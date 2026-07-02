@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.14.0] — 2026-07-02
+
+### Added
+
+- History panel: a third tab next to Layers and Adjust listing every undoable
+  step of the active document — click any entry to jump the document to that
+  state. Follows the active tab automatically.
+
 ## [0.13.0] — 2026-07-02
 
 ### Added
