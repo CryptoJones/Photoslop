@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.5.0] — 2026-07-02
+
+### Added
+
+- Image preview in the Open dialog: selecting a file shows a thumbnail plus
+  dimensions, format, layer count (for `.ora`), and file size. Previews are
+  decoded scaled-down via `QImageReader.setScaledSize` (no full-size decode),
+  and `.ora` thumbnails come straight from the zip's embedded thumbnail.
+
 ## [0.4.0] — 2026-07-02
 
 ### Added

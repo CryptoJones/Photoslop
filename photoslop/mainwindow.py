@@ -47,6 +47,7 @@ from photoslop.document import Document
 from photoslop.icons import TOOL_ICONS
 from photoslop.io_ora import load_ora, save_ora
 from photoslop.layer import FORMAT, Layer, blank_image
+from photoslop.opendialog import OpenImageDialog
 from photoslop.tools import (
     BrushTool,
     BucketTool,
@@ -56,10 +57,6 @@ from photoslop.tools import (
     ToolOptions,
 )
 
-_OPEN_FILTER = (
-    "Images (*.ora *.png *.jpg *.jpeg *.bmp *.webp *.gif *.tif *.tiff);;"
-    "OpenRaster (*.ora);;All files (*)"
-)
 _EXPORT_FILTER = "PNG (*.png);;JPEG (*.jpg *.jpeg);;WebP (*.webp);;BMP (*.bmp)"
 
 
@@ -473,8 +470,7 @@ class MainWindow(QMainWindow):
             self.add_document(Document.new(size, dpi, name, background))
 
     def action_open(self) -> None:
-        paths, _ = QFileDialog.getOpenFileNames(self, "Open images", "", _OPEN_FILTER)
-        for path in paths:
+        for path in OpenImageDialog.get_paths(self):
             self.open_path(path)
 
     def open_path(self, path: str) -> bool:
