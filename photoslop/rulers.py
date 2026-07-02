@@ -5,7 +5,7 @@ guides: press on a ruler and drag into the canvas to place one."""
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QWidget
 
 from photoslop import units
@@ -25,7 +25,8 @@ class Ruler(QWidget):
         self.dpi = 72.0
         self.unit = "px"
         self.length = 0  # canvas extent in canvas px
-        self.marker: float | None = None  # canvas coords
+        self.marker: float | None = None  # canvas coords (cursor)
+        self.guide_marker: float | None = None  # canvas coords (guide being dragged)
         self._dragging = False
         if orientation == Qt.Orientation.Horizontal:
             self.setFixedHeight(THICKNESS)
@@ -43,6 +44,10 @@ class Ruler(QWidget):
 
     def set_marker(self, canvas_pos: float | None) -> None:
         self.marker = canvas_pos
+        self.update()
+
+    def set_guide_marker(self, canvas_pos: float | None) -> None:
+        self.guide_marker = canvas_pos
         self.update()
 
     # -- guide creation ------------------------------------------------------
@@ -125,6 +130,26 @@ class Ruler(QWidget):
                 p.drawLine(QPointF(w, 0), QPointF(w, self.height()))
             else:
                 p.drawLine(QPointF(0, w), QPointF(self.width(), w))
+
+        # guide-drag marker: full line + a triangle at the canvas-adjacent edge
+        if self.guide_marker is not None:
+            w = self.origin + self.guide_marker * self.zoom
+            color = QColor(255, 0, 200)
+            p.setPen(QPen(color, 1))
+            tri = QPolygonF()
+            if horizontal:
+                p.drawLine(QPointF(w, 0), QPointF(w, self.height()))
+                tri.append(QPointF(w - 4, edge - 6))
+                tri.append(QPointF(w + 4, edge - 6))
+                tri.append(QPointF(w, edge))
+            else:
+                p.drawLine(QPointF(0, w), QPointF(self.width(), w))
+                tri.append(QPointF(edge - 6, w - 4))
+                tri.append(QPointF(edge - 6, w + 4))
+                tri.append(QPointF(edge, w))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QBrush(color))
+            p.drawPolygon(tri)
         p.end()
 
     def _tick(self, p: QPainter, w: float, edge: int, length: int) -> None:

@@ -45,6 +45,8 @@ class CanvasView(QWidget):
         self.zoom = 1.0
         self.hover_pos: QPointF | None = None
         self.temp_guide: tuple[str, float] | None = None
+        # (orient, canvas value, anchor in widget coords) while a guide is dragged
+        self.guide_label: tuple[str, float, QPointF] | None = None
         self._ants_offset = 0.0
         self._ants = QTimer(self)
         self._ants.setInterval(120)
@@ -128,6 +130,7 @@ class CanvasView(QWidget):
 
         self._paint_guides(p)
         self._paint_selection(p)
+        self._paint_guide_label(p)
         tool = self.editor.active_tool()
         if tool is not None:
             tool.overlay(self.doc, p, self)
@@ -150,6 +153,28 @@ class CanvasView(QWidget):
                 p.drawLine(0, w, self.width(), w)
             else:
                 p.drawLine(w, 0, w, self.height())
+
+    def _paint_guide_label(self, p: QPainter) -> None:
+        if self.guide_label is None:
+            return
+        orient, value, anchor = self.guide_label
+        axis = "Y" if orient == "h" else "X"
+        text = f"{axis}: {units.format_value_precise(value, self.editor.host.unit, self.doc.dpi)}"
+        rect = p.fontMetrics().boundingRect(text).adjusted(-5, -3, 5, 3)
+        rect.moveTo(int(anchor.x()) + 14, int(anchor.y()) - rect.height() - 8)
+        if rect.right() > self.width() - 2:
+            rect.moveRight(self.width() - 2)
+        if rect.left() < 2:
+            rect.moveLeft(2)
+        if rect.top() < 2:
+            rect.moveTop(int(anchor.y()) + 16)
+        if rect.bottom() > self.height() - 2:
+            rect.moveBottom(self.height() - 2)
+        p.setPen(QPen(QColor(70, 70, 70), 1))
+        p.setBrush(QColor(255, 255, 245, 235))
+        p.drawRoundedRect(rect, 3, 3)
+        p.setPen(QColor(20, 20, 20))
+        p.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
 
     def _paint_selection(self, p: QPainter) -> None:
         sel = self.doc.selection
@@ -353,12 +378,36 @@ class EditorView(QWidget):
         z = self.canvas.zoom
         return (local.y() if orient == "h" else local.x()) / z
 
-    def _guide_drag(self, orient: str, global_pos: QPoint) -> None:
-        self.canvas.temp_guide = (orient, self._guide_pos(orient, global_pos))
+    def show_guide_feedback(self, orient: str, pos: float,
+                            anchor: QPointF | None = None) -> None:
+        """Live drag feedback: marker on the matching ruler, floating X/Y
+        readout on the canvas, echo in the status bar."""
+        ruler = self.vruler if orient == "h" else self.hruler
+        other = self.hruler if orient == "h" else self.vruler
+        ruler.set_guide_marker(pos)
+        other.set_guide_marker(None)
+        if anchor is None:
+            hp = self.canvas.hover_pos
+            z = self.canvas.zoom
+            anchor = QPointF(hp.x() * z, hp.y() * z) if hp is not None else QPointF(8, 8)
+        self.canvas.guide_label = (orient, pos, anchor)
         self.canvas.update()
+        self.host.show_guide_value(orient, pos, self.doc.dpi)
+
+    def clear_guide_feedback(self) -> None:
+        self.hruler.set_guide_marker(None)
+        self.vruler.set_guide_marker(None)
+        self.canvas.guide_label = None
+        self.canvas.update()
+
+    def _guide_drag(self, orient: str, global_pos: QPoint) -> None:
+        pos = self._guide_pos(orient, global_pos)
+        self.canvas.temp_guide = (orient, pos)
+        self.show_guide_feedback(orient, pos, QPointF(self.canvas.mapFromGlobal(global_pos)))
 
     def _guide_drop(self, orient: str, global_pos: QPoint) -> None:
         self.canvas.temp_guide = None
+        self.clear_guide_feedback()
         local = self.canvas.mapFromGlobal(global_pos)
         if self.canvas.rect().contains(local):
             self.doc.add_guide(orient, self._guide_pos(orient, global_pos))

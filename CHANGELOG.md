@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.2.0] — 2026-07-02
+
+### Added
+
+- Guide-drag feedback: while creating a guide from a ruler or moving one with
+  the Move tool, a magenta marker tracks the guide on the matching ruler, a
+  floating label next to the cursor shows the live X/Y float value in the
+  current unit, and the status bar echoes it.
+
 ## [0.1.1] — 2026-07-02
 
 ### Removed
