@@ -53,6 +53,7 @@ from photoslop.document import Document
 from photoslop.exportdialog import ExportDialog
 from photoslop.icons import TOOL_ICONS
 from photoslop.io_ora import load_ora, save_ora
+from photoslop.io_raw import is_raw_path, load_raw
 from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
 from photoslop.opendialog import OpenImageDialog
 from photoslop.tools import (
@@ -892,6 +893,9 @@ class MainWindow(QMainWindow):
         try:
             if path.lower().endswith(".ora"):
                 doc = load_ora(path)
+            elif is_raw_path(path):
+                img = load_raw(path)
+                doc = Document.from_image(img, os.path.basename(path), 72.0)
             else:
                 img = QImage(path)
                 if img.isNull():

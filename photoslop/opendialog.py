@@ -15,7 +15,8 @@ from PySide6.QtGui import QImage, QImageReader, QPixmap
 from PySide6.QtWidgets import QFileDialog, QGridLayout, QLabel, QVBoxLayout, QWidget
 
 OPEN_FILTER = (
-    "Images (*.ora *.png *.jpg *.jpeg *.bmp *.webp *.gif *.tif *.tiff);;"
+    "Images (*.ora *.png *.jpg *.jpeg *.bmp *.webp *.gif *.tif *.tiff "
+    "*.arw *.cr2 *.cr3 *.dng *.nef *.nrw *.orf *.pef *.raf *.rw2 *.srw);;"
     "OpenRaster (*.ora);;All files (*)"
 )
 

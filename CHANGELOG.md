@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.73.0] — 2026-07-02
+
+### Added
+
+- Camera-raw import (`pip install photoslop[raw]`): open NEF/CR2/CR3/DNG/
+  ARW/RAF and friends straight from File → Open — decoded via rawpy with
+  camera white balance. Without the extra installed, raw files give an
+  actionable install hint instead of a failure.
+
 ## [0.72.0] — 2026-07-02
 
 ### Added
