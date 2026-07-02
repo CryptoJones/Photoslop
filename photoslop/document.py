@@ -115,7 +115,13 @@ class Document(QObject):
             if layer.visible:
                 p.setOpacity(layer.opacity)
                 p.setCompositionMode(BLEND_MODES[layer.blend_mode])
-                p.drawImage(layer.offset, layer.image)
+                if layer.mask is None:
+                    p.drawImage(layer.offset, layer.image)
+                else:
+                    region = self.canvas_rect().intersected(layer.bounds())
+                    if not region.isEmpty():
+                        local = region.translated(-layer.offset)
+                        p.drawImage(region.topLeft(), layer.paint_image(local))
         p.end()
         return out
 
@@ -127,11 +133,18 @@ class Document(QObject):
         out = blank_image(QSize(1, 1))
         p = QPainter(out)
         p.translate(-x, -y)
+        point = QRect(x, y, 1, 1)
         for layer in self.layers:
             if layer.visible:
                 p.setOpacity(layer.opacity)
                 p.setCompositionMode(BLEND_MODES[layer.blend_mode])
-                p.drawImage(layer.offset, layer.image)
+                if layer.mask is None:
+                    p.drawImage(layer.offset, layer.image)
+                else:
+                    region = point.intersected(layer.bounds())
+                    if not region.isEmpty():
+                        local = region.translated(-layer.offset)
+                        p.drawImage(region.topLeft(), layer.paint_image(local))
         p.end()
         return out.pixelColor(0, 0)
 

@@ -39,6 +39,13 @@ def save_ora(doc: Document, path: str) -> None:
     # ORA stores layers top-first; our list is bottom-first.
     for i, layer in enumerate(reversed(doc.layers)):
         src = f"data/layer{i}.png"
+        attrib = {"composite-op": ORA_OPS.get(layer.blend_mode, "svg:src-over")}
+        if layer.mask is not None:
+            # Photoslop extension: ORA has no standard layer-mask entry.
+            # GIMP/Krita ignore the attribute; Photoslop round-trips it.
+            mask_src = f"data/layer{i}_mask.png"
+            attrib["photoslop-mask"] = mask_src
+            entries.append((mask_src, _png_bytes(layer.mask)))
         ET.SubElement(
             stack,
             "layer",
@@ -48,7 +55,7 @@ def save_ora(doc: Document, path: str) -> None:
             y=str(layer.offset.y()),
             opacity=f"{layer.opacity:.4f}",
             visibility="visible" if layer.visible else "hidden",
-            attrib={"composite-op": ORA_OPS.get(layer.blend_mode, "svg:src-over")},
+            attrib=attrib,
         )
         entries.append((src, _png_bytes(layer.image)))
 
@@ -86,6 +93,10 @@ def _walk_layers(zf: zipfile.ZipFile, node: ET.Element, base: QPoint, out: list[
                 float(child.get("opacity", "1.0")),
                 ORA_OPS_REVERSE.get(child.get("composite-op", "svg:src-over"), "normal"),
             )
+            mask_src = child.get("photoslop-mask")
+            if mask_src and mask_src in zf.namelist():
+                layer.mask = QImage.fromData(zf.read(mask_src)).convertToFormat(
+                    QImage.Format.Format_Grayscale8)
             out.append(layer)
 
 

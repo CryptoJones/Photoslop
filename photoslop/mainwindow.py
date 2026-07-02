@@ -451,6 +451,13 @@ class MainWindow(QMainWindow):
         m_layer.addAction(self._act("S&tamp Visible", "Ctrl+Shift+Alt+E",
                                     self.action_stamp_visible))
         m_layer.addSeparator()
+        m_layer.addAction(self._act("Add Layer Mask (Reveal All)", None,
+                                    lambda: self.action_add_mask(False)))
+        m_layer.addAction(self._act("Add Layer Mask (From Selection)", None,
+                                    lambda: self.action_add_mask(True)))
+        m_layer.addAction(self._act("Apply Layer Mask", None, self.action_apply_mask))
+        m_layer.addAction(self._act("Delete Layer Mask", None, self.action_delete_mask))
+        m_layer.addSeparator()
         m_layer.addAction(self._act("&Copy Layer", "Ctrl+Shift+C", self.action_copy_layer))
         m_layer.addAction(self._act("&Paste Layer", "Ctrl+Shift+V", self.action_paste_layer))
         m_layer.addSeparator()
@@ -870,6 +877,46 @@ class MainWindow(QMainWindow):
         doc.undo_stack.push(
             InsertLayerCommand(doc, doc.active_index + 1, layer, "Paste Layer")
         )
+
+    def action_add_mask(self, from_selection: bool) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        layer = doc.active_layer
+        if from_selection and doc.selection is None:
+            self.statusBar().showMessage("Add Mask From Selection needs a selection",
+                                         4000)
+            return
+        mask = QImage(layer.image.size(), QImage.Format.Format_Grayscale8)
+        if from_selection:
+            mask.fill(0)
+            p = QPainter(mask)
+            p.fillPath(doc.selection.translated(-layer.offset.x(),
+                                                -layer.offset.y()),
+                       QColor(255, 255, 255))
+            p.end()
+        else:
+            mask.fill(255)
+        from photoslop.commands import SetLayerMaskCommand
+
+        doc.undo_stack.push(SetLayerMaskCommand(doc, layer, mask, "Add Layer Mask"))
+
+    def action_apply_mask(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None or doc.active_layer.mask is None:
+            return
+        from photoslop.commands import ApplyLayerMaskCommand
+
+        doc.undo_stack.push(ApplyLayerMaskCommand(doc, doc.active_layer))
+
+    def action_delete_mask(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None or doc.active_layer.mask is None:
+            return
+        from photoslop.commands import SetLayerMaskCommand
+
+        doc.undo_stack.push(SetLayerMaskCommand(doc, doc.active_layer, None,
+                                                "Delete Layer Mask"))
 
     def action_merge_visible(self) -> None:
         doc = self.current_doc()

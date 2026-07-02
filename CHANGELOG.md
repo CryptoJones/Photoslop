@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.26.0] — 2026-07-02
+
+### Added
+
+- Layer masks: non-destructive per-layer visibility (Grayscale8, 1 byte/px).
+  Layer → Add Layer Mask (Reveal All or From Selection), Apply (bakes into
+  alpha), Delete — all undoable. Masked layers composite through
+  viewport-bounded transient buffers, so the memory story holds. Masks
+  round-trip in .ora via a Photoslop extension attribute (ignored by
+  GIMP/Krita).
+
 ## [0.25.0] — 2026-07-02
 
 ### Added

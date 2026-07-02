@@ -132,6 +132,9 @@ class CanvasView(QWidget):
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, z < 1.0)
         clip = QRectF(exposed).adjusted(-1, -1, 1, 1)
         p.setClipRect(QRectF(clip.x() / z, clip.y() / z, clip.width() / z, clip.height() / z))
+        clip_canvas = QRect(
+            int(clip.x() / z), int(clip.y() / z),
+            int(clip.width() / z) + 2, int(clip.height() / z) + 2)
         transform_session = self._transform_session()
         for layer in self.doc.layers:
             if not layer.visible:
@@ -149,8 +152,13 @@ class CanvasView(QWidget):
                 base = transform_session.base_image
                 p.drawImage(QPointF(-base.width() / 2.0, -base.height() / 2.0), base)
                 p.restore()
-            else:
+            elif layer.mask is None:
                 p.drawImage(QPointF(layer.offset), layer.image)
+            else:
+                region = clip_canvas.intersected(layer.bounds())
+                if not region.isEmpty():
+                    local = region.translated(-layer.offset)
+                    p.drawImage(region.topLeft(), layer.paint_image(local))
         p.restore()
         p.setOpacity(1.0)
 
