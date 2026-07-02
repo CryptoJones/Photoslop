@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.29.0] — 2026-07-02
+
+### Added
+
+- Dodge (`O`) and Burn (`Shift+O`) brushes: lighten/darken as you paint via
+  soft-light white/black stamps — strength follows the opacity slider,
+  hardness controls the falloff, full stroke undo.
+
 ## [0.28.0] — 2026-07-02
 
 ### Added
