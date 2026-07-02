@@ -220,6 +220,20 @@ def heal_icon() -> QIcon:
     return _make(draw)
 
 
+def patch_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        pen = QPen(_INK, 1.5, Qt.PenStyle.DashLine)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QPointF(8, 8), 4.5, 4.5)
+        p.setPen(QPen(_INK, 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.drawLine(QPointF(11, 11), QPointF(17, 17))  # drag arrow
+        p.drawLine(QPointF(17, 17), QPointF(13.5, 16.5))
+        p.drawLine(QPointF(17, 17), QPointF(16.5, 13.5))
+
+    return _make(draw)
+
+
 def text_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
@@ -325,6 +339,7 @@ TOOL_ICONS = {
     "smudge": smudge_icon,
     "spot-heal": spot_heal_icon,
     "heal": heal_icon,
+    "patch": patch_icon,
     "text": text_icon,
     "crop": crop_icon,
     "dodge": dodge_icon,

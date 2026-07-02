@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.49.0] — 2026-07-02
+
+### Added
+
+- Patch tool (`Alt+Shift+J`): select a blemish with any selection tool, then
+  drag from inside the selection to a clean source area — the selection
+  heals with the sampled texture, tone-matched to its surroundings. Ghost
+  outline follows the drag; one undo step.
+
 ## [0.48.0] — 2026-07-02
 
 ### Added
