@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.68.0] — 2026-07-02
+
+### Added
+
+- Centimetres join the ruler units — switch metric between mm and cm from
+  Edit → Options → Rulers (or the View menu / ruler-corner button). Ticks,
+  snapping, guide readouts, and the end-of-image marker all follow.
+
+### Fixed
+
+- Tests clear saved settings between cases (window geometry persisted by
+  one test's close no longer leaks into the next).
+
 ## [0.67.0] — 2026-07-02
 
 ### Added

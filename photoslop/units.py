@@ -7,9 +7,10 @@ to and from display units using the document's DPI.
 
 from __future__ import annotations
 
-UNITS = ("px", "in", "mm", "pc")
+UNITS = ("px", "in", "mm", "cm", "pc")
 
-_LABELS = {"px": "pixels", "in": "freedom units", "mm": "millimetres", "pc": "picas"}
+_LABELS = {"px": "pixels", "in": "freedom units", "mm": "millimetres",
+           "cm": "centimetres", "pc": "picas"}
 
 
 def unit_label(unit: str) -> str:
@@ -24,6 +25,8 @@ def px_per_unit(unit: str, dpi: float) -> float:
         return dpi
     if unit == "mm":
         return dpi / 25.4
+    if unit == "cm":
+        return dpi / 2.54
     if unit == "pc":  # 1 pica = 1/6 inch
         return dpi / 6.0
     raise ValueError(f"unknown unit {unit!r}")

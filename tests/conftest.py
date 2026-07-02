@@ -21,6 +21,14 @@ def _isolated_settings(tmp_path_factory):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _fresh_settings():
+    """Each test starts with clean settings — closeEvent persists window
+    geometry/workspace, which would otherwise leak between tests."""
+    QSettings("CryptoJones", "Photoslop").clear()
+    yield
+
+
 @pytest.fixture(scope="session")
 def qapp():
     app = QApplication.instance() or QApplication([])
