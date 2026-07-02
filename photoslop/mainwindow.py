@@ -517,6 +517,7 @@ class MainWindow(QMainWindow):
                                    self.action_define_pattern))
         m_edit.addSeparator()
         m_edit.addAction(self._act("Free &Transform", "Ctrl+T", self.action_free_transform))
+        m_edit.addAction(self._act("&Warp…", "Ctrl+Shift+T", self.action_warp))
         m_edit.addSeparator()
         m_edit.addAction(self._act("S&wap Colours", "X", self.action_swap_colors))
         m_edit.addAction(self._act("Rese&t Colours", "D", self.action_reset_colors))
@@ -1068,6 +1069,21 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             "Free Transform: drag inside to move, handles to scale, outside "
             "to rotate — Enter/double-click commits, Esc cancels", 6000)
+
+    def action_warp(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        tool = self.tools["transform"]
+        if tool.session is not None:
+            tool.session.enter_warp()
+            return
+        self._pre_transform_tool = self._active_tool_name
+        tool.begin(doc, doc.active_layer)
+        tool.session.enter_warp()
+        self._set_tool("transform")
+        self.statusBar().showMessage(
+            "Warp: drag the 3\u00d73 grid points — Enter commits, Esc cancels", 6000)
 
     def end_transform(self) -> None:
         """Called after a transform commit/cancel: restore the prior tool."""

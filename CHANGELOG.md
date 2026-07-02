@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.58.0] — 2026-07-02
+
+### Added
+
+- Warp (`Ctrl+Shift+T`): a 3×3 control grid over the active layer — drag any
+  of the nine points and the image bends through four projective patches
+  with a live preview. Enter commits (single smooth resample), Esc cancels
+  exactly. Also enterable from inside a Free Transform session.
+
 ## [0.57.0] — 2026-07-02
 
 ### Added
