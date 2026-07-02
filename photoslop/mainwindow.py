@@ -37,10 +37,14 @@ from PySide6.QtWidgets import (
 from photoslop import __version__, units
 from photoslop.canvas import EditorView
 from photoslop.commands import (
+    FlipImageCommand,
+    FlipLayerCommand,
     InsertLayerCommand,
     LayerRegionCommand,
     ResizeCanvasCommand,
     ResizeImageCommand,
+    RotateImageCommand,
+    RotateLayerCommand,
 )
 from photoslop.dialogs import CanvasSizeDialog, NewDocumentDialog, ResizeImageDialog
 from photoslop.document import Document
@@ -281,6 +285,19 @@ class MainWindow(QMainWindow):
         m_image.addAction(self._act("&Image Size…", "Ctrl+Alt+I", self.action_image_size))
         m_image.addAction(self._act("&Canvas Size…", "Ctrl+Alt+S", self.action_canvas_size))
         m_image.addAction(self._act("C&rop to Selection", "Ctrl+Alt+C", self.action_crop))
+        m_image.addSeparator()
+        m_rotate = m_image.addMenu("Image &Rotation")
+        m_rotate.addAction(self._act("Rotate 90° &CW", None,
+                                     lambda: self._image_cmd(RotateImageCommand, 90)))
+        m_rotate.addAction(self._act("Rotate 90° CC&W", None,
+                                     lambda: self._image_cmd(RotateImageCommand, 270)))
+        m_rotate.addAction(self._act("Rotate &180°", None,
+                                     lambda: self._image_cmd(RotateImageCommand, 180)))
+        m_rotate.addSeparator()
+        m_rotate.addAction(self._act("Flip Canvas &Horizontal", None,
+                                     lambda: self._image_cmd(FlipImageCommand, True)))
+        m_rotate.addAction(self._act("Flip Canvas &Vertical", None,
+                                     lambda: self._image_cmd(FlipImageCommand, False)))
 
         m_layer = menu.addMenu("&Layer")
         m_layer.addAction(self._act("&New Layer", "Ctrl+Shift+N",
@@ -299,6 +316,17 @@ class MainWindow(QMainWindow):
                                     lambda: self.layer_panel.shift_layer(+1)))
         m_layer.addAction(self._act("Lower Layer", "Ctrl+[",
                                     lambda: self.layer_panel.shift_layer(-1)))
+        m_layer.addSeparator()
+        m_layer.addAction(self._act("Rotate Layer 90° CW", None,
+                                    lambda: self._layer_cmd(RotateLayerCommand, 90)))
+        m_layer.addAction(self._act("Rotate Layer 90° CCW", None,
+                                    lambda: self._layer_cmd(RotateLayerCommand, 270)))
+        m_layer.addAction(self._act("Rotate Layer 180°", None,
+                                    lambda: self._layer_cmd(RotateLayerCommand, 180)))
+        m_layer.addAction(self._act("Flip Layer Horizontal", None,
+                                    lambda: self._layer_cmd(FlipLayerCommand, True)))
+        m_layer.addAction(self._act("Flip Layer Vertical", None,
+                                    lambda: self._layer_cmd(FlipLayerCommand, False)))
 
         m_view = menu.addMenu("&View")
         m_view.addAction(self._act("Zoom &In", "Ctrl++", lambda: self._zoom(+1)))
@@ -658,6 +686,16 @@ class MainWindow(QMainWindow):
         )
 
     # ------------------------------------------------------------------ image actions
+
+    def _image_cmd(self, command, arg) -> None:
+        doc = self.current_doc()
+        if doc is not None:
+            doc.undo_stack.push(command(doc, arg))
+
+    def _layer_cmd(self, command, arg) -> None:
+        doc = self.current_doc()
+        if doc is not None and doc.active_layer is not None:
+            doc.undo_stack.push(command(doc, doc.active_layer, arg))
 
     def action_crop(self) -> None:
         doc = self.current_doc()
