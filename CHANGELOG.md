@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.19.0] — 2026-07-02
+
+### Added
+
+- Image → Adjustments → Hue/Saturation… (`Ctrl+U`): hue rotation (±180°,
+  luminance-preserving), saturation, and lightness with live preview on the
+  active layer; one undo step on OK, exact restore on Cancel. Same banded,
+  premultiplication-aware engine as Levels.
+
 ## [0.18.0] — 2026-07-02
 
 ### Added
