@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import QPoint, QRect, QSettings, Qt, QTimer
+from PySide6.QtCore import QPoint, QRect, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
@@ -569,6 +569,9 @@ class MainWindow(QMainWindow):
         m_layer.addAction(self._act("Clip to Layer Belo&w (toggle)", "Ctrl+Alt+G",
                                     self.action_toggle_clip))
         m_layer.addSeparator()
+        m_layer.addAction(self._act("New Adjustment Layer: Le&vels…", None,
+                                    self.action_adjustment_levels))
+        m_layer.addSeparator()
         m_layer.addAction(self._act("Layer Style: Drop &Shadow…", None,
                                     self.action_drop_shadow))
         m_layer.addAction(self._act("Layer Style: Outer G&low…", None,
@@ -1091,6 +1094,54 @@ class MainWindow(QMainWindow):
 
         doc.undo_stack.push(SetLayerMaskCommand(doc, doc.active_layer, None,
                                                 "Delete Layer Mask"))
+
+    def action_adjustment_levels(self) -> None:
+        doc = self.current_doc()
+        if doc is None:
+            return
+        import numpy as np
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QSpinBox
+
+        from photoslop.adjust import levels_lut
+
+        layer = Layer("Levels adjustment", blank_image(QSize(1, 1)))
+        layer.adjustment = np.tile(np.arange(256, dtype=np.uint8), (3, 1))
+        doc.undo_stack.push(InsertLayerCommand(
+            doc, doc.active_index + 1, layer, "New Adjustment Layer"))
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Levels (adjustment layer)")
+        form = QFormLayout(dialog)
+        spins = {}
+        for key, lo, hi, default in (("in_black", 0, 253, 0), ("in_white", 2, 255, 255),
+                                     ("gamma_x100", 10, 999, 100),
+                                     ("out_black", 0, 255, 0), ("out_white", 0, 255, 255)):
+            spin = QSpinBox()
+            spin.setRange(lo, hi)
+            spin.setValue(default)
+            form.addRow(key.replace("_", " "), spin)
+            spins[key] = spin
+
+        def refresh() -> None:
+            lut = levels_lut(spins["in_black"].value(),
+                             max(spins["in_white"].value(),
+                                 spins["in_black"].value() + 2),
+                             spins["gamma_x100"].value() / 100.0,
+                             spins["out_black"].value(),
+                             spins["out_white"].value())
+            layer.adjustment = np.tile(lut, (3, 1))
+            doc.notify_pixels(doc.canvas_rect())
+
+        for spin in spins.values():
+            spin.valueChanged.connect(lambda _v: refresh())
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        refresh()
+        if not dialog.exec():
+            doc.undo_stack.undo()  # remove the inserted adjustment layer
 
     def action_drop_shadow(self) -> None:
         doc = self.current_doc()

@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.53.0] — 2026-07-02
+
+### Added
+
+- Adjustment layers (Layer → New Adjustment Layer: Levels…): a
+  non-destructive LUT layer that recolours everything below it — live
+  spinbox editing, toggle its visibility to compare, reorder it in the
+  stack, and it round-trips in `.ora`. When adjustment layers are present
+  the canvas composites through a viewport-bounded offscreen buffer;
+  otherwise the zero-copy fast path is unchanged.
+
 ## [0.52.0] — 2026-07-02
 
 ### Added
