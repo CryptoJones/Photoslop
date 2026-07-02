@@ -47,6 +47,46 @@ def selection_mask(path, size, offset) -> np.ndarray:
     return arr[:, :w] > 127
 
 
+def _tolerance_mask(arr: np.ndarray, target: int, tolerance: int) -> np.ndarray:
+    if tolerance <= 0:
+        return arr == np.uint32(target)
+    tb, tg = target & 0xFF, (target >> 8) & 0xFF
+    tr, ta = (target >> 16) & 0xFF, (target >> 24) & 0xFF
+    db = np.abs((arr & 0xFF).astype(np.int16) - tb)
+    dg = np.abs(((arr >> np.uint32(8)) & 0xFF).astype(np.int16) - tg)
+    dr = np.abs(((arr >> np.uint32(16)) & 0xFF).astype(np.int16) - tr)
+    da = np.abs((arr >> np.uint32(24)).astype(np.int16) - ta)
+    return np.maximum(np.maximum(db, dg), np.maximum(dr, da)) <= tolerance
+
+
+def _mask_bbox(mask: np.ndarray) -> QRect:
+    rows = np.flatnonzero(mask.any(axis=1))
+    cols = np.flatnonzero(mask.any(axis=0))
+    return QRect(int(cols[0]), int(rows[0]),
+                 int(cols[-1] - cols[0] + 1), int(rows[-1] - rows[0] + 1))
+
+
+def global_mask(
+    img: QImage,
+    x: int,
+    y: int,
+    tolerance: int = 0,
+    sel_mask: np.ndarray | None = None,
+) -> tuple[np.ndarray, QRect] | None:
+    """Mask of ALL pixels within tolerance of the seed colour, connected or
+    not — the wand's non-contiguous / colour-range mode."""
+    arr = view_u32(img)
+    h, w = arr.shape
+    if not (0 <= x < w and 0 <= y < h):
+        return None
+    mask = _tolerance_mask(arr, int(arr[y, x]), tolerance)
+    if sel_mask is not None:
+        mask = mask & sel_mask
+    if not mask[y, x]:
+        return None
+    return mask, _mask_bbox(mask)
+
+
 def flood_mask(
     img: QImage,
     x: int,
@@ -61,18 +101,7 @@ def flood_mask(
     if not (0 <= x < w and 0 <= y < h):
         return None
 
-    target = int(arr[y, x])
-    if tolerance <= 0:
-        fillable = arr == np.uint32(target)
-    else:
-        tb, tg = target & 0xFF, (target >> 8) & 0xFF
-        tr, ta = (target >> 16) & 0xFF, (target >> 24) & 0xFF
-        db = np.abs((arr & 0xFF).astype(np.int16) - tb)
-        dg = np.abs(((arr >> np.uint32(8)) & 0xFF).astype(np.int16) - tg)
-        dr = np.abs(((arr >> np.uint32(16)) & 0xFF).astype(np.int16) - tr)
-        da = np.abs((arr >> np.uint32(24)).astype(np.int16) - ta)
-        fillable = np.maximum(np.maximum(db, dg), np.maximum(dr, da)) <= tolerance
-
+    fillable = _tolerance_mask(arr, int(arr[y, x]), tolerance)
     if sel_mask is not None:
         fillable &= sel_mask
     if not fillable[y, x]:

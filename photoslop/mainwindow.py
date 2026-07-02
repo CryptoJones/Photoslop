@@ -266,6 +266,13 @@ class MainWindow(QMainWindow):
             lambda v: setattr(self.options, "gradient_shape", v))
         shape_act = bar.addWidget(shape)
 
+        contiguous = QCheckBox("Contiguous")
+        contiguous.setChecked(self.options.contiguous)
+        contiguous.setToolTip("Off: select every pixel in colour range, "
+                              "connected or not")
+        contiguous.toggled.connect(lambda v: setattr(self.options, "contiguous", v))
+        contig_act = bar.addWidget(contiguous)
+
         self._option_actions = {
             "brush": [color_act, bg_act, size_act, hard_act, opacity_act, eraser_act],
             "pencil": [color_act, bg_act, size_act, opacity_act, eraser_act],
@@ -275,14 +282,14 @@ class MainWindow(QMainWindow):
             "rect-select": [],
             "lasso": [],
             "poly-lasso": [],
-            "wand": [tol_act],
+            "wand": [tol_act, contig_act],
             "move": [],
             "hand": [],
             "zoom": [],
         }
         self._all_option_actions = [
             color_act, bg_act, size_act, hard_act, opacity_act, eraser_act,
-            tol_act, shape_act,
+            tol_act, shape_act, contig_act,
         ]
 
         # PS-style bracket shortcuts; window-level, invisible in menus

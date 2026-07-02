@@ -35,6 +35,7 @@ class ToolOptions:
         self.eraser = False
         self.tolerance = 32  # 0..255
         self.gradient_shape = "linear"  # or "radial"
+        self.contiguous = True  # wand: connected region vs global colour range
 
     def swap_colors(self) -> None:
         self.foreground, self.background = self.background, self.foreground
@@ -488,7 +489,8 @@ class MagicWandTool(Tool):
         ly = int(pos.y() - layer.offset.y())
         if not (0 <= lx < img.width() and 0 <= ly < img.height()):
             return
-        result = npimage.flood_mask(img, lx, ly, self.opts.tolerance)
+        finder = npimage.flood_mask if self.opts.contiguous else npimage.global_mask
+        result = finder(img, lx, ly, self.opts.tolerance)
         if result is None:
             return
         mask, _bbox = result
