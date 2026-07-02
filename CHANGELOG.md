@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.48.0] — 2026-07-02
+
+### Added
+
+- Layer Styles: Outer Glow… and Stroke… join Drop Shadow — glow is a
+  zero-offset tinted halo, stroke is an exact-width dilated outline ring;
+  both land as undoable generated layers below the active one.
+
 ## [0.47.0] — 2026-07-02
 
 ### Added
