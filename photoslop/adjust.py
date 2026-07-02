@@ -111,6 +111,83 @@ def apply_luts(img: QImage, luts: np.ndarray) -> None:
         )
 
 
+def apply_hsl(img: QImage, hue_deg: float, saturation: float,
+              lightness: float) -> None:
+    """Hue rotation (luminance-preserving RGB matrix), saturation mix toward
+    luma, and lightness toward black/white — in place, in row bands."""
+    if hue_deg == 0 and saturation == 0 and lightness == 0:
+        return
+    theta = np.deg2rad(hue_deg)
+    cos_a, sin_a = np.cos(theta), np.sin(theta)
+    # standard luminance-preserving hue-rotate matrix (as used by SVG/CSS)
+    lr, lg, lb = 0.213, 0.715, 0.072
+    m = np.array([
+        [lr + cos_a * (1 - lr) + sin_a * (-lr),
+         lg + cos_a * (-lg) + sin_a * (-lg),
+         lb + cos_a * (-lb) + sin_a * (1 - lb)],
+        [lr + cos_a * (-lr) + sin_a * 0.143,
+         lg + cos_a * (1 - lg) + sin_a * 0.140,
+         lb + cos_a * (-lb) + sin_a * (-0.283)],
+        [lr + cos_a * (-lr) + sin_a * (-(1 - lr)),
+         lg + cos_a * (-lg) + sin_a * lg,
+         lb + cos_a * (1 - lb) + sin_a * lb],
+    ], dtype=np.float32)
+    sat_factor = 1.0 + saturation / 100.0
+
+    arr = view_u32(img)
+    height = arr.shape[0]
+    for y0 in range(0, height, CHUNK_ROWS):
+        chunk = arr[y0 : y0 + CHUNK_ROWS]
+        a = (chunk >> np.uint32(24)).astype(np.uint16)
+        r = ((chunk >> np.uint32(16)) & 0xFF).astype(np.uint16)
+        g = ((chunk >> np.uint32(8)) & 0xFF).astype(np.uint16)
+        b = (chunk & 0xFF).astype(np.uint16)
+
+        opaque = bool((a == 255).all())
+        if not opaque:
+            safe_a = np.maximum(a, 1)
+            r = np.minimum(255, r * 255 // safe_a)
+            g = np.minimum(255, g * 255 // safe_a)
+            b = np.minimum(255, b * 255 // safe_a)
+
+        rf = r.astype(np.float32)
+        gf = g.astype(np.float32)
+        bf = b.astype(np.float32)
+        if hue_deg != 0:
+            rf, gf, bf = (m[0, 0] * rf + m[0, 1] * gf + m[0, 2] * bf,
+                          m[1, 0] * rf + m[1, 1] * gf + m[1, 2] * bf,
+                          m[2, 0] * rf + m[2, 1] * gf + m[2, 2] * bf)
+        if saturation != 0:
+            luma = 0.299 * rf + 0.587 * gf + 0.114 * bf
+            rf = luma + (rf - luma) * sat_factor
+            gf = luma + (gf - luma) * sat_factor
+            bf = luma + (bf - luma) * sat_factor
+        if lightness > 0:
+            k = lightness / 100.0
+            rf = rf + (255.0 - rf) * k
+            gf = gf + (255.0 - gf) * k
+            bf = bf + (255.0 - bf) * k
+        elif lightness < 0:
+            k = 1.0 + lightness / 100.0
+            rf, gf, bf = rf * k, gf * k, bf * k
+
+        r = (np.clip(rf, 0, 255) + 0.5).astype(np.uint16)
+        g = (np.clip(gf, 0, 255) + 0.5).astype(np.uint16)
+        b = (np.clip(bf, 0, 255) + 0.5).astype(np.uint16)
+
+        if not opaque:
+            r = r * a // 255
+            g = g * a // 255
+            b = b * a // 255
+
+        chunk[:] = (
+            (a.astype(np.uint32) << np.uint32(24))
+            | (r.astype(np.uint32) << np.uint32(16))
+            | (g.astype(np.uint32) << np.uint32(8))
+            | b.astype(np.uint32)
+        )
+
+
 def apply_settings(img: QImage, s: AdjustSettings) -> None:
     """Apply in place to a premultiplied ARGB32 QImage, in row bands."""
     if s.is_identity():
