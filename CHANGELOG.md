@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.59.0] — 2026-07-02
+
+### Added
+
+- Filter → Tilt-Shift…: the miniature-faking gradient blur — a sharp
+  horizontal band with blur ramping smoothly above and below (centre, band
+  height, transition, and blur radius in the dialog). One undo step.
+
 ## [0.58.0] — 2026-07-02
 
 ### Added

@@ -659,6 +659,7 @@ class MainWindow(QMainWindow):
         m_filter = menu.addMenu("Fi&lter")
         m_filter.addAction(self._act("Gaussian &Blur…", None, self.action_gaussian_blur))
         m_filter.addAction(self._act("&Unsharp Mask…", None, self.action_unsharp_mask))
+        m_filter.addAction(self._act("&Tilt-Shift…", None, self.action_tilt_shift))
 
         m_help = menu.addMenu("&Help")
         m_help.addAction(self._act("&About Photoslop", None, self.action_about))
@@ -1020,6 +1021,63 @@ class MainWindow(QMainWindow):
 
         self._run_filter("Unsharp Mask",
                          lambda img, m: npimage.unsharp_mask(img, 4, amount / 100.0, m))
+
+    def action_tilt_shift(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        layer = doc.active_layer
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QSpinBox
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Tilt-Shift")
+        form = QFormLayout(dialog)
+        spins = {}
+        h = layer.image.height()
+        for key, lo, hi, default, suffix in (
+                ("centre", 0, h, h // 2, " px"),
+                ("band", 4, h, max(8, h // 4), " px sharp"),
+                ("transition", 2, h, max(8, h // 6), " px"),
+                ("radius", 2, 60, 12, " px blur")):
+            spin = QSpinBox()
+            spin.setRange(lo, hi)
+            spin.setValue(default)
+            spin.setSuffix(suffix)
+            form.addRow(key.capitalize(), spin)
+            spins[key] = spin
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        if not dialog.exec():
+            return
+        self.apply_tilt_shift(doc, layer, spins["centre"].value(),
+                              spins["band"].value(), spins["transition"].value(),
+                              spins["radius"].value())
+
+    def apply_tilt_shift(self, doc, layer, centre: int, band: int,
+                         transition: int, radius: int) -> None:
+        import numpy as np
+
+        from photoslop import npimage
+
+        before = QImage(layer.image)
+        blurred = QImage(before)
+        npimage.gaussian_blur(blurred, radius)
+
+        h, w = layer.image.height(), layer.image.width()
+        ys = np.abs(np.arange(h, dtype=np.float32) - centre)
+        row_w = np.clip((ys - band / 2.0) / max(1, transition), 0.0, 1.0)
+        weights = np.repeat(row_w[:, None], w, axis=1)
+        npimage.blend_by_weights(blurred, before, weights)
+
+        layer.image = blurred
+        rect = layer.image.rect()
+        doc.undo_stack.push(LayerRegionCommand(
+            doc, layer, rect, before.copy(rect), blurred.copy(rect),
+            "Tilt-Shift", applied=True))
+        doc.notify_pixels(layer.bounds())
 
     def action_content_aware_fill(self) -> None:
         doc = self.current_doc()
