@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.64.0] — 2026-07-02
+
+### Added
+
+- Actions (Edit → Actions): record a sequence of parametrised operations —
+  Gaussian Blur, Unsharp Mask, Tilt-Shift — and play it back (`F9`) on any
+  layer or document. Playback lands as one undoable macro step.
+
 ## [0.63.1] — 2026-07-02
 
 ### Fixed

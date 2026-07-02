@@ -999,12 +999,16 @@ class MainWindow(QMainWindow):
 
         self._run_filter("Gaussian Blur",
                          lambda img, m: npimage.gaussian_blur(img, radius, m))
+        self._record_step(f"Gaussian Blur {radius}px",
+                          lambda w: w.action_gaussian_blur_direct(radius))
 
     def action_unsharp_direct(self, amount: int) -> None:
         from photoslop import npimage
 
         self._run_filter("Unsharp Mask",
                          lambda img, m: npimage.unsharp_mask(img, 4, amount / 100.0, m))
+        self._record_step(f"Unsharp Mask {amount}%",
+                          lambda w: w.action_unsharp_direct(amount))
 
     def action_record_start(self) -> None:
         self.action_recording = []
@@ -1124,14 +1128,9 @@ class MainWindow(QMainWindow):
         form.addRow(buttons)
         if not dialog.exec():
             return
-        centre, band = spins["centre"].value(), spins["band"].value()
-        transition, radius = spins["transition"].value(), spins["radius"].value()
-        self.apply_tilt_shift(doc, layer, centre, band, transition, radius)
-        self._record_step(
-            f"Tilt-Shift {radius}px",
-            lambda w: w.apply_tilt_shift(w.current_doc(),
-                                         w.current_doc().active_layer,
-                                         centre, band, transition, radius))
+        self.apply_tilt_shift(doc, layer, spins["centre"].value(),
+                              spins["band"].value(), spins["transition"].value(),
+                              spins["radius"].value())
 
     def apply_tilt_shift(self, doc, layer, centre: int, band: int,
                          transition: int, radius: int) -> None:
@@ -1155,6 +1154,11 @@ class MainWindow(QMainWindow):
             doc, layer, rect, before.copy(rect), blurred.copy(rect),
             "Tilt-Shift", applied=True))
         doc.notify_pixels(layer.bounds())
+        self._record_step(
+            f"Tilt-Shift {radius}px",
+            lambda w: w.apply_tilt_shift(w.current_doc(),
+                                         w.current_doc().active_layer,
+                                         centre, band, transition, radius))
 
     def action_content_aware_fill(self) -> None:
         doc = self.current_doc()
