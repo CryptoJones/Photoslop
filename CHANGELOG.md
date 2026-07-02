@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.69.0] — 2026-07-02
+
+### Added
+
+- Shape tool (`U`): drag to draw a rectangle, ellipse, or line onto a new
+  layer — foreground fill, brush-size line width, dashed live preview,
+  `Shift+U` cycles the shape. Layers are bounded to the shape, not the
+  canvas (30 tools).
+
 ## [0.68.0] — 2026-07-02
 
 ### Added

@@ -409,6 +409,16 @@ def zoom_out_icon() -> QIcon:
     return _make(draw)
 
 
+def shape_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.6))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRect(QRectF(4, 4, 9, 9))
+        p.drawEllipse(QRectF(9, 9, 8, 8))
+
+    return _make(draw)
+
+
 TOOL_ICONS = {
     "brush": brush_icon,
     "pencil": pencil_icon,
@@ -425,6 +435,7 @@ TOOL_ICONS = {
     "puppet": puppet_icon,
     "perspective": perspective_icon,
     "text": text_icon,
+    "shape": shape_icon,
     "crop": crop_icon,
     "dodge": dodge_icon,
     "burn": burn_icon,

@@ -79,6 +79,7 @@ from photoslop.tools import (
     PuppetTool,
     QuickSelectTool,
     RectSelectTool,
+    ShapeTool,
     SmudgeTool,
     SpotHealTool,
     TextTool,
@@ -123,6 +124,7 @@ class MainWindow(QMainWindow):
                 PuppetTool(self.options),
                 PerspectiveTool(self.options),
                 TextTool(self.options),
+                ShapeTool(self.options),
                 DodgeTool(self.options),
                 CropTool(self.options),
                 BurnTool(self.options),
@@ -221,6 +223,7 @@ class MainWindow(QMainWindow):
             "heal": "Shift+J", "patch": "Alt+Shift+J", "liquify": "Y",
             "puppet": "Shift+Y", "perspective": "Shift+P",
             "text": "T",
+            "shape": "U",
             "dodge": "O", "burn": "Shift+O", "crop": "C",
             "move": "V", "hand": "H", "zoom": "Z",
         }
@@ -241,6 +244,7 @@ class MainWindow(QMainWindow):
             "puppet": "Puppet Warp (click pins, drag; Enter commits)",
             "perspective": "Perspective Warp (click 4 plane corners, drag)",
             "text": "Text (click to place)",
+            "shape": "Shape (drag; Shift+U cycles rect/ellipse/line)",
             "dodge": "Dodge (lighten)", "burn": "Burn (darken)",
             "crop": "Crop (drag, Enter commits)",
             "move": "Move", "hand": "Hand (pan)", "zoom": "Zoom",
@@ -250,6 +254,7 @@ class MainWindow(QMainWindow):
                      "rect-select", "lasso", "poly-lasso", "magnetic-lasso", "wand",
                      "quick-select", "clone-stamp", "smudge", "spot-heal", "heal",
                      "patch", "liquify", "puppet", "perspective", "text",
+                     "shape",
                      "dodge", "burn", "crop",
                      "move", "hand", "zoom"):
             act = QAction(TOOL_ICONS[name](), labels[name], self)
@@ -279,6 +284,17 @@ class MainWindow(QMainWindow):
 
         cycle = QShortcut(QKeySequence("G"), self)
         cycle.activated.connect(self._cycle_fill_tool)
+        shape_cycle = QShortcut(QKeySequence("Shift+U"), self)
+        shape_cycle.activated.connect(self._cycle_shape)
+
+    def _cycle_shape(self) -> None:
+        """Shift+U: rect -> ellipse -> line, PS-style same-key variants."""
+        order = ("rect", "ellipse", "line")
+        self.options.shape = order[(order.index(self.options.shape) + 1) % 3]
+        if self._active_tool_name != "shape":
+            self._set_tool("shape")
+            self._tool_actions["shape"].setChecked(True)
+        self.statusBar().showMessage(f"Shape: {self.options.shape}", 3000)
 
     def _cycle_fill_tool(self) -> None:
         """G cycles Bucket <-> Gradient, PS-style same-key tool groups."""
@@ -420,6 +436,7 @@ class MainWindow(QMainWindow):
             "puppet": [],
             "perspective": [],
             "text": [color_act],
+            "shape": [color_act, size_act],
             "dodge": [size_act, hard_act, opacity_act, spacing_act],
             "burn": [size_act, hard_act, opacity_act, spacing_act],
             "crop": [],
