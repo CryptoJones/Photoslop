@@ -236,6 +236,57 @@ def drop_shadow_image(img: QImage, color, blur: int) -> QImage:
     return out
 
 
+def patch_heal(img: QImage, mask: np.ndarray, dx: int, dy: int) -> QRect:
+    """Patch-tool blend: fill the masked region with texture sampled at
+    (dx, dy) away, tone-matched to the destination (src - blur(src) +
+    blur(dst) inside the mask). Returns the dirty rect."""
+    ys, xs = np.nonzero(mask)
+    if len(ys) == 0:
+        return QRect()
+    pad = 4
+    h, w = mask.shape
+    y0, y1 = max(0, ys.min() - pad), min(h, ys.max() + 1 + pad)
+    x0, x1 = max(0, xs.min() - pad), min(w, xs.max() + 1 + pad)
+    sy0, sy1 = y0 + dy, y1 + dy
+    sx0, sx1 = x0 + dx, x1 + dx
+    if sy0 < 0 or sx0 < 0 or sy1 > h or sx1 > w:
+        return QRect()  # source window out of bounds: refuse
+
+    arr = view_u32(img)
+    dst = arr[y0:y1, x0:x1]
+    src = arr[sy0:sy1, sx0:sx1]
+    hole = mask[y0:y1, x0:x1]
+
+    # tone reference: the destination with the blemish diffused away —
+    # matching against the raw destination would re-impose the blemish
+    tone_img = img.copy(QRect(int(x0), int(y0), int(x1 - x0), int(y1 - y0)))
+    inpaint_diffuse(tone_img, hole, blend_passes=1)
+    tone = view_u32(tone_img)
+
+    def channels(a):
+        return [((a >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (16, 8, 0)]
+
+    def blur(c):
+        out = c
+        for _ in range(3):
+            padded = np.pad(out, 1, mode="edge")
+            out = (padded[:-2, 1:-1] + padded[2:, 1:-1] + padded[1:-1, :-2]
+                   + padded[1:-1, 2:] + padded[1:-1, 1:-1]) / 5.0
+        return out
+
+    alpha = (dst >> np.uint32(24)) & 0xFF
+    healed = []
+    for sc, tc in zip(channels(src), channels(tone), strict=True):
+        healed.append(np.minimum(
+            np.clip(sc - blur(sc) + blur(tc), 0, 255).astype(np.uint32),
+            alpha))
+    r, g, b = healed
+    out = ((alpha << np.uint32(24)) | (r << np.uint32(16))
+           | (g << np.uint32(8)) | b)
+    dst[hole] = out[hole]
+    return QRect(int(x0), int(y0), int(x1 - x0), int(y1 - y0))
+
+
 def stroke_outline_image(img: QImage, color, width: int) -> QImage:
     """A solid outline `width` px around `img`'s alpha silhouette, padded so
     the outline never clips (outside stroke)."""

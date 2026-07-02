@@ -384,6 +384,75 @@ class EraserTool(BrushTool):
             self._stamp_segment(p, la, lb, alpha, first, QColor(0, 0, 0))
 
 
+class PatchTool(Tool):
+    """Patch: make a selection first, then drag from inside it to the area
+    to sample — on release the selection heals with the sampled texture,
+    tone-matched to its surroundings."""
+
+    name = "patch"
+    cursor = Qt.CursorShape.OpenHandCursor
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._start: QPointF | None = None
+        self._delta = QPointF(0, 0)
+
+    def press(self, doc, canvas, pos, ev):
+        if doc.selection is None or not doc.selection.contains(pos):
+            return
+        self._start = pos
+        self._delta = QPointF(0, 0)
+
+    def move(self, doc, canvas, pos, ev):
+        if self._start is None:
+            return
+        self._delta = pos - self._start
+        canvas.update()
+
+    def release(self, doc, canvas, pos, ev):
+        if self._start is None:
+            return
+        delta = pos - self._start
+        self._start = None
+        self._delta = QPointF(0, 0)
+        layer = doc.active_layer
+        if layer is None or (abs(delta.x()) < 1 and abs(delta.y()) < 1):
+            if canvas is not None:
+                canvas.update()
+            return
+        mask = npimage.selection_mask(doc.selection, layer.image.size(),
+                                      layer.offset)
+        if not mask.any():
+            return
+        before = QImage(layer.image)  # COW; patch_heal's write detaches
+        dirty = npimage.patch_heal(layer.image, mask,
+                                   round(delta.x()), round(delta.y()))
+        if dirty.isEmpty():
+            return  # sample window out of bounds
+        doc.undo_stack.push(LayerRegionCommand(
+            doc, layer, dirty, before.copy(dirty), layer.image.copy(dirty),
+            "Patch", applied=True))
+        doc.notify_pixels(dirty.translated(layer.offset))
+        if canvas is not None:
+            canvas.update()
+
+    def cancel(self, doc=None) -> None:
+        self._start = None
+        self._delta = QPointF(0, 0)
+
+    def overlay(self, doc, painter, canvas):
+        if self._start is None or doc.selection is None:
+            return
+        z = canvas.zoom
+        ghost = doc.selection.translated(self._delta.x(), self._delta.y())
+        painter.save()
+        painter.scale(z, z)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor(120, 220, 255, 220), 1.5 / max(z, 0.01)))
+        painter.drawPath(ghost)
+        painter.restore()
+
+
 class TextTool(Tool):
     """Text (T): click to place text — a dialog takes the content and font,
     and the text rasterises onto a new layer at the click point."""
