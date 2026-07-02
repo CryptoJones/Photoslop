@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.52.0] — 2026-07-02
+
+### Added
+
+- Magnetic Lasso (`Alt+L`): click anchors like the polygonal lasso, but each
+  segment is a livewire — a minimum-cost Dijkstra path that hugs strong
+  edges between your clicks. Double-click or click the first anchor to
+  close; Escape cancels.
+
 ## [0.51.0] — 2026-07-02
 
 ### Changed

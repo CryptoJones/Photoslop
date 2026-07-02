@@ -144,6 +144,19 @@ def poly_lasso_icon() -> QIcon:
     return _make(draw)
 
 
+def magnetic_lasso_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        pen = QPen(_INK, 1.6, Qt.PenStyle.DashLine)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QPointF(11, 10), 6.5, 5.0)
+        p.setPen(QPen(_INK, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.drawLine(QPointF(7, 16), QPointF(7, 19))  # magnet legs
+        p.drawLine(QPointF(11, 16), QPointF(11, 19))
+
+    return _make(draw)
+
+
 def wand_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 2.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
@@ -347,6 +360,7 @@ TOOL_ICONS = {
     "rect-select": rect_select_icon,
     "lasso": lasso_icon,
     "poly-lasso": poly_lasso_icon,
+    "magnetic-lasso": magnetic_lasso_icon,
     "wand": wand_icon,
     "quick-select": quick_select_icon,
     "move": move_icon,
