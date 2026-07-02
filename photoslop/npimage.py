@@ -236,6 +236,63 @@ def drop_shadow_image(img: QImage, color, blur: int) -> QImage:
     return out
 
 
+def _box_blur_plane(c: np.ndarray, r: int) -> np.ndarray:
+    k = 2 * r + 1
+    csum = np.cumsum(c, axis=0)
+    c = (np.vstack((csum[r:], np.repeat(csum[-1:], r, axis=0)))
+         - np.vstack((np.zeros((r + 1, c.shape[1]), np.float32),
+                      csum[:-r - 1]))) / k
+    csum = np.cumsum(c, axis=1)
+    c = (np.hstack((csum[:, r:], np.repeat(csum[:, -1:], r, axis=1)))
+         - np.hstack((np.zeros((c.shape[0], r + 1), np.float32),
+                      csum[:, :-r - 1]))) / k
+    return c
+
+
+def gaussian_blur(img: QImage, radius: int,
+                  mask: np.ndarray | None = None) -> None:
+    """Approximate gaussian blur (triple box blur) on all four premultiplied
+    channels, in place; when `mask` is given only masked pixels change."""
+    r = max(1, int(radius) // 2 + 1)
+    arr = view_u32(img)
+    planes = [((arr >> np.uint32(k)) & 0xFF).astype(np.float32)
+              for k in (24, 16, 8, 0)]
+    blurred = planes
+    for _ in range(3):
+        blurred = [_box_blur_plane(c, r) for c in blurred]
+    a, rr, g, b = [np.clip(c + 0.5, 0, 255).astype(np.uint32) for c in blurred]
+    out = (a << np.uint32(24)) | (rr << np.uint32(16)) | (g << np.uint32(8)) | b
+    if mask is None:
+        arr[:] = out
+    else:
+        arr[mask] = out[mask]
+
+
+def unsharp_mask(img: QImage, radius: int, amount: float,
+                 mask: np.ndarray | None = None) -> None:
+    """Sharpen: original + amount * (original - blur), premultiplied-safe."""
+    r = max(1, int(radius) // 2 + 1)
+    arr = view_u32(img)
+    planes = [((arr >> np.uint32(k)) & 0xFF).astype(np.float32)
+              for k in (24, 16, 8, 0)]
+    sharpened = []
+    for i, c in enumerate(planes):
+        blur = c
+        for _ in range(3):
+            blur = _box_blur_plane(blur, r)
+        if i == 0:
+            sharpened.append(c)  # alpha untouched
+        else:
+            sharpened.append(np.minimum(
+                np.clip(c + amount * (c - blur), 0, 255), planes[0]))
+    a, rr, g, b = [np.clip(c + 0.5, 0, 255).astype(np.uint32) for c in sharpened]
+    out = (a << np.uint32(24)) | (rr << np.uint32(16)) | (g << np.uint32(8)) | b
+    if mask is None:
+        arr[:] = out
+    else:
+        arr[mask] = out[mask]
+
+
 def livewire_path(img: QImage, a, b, margin: int = 16,
                   max_area: int = 60000) -> list:
     """Minimum-cost 8-connected path from a to b (layer coords) where cost is
