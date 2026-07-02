@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QImage, QPen, QPolygonF, QTransform, QUndoCommand
+from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPolygonF, QTransform, QUndoCommand
 
 from photoslop.tools import Tool, ToolOptions
 
@@ -54,6 +54,9 @@ class TransformSession:
         # Free-quad mode (distort/skew/perspective): once set, the quad IS
         # the transform and rot/scale/translation are baked into it.
         self.quad: list[QPointF] | None = None
+        # Warp mode: a 3x3 control grid; the image renders as four
+        # projective patches (quarter -> warped quad).
+        self.warp_grid: list[QPointF] | None = None
 
     @property
     def base_center(self) -> QPointF:
@@ -102,6 +105,51 @@ class TransformSession:
         if self.quad is None:
             self.quad = self.corners()
 
+    def enter_warp(self) -> None:
+        if self.warp_grid is not None:
+            return
+        w = self.base_image.width()
+        h = self.base_image.height()
+        off = self.base_offset
+        self.warp_grid = [
+            QPointF(off.x() + w * col / 2.0, off.y() + h * row / 2.0)
+            for row in range(3) for col in range(3)
+        ]
+
+    def warp_patches(self):
+        """Yield (source_rect_in_image_coords, image->canvas QTransform) for
+        the four grid patches."""
+        w = self.base_image.width()
+        h = self.base_image.height()
+        grid = self.warp_grid
+        for row in range(2):
+            for col in range(2):
+                sx0, sy0 = w * col / 2.0, h * row / 2.0
+                sx1, sy1 = w * (col + 1) / 2.0, h * (row + 1) / 2.0
+                src = QPolygonF([QPointF(sx0, sy0), QPointF(sx1, sy0),
+                                 QPointF(sx1, sy1), QPointF(sx0, sy1)])
+                i = row * 3 + col
+                dst = QPolygonF([grid[i], grid[i + 1],
+                                 grid[i + 4], grid[i + 3]])
+                m = QTransform()
+                QTransform.quadToQuad(src, dst, m)
+                yield QRectF(sx0, sy0, sx1 - sx0, sy1 - sy0), m
+
+    def draw_preview(self, p) -> None:
+        """Paint the live transform preview through the painter (canvas
+        coordinate space) — handles warp, quad, and rot/scale uniformly."""
+        if self.warp_grid is not None:
+            for src, m in self.warp_patches():
+                p.save()
+                p.setTransform(m, True)
+                p.drawImage(src.topLeft(), self.base_image, src)
+                p.restore()
+            return
+        p.save()
+        p.setTransform(self.full_matrix(), True)
+        p.drawImage(QPointF(0, 0), self.base_image)
+        p.restore()
+
     def to_local(self, pos: QPointF) -> QPointF:
         """Canvas point → unrotated, unscaled frame centred on the layer."""
         inverted, ok = self.matrix().inverted()
@@ -111,11 +159,45 @@ class TransformSession:
         return inverted.map(QPointF(d.x(), d.y()))
 
     def is_identity(self) -> bool:
+        if self.warp_grid is not None:
+            w = self.base_image.width()
+            h = self.base_image.height()
+            off = self.base_offset
+            for row in range(3):
+                for col in range(3):
+                    expected = QPointF(off.x() + w * col / 2.0,
+                                       off.y() + h * row / 2.0)
+                    if self.warp_grid[row * 3 + col] != expected:
+                        return False
+            return True
         return (self.quad is None and self.scale_x == 1.0 and self.scale_y == 1.0
                 and self.rotation == 0.0 and self.translation.isNull())
 
     def commit(self) -> None:
         if self.is_identity():
+            return
+        if self.warp_grid is not None:
+            xs = [pt.x() for pt in self.warp_grid]
+            ys = [pt.y() for pt in self.warp_grid]
+            bounds = QRectF(min(xs), min(ys),
+                            max(xs) - min(xs), max(ys) - min(ys))
+            from PySide6.QtCore import QSize
+
+            from photoslop.layer import blank_image
+
+            new_image = blank_image(QSize(max(1, round(bounds.width())),
+                                          max(1, round(bounds.height()))))
+            p = QPainter(new_image)
+            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            p.translate(-bounds.topLeft())
+            for src, m in self.warp_patches():
+                p.save()
+                p.setTransform(m, True)
+                p.drawImage(src.topLeft(), self.base_image, src)
+                p.restore()
+            p.end()
+            self._push(new_image, QPoint(round(bounds.left()),
+                                         round(bounds.top())))
             return
         if self.quad is not None:
             m = self.full_matrix()
@@ -212,6 +294,19 @@ class TransformTool(Tool):
     def press(self, doc, canvas, pos, ev):
         if self.session is None:
             return
+        if self.session.warp_grid is not None:
+            tol = 10.0 / max(canvas.zoom, 0.01)
+            best, best_d = None, tol * tol
+            for i, pt in enumerate(self.session.warp_grid):
+                d = (pt.x() - pos.x()) ** 2 + (pt.y() - pos.y()) ** 2
+                if d <= best_d:
+                    best, best_d = i, d
+            self._mode = f"warp:{best}" if best is not None else None
+            self._press_pos = pos
+            self._press_state = (self.session.scale_x, self.session.scale_y,
+                                 self.session.rotation,
+                                 QPointF(self.session.translation))
+            return
         self._mode = self._hit(canvas, pos)
         self._press_pos = pos
         s = self.session
@@ -236,6 +331,12 @@ class TransformTool(Tool):
         shift = ev is not None and bool(
             ev.modifiers() & Qt.KeyboardModifier.ShiftModifier)
 
+        if self._mode.startswith("warp:"):
+            index = int(self._mode[5:])
+            s.warp_grid[index] = QPointF(pos)
+            doc.notify_structure()
+            canvas.update()
+            return
         if self._mode.startswith("quad:"):
             handle = self._mode[5:]
             delta = pos - self._press_pos
@@ -296,6 +397,21 @@ class TransformTool(Tool):
         if self.session is None:
             return
         z = canvas.zoom
+        if self.session.warp_grid is not None:
+            grid = [QPointF(pt.x() * z, pt.y() * z)
+                    for pt in self.session.warp_grid]
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor(120, 220, 255, 200), 1))
+            for row in range(3):  # grid lines
+                painter.drawLine(grid[row * 3], grid[row * 3 + 1])
+                painter.drawLine(grid[row * 3 + 1], grid[row * 3 + 2])
+                painter.drawLine(grid[row], grid[row + 3])
+                painter.drawLine(grid[row + 3], grid[row + 6])
+            painter.setPen(QPen(QColor(0, 0, 0, 220), 1))
+            painter.setBrush(QColor(255, 255, 255, 230))
+            for pt in grid:
+                painter.drawRect(QRectF(pt.x() - 3.5, pt.y() - 3.5, 7, 7))
+            return
         corners = [QPointF(p.x() * z, p.y() * z) for p in self.session.corners()]
         painter.setBrush(Qt.BrushStyle.NoBrush)
         for color, style in ((QColor(255, 255, 255, 220), Qt.PenStyle.SolidLine),

@@ -168,10 +168,7 @@ class CanvasView(QWidget):
                 p.drawImage(region.topLeft(),
                             render_region(self.doc, region, exclude))
                 if transform_session is not None:
-                    p.save()
-                    p.setTransform(transform_session.full_matrix(), True)
-                    p.drawImage(QPointF(0, 0), transform_session.base_image)
-                    p.restore()
+                    transform_session.draw_preview(p)
             layers_to_paint = ()
         else:
             layers_to_paint = self.doc.layers
@@ -181,12 +178,8 @@ class CanvasView(QWidget):
             p.setOpacity(layer.opacity)
             p.setCompositionMode(BLEND_MODES[layer.blend_mode])
             if transform_session is not None and layer is transform_session.layer:
-                # live Free Transform preview: draw through the painter
-                # transform instead of resampling pixels
-                p.save()
-                p.setTransform(transform_session.full_matrix(), True)
-                p.drawImage(QPointF(0, 0), transform_session.base_image)
-                p.restore()
+                # live transform preview: painter transforms, no resampling
+                transform_session.draw_preview(p)
             else:
                 draw_layer(p, self.doc, layer, clip_canvas)
         p.restore()
