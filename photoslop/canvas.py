@@ -317,7 +317,7 @@ class CanvasView(QWidget):
             return
         tool = self.editor.active_tool()
         if (key in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
-                and tool is not None and tool.name == "transform"):
+                and tool is not None and hasattr(tool, "commit")):
             tool.commit(self)
             return
         if key == Qt.Key.Key_Escape:

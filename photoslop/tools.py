@@ -242,6 +242,79 @@ class PencilTool(BrushTool):
         self._pen_segment(p, la, lb, color, first)
 
 
+class CropTool(Tool):
+    """Drag a crop rectangle; Enter or double-click commits (offset-shift
+    crop, no pixel copies), Escape clears. The overlay shields the discard
+    area and shows a rule-of-thirds grid."""
+
+    name = "crop"
+    cursor = Qt.CursorShape.CrossCursor
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._start: QPointF | None = None
+        self.rect: QRect | None = None
+
+    def press(self, doc, canvas, pos, ev):
+        self._start = pos
+        self.rect = None
+
+    def move(self, doc, canvas, pos, ev):
+        if self._start is None:
+            return
+        rect = QRectF(self._start, pos).normalized().toAlignedRect()
+        self.rect = rect.intersected(doc.canvas_rect())
+        canvas.update()
+
+    def release(self, doc, canvas, pos, ev):
+        self._start = None
+        if self.rect is not None and (self.rect.width() < 2 or self.rect.height() < 2):
+            self.rect = None
+        if canvas is not None:
+            canvas.update()
+
+    def double_click(self, doc, canvas, pos, ev):
+        self.commit(canvas)
+
+    def cancel(self, doc=None) -> None:
+        self._start = None
+        self.rect = None
+
+    def commit(self, canvas) -> None:
+        from photoslop.commands import ResizeCanvasCommand
+
+        rect = self.rect
+        if canvas is None or rect is None or rect.isEmpty():
+            return
+        doc = canvas.doc
+        doc.undo_stack.push(
+            ResizeCanvasCommand(doc, rect.size(), -rect.topLeft(), "Crop"))
+        self.rect = None
+        canvas.update()
+
+    def overlay(self, doc, painter, canvas):
+        rect = self.rect
+        if rect is None:
+            return
+        z = canvas.zoom
+        r = QRectF(rect.x() * z, rect.y() * z, rect.width() * z, rect.height() * z)
+        full = QRectF(0, 0, doc.size.width() * z, doc.size.height() * z)
+        shield = QPainterPath()
+        shield.addRect(full)
+        inner = QPainterPath()
+        inner.addRect(r)
+        painter.fillPath(shield.subtracted(inner), QColor(0, 0, 0, 110))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor(255, 255, 255, 230), 1))
+        painter.drawRect(r)
+        painter.setPen(QPen(QColor(255, 255, 255, 90), 1))
+        for i in (1, 2):  # rule-of-thirds guides
+            x = r.left() + r.width() * i / 3
+            y = r.top() + r.height() * i / 3
+            painter.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
+            painter.drawLine(QPointF(r.left(), y), QPointF(r.right(), y))
+
+
 class DodgeTool(BrushTool):
     """Lighten as you paint: soft-light white stamps, strength = opacity."""
 
