@@ -122,9 +122,10 @@ class Ruler(QWidget):
                     p.restore()
             value += step
 
-        # cursor marker
+        # cursor marker (round exactly like the canvas draws guides, so the
+        # hairline and a guide under the cursor form one continuous line)
         if self.marker is not None:
-            w = self.origin + self.marker * self.zoom
+            w = self.origin + round(self.marker * self.zoom)
             p.setPen(QPen(QColor(220, 60, 60), 1))
             if horizontal:
                 p.drawLine(QPointF(w, 0), QPointF(w, self.height()))
@@ -133,7 +134,7 @@ class Ruler(QWidget):
 
         # guide-drag marker: full line + a triangle at the canvas-adjacent edge
         if self.guide_marker is not None:
-            w = self.origin + self.guide_marker * self.zoom
+            w = self.origin + round(self.guide_marker * self.zoom)
             color = QColor(255, 0, 200)
             p.setPen(QPen(color, 1))
             tri = QPolygonF()

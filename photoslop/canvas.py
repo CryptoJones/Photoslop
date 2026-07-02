@@ -314,11 +314,16 @@ class EditorView(QWidget):
     # -- rulers --
 
     def sync_rulers(self) -> None:
-        origin = self.canvas.mapTo(self.scroll.viewport(), QPoint(0, 0))
+        # Map the canvas origin into each RULER's own coordinate space (via
+        # global coords) — the viewport is inset by the scroll-area frame, so
+        # viewport-relative origins draw everything a frame-width off.
+        origin_global = self.canvas.mapToGlobal(QPoint(0, 0))
+        origin_x = self.hruler.mapFromGlobal(origin_global).x()
+        origin_y = self.vruler.mapFromGlobal(origin_global).y()
         unit = self.host.unit
         zoom = self.canvas.zoom
-        self.hruler.configure(origin.x(), zoom, self.doc.dpi, unit, self.doc.size.width())
-        self.vruler.configure(origin.y(), zoom, self.doc.dpi, unit, self.doc.size.height())
+        self.hruler.configure(origin_x, zoom, self.doc.dpi, unit, self.doc.size.width())
+        self.vruler.configure(origin_y, zoom, self.doc.dpi, unit, self.doc.size.height())
         self.corner.setText(unit)
 
     def _cycle_unit(self) -> None:
