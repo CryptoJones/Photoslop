@@ -1,12 +1,14 @@
 # Photoslop
 
+<img src="docs/icon.png" width="112" align="right" alt="Le Basilisk, the Photoslop mascot — a doofy green tentacled fellow in a beret, brush in one tentacle, palette in another">
+
 A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped, Qt-native, zero Electron.
 
 [![Tests](https://github.com/CryptoJones/Photoslop/actions/workflows/test.yml/badge.svg)](https://github.com/CryptoJones/Photoslop/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.2.3-orange)]()
+[![Version](https://img.shields.io/badge/version-v0.2.4-orange)]()
 
 ---
 
