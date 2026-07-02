@@ -18,7 +18,9 @@ from PySide6.QtGui import (
     QPainter,
     QPainterPath,
     QPen,
+    QPolygonF,
     QRadialGradient,
+    QTransform,
 )
 
 from photoslop import npimage
@@ -521,6 +523,159 @@ class LiquifyTool(Tool):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(QColor(255, 180, 80, 200), 1))
         painter.drawEllipse(center, r, r)
+
+
+class PerspectiveTool(Tool):
+    """Perspective Warp (Shift+P): click four corners to define the source
+    plane, then drag them to their rectified positions — the whole layer
+    warps by that homography. Enter commits, Escape cancels."""
+
+    name = "perspective"
+    cursor = Qt.CursorShape.CrossCursor
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._layer = None
+        self._doc = None
+        self._base: QImage | None = None
+        self._base_offset: QPoint | None = None
+        self.src: list[QPointF] = []  # layer-local plane corners
+        self.dst: list[QPointF] = []
+        self._drag: int | None = None
+
+    def press(self, doc, canvas, pos, ev):
+        layer = doc.active_layer
+        if layer is None:
+            return
+        if self._base is None:
+            self._layer = layer
+            self._doc = doc
+            self._base = QImage(layer.image)
+            self._base_offset = QPoint(layer.offset)
+            self.src = []
+            self.dst = []
+        local = pos - QPointF(layer.offset if not self.dst else self._base_offset)
+        if len(self.src) < 4:
+            self.src.append(QPointF(local))
+            if len(self.src) == 4:
+                self.dst = [QPointF(p) for p in self.src]
+            canvas.update()
+            return
+        tol = 10.0 / max(canvas.zoom, 0.01)
+        best, best_d = None, tol * tol
+        for i, pt in enumerate(self.dst):
+            d = (pt.x() - local.x()) ** 2 + (pt.y() - local.y()) ** 2
+            if d <= best_d:
+                best, best_d = i, d
+        self._drag = best
+
+    def move(self, doc, canvas, pos, ev):
+        if self._drag is None or self._base is None:
+            return
+        local = pos - QPointF(self._base_offset)
+        self.dst[self._drag] = QPointF(local)
+        self._rewarp(doc)
+        canvas.update()
+
+    def release(self, doc, canvas, pos, ev):
+        self._drag = None
+
+    def _homography(self) -> QTransform:
+        m = QTransform()
+        QTransform.quadToQuad(QPolygonF(self.src), QPolygonF(self.dst), m)
+        return m
+
+    def _rewarp(self, doc) -> None:
+        from PySide6.QtCore import QRectF
+
+        from photoslop.layer import blank_image
+
+        layer = self._layer
+        h = self._homography()
+        bw, bh = self._base.width(), self._base.height()
+        # projective transforms can shoot past the vanishing line: clamp the
+        # output window to a sane multiple of the layer instead of trusting
+        # mapRect (QImage.transformed would try to allocate the horizon)
+        sane = QRectF(-2.0 * bw, -2.0 * bh, 5.0 * bw, 5.0 * bh)
+        bounds = h.mapRect(QRectF(0, 0, bw, bh)).intersected(sane)
+        if bounds.width() < 1 or bounds.height() < 1:
+            return
+        from PySide6.QtCore import QSize
+
+        warped = blank_image(QSize(round(bounds.width()), round(bounds.height())))
+        p = QPainter(warped)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        p.translate(-bounds.topLeft())
+        p.setTransform(h, True)
+        p.drawImage(QPointF(0, 0), self._base)
+        p.end()
+        layer.image = warped
+        layer.offset = self._base_offset + QPoint(round(bounds.left()),
+                                                  round(bounds.top()))
+        doc.notify_pixels(doc.canvas_rect())
+
+    def commit(self, canvas) -> None:
+        if self._base is None or self._layer is None:
+            return
+        from photoslop.transform import TransformLayerCommand
+
+        layer, doc = self._layer, self._doc
+        if layer.image != self._base or layer.offset != self._base_offset:
+            command = TransformLayerCommand(
+                doc, layer, self._base, self._base_offset,
+                QImage(layer.image), QPoint(layer.offset))
+            command.setText("Perspective Warp")
+            doc.undo_stack.push(command)
+        self._reset()
+        if canvas is not None:
+            canvas.update()
+
+    def cancel(self, doc=None) -> None:
+        if self._base is not None and self._layer is not None:
+            self._layer.image = QImage(self._base)
+            self._layer.offset = QPoint(self._base_offset)
+            self._doc.notify_pixels(self._doc.canvas_rect())
+        self._reset()
+
+    def _reset(self) -> None:
+        self._layer = None
+        self._doc = None
+        self._base = None
+        self._base_offset = None
+        self.src = []
+        self.dst = []
+        self._drag = None
+
+    def overlay(self, doc, painter, canvas):
+        if self._base is None:
+            return
+        z = canvas.zoom
+        off = QPointF(self._base_offset)
+
+        def to_widget(pt: QPointF) -> QPointF:
+            return QPointF((pt.x() + off.x()) * z, (pt.y() + off.y()) * z)
+
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        if len(self.src) >= 2:
+            painter.setPen(QPen(QColor(160, 160, 160, 200), 1, Qt.PenStyle.DashLine))
+            pts = [to_widget(p) for p in self.src]
+            for i in range(len(pts) - (0 if len(pts) == 4 else 1)):
+                painter.drawLine(pts[i], pts[(i + 1) % len(pts)])
+        if self.dst:
+            painter.setPen(QPen(QColor(120, 220, 255, 230), 1))
+            pts = [to_widget(p) for p in self.dst]
+            for i in range(4):
+                painter.drawLine(pts[i], pts[(i + 1) % 4])
+            painter.setPen(QPen(QColor(0, 0, 0, 220), 1))
+            painter.setBrush(QColor(255, 255, 255, 230))
+            for pt in pts:
+                painter.drawRect(QRectF(pt.x() - 3.5, pt.y() - 3.5, 7, 7))
+        elif self.src:
+            painter.setPen(QPen(QColor(0, 0, 0, 220), 1))
+            painter.setBrush(QColor(255, 255, 255, 230))
+            for p in self.src:
+                w = to_widget(p)
+                painter.drawRect(QRectF(w.x() - 3.5, w.y() - 3.5, 7, 7))
 
 
 class PuppetTool(Tool):

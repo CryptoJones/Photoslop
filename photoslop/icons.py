@@ -276,6 +276,20 @@ def puppet_icon() -> QIcon:
     return _make(draw)
 
 
+def perspective_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.8))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        path = QPainterPath(QPointF(7, 5))
+        path.lineTo(QPointF(15, 6.5))
+        path.lineTo(QPointF(18, 17))
+        path.lineTo(QPointF(4, 17))
+        path.closeSubpath()
+        p.drawPath(path)
+
+    return _make(draw)
+
+
 def text_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
@@ -384,6 +398,7 @@ TOOL_ICONS = {
     "patch": patch_icon,
     "liquify": liquify_icon,
     "puppet": puppet_icon,
+    "perspective": perspective_icon,
     "text": text_icon,
     "crop": crop_icon,
     "dodge": dodge_icon,
