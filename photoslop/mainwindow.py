@@ -50,6 +50,7 @@ from photoslop.commands import (
 )
 from photoslop.dialogs import CanvasSizeDialog, NewDocumentDialog, ResizeImageDialog
 from photoslop.document import Document
+from photoslop.exportdialog import ExportDialog
 from photoslop.icons import TOOL_ICONS
 from photoslop.io_ora import load_ora, save_ora
 from photoslop.layer import FORMAT, Layer, blank_image
@@ -69,8 +70,6 @@ from photoslop.tools import (
     ToolOptions,
     ZoomTool,
 )
-
-_EXPORT_FILTER = "PNG (*.png);;JPEG (*.jpg *.jpeg);;WebP (*.webp);;BMP (*.bmp)"
 
 
 class MainWindow(QMainWindow):
@@ -675,20 +674,22 @@ class MainWindow(QMainWindow):
         doc = self.current_doc()
         if doc is None:
             return
-        suggested = os.path.splitext(doc.name)[0] + ".png"
-        path, chosen = QFileDialog.getSaveFileName(self, "Export", suggested, _EXPORT_FILTER)
+        dialog = ExportDialog(doc, self)
+        if not dialog.exec():
+            return
+        fmt = dialog.chosen_format()
+        suffix = dialog.suggested_suffix()
+        suggested = os.path.splitext(doc.name)[0] + suffix
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export As", suggested, f"{fmt} (*{suffix})")
         if not path:
             return
-        ext = os.path.splitext(path)[1].lower()
-        if not ext:
-            ext = ".png"
-            path += ext
-        opaque = ext in (".jpg", ".jpeg", ".bmp")
-        img = doc.flatten(QColor(255, 255, 255) if opaque else None)
+        if not path.lower().endswith(suffix):
+            path += suffix
+        img = dialog.export_image()
         img.setDotsPerMeterX(round(doc.dpi / 0.0254))
         img.setDotsPerMeterY(round(doc.dpi / 0.0254))
-        quality = 95 if ext in (".jpg", ".jpeg", ".webp") else -1
-        if img.save(path, None, quality):
+        if img.save(path, fmt, dialog.chosen_quality()):
             self.statusBar().showMessage(f"Exported {path}", 4000)
         else:
             self.statusBar().showMessage(f"Export failed: {path}", 6000)
