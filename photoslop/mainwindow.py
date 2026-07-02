@@ -297,6 +297,14 @@ class MainWindow(QMainWindow):
             lambda v: setattr(self.options, "gradient_shape", v))
         shape_act = bar.addWidget(shape)
 
+        flow = QSpinBox()
+        flow.setRange(1, 100)
+        flow.setValue(self.options.flow)
+        flow.setSuffix("% flow")
+        flow.setToolTip("Paint per stamp; opacity caps the whole stroke")
+        flow.valueChanged.connect(lambda v: setattr(self.options, "flow", v))
+        flow_act = bar.addWidget(flow)
+
         spacing = QSpinBox()
         spacing.setRange(5, 200)
         spacing.setValue(self.options.spacing)
@@ -322,9 +330,9 @@ class MainWindow(QMainWindow):
 
         self._option_actions = {
             "brush": [color_act, bg_act, size_act, hard_act, opacity_act,
-                      eraser_act, spacing_act],
+                      eraser_act, flow_act, spacing_act],
             "pencil": [color_act, bg_act, size_act, opacity_act, eraser_act],
-            "eraser": [size_act, hard_act, opacity_act, spacing_act],
+            "eraser": [size_act, hard_act, opacity_act, flow_act, spacing_act],
             "bucket": [color_act, bg_act, opacity_act, tol_act, fill_source_act],
             "gradient": [color_act, bg_act, opacity_act, shape_act],
             "eyedropper": [color_act, bg_act],
@@ -344,7 +352,8 @@ class MainWindow(QMainWindow):
         }
         self._all_option_actions = [
             color_act, bg_act, size_act, hard_act, opacity_act, eraser_act,
-            tol_act, shape_act, contig_act, fill_source_act, spacing_act,
+            tol_act, shape_act, contig_act, fill_source_act, flow_act,
+            spacing_act,
         ]
 
         # PS-style bracket shortcuts; window-level, invisible in menus

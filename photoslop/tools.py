@@ -22,6 +22,7 @@ from PySide6.QtGui import (
 
 from photoslop import npimage
 from photoslop.commands import LayerRegionCommand, SetLayerOffsetCommand, TileRecorder
+from photoslop.layer import blank_image
 
 
 class ToolOptions:
@@ -39,6 +40,7 @@ class ToolOptions:
         self.contiguous = True  # wand: connected region vs global colour range
         self.fill_source = "color"  # bucket: "color" or "pattern"
         self.spacing = 25  # stamp spacing, % of brush size
+        self.flow = 100  # per-stamp paint amount; opacity is the stroke ceiling
         self.pattern = None  # QImage tile from Edit > Define Pattern
 
     def swap_colors(self) -> None:
@@ -77,6 +79,10 @@ class Tool:
 class BrushTool(Tool):
     name = "brush"
     antialias = True
+    # Soft/partial strokes paint into a per-stroke scratch buffer at `flow`
+    # strength and composite at `opacity` — so opacity is a true stroke
+    # ceiling (PS semantics). Subclasses that paint directly opt out.
+    scratch_stroke = True
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
@@ -85,6 +91,8 @@ class BrushTool(Tool):
         self._last: QPointF | None = None
         self._residual = 0.0
         self._clip: QPainterPath | None = None
+        self._scratch: QImage | None = None
+        self._orig: QImage | None = None
 
     # -- stroke lifecycle --
 
@@ -116,6 +124,8 @@ class BrushTool(Tool):
         self._recorder = None
         self._layer = None
         self._last = None
+        self._scratch = None
+        self._orig = None
 
     def _stroke_name(self) -> str:
         return "Eraser" if self.opts.eraser else "Brush Stroke"
@@ -132,14 +142,45 @@ class BrushTool(Tool):
         rect = QRectF(la, lb).normalized().adjusted(-pad, -pad, pad, pad).toAlignedRect()
         self._recorder.will_change(rect)
 
-        p = QPainter(layer.image)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, self.antialias)
-        if self._clip is not None:
-            p.setClipPath(self._clip)
-        self._paint(p, la, lb, first)
-        p.end()
+        fast = (self.opts.hardness >= 100 and self.opts.opacity >= 100
+                and self.opts.flow >= 100)
+        if not self.scratch_stroke or fast:
+            p = QPainter(layer.image)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing, self.antialias)
+            if self._clip is not None:
+                p.setClipPath(self._clip)
+            self._paint(p, la, lb, first)
+            p.end()
+        else:
+            if self._scratch is None:
+                self._orig = QImage(layer.image)  # COW reference
+                self._scratch = blank_image(layer.image.size())
+            sp = QPainter(self._scratch)
+            sp.setRenderHint(QPainter.RenderHint.Antialiasing, self.antialias)
+            if self._clip is not None:
+                sp.setClipPath(self._clip)
+            self._stamp_segment(sp, la, lb, round(self.opts.flow * 2.55),
+                                first, self._stroke_color())
+            sp.end()
+            # rebuild the dirty rect: original pixels + stroke at opacity
+            p = QPainter(layer.image)
+            p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+            p.drawImage(rect.topLeft(), self._orig, rect)
+            p.setCompositionMode(
+                QPainter.CompositionMode.CompositionMode_DestinationOut
+                if self._erases()
+                else QPainter.CompositionMode.CompositionMode_SourceOver)
+            p.setOpacity(self.opts.opacity / 100.0)
+            p.drawImage(rect.topLeft(), self._scratch, rect)
+            p.end()
 
         doc.notify_pixels(rect.translated(layer.offset))
+
+    def _erases(self) -> bool:
+        return self.opts.eraser
+
+    def _stroke_color(self) -> QColor:
+        return QColor(0, 0, 0) if self._erases() else QColor(self.opts.foreground)
 
     def _paint(self, p: QPainter, la: QPointF, lb: QPointF, first: bool) -> None:
         hard = self.opts.hardness >= 100
@@ -224,6 +265,7 @@ class BrushTool(Tool):
 
 
 class PencilTool(BrushTool):
+    scratch_stroke = False
     """Hard-edged aliased strokes: every painted pixel is exactly the
     foreground colour at the shared opacity — no antialiasing, no hardness
     falloff. Paints with replace semantics (like the bucket), so overlapping
@@ -321,9 +363,12 @@ class CropTool(Tool):
 class EraserTool(BrushTool):
     """A first-class eraser: always erases, whatever the eraser checkbox
     says. Hard 100% strokes clear outright; soft/partial strokes fade
-    alpha via DestinationOut stamps."""
+    alpha via the scratch stroke at flow/opacity."""
 
     name = "eraser"
+
+    def _erases(self) -> bool:
+        return True
 
     def _stroke_name(self) -> str:
         return "Eraser"
@@ -340,6 +385,7 @@ class EraserTool(BrushTool):
 
 
 class DodgeTool(BrushTool):
+    scratch_stroke = False
     """Lighten as you paint: soft-light white stamps, strength = opacity."""
 
     name = "dodge"
@@ -362,6 +408,7 @@ class BurnTool(DodgeTool):
 
 
 class CloneStampTool(BrushTool):
+    scratch_stroke = False
     """Alt+click sets the clone source; painting copies pixels from the
     source, offset-locked on the first stroke (aligned mode)."""
 
