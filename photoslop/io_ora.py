@@ -58,6 +58,11 @@ def save_ora(doc: Document, path: str) -> None:
             source_src = f"data/layer{i}_source.png"
             attrib["photoslop-source"] = source_src
             entries.append((source_src, _png_bytes(layer.source)))
+        if layer.smart_filters:
+            import json
+
+            attrib["photoslop-smart-filters"] = json.dumps(
+                [list(f) for f in layer.smart_filters])
         ET.SubElement(
             stack,
             "layer",
@@ -112,9 +117,14 @@ def _walk_layers(zf: zipfile.ZipFile, node: ET.Element, base: QPoint, out: list[
             layer.clipped = child.get("photoslop-clipped") == "1"
             layer.group = child.get("photoslop-group") or None
             source_src = child.get("photoslop-source")
+            filters_json = child.get("photoslop-smart-filters")
             if source_src and source_src in zf.namelist():
                 layer.source = QImage.fromData(
                     zf.read(source_src)).convertToFormat(FORMAT)
+            if filters_json:
+                import json
+
+                layer.smart_filters = [tuple(f) for f in json.loads(filters_json)]
             adj_src = child.get("photoslop-adjustment")
             if adj_src and adj_src in zf.namelist():
                 import numpy as np

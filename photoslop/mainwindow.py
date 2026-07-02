@@ -648,6 +648,8 @@ class MainWindow(QMainWindow):
                                     self.action_convert_smart))
         m_layer.addAction(self._act("Restore Smart Object Or&iginal", None,
                                     self.action_restore_smart))
+        m_layer.addAction(self._act("Re-apply Smart &Filters", None,
+                                    self.action_reapply_smart_filters))
         m_layer.addSeparator()
         m_layer.addAction(self._act("&Copy Layer", "Ctrl+Shift+C", self.action_copy_layer))
         m_layer.addAction(self._act("&Paste Layer", "Ctrl+Shift+V", self.action_paste_layer))
@@ -1035,6 +1037,43 @@ class MainWindow(QMainWindow):
         if self.action_recording is not None:
             self.action_recording.append((label, replay))
 
+    def _record_smart_filter(self, tag: tuple) -> None:
+        """Filters applied to a smart-object layer stack up for re-apply."""
+        doc = self.current_doc()
+        layer = doc.active_layer if doc else None
+        if (layer is not None and layer.source is not None
+                and not getattr(self, "_replaying_smart", False)):
+            layer.smart_filters.append(tag)
+
+    def action_reapply_smart_filters(self) -> None:
+        doc = self.current_doc()
+        layer = doc.active_layer if doc else None
+        if layer is None or layer.source is None:
+            if doc is not None:
+                self.statusBar().showMessage(
+                    "Not a smart object — Convert to Smart Object first", 4000)
+            return
+        if not layer.smart_filters:
+            self.statusBar().showMessage("No smart filters recorded", 4000)
+            return
+        doc.undo_stack.beginMacro("Re-apply Smart Filters")
+        self._replaying_smart = True
+        try:
+            self.action_restore_smart()
+            for tag in layer.smart_filters:
+                kind, *params = tag
+                if kind == "gaussian":
+                    self.action_gaussian_blur_direct(*params)
+                elif kind == "unsharp":
+                    self.action_unsharp_direct(*params)
+                elif kind == "tilt-shift":
+                    self.apply_tilt_shift(doc, layer, *params)
+        finally:
+            self._replaying_smart = False
+            doc.undo_stack.endMacro()
+        self.statusBar().showMessage(
+            f"Smart filters re-applied ({len(layer.smart_filters)})", 4000)
+
     def action_gaussian_blur_direct(self, radius: int) -> None:
         from photoslop import npimage
 
@@ -1042,6 +1081,7 @@ class MainWindow(QMainWindow):
                          lambda img, m: npimage.gaussian_blur(img, radius, m))
         self._record_step(f"Gaussian Blur {radius}px",
                           lambda w: w.action_gaussian_blur_direct(radius))
+        self._record_smart_filter(("gaussian", radius))
 
     def action_unsharp_direct(self, amount: int) -> None:
         from photoslop import npimage
@@ -1050,6 +1090,7 @@ class MainWindow(QMainWindow):
                          lambda img, m: npimage.unsharp_mask(img, 4, amount / 100.0, m))
         self._record_step(f"Unsharp Mask {amount}%",
                           lambda w: w.action_unsharp_direct(amount))
+        self._record_smart_filter(("unsharp", amount))
 
     def action_record_start(self) -> None:
         self.action_recording = []
@@ -1200,6 +1241,10 @@ class MainWindow(QMainWindow):
             lambda w: w.apply_tilt_shift(w.current_doc(),
                                          w.current_doc().active_layer,
                                          centre, band, transition, radius))
+        if (layer.source is not None
+                and not getattr(self, "_replaying_smart", False)):
+            layer.smart_filters.append(
+                ("tilt-shift", centre, band, transition, radius))
 
     def action_content_aware_fill(self) -> None:
         doc = self.current_doc()
