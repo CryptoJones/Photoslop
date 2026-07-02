@@ -12,6 +12,7 @@ from PySide6.QtGui import (
     QBrush,
     QColor,
     QImage,
+    QLinearGradient,
     QPainter,
     QPainterPath,
     QPen,
@@ -33,6 +34,7 @@ class ToolOptions:
         self.opacity = 100  # percent
         self.eraser = False
         self.tolerance = 32  # 0..255
+        self.gradient_shape = "linear"  # or "radial"
 
     def swap_colors(self) -> None:
         self.foreground, self.background = self.background, self.foreground
@@ -356,6 +358,91 @@ class LassoTool(Tool):
         if close:
             path.closeSubpath()
         return path
+
+
+class GradientTool(Tool):
+    """Drag start→end, release to fill the active layer (or selection) with
+    a foreground→background gradient, linear or radial."""
+
+    name = "gradient"
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._start: QPointF | None = None
+        self._end: QPointF | None = None
+        self._layer = None
+
+    def press(self, doc, canvas, pos, ev):
+        layer = doc.active_layer
+        if layer is None:
+            return
+        self._layer = layer
+        self._start = pos
+        self._end = pos
+
+    def move(self, doc, canvas, pos, ev):
+        if self._start is not None:
+            self._end = pos
+            canvas.update()
+
+    def cancel(self, doc=None) -> None:
+        self._start = self._end = None
+        self._layer = None
+
+    def release(self, doc, canvas, pos, ev):
+        if self._start is None or self._layer is None:
+            return
+        self._end = pos
+        layer = self._layer
+        try:
+            if (self._end - self._start).manhattanLength() < 2:
+                return
+            if doc.selection is not None:
+                region = doc.selection_bounds()
+                region = region.intersected(layer.bounds()) if region is not None else None
+                if region is None or region.isEmpty():
+                    return
+            else:
+                region = layer.bounds()
+            local = region.translated(-layer.offset)
+            before = layer.image.copy(local)
+
+            off = QPointF(layer.offset)
+            start_l, end_l = self._start - off, self._end - off
+            if self.opts.gradient_shape == "radial":
+                delta = end_l - start_l
+                radius = max(math.hypot(delta.x(), delta.y()), 0.001)
+                grad = QRadialGradient(start_l, radius)
+            else:
+                grad = QLinearGradient(start_l, end_l)
+            grad.setColorAt(0.0, QColor(self.opts.foreground))
+            grad.setColorAt(1.0, QColor(self.opts.background))
+
+            p = QPainter(layer.image)
+            p.setOpacity(self.opts.opacity / 100.0)
+            if doc.selection is not None:
+                p.setClipPath(doc.selection.translated(-layer.offset.x(),
+                                                       -layer.offset.y()))
+            p.fillRect(local, QBrush(grad))
+            p.end()
+
+            after = layer.image.copy(local)
+            doc.undo_stack.push(LayerRegionCommand(
+                doc, layer, local, before, after, "Gradient"))
+            doc.notify_pixels(region)
+        finally:
+            self.cancel()
+
+    def overlay(self, doc, painter, canvas):
+        if self._start is None or self._end is None or self._start == self._end:
+            return
+        z = canvas.zoom
+        a = QPointF(self._start.x() * z, self._start.y() * z)
+        b = QPointF(self._end.x() * z, self._end.y() * z)
+        painter.setPen(QPen(QColor(255, 255, 255, 200), 1))
+        painter.drawLine(a, b)
+        painter.setPen(QPen(QColor(0, 0, 0, 200), 1, Qt.PenStyle.DashLine))
+        painter.drawLine(a, b)
 
 
 class MagicWandTool(Tool):

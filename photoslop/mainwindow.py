@@ -23,6 +23,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
+    QComboBox,
     QDockWidget,
     QFileDialog,
     QLabel,
@@ -57,6 +58,7 @@ from photoslop.tools import (
     BrushTool,
     BucketTool,
     EyedropperTool,
+    GradientTool,
     HandTool,
     LassoTool,
     MagicWandTool,
@@ -86,6 +88,7 @@ class MainWindow(QMainWindow):
             for tool in (
                 BrushTool(self.options),
                 BucketTool(self.options),
+                GradientTool(self.options),
                 EyedropperTool(self.options),
                 RectSelectTool(self.options),
                 LassoTool(self.options),
@@ -164,19 +167,20 @@ class MainWindow(QMainWindow):
         self.addToolBar(Qt.ToolBarArea.LeftToolBarArea, bar)
         group = QActionGroup(self)
         shortcuts = {
-            "brush": "B", "bucket": "G", "eyedropper": "I",
+            "brush": "B", "bucket": "G", "gradient": "Shift+G", "eyedropper": "I",
             "rect-select": "M", "lasso": "L", "poly-lasso": "Shift+L", "wand": "W",
             "move": "V", "hand": "H", "zoom": "Z",
         }
         labels = {
-            "brush": "Brush", "bucket": "Paint Bucket", "eyedropper": "Eyedropper",
-            "rect-select": "Rectangle Select", "lasso": "Lasso Select",
-            "poly-lasso": "Polygonal Lasso", "wand": "Magic Wand", "move": "Move",
+            "brush": "Brush", "bucket": "Paint Bucket", "gradient": "Gradient",
+            "eyedropper": "Eyedropper", "rect-select": "Rectangle Select",
+            "lasso": "Lasso Select", "poly-lasso": "Polygonal Lasso",
+            "wand": "Magic Wand", "move": "Move",
             "hand": "Hand (pan)", "zoom": "Zoom",
         }
         self._tool_actions = {}
-        for name in ("brush", "bucket", "eyedropper", "rect-select", "lasso",
-                     "poly-lasso", "wand", "move", "hand", "zoom"):
+        for name in ("brush", "bucket", "gradient", "eyedropper", "rect-select",
+                     "lasso", "poly-lasso", "wand", "move", "hand", "zoom"):
             act = QAction(TOOL_ICONS[name](), labels[name], self)
             act.setCheckable(True)
             act.setShortcut(shortcuts[name])
@@ -251,9 +255,17 @@ class MainWindow(QMainWindow):
         tolerance.valueChanged.connect(lambda v: setattr(self.options, "tolerance", v))
         tol_act = bar.addWidget(tolerance)
 
+        shape = QComboBox()
+        shape.addItems(["linear", "radial"])
+        shape.setToolTip("Gradient shape")
+        shape.currentTextChanged.connect(
+            lambda v: setattr(self.options, "gradient_shape", v))
+        shape_act = bar.addWidget(shape)
+
         self._option_actions = {
             "brush": [color_act, bg_act, size_act, hard_act, opacity_act, eraser_act],
             "bucket": [color_act, bg_act, opacity_act, tol_act],
+            "gradient": [color_act, bg_act, opacity_act, shape_act],
             "eyedropper": [color_act, bg_act],
             "rect-select": [],
             "lasso": [],
@@ -264,7 +276,8 @@ class MainWindow(QMainWindow):
             "zoom": [],
         }
         self._all_option_actions = [
-            color_act, bg_act, size_act, hard_act, opacity_act, eraser_act, tol_act,
+            color_act, bg_act, size_act, hard_act, opacity_act, eraser_act,
+            tol_act, shape_act,
         ]
 
         # PS-style bracket shortcuts; window-level, invisible in menus
