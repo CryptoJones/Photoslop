@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.46.0] — 2026-07-02
+
+### Added
+
+- Layer Style: Drop Shadow… (Layer menu): builds a blurred, tinted
+  silhouette of the active layer as a shadow layer just below it — offset,
+  blur, and opacity in the dialog; one undoable insert.
+
 ## [0.45.0] — 2026-07-02
 
 ### Added

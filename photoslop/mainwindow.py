@@ -533,6 +533,9 @@ class MainWindow(QMainWindow):
         m_layer.addAction(self._act("Clip to Layer Belo&w (toggle)", "Ctrl+Alt+G",
                                     self.action_toggle_clip))
         m_layer.addSeparator()
+        m_layer.addAction(self._act("Layer Style: Drop &Shadow…", None,
+                                    self.action_drop_shadow))
+        m_layer.addSeparator()
         m_layer.addAction(self._act("&Group with Layer Below", "Ctrl+G",
                                     self.action_group_layer))
         m_layer.addAction(self._act("U&ngroup Layer", "Ctrl+Shift+G",
@@ -1048,6 +1051,49 @@ class MainWindow(QMainWindow):
 
         doc.undo_stack.push(SetLayerMaskCommand(doc, doc.active_layer, None,
                                                 "Delete Layer Mask"))
+
+    def action_drop_shadow(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        layer = doc.active_layer
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QSpinBox
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Drop Shadow")
+        form = QFormLayout(dialog)
+        spins = {}
+        for key, lo, hi, default, suffix in (
+                ("offset_x", -50, 50, 6, " px"), ("offset_y", -50, 50, 6, " px"),
+                ("blur", 0, 50, 8, " px"), ("opacity", 1, 100, 60, " %")):
+            spin = QSpinBox()
+            spin.setRange(lo, hi)
+            spin.setValue(default)
+            spin.setSuffix(suffix)
+            form.addRow(key.replace("_", " ").capitalize(), spin)
+            spins[key] = spin
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        if not dialog.exec():
+            return
+        self.apply_drop_shadow(doc, layer, spins["offset_x"].value(),
+                               spins["offset_y"].value(), spins["blur"].value(),
+                               spins["opacity"].value())
+
+    def apply_drop_shadow(self, doc, layer, dx: int, dy: int, blur: int,
+                          opacity: int) -> None:
+        from photoslop import npimage
+
+        color = QColor(0, 0, 0, round(opacity * 2.55))
+        shadow_img = npimage.drop_shadow_image(layer.image, color, blur)
+        pad = max(0, blur)
+        shadow = Layer(f"{layer.name} shadow", shadow_img,
+                       layer.offset + QPoint(dx - pad, dy - pad))
+        index = doc.layers.index(layer)
+        doc.undo_stack.push(InsertLayerCommand(doc, index, shadow, "Drop Shadow"))
 
     def action_group_layer(self) -> None:
         doc = self.current_doc()
