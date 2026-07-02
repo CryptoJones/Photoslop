@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.24.0] — 2026-07-02
+
+### Added
+
+- Workspaces (View → Workspace): save your dock/toolbar layout, restore it,
+  or reset to the built-in default. A saved workspace (and the window
+  geometry) applies automatically at startup.
+
 ## [0.23.0] — 2026-07-02
 
 ### Added

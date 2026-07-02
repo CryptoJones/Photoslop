@@ -158,6 +158,15 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
         self.resize(1280, 800)
 
+        # workspace: remember the built-in default, then apply a saved layout
+        self._default_workspace = self.saveState()
+        saved = self.settings.value("workspace/state")
+        if saved is not None:
+            self.restoreState(saved)
+        geometry = self.settings.value("workspace/geometry")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
+
     # ------------------------------------------------------------------ tools
 
     @property
@@ -490,6 +499,11 @@ class MainWindow(QMainWindow):
         self._snap_action.toggled.connect(self._toggle_snap)
         m_view.addAction(self._snap_action)
         m_view.addAction(self._act("Clear &Guides", None, self.action_clear_guides))
+        m_view.addSeparator()
+        m_workspace = m_view.addMenu("&Workspace")
+        m_workspace.addAction(self._act("&Save Workspace", None, self.save_workspace))
+        m_workspace.addAction(self._act("&Restore Saved", None, self.restore_workspace))
+        m_workspace.addAction(self._act("Reset to &Default", None, self.reset_workspace))
 
         m_help = menu.addMenu("&Help")
         m_help.addAction(self._act("&About Photoslop", None, self.action_about))
@@ -629,6 +643,7 @@ class MainWindow(QMainWindow):
                 if answer == QMessageBox.StandardButton.Save and not self._save_doc(editor.doc):
                     ev.ignore()
                     return
+        self.settings.setValue("workspace/geometry", self.saveGeometry())
         ev.accept()
 
     # ------------------------------------------------------------------ file actions
@@ -976,6 +991,23 @@ class MainWindow(QMainWindow):
     def _toggle_snap(self, checked: bool) -> None:
         self.snap_enabled = checked
         self.settings.setValue("snap", "true" if checked else "false")
+
+    def save_workspace(self) -> None:
+        self.settings.setValue("workspace/state", self.saveState())
+        self.settings.setValue("workspace/geometry", self.saveGeometry())
+        self.statusBar().showMessage("Workspace saved", 3000)
+
+    def restore_workspace(self) -> None:
+        saved = self.settings.value("workspace/state")
+        if saved is not None:
+            self.restoreState(saved)
+            self.statusBar().showMessage("Workspace restored", 3000)
+        else:
+            self.statusBar().showMessage("No saved workspace yet", 3000)
+
+    def reset_workspace(self) -> None:
+        self.restoreState(self._default_workspace)
+        self.statusBar().showMessage("Workspace reset to default", 3000)
 
     def action_clear_guides(self) -> None:
         doc = self.current_doc()
