@@ -1454,14 +1454,14 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QSpinBox
 
         dialog = QDialog(self)
-        dialog.setWindowTitle("Content-Aware Scale (shrink)")
+        dialog.setWindowTitle("Content-Aware Scale")
         form = QFormLayout(dialog)
         w_spin = QSpinBox()
-        w_spin.setRange(2, layer.image.width())
+        w_spin.setRange(2, 4 * layer.image.width())
         w_spin.setValue(layer.image.width())
         w_spin.setSuffix(" px")
         h_spin = QSpinBox()
-        h_spin.setRange(2, layer.image.height())
+        h_spin.setRange(2, 4 * layer.image.height())
         h_spin.setValue(layer.image.height())
         h_spin.setSuffix(" px")
         form.addRow("Target width", w_spin)
