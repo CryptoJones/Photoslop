@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.44.0] — 2026-07-02
+
+### Added
+
+- Text tool (`T`): click the canvas, type in the dialog (any font, 6–400 pt,
+  multiline), and the text rasterises onto a new tightly-sized layer at the
+  click point in the foreground colour — movable, transformable, blendable
+  like any layer. Undoable insert.
+
 ## [0.43.0] — 2026-07-02
 
 ### Added
