@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.22.0] — 2026-07-02
+
+### Added
+
+- Magic Wand "Contiguous" toggle: uncheck it to select every pixel within
+  the colour tolerance across the whole layer — connected or not — i.e.
+  colour-range selection. Shift/Alt add/subtract still apply.
+
 ## [0.21.0] — 2026-07-02
 
 ### Added
