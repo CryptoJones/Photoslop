@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.40.0] — 2026-07-02
+
+### Added
+
+- Layer groups (first slice): `Ctrl+G` groups the active layer with the one
+  below (creating a named group), `Ctrl+Shift+G` ungroups. Grouped layers
+  are tinted in the Layers panel, the Move tool drags the whole group as
+  one (single undo step), and groups round-trip in `.ora` via a Photoslop
+  extension.
+
 ## [0.39.0] — 2026-07-02
 
 ### Added

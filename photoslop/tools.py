@@ -985,7 +985,11 @@ class MoveTool(Tool):
                 return
         layer = doc.active_layer
         if layer is not None:
-            self._mode = ("layer", layer, QPoint(layer.offset), pos)
+            members = ([lyr for lyr in doc.layers if lyr.group == layer.group]
+                       if layer.group else [layer])
+            origins = [QPoint(lyr.offset) for lyr in members]
+            self._mode = ("layer", layer, QPoint(layer.offset), pos,
+                          members, origins)
 
     def move(self, doc, canvas, pos, ev):
         if self._mode is None:
@@ -1002,12 +1006,17 @@ class MoveTool(Tool):
             doc.guidesChanged.emit()
             canvas.editor.show_guide_feedback("v", snapped)
         else:
-            _, layer, orig, start = self._mode
-            old_bounds = layer.bounds()
+            _, layer, orig, start, members, origins = self._mode
             proposed = orig + (pos - start).toPoint()
-            layer.offset = canvas.editor.snap_layer_offset(
+            snapped = canvas.editor.snap_layer_offset(
                 layer, proposed, ev.modifiers() if ev else None)
-            doc.notify_pixels(old_bounds.united(layer.bounds()))
+            delta = snapped - orig
+            dirty = QRect()
+            for member, member_orig in zip(members, origins, strict=True):
+                dirty = dirty.united(member.bounds())
+                member.offset = member_orig + delta
+                dirty = dirty.united(member.bounds())
+            doc.notify_pixels(dirty)
 
     def release(self, doc, canvas, pos, ev):
         if self._mode is None:
@@ -1022,7 +1031,16 @@ class MoveTool(Tool):
                 guides.pop(self._mode[1])
                 doc.guidesChanged.emit()
         else:
-            _, layer, orig, _start = self._mode
-            if layer.offset != orig:
-                doc.undo_stack.push(SetLayerOffsetCommand(doc, layer, orig, layer.offset))
+            _, layer, orig, _start, members, origins = self._mode
+            delta = layer.offset - orig
+            if not delta.isNull():
+                if len(members) > 1:
+                    from photoslop.commands import MoveGroupCommand
+
+                    # offsets already sit at their final positions; the
+                    # command's skip-first-redo pattern records them as-is
+                    doc.undo_stack.push(MoveGroupCommand(doc, members, delta))
+                else:
+                    doc.undo_stack.push(
+                        SetLayerOffsetCommand(doc, layer, orig, layer.offset))
         self._mode = None
