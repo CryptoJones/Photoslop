@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.12.0] — 2026-07-02
+
+### Added
+
+- Polygonal Lasso (`Shift+L`): click to place vertices with a live rubber-band
+  preview and vertex handles; close by clicking the first vertex or
+  double-clicking; Escape cancels the in-progress polygon.
+
 ## [0.11.0] — 2026-07-02
 
 ### Added
