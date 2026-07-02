@@ -384,6 +384,31 @@ def quick_select_icon() -> QIcon:
     return _make(draw)
 
 
+def zoom_in_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.8))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QPointF(10, 10), 6, 6)
+        p.setPen(QPen(_INK, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.drawLine(QPointF(14.5, 14.5), QPointF(19, 19))  # handle
+        p.drawLine(QPointF(7, 10), QPointF(13, 10))  # plus
+        p.drawLine(QPointF(10, 7), QPointF(10, 13))
+
+    return _make(draw)
+
+
+def zoom_out_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.8))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QPointF(10, 10), 6, 6)
+        p.setPen(QPen(_INK, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.drawLine(QPointF(14.5, 14.5), QPointF(19, 19))  # handle
+        p.drawLine(QPointF(7, 10), QPointF(13, 10))  # minus
+
+    return _make(draw)
+
+
 TOOL_ICONS = {
     "brush": brush_icon,
     "pencil": pencil_icon,

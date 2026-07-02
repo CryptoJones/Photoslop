@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.67.0] — 2026-07-02
+
+### Added
+
+- Zoom In/Out buttons on the toolbar — magnifier icons with +/− glyphs.
+
+### Fixed
+
+- `Ctrl` + the plus key now zooms in on US keyboards: the unshifted key is
+  `=`, so Zoom In binds `Ctrl+=`, `Ctrl++`, and `Ctrl+Shift+=` (Zoom Out
+  gains `Ctrl+Shift+-`).
+- Tests no longer read the live app's saved settings (workspace, grid,
+  units) — QSettings is redirected to a temp path per test session.
+
 ## [0.66.0] — 2026-07-02
 
 ### Added
