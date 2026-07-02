@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.39.0] — 2026-07-02
+
+### Added
+
+- Refine Selection (`Ctrl+Alt+R`): smooth (rounds corners, heals notches)
+  and expand/contract (exact pixel morphology) with a live marching-ants
+  preview — the working core of Select and Mask. Cancel restores the
+  original selection exactly.
+
 ## [0.38.0] — 2026-07-02
 
 ### Added

@@ -167,6 +167,43 @@ def flood_fill(
     return bbox
 
 
+def _dilate(mask: np.ndarray) -> np.ndarray:
+    out = mask.copy()
+    out[1:, :] |= mask[:-1, :]
+    out[:-1, :] |= mask[1:, :]
+    out[:, 1:] |= mask[:, :-1]
+    out[:, :-1] |= mask[:, 1:]
+    out[1:, 1:] |= mask[:-1, :-1]
+    out[1:, :-1] |= mask[:-1, 1:]
+    out[:-1, 1:] |= mask[1:, :-1]
+    out[:-1, :-1] |= mask[1:, 1:]
+    return out
+
+
+def _erode(mask: np.ndarray) -> np.ndarray:
+    return ~_dilate(~mask)
+
+
+def refine_mask(mask: np.ndarray, smooth: int = 0, expand: int = 0) -> np.ndarray:
+    """Morphological selection refinement: `smooth` rounds corners and fills
+    notches (close-then-open), `expand` grows (+) or contracts (-) by that
+    many pixels. Exact 8-neighbour morphology, no dependencies."""
+    out = mask
+    for _ in range(max(0, smooth)):  # close
+        out = _dilate(out)
+    for _ in range(max(0, smooth) * 2):  # then open (erode past the close)
+        out = _erode(out)
+    for _ in range(max(0, smooth)):
+        out = _dilate(out)
+    if expand > 0:
+        for _ in range(expand):
+            out = _dilate(out)
+    elif expand < 0:
+        for _ in range(-expand):
+            out = _erode(out)
+    return out
+
+
 def mask_to_path(mask: np.ndarray, offset: QPoint | None = None) -> QPainterPath:
     """Convert a boolean mask to a selection QPainterPath. Identical row
     runs are merged into vertical bands first, so the path stays small."""

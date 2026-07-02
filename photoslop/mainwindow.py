@@ -455,6 +455,8 @@ class MainWindow(QMainWindow):
         m_edit.addAction(self._act("&Delete Selection", "Del", self.action_delete_selection))
         m_edit.addSeparator()
         m_edit.addAction(self._act("Select &All", "Ctrl+A", self.action_select_all))
+        m_edit.addAction(self._act("&Refine Selection…", "Ctrl+Alt+R",
+                                   self.action_refine_selection))
         m_edit.addAction(self._act("D&eselect", "Ctrl+D", self.action_deselect))
         m_edit.addSeparator()
         m_edit.addAction(self._act("Define &Pattern from Selection", None,
@@ -916,6 +918,17 @@ class MainWindow(QMainWindow):
             action = self._tool_actions.get(self._pre_transform_tool)
             if action is not None:
                 action.setChecked(True)
+
+    def action_refine_selection(self) -> None:
+        doc = self.current_doc()
+        if doc is None:
+            return
+        if doc.selection is None:
+            self.statusBar().showMessage("Refine Selection needs a selection", 4000)
+            return
+        from photoslop.refinedialog import RefineSelectionDialog
+
+        RefineSelectionDialog(doc, self).exec()
 
     def action_select_all(self) -> None:
         doc = self.current_doc()
