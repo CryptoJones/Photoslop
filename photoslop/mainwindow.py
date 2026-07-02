@@ -324,6 +324,14 @@ class MainWindow(QMainWindow):
         flow.valueChanged.connect(lambda v: setattr(self.options, "flow", v))
         flow_act = bar.addWidget(flow)
 
+        scatter = QSpinBox()
+        scatter.setRange(0, 200)
+        scatter.setValue(self.options.scatter)
+        scatter.setSuffix("% scatter")
+        scatter.setToolTip("Random stamp offset as % of brush size")
+        scatter.valueChanged.connect(lambda v: setattr(self.options, "scatter", v))
+        scatter_act = bar.addWidget(scatter)
+
         spacing = QSpinBox()
         spacing.setRange(5, 200)
         spacing.setValue(self.options.spacing)
@@ -349,9 +357,10 @@ class MainWindow(QMainWindow):
 
         self._option_actions = {
             "brush": [color_act, bg_act, size_act, hard_act, opacity_act,
-                      eraser_act, flow_act, spacing_act],
+                      eraser_act, flow_act, spacing_act, scatter_act],
             "pencil": [color_act, bg_act, size_act, opacity_act, eraser_act],
-            "eraser": [size_act, hard_act, opacity_act, flow_act, spacing_act],
+            "eraser": [size_act, hard_act, opacity_act, flow_act, spacing_act,
+                       scatter_act],
             "bucket": [color_act, bg_act, opacity_act, tol_act, fill_source_act],
             "gradient": [color_act, bg_act, opacity_act, shape_act],
             "eyedropper": [color_act, bg_act],
@@ -377,7 +386,7 @@ class MainWindow(QMainWindow):
         self._all_option_actions = [
             color_act, bg_act, size_act, hard_act, opacity_act, eraser_act,
             tol_act, shape_act, contig_act, fill_source_act, flow_act,
-            spacing_act,
+            spacing_act, scatter_act,
         ]
 
         # PS-style bracket shortcuts; window-level, invisible in menus

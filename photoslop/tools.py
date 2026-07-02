@@ -6,6 +6,7 @@ undo command on release."""
 from __future__ import annotations
 
 import math
+import random
 
 import numpy as np
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt
@@ -41,6 +42,7 @@ class ToolOptions:
         self.fill_source = "color"  # bucket: "color" or "pattern"
         self.spacing = 25  # stamp spacing, % of brush size
         self.flow = 100  # per-stamp paint amount; opacity is the stroke ceiling
+        self.scatter = 0  # random stamp offset, % of brush size
         self.pattern = None  # QImage tile from Edit > Define Pattern
 
     def swap_colors(self) -> None:
@@ -93,6 +95,7 @@ class BrushTool(Tool):
         self._clip: QPainterPath | None = None
         self._scratch: QImage | None = None
         self._orig: QImage | None = None
+        self._rng = random.Random(0)
 
     # -- stroke lifecycle --
 
@@ -107,6 +110,7 @@ class BrushTool(Tool):
             self._clip = doc.selection.translated(-layer.offset.x(), -layer.offset.y())
         self._residual = 0.0
         self._last = pos
+        self._rng = random.Random(round(pos.x() * 7919) ^ round(pos.y() * 104729))
         self._segment(doc, pos, pos, first=True)
 
     def move(self, doc, canvas, pos, ev):
@@ -138,7 +142,7 @@ class BrushTool(Tool):
         off = QPointF(layer.offset)
         la, lb = a - off, b - off
         radius = self.opts.size / 2.0
-        pad = int(radius) + 2
+        pad = int(radius + self.opts.scatter / 100.0 * self.opts.size) + 2
         rect = QRectF(la, lb).normalized().adjusted(-pad, -pad, pad, pad).toAlignedRect()
         self._recorder.will_change(rect)
 
@@ -228,7 +232,13 @@ class BrushTool(Tool):
         grad_stop = max(0.0, min(self.opts.hardness / 100.0, 0.999))
         p.setPen(Qt.PenStyle.NoPen)
 
+        scatter = self.opts.scatter / 100.0 * self.opts.size
+
         def stamp(center: QPointF) -> None:
+            if scatter:
+                center = QPointF(
+                    center.x() + self._rng.uniform(-scatter, scatter),
+                    center.y() + self._rng.uniform(-scatter, scatter))
             grad = QRadialGradient(center, radius)
             grad.setColorAt(0.0, base)
             grad.setColorAt(grad_stop, base)
