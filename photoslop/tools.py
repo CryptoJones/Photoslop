@@ -773,6 +773,111 @@ class PuppetTool(Tool):
             painter.drawEllipse(centre, 5, 5)
 
 
+class PenTool(Tool):
+    """Pen (P): click to place anchor points — the path draws smoothed
+    (Catmull-Rom) through them. Enter strokes it onto a new layer at brush
+    size; Ctrl+Enter fills the closed path; double-click commits a stroke;
+    Escape cancels."""
+
+    name = "pen"
+    cursor = Qt.CursorShape.CrossCursor
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._points: list[QPointF] = []
+        self._hover: QPointF | None = None
+
+    def press(self, doc, canvas, pos, ev):
+        self._points.append(pos)
+        canvas.update()
+
+    def hover(self, doc, canvas, pos):
+        if self._points:
+            self._hover = pos
+            canvas.update()
+
+    def double_click(self, doc, canvas, pos, ev):
+        self.commit(canvas)
+
+    def cancel(self, doc=None) -> None:
+        self._points = []
+        self._hover = None
+
+    def _smooth_path(self, pts: list[QPointF], close: bool) -> QPainterPath:
+        path = QPainterPath(pts[0])
+        if len(pts) == 2:
+            path.lineTo(pts[1])
+            return path
+        # Catmull-Rom through the anchors, converted to cubic Beziers
+        ring = ([pts[-1], *pts, pts[0], pts[1]] if close
+                else [pts[0], *pts, pts[-1]])
+        for i in range(1, len(ring) - 2):
+            p0, p1, p2, p3 = ring[i - 1], ring[i], ring[i + 1], ring[i + 2]
+            c1 = QPointF(p1.x() + (p2.x() - p0.x()) / 6.0,
+                         p1.y() + (p2.y() - p0.y()) / 6.0)
+            c2 = QPointF(p2.x() - (p3.x() - p1.x()) / 6.0,
+                         p2.y() - (p3.y() - p1.y()) / 6.0)
+            path.cubicTo(c1, c2, p2)
+        if close:
+            path.closeSubpath()
+        return path
+
+    def overlay(self, doc, painter, canvas):
+        if not self._points:
+            return
+        z = canvas.zoom
+        pts = [QPointF(p.x() * z, p.y() * z) for p in self._points]
+        painter.setPen(QPen(QColor(30, 144, 255), 1, Qt.PenStyle.DashLine))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        preview = pts if self._hover is None else [
+            *pts, QPointF(self._hover.x() * z, self._hover.y() * z)]
+        if len(preview) >= 2:
+            painter.drawPath(self._smooth_path(preview, close=False))
+        painter.setBrush(QColor(30, 144, 255))
+        for pt in pts:
+            painter.drawRect(QRectF(pt.x() - 2, pt.y() - 2, 4, 4))
+
+    def commit(self, canvas) -> None:
+        from PySide6.QtWidgets import QApplication
+
+        from photoslop.commands import InsertLayerCommand
+
+        doc = canvas.doc
+        pts, self._points, self._hover = self._points, [], None
+        canvas.update()
+        fill = bool(QApplication.keyboardModifiers()
+                    & Qt.KeyboardModifier.ControlModifier)
+        if len(pts) < (3 if fill else 2):
+            return
+        path = self._smooth_path(pts, close=fill)
+        margin = 2 if fill else max(2, self.opts.size)
+        bounds = (path.boundingRect().toAlignedRect()
+                  .adjusted(-margin, -margin, margin, margin)
+                  .intersected(doc.canvas_rect().adjusted(-margin, -margin,
+                                                          margin, margin)))
+        if bounds.width() < 2 or bounds.height() < 2:
+            return
+        layer = Layer.blank(f"Pen {len(doc.layers)}", bounds.size(),
+                            bounds.topLeft())
+        p = QPainter(layer.image)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.translate(-bounds.topLeft())
+        if fill:
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(self.opts.foreground)
+            p.drawPath(path)
+        else:
+            pen = QPen(self.opts.foreground, max(1, self.opts.size))
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            p.setPen(pen)
+            p.drawPath(path)
+        p.end()
+        doc.undo_stack.push(InsertLayerCommand(
+            doc, len(doc.layers), layer, "Add Pen Fill" if fill
+            else "Add Pen Stroke"))
+
+
 class ShapeTool(Tool):
     """Shape (U): drag to draw a rectangle, ellipse, or line onto a NEW
     layer (foreground fill; the line's width is the brush size). Shift+U

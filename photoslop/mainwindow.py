@@ -74,6 +74,7 @@ from photoslop.tools import (
     MoveTool,
     PatchTool,
     PencilTool,
+    PenTool,
     PerspectiveTool,
     PolyLassoTool,
     PuppetTool,
@@ -125,6 +126,7 @@ class MainWindow(QMainWindow):
                 PerspectiveTool(self.options),
                 TextTool(self.options),
                 ShapeTool(self.options),
+                PenTool(self.options),
                 DodgeTool(self.options),
                 CropTool(self.options),
                 BurnTool(self.options),
@@ -224,6 +226,7 @@ class MainWindow(QMainWindow):
             "puppet": "Shift+Y", "perspective": "Shift+P",
             "text": "T",
             "shape": "U",
+            "pen": "P",
             "dodge": "O", "burn": "Shift+O", "crop": "C",
             "move": "V", "hand": "H", "zoom": "Z",
         }
@@ -245,6 +248,7 @@ class MainWindow(QMainWindow):
             "perspective": "Perspective Warp (click 4 plane corners, drag)",
             "text": "Text (click to place)",
             "shape": "Shape (drag; Shift+U cycles rect/ellipse/line)",
+            "pen": "Pen (click anchors; Enter strokes, Ctrl+Enter fills)",
             "dodge": "Dodge (lighten)", "burn": "Burn (darken)",
             "crop": "Crop (drag, Enter commits)",
             "move": "Move", "hand": "Hand (pan)", "zoom": "Zoom",
@@ -254,7 +258,7 @@ class MainWindow(QMainWindow):
                      "rect-select", "lasso", "poly-lasso", "magnetic-lasso", "wand",
                      "quick-select", "clone-stamp", "smudge", "spot-heal", "heal",
                      "patch", "liquify", "puppet", "perspective", "text",
-                     "shape",
+                     "shape", "pen",
                      "dodge", "burn", "crop",
                      "move", "hand", "zoom"):
             act = QAction(TOOL_ICONS[name](), labels[name], self)
@@ -437,6 +441,7 @@ class MainWindow(QMainWindow):
             "perspective": [],
             "text": [color_act],
             "shape": [color_act, size_act],
+            "pen": [color_act, size_act],
             "dodge": [size_act, hard_act, opacity_act, spacing_act],
             "burn": [size_act, hard_act, opacity_act, spacing_act],
             "crop": [],

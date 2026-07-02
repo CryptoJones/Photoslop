@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.70.0] — 2026-07-02
+
+### Added
+
+- Pen tool (`P`) — the last PS keymap row: click to place anchors, the path
+  smooths through them (Catmull-Rom), Enter strokes it onto a new bounded
+  layer at brush size, Ctrl+Enter fills the closed path, double-click
+  commits, Escape cancels (31 tools).
+
 ## [0.69.0] — 2026-07-02
 
 ### Added
