@@ -90,6 +90,8 @@ from photoslop.tools import (
 )
 from photoslop.transform import TransformTool
 
+CREDITS_TEXT = "Programming: CryptoJones, GPT5.5, and Fable5"
+
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
@@ -568,6 +570,8 @@ class MainWindow(QMainWindow):
         m_action.addAction(self._act("Sto&p Recording", None, self.action_record_stop))
         m_action.addAction(self._act("&Play Action", "F9", self.action_play))
         m_edit.addSeparator()
+        m_edit.addAction(self._act("&Fill Layer", "Alt+Backspace",
+                                   self.action_fill_layer))
         m_edit.addAction(self._act("Fill Selection (Content-&Aware)", "Shift+F5",
                                    self.action_content_aware_fill))
         m_edit.addAction(self._act("Define &Pattern from Selection", None,
@@ -2111,15 +2115,44 @@ class MainWindow(QMainWindow):
         if doc is not None:
             doc.clear_guides()
 
-    def action_about(self) -> None:
-        QMessageBox.about(
-            self, "About Photoslop",
+    def action_fill_layer(self) -> None:
+        """Fill the whole active layer with the foreground colour."""
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        layer = doc.active_layer
+        before = QImage(layer.image)
+        filled = QImage(layer.image.size(),
+                        QImage.Format.Format_ARGB32_Premultiplied)
+        filled.fill(self.options.foreground)
+        layer.image = filled
+        rect = layer.image.rect()
+        doc.undo_stack.push(LayerRegionCommand(
+            doc, layer, rect, before.copy(rect), filled.copy(rect),
+            "Fill Layer", applied=True))
+        doc.notify_pixels(layer.bounds())
+
+    def _build_about(self) -> QMessageBox:
+        box = QMessageBox(self)
+        box.setWindowTitle("About Photoslop")
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.setText(
             f"<h3>Photoslop {__version__}</h3>"
             "<p>A memory-frugal, multiplatform, layered raster image editor.</p>"
             "<p>Apache-2.0 · <a href='https://github.com/CryptoJones/Photoslop'>"
             "github.com/CryptoJones/Photoslop</a></p>"
-            "<p>Proudly Made in Nebraska. Go Big Red! 🌽</p>",
-        )
+            "<p>Proudly Made in Nebraska. Go Big Red! 🌽</p>")
+        box.addButton(QMessageBox.StandardButton.Ok)
+        credits = box.addButton("&Credits",
+                                QMessageBox.ButtonRole.ActionRole)
+        credits.clicked.connect(self.action_credits)
+        return box
+
+    def action_about(self) -> None:
+        self._build_about().exec()
+
+    def action_credits(self) -> None:
+        QMessageBox.information(self, "Credits", CREDITS_TEXT)
 
     # ------------------------------------------------------------------ drag & drop
 

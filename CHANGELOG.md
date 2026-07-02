@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.76.0] — 2026-07-02
+
+### Added
+
+- Fill Layer (Edit menu, `Alt+Backspace`): fills the entire active layer
+  with the foreground colour — one undo step, unaffected by any selection.
+- Credits button in Help → About, opening a credits window.
+
 ## [0.75.0] — 2026-07-02
 
 ### Added
