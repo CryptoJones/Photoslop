@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.36.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v0.37.0-orange)]()
 
 ---
 
@@ -44,7 +44,8 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
 - **Geometry** — crop to selection, image resize (resamples every layer), canvas
   resize with 9-way anchor; rotate the image 90°/180° or flip it (layers and
   guides come along), rotate/flip individual layers about their centre, and
-  Free Transform (`Ctrl+T`) for freehand scale/rotate/move with live preview.
+  Free Transform (`Ctrl+T`) for freehand scale/rotate/move with live preview
+  (Ctrl+drag corners/edges for distort, skew, and perspective).
 - **Rulers & guides** — rulers in pixels, millimetres, picas, or freedom
   units (inches); drag guides out of the rulers, drag them back off to
   remove. While a guide is dragged, a marker tracks it on the matching ruler

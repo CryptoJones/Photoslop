@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QImage, QPen, QTransform, QUndoCommand
+from PySide6.QtGui import QColor, QImage, QPen, QPolygonF, QTransform, QUndoCommand
 
 from photoslop.tools import Tool, ToolOptions
 
@@ -51,6 +51,9 @@ class TransformSession:
         self.scale_y = 1.0
         self.rotation = 0.0  # degrees
         self.translation = QPointF(0.0, 0.0)
+        # Free-quad mode (distort/skew/perspective): once set, the quad IS
+        # the transform and rot/scale/translation are baked into it.
+        self.quad: list[QPointF] | None = None
 
     @property
     def base_center(self) -> QPointF:
@@ -64,8 +67,28 @@ class TransformSession:
     def matrix(self) -> QTransform:
         return QTransform().rotate(self.rotation).scale(self.scale_x, self.scale_y)
 
+    def full_matrix(self) -> QTransform:
+        """Image-local (0,0 at top-left) → canvas coordinates, whatever the
+        mode. The preview painter and the commit both use this."""
+        w, h = self.base_image.width(), self.base_image.height()
+        if self.quad is not None:
+            src = QPolygonF([QPointF(0, 0), QPointF(w, 0),
+                             QPointF(w, h), QPointF(0, h)])
+            m = QTransform()
+            QTransform.quadToQuad(src, QPolygonF(self.quad), m)
+            return m
+        c = self.center
+        m = QTransform()
+        m.translate(c.x(), c.y())
+        m.rotate(self.rotation)
+        m.scale(self.scale_x, self.scale_y)
+        m.translate(-w / 2.0, -h / 2.0)
+        return m
+
     def corners(self) -> list[QPointF]:
         """Transformed corner positions in canvas coordinates (TL,TR,BR,BL)."""
+        if self.quad is not None:
+            return [QPointF(p) for p in self.quad]
         w, h = self.base_image.width(), self.base_image.height()
         m = self.matrix()
         c = self.center
@@ -74,6 +97,10 @@ class TransformSession:
             p = m.map(QPointF(lx - w / 2.0, ly - h / 2.0))
             out.append(QPointF(p.x() + c.x(), p.y() + c.y()))
         return out
+
+    def enter_quad(self) -> None:
+        if self.quad is None:
+            self.quad = self.corners()
 
     def to_local(self, pos: QPointF) -> QPointF:
         """Canvas point → unrotated, unscaled frame centred on the layer."""
@@ -84,17 +111,29 @@ class TransformSession:
         return inverted.map(QPointF(d.x(), d.y()))
 
     def is_identity(self) -> bool:
-        return (self.scale_x == 1.0 and self.scale_y == 1.0
+        return (self.quad is None and self.scale_x == 1.0 and self.scale_y == 1.0
                 and self.rotation == 0.0 and self.translation.isNull())
 
     def commit(self) -> None:
         if self.is_identity():
+            return
+        if self.quad is not None:
+            m = self.full_matrix()
+            w, h = self.base_image.width(), self.base_image.height()
+            new_image = self.base_image.transformed(
+                m, Qt.TransformationMode.SmoothTransformation)
+            bounds = m.mapRect(QRectF(0, 0, w, h))
+            new_offset = QPoint(round(bounds.left()), round(bounds.top()))
+            self._push(new_image, new_offset)
             return
         new_image = self.base_image.transformed(
             self.matrix(), Qt.TransformationMode.SmoothTransformation)
         c = self.center
         new_offset = QPoint(round(c.x() - new_image.width() / 2.0),
                             round(c.y() - new_image.height() / 2.0))
+        self._push(new_image, new_offset)
+
+    def _push(self, new_image: QImage, new_offset: QPoint) -> None:
         self.layer.image = new_image
         self.layer.offset = new_offset
         self.doc.undo_stack.push(TransformLayerCommand(
@@ -124,6 +163,7 @@ class TransformTool(Tool):
         self._mode: str | None = None
         self._press_pos = QPointF()
         self._press_state: tuple | None = None
+        self._press_quad: list[QPointF] | None = None
 
     # -- session control --
 
@@ -175,6 +215,16 @@ class TransformTool(Tool):
         self._mode = self._hit(canvas, pos)
         self._press_pos = pos
         s = self.session
+        ctrl = ev is not None and bool(
+            ev.modifiers() & Qt.KeyboardModifier.ControlModifier)
+        if s.quad is not None or (ctrl and self._mode in _HANDLES):
+            if self._mode in _HANDLES:
+                s.enter_quad()
+                self._mode = "quad:" + self._mode
+            elif self._mode == "rotate":
+                self._mode = "move"  # rotation is baked once distorting
+        self._press_quad = ([QPointF(p) for p in s.quad]
+                            if s.quad is not None else None)
         self._press_state = (s.scale_x, s.scale_y, s.rotation,
                              QPointF(s.translation))
 
@@ -186,8 +236,24 @@ class TransformTool(Tool):
         shift = ev is not None and bool(
             ev.modifiers() & Qt.KeyboardModifier.ShiftModifier)
 
-        if self._mode == "move":
-            s.translation = tr0 + (pos - self._press_pos)
+        if self._mode.startswith("quad:"):
+            handle = self._mode[5:]
+            delta = pos - self._press_pos
+            quad = [QPointF(p) for p in self._press_quad]
+            corner_of = {"tl": (0,), "tr": (1,), "br": (2,), "bl": (3,),
+                         "t": (0, 1), "r": (1, 2), "b": (2, 3), "l": (3, 0)}
+            for i in corner_of[handle]:
+                if handle in ("tl", "tr", "br", "bl"):
+                    quad[i] = QPointF(pos)  # corner follows the cursor
+                else:
+                    quad[i] = self._press_quad[i] + delta  # edge skews
+            s.quad = quad
+        elif self._mode == "move":
+            if s.quad is not None:
+                delta = pos - self._press_pos
+                s.quad = [p + delta for p in self._press_quad]
+            else:
+                s.translation = tr0 + (pos - self._press_pos)
         elif self._mode == "rotate":
             c = s.base_center + tr0
             a0 = math.degrees(math.atan2(self._press_pos.y() - c.y(),
