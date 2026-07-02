@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.55.0] — 2026-07-02
+
+### Added
+
+- Liquify (`Y`): the forward-warp push brush — drag to shove pixels along
+  the stroke with a smooth falloff (bilinear resample, local region only).
+  Strength = opacity, one undo step per stroke.
+
 ## [0.54.0] — 2026-07-02
 
 ### Added

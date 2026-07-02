@@ -236,6 +236,55 @@ def drop_shadow_image(img: QImage, color, blur: int) -> QImage:
     return out
 
 
+def warp_push(img: QImage, cx: float, cy: float, radius: float,
+              dx: float, dy: float) -> QRect:
+    """Liquify push: pixels inside the brush shift along (dx, dy) with a
+    smooth falloff — bilinear backward resample over the local region only.
+    Returns the dirty rect."""
+    h, w = img.height(), img.width()
+    pad = int(radius + max(abs(dx), abs(dy))) + 2
+    x0, x1 = max(0, int(cx) - pad), min(w, int(cx) + pad + 1)
+    y0, y1 = max(0, int(cy) - pad), min(h, int(cy) + pad + 1)
+    if x1 - x0 < 2 or y1 - y0 < 2:
+        return QRect()
+
+    arr = view_u32(img)
+    sub = arr[y0:y1, x0:x1].copy()
+    hh, ww = sub.shape
+    yy, xx = np.mgrid[0:hh, 0:ww].astype(np.float32)
+    rx, ry = xx - (cx - x0), yy - (cy - y0)
+    dist = np.sqrt(rx * rx + ry * ry)
+    weight = np.clip(1.0 - dist / max(radius, 1.0), 0.0, 1.0) ** 2
+    sx = np.clip(xx - dx * weight, 0, ww - 1)
+    sy = np.clip(yy - dy * weight, 0, hh - 1)
+
+    fx0 = np.floor(sx).astype(np.int64)
+    fy0 = np.floor(sy).astype(np.int64)
+    fx1 = np.minimum(fx0 + 1, ww - 1)
+    fy1 = np.minimum(fy0 + 1, hh - 1)
+    tx = (sx - fx0)[..., None]
+    ty = (sy - fy0)[..., None]
+
+    def planes(a):
+        return np.stack([((a >> np.uint32(k)) & 0xFF).astype(np.float32)
+                         for k in (24, 16, 8, 0)], axis=-1)
+
+    p00 = planes(sub[fy0, fx0])
+    p01 = planes(sub[fy0, fx1])
+    p10 = planes(sub[fy1, fx0])
+    p11 = planes(sub[fy1, fx1])
+    top = p00 * (1 - tx) + p01 * tx
+    bot = p10 * (1 - tx) + p11 * tx
+    out = top * (1 - ty) + bot * ty
+    a, r, g, b = [np.clip(out[..., i] + 0.5, 0, 255).astype(np.uint32)
+                  for i in range(4)]
+    packed = (a << np.uint32(24)) | (r << np.uint32(16)) | (g << np.uint32(8)) | b
+    changed = weight > 0.001
+    target = arr[y0:y1, x0:x1]
+    target[changed] = packed[changed]
+    return QRect(x0, y0, x1 - x0, y1 - y0)
+
+
 def _box_blur_plane(c: np.ndarray, r: int) -> np.ndarray:
     k = 2 * r + 1
     csum = np.cumsum(c, axis=0)

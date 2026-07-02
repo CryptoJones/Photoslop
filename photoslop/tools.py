@@ -463,6 +463,66 @@ class PatchTool(Tool):
         painter.restore()
 
 
+class LiquifyTool(Tool):
+    """Liquify push (Y): drag to shove pixels along the stroke with a smooth
+    falloff — the classic forward-warp brush."""
+
+    name = "liquify"
+    cursor = Qt.CursorShape.SizeAllCursor
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._layer = None
+        self._recorder: TileRecorder | None = None
+        self._last: QPointF | None = None
+
+    def press(self, doc, canvas, pos, ev):
+        layer = doc.active_layer
+        if layer is None:
+            return
+        self._layer = layer
+        self._recorder = TileRecorder(doc, layer)
+        self._last = pos
+
+    def move(self, doc, canvas, pos, ev):
+        if self._recorder is None or self._last is None:
+            return
+        layer = self._layer
+        delta = pos - self._last
+        strength = self.opts.opacity / 100.0
+        radius = max(2.0, self.opts.size / 2.0)
+        local = self._last - QPointF(layer.offset)
+        pad = int(radius + delta.manhattanLength()) + 2
+        rect = QRect(int(local.x()) - pad, int(local.y()) - pad,
+                     2 * pad, 2 * pad)
+        self._recorder.will_change(rect)
+        dirty = npimage.warp_push(layer.image, local.x(), local.y(), radius,
+                                  delta.x() * strength, delta.y() * strength)
+        self._last = pos
+        if not dirty.isEmpty():
+            doc.notify_pixels(dirty.translated(layer.offset))
+
+    def release(self, doc, canvas, pos, ev):
+        if self._recorder is None:
+            return
+        cmd = self._recorder.finish("Liquify")
+        if cmd is not None:
+            doc.undo_stack.push(cmd)
+        self._recorder = None
+        self._layer = None
+        self._last = None
+
+    def overlay(self, doc, painter, canvas):
+        if canvas.hover_pos is None:
+            return
+        z = canvas.zoom
+        center = QPointF(canvas.hover_pos.x() * z, canvas.hover_pos.y() * z)
+        r = max(2.0, self.opts.size / 2.0 * z)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor(255, 180, 80, 200), 1))
+        painter.drawEllipse(center, r, r)
+
+
 class TextTool(Tool):
     """Text (T): click to place text — a dialog takes the content and font,
     and the text rasterises onto a new layer at the click point."""
