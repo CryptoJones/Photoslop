@@ -417,8 +417,12 @@ class MainWindow(QMainWindow):
                                     lambda: self.layer_panel.duplicate_layer()))
         m_layer.addAction(self._act("Delete La&yer", None,
                                     lambda: self.layer_panel.delete_layer()))
-        m_layer.addAction(self._act("Merge Do&wn", "Ctrl+Shift+E",
+        m_layer.addAction(self._act("Merge Do&wn", "Ctrl+E",
                                     lambda: self.layer_panel.merge_down()))
+        m_layer.addAction(self._act("Merge &Visible", "Ctrl+Shift+E",
+                                    self.action_merge_visible))
+        m_layer.addAction(self._act("S&tamp Visible", "Ctrl+Shift+Alt+E",
+                                    self.action_stamp_visible))
         m_layer.addSeparator()
         m_layer.addAction(self._act("&Copy Layer", "Ctrl+Shift+C", self.action_copy_layer))
         m_layer.addAction(self._act("&Paste Layer", "Ctrl+Shift+V", self.action_paste_layer))
@@ -809,6 +813,26 @@ class MainWindow(QMainWindow):
         doc.undo_stack.push(
             InsertLayerCommand(doc, doc.active_index + 1, layer, "Paste Layer")
         )
+
+    def action_merge_visible(self) -> None:
+        doc = self.current_doc()
+        if doc is None:
+            return
+        visible = [layer for layer in doc.layers if layer.visible]
+        if len(visible) < 2:
+            self.statusBar().showMessage("Merge Visible needs 2+ visible layers", 4000)
+            return
+        from photoslop.commands import MergeVisibleCommand
+
+        doc.undo_stack.push(MergeVisibleCommand(doc))
+
+    def action_stamp_visible(self) -> None:
+        doc = self.current_doc()
+        if doc is None:
+            return
+        layer = Layer("Stamp", doc.flatten())
+        doc.undo_stack.push(
+            InsertLayerCommand(doc, len(doc.layers), layer, "Stamp Visible"))
 
     # ------------------------------------------------------------------ image actions
 
