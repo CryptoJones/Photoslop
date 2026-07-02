@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.1.1] — 2026-07-02
+
+### Removed
+
+- Codeberg badge and "mirrored on both forges" README callout, and the
+  Woodpecker CI config — the project is GitHub-only (Codeberg account is at
+  its repo cap).
+
 ## [0.1.0] — 2026-07-02
 
 ### Added
