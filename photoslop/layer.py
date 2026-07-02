@@ -9,9 +9,31 @@ side is painted on.
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, QRect, QSize
-from PySide6.QtGui import QImage, Qt
+from PySide6.QtGui import QImage, QPainter, Qt
 
 FORMAT = QImage.Format.Format_ARGB32_Premultiplied
+
+_CM = QPainter.CompositionMode
+BLEND_MODES: dict[str, QPainter.CompositionMode] = {
+    "normal": _CM.CompositionMode_SourceOver,
+    "multiply": _CM.CompositionMode_Multiply,
+    "screen": _CM.CompositionMode_Screen,
+    "overlay": _CM.CompositionMode_Overlay,
+    "darken": _CM.CompositionMode_Darken,
+    "lighten": _CM.CompositionMode_Lighten,
+    "color-dodge": _CM.CompositionMode_ColorDodge,
+    "color-burn": _CM.CompositionMode_ColorBurn,
+    "hard-light": _CM.CompositionMode_HardLight,
+    "soft-light": _CM.CompositionMode_SoftLight,
+    "difference": _CM.CompositionMode_Difference,
+    "exclusion": _CM.CompositionMode_Exclusion,
+    "addition": _CM.CompositionMode_Plus,
+}
+
+# OpenRaster composite-op names (GIMP/Krita-interoperable)
+ORA_OPS = {name: f"svg:{'src-over' if name == 'normal' else 'plus' if name == 'addition' else name}"
+           for name in BLEND_MODES}
+ORA_OPS_REVERSE = {v: k for k, v in ORA_OPS.items()}
 
 
 def blank_image(size: QSize) -> QImage:
@@ -21,7 +43,7 @@ def blank_image(size: QSize) -> QImage:
 
 
 class Layer:
-    __slots__ = ("image", "name", "offset", "opacity", "visible")
+    __slots__ = ("blend_mode", "image", "name", "offset", "opacity", "visible")
 
     def __init__(
         self,
@@ -30,12 +52,14 @@ class Layer:
         offset: QPoint | None = None,
         visible: bool = True,
         opacity: float = 1.0,
+        blend_mode: str = "normal",
     ) -> None:
         self.name = name
         self.image = image if image.format() == FORMAT else image.convertToFormat(FORMAT)
         self.offset = QPoint(offset) if offset is not None else QPoint(0, 0)
         self.visible = visible
         self.opacity = float(opacity)
+        self.blend_mode = blend_mode if blend_mode in BLEND_MODES else "normal"
 
     @classmethod
     def blank(cls, name: str, size: QSize, offset: QPoint | None = None) -> Layer:
@@ -49,6 +73,7 @@ class Layer:
             QPoint(self.offset),
             self.visible,
             self.opacity,
+            self.blend_mode,
         )
 
     def bounds(self) -> QRect:

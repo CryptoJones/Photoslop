@@ -11,7 +11,7 @@ from PySide6.QtCore import QBuffer, QIODevice, QPoint, QSize, Qt
 from PySide6.QtGui import QImage
 
 from photoslop.document import Document
-from photoslop.layer import FORMAT, Layer
+from photoslop.layer import FORMAT, ORA_OPS, ORA_OPS_REVERSE, Layer
 
 MIMETYPE = "image/openraster"
 
@@ -48,7 +48,7 @@ def save_ora(doc: Document, path: str) -> None:
             y=str(layer.offset.y()),
             opacity=f"{layer.opacity:.4f}",
             visibility="visible" if layer.visible else "hidden",
-            attrib={"composite-op": "svg:src-over"},
+            attrib={"composite-op": ORA_OPS.get(layer.blend_mode, "svg:src-over")},
         )
         entries.append((src, _png_bytes(layer.image)))
 
@@ -84,6 +84,7 @@ def _walk_layers(zf: zipfile.ZipFile, node: ET.Element, base: QPoint, out: list[
                 base + QPoint(int(float(child.get("x", "0"))), int(float(child.get("y", "0")))),
                 child.get("visibility", "visible") != "hidden",
                 float(child.get("opacity", "1.0")),
+                ORA_OPS_REVERSE.get(child.get("composite-op", "svg:src-over"), "normal"),
             )
             out.append(layer)
 

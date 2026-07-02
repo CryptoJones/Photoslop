@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.7.0] — 2026-07-02
+
+### Added
+
+- Layer blend modes: normal, multiply, screen, overlay, darken, lighten,
+  color-dodge, color-burn, hard-light, soft-light, difference, exclusion,
+  addition — picked from a combo in the Layers panel, applied in both the
+  canvas and flatten/export paths, and stored as standard `composite-op`
+  values in `.ora` (round-trips with GIMP/Krita).
+
 ## [0.6.0] — 2026-07-02
 
 ### Added

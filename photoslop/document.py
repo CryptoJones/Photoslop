@@ -11,7 +11,7 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, QPoint, QRect, QSize, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QUndoStack
 
-from photoslop.layer import FORMAT, Layer, blank_image
+from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
 
 UNDO_LIMIT = 64
 
@@ -114,6 +114,7 @@ class Document(QObject):
         for layer in self.layers:
             if layer.visible:
                 p.setOpacity(layer.opacity)
+                p.setCompositionMode(BLEND_MODES[layer.blend_mode])
                 p.drawImage(layer.offset, layer.image)
         p.end()
         return out

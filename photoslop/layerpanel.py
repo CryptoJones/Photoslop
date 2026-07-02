@@ -7,6 +7,7 @@ from __future__ import annotations
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -24,7 +25,7 @@ from photoslop.commands import (
     RemoveLayerCommand,
 )
 from photoslop.document import Document
-from photoslop.layer import Layer
+from photoslop.layer import BLEND_MODES, Layer
 
 _THUMB = 36
 
@@ -39,6 +40,10 @@ class LayerPanel(QWidget):
         self.list.setIconSize(QSize(_THUMB, _THUMB))
         self.list.currentRowChanged.connect(self._on_row)
         self.list.itemChanged.connect(self._on_item_changed)
+
+        self.blend = QComboBox()
+        self.blend.addItems(list(BLEND_MODES))
+        self.blend.activated.connect(self._on_blend)
 
         self.opacity = QSlider(Qt.Orientation.Horizontal)
         self.opacity.setRange(0, 100)
@@ -70,6 +75,10 @@ class LayerPanel(QWidget):
         self._buttons["down"].clicked.connect(lambda: self.shift_layer(-1))
         self._buttons["merge"].clicked.connect(self.merge_down)
 
+        blend_row = QHBoxLayout()
+        blend_row.addWidget(QLabel("Blend"))
+        blend_row.addWidget(self.blend, 1)
+
         opacity_row = QHBoxLayout()
         opacity_row.addWidget(QLabel("Opacity"))
         opacity_row.addWidget(self.opacity, 1)
@@ -77,6 +86,7 @@ class LayerPanel(QWidget):
 
         box = QVBoxLayout(self)
         box.setContentsMargins(4, 4, 4, 4)
+        box.addLayout(blend_row)
         box.addLayout(opacity_row)
         box.addWidget(self.list, 1)
         box.addLayout(buttons)
@@ -121,12 +131,7 @@ class LayerPanel(QWidget):
                 self.list.addItem(item)
             if self.doc.active_index >= 0:
                 self.list.setCurrentRow(self._row_to_index(self.doc.active_index))
-            active = self.doc.active_layer
-            if active is not None:
-                self.opacity.blockSignals(True)
-                self.opacity.setValue(round(active.opacity * 100))
-                self.opacity.blockSignals(False)
-                self.opacity_label.setText(f"{round(active.opacity * 100)}%")
+            self._sync_active_controls()
         self._updating = False
 
     def _refresh_thumbs(self) -> None:
@@ -140,16 +145,23 @@ class LayerPanel(QWidget):
 
     # -- user edits --
 
+    def _sync_active_controls(self) -> None:
+        active = self.doc.active_layer if self.doc is not None else None
+        if active is None:
+            return
+        self.opacity.blockSignals(True)
+        self.opacity.setValue(round(active.opacity * 100))
+        self.opacity.blockSignals(False)
+        self.opacity_label.setText(f"{round(active.opacity * 100)}%")
+        self.blend.blockSignals(True)
+        self.blend.setCurrentText(active.blend_mode)
+        self.blend.blockSignals(False)
+
     def _on_row(self, row: int) -> None:
         if self.doc is None or self._updating or row < 0:
             return
         self.doc.active_index = self._row_to_index(row)
-        active = self.doc.active_layer
-        if active is not None:
-            self.opacity.blockSignals(True)
-            self.opacity.setValue(round(active.opacity * 100))
-            self.opacity.blockSignals(False)
-            self.opacity_label.setText(f"{round(active.opacity * 100)}%")
+        self._sync_active_controls()
 
     def _on_item_changed(self, item: QListWidgetItem) -> None:
         if self.doc is None or self._updating:
@@ -163,6 +175,14 @@ class LayerPanel(QWidget):
             self.doc.notify_pixels(layer.bounds())
         if name != layer.name:
             layer.name = name
+
+    def _on_blend(self) -> None:
+        if self.doc is None or self._updating:
+            return
+        layer = self.doc.active_layer
+        if layer is not None:
+            layer.blend_mode = self.blend.currentText()
+            self.doc.notify_pixels(layer.bounds())
 
     def _on_opacity(self, value: int) -> None:
         if self.doc is None or self._updating:
