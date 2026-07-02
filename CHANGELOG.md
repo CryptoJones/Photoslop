@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.20.0] — 2026-07-02
+
+### Added
+
+- Merge Visible (`Ctrl+Shift+E`): composites every visible layer into one
+  (blend modes and opacity baked in), leaving hidden layers untouched; fully
+  undoable.
+- Stamp Visible (`Ctrl+Shift+Alt+E`): drops the canvas composite onto a new
+  top layer without touching the stack.
+
+### Changed
+
+- Merge Down moved to `Ctrl+E` — the keys now match Photoshop.
+
 ## [0.19.0] — 2026-07-02
 
 ### Added

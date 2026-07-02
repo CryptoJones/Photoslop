@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.19.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v0.20.0-orange)]()
 
 ---
 
@@ -106,6 +106,8 @@ uvx --from git+https://github.com/CryptoJones/Photoslop photoslop
 | Copy selection       | `Ctrl+C`     |
 | Paste as new layer   | `Ctrl+V`     |
 | Delete selection     | `Del`        |
+| Merge down / visible | `Ctrl+E` / `Ctrl+Shift+E` |
+| Stamp visible        | `Ctrl+Shift+Alt+E` |
 | Copy layer           | `Ctrl+Shift+C` |
 | Paste layer          | `Ctrl+Shift+V` |
 | Brush size / hardness | `[` / `]` and `Shift+[` / `Shift+]` |

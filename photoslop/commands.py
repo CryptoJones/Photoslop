@@ -9,7 +9,7 @@ from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QImage, QPainter, QTransform, QUndoCommand
 
 from photoslop.document import Document
-from photoslop.layer import Layer, blank_image
+from photoslop.layer import BLEND_MODES, Layer, blank_image
 
 TILE = 128
 
@@ -226,6 +226,52 @@ class MergeDownCommand(QUndoCommand):
         lower.image, lower.offset, lower.opacity = self.old_lower
         doc.insert_layer(self.index, self.upper)
         doc.notify_pixels(dirty)
+
+
+class MergeVisibleCommand(QUndoCommand):
+    """Composite every visible layer into one (at the lowest visible slot),
+    leaving hidden layers untouched. Undo restores the exact stack."""
+
+    def __init__(self, doc: Document):
+        super().__init__("Merge Visible")
+        self.doc = doc
+        self.removed: list[tuple[int, Layer]] = []
+        self.merged: Layer | None = None
+        self.insert_at = 0
+        self.old_active = doc.active_index
+
+    def redo(self) -> None:
+        doc = self.doc
+        if self.merged is None:
+            self.removed = [(i, layer) for i, layer in enumerate(doc.layers)
+                            if layer.visible]
+            union = QRect()
+            for _, layer in self.removed:
+                union = union.united(layer.bounds())
+            img = blank_image(union.size())
+            p = QPainter(img)
+            for _, layer in self.removed:
+                p.setOpacity(layer.opacity)
+                p.setCompositionMode(BLEND_MODES[layer.blend_mode])
+                p.drawImage(layer.offset - union.topLeft(), layer.image)
+            p.end()
+            self.merged = Layer("Merged", img, union.topLeft())
+            self.insert_at = self.removed[0][0]
+        for i, _ in reversed(self.removed):
+            doc.layers.pop(i)
+        doc.layers.insert(self.insert_at, self.merged)
+        doc.active_index = self.insert_at
+        doc.notify_structure()
+        doc.notify_pixels(QRect(QPoint(0, 0), doc.size))
+
+    def undo(self) -> None:
+        doc = self.doc
+        doc.layers.pop(self.insert_at)
+        for i, layer in self.removed:
+            doc.layers.insert(i, layer)
+        doc.active_index = self.old_active
+        doc.notify_structure()
+        doc.notify_pixels(QRect(QPoint(0, 0), doc.size))
 
 
 class ResizeImageCommand(QUndoCommand):
