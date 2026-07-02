@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.25.0] — 2026-07-02
+
+### Added
+
+- Quick Selection (`Shift+W`): paint over the image and every brush seed
+  floods its contiguous colour region (shared tolerance) into the selection,
+  live. Plain drags add to the existing selection; Alt-drags subtract.
+
 ## [0.24.0] — 2026-07-02
 
 ### Added

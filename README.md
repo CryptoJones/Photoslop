@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.24.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v0.25.0-orange)]()
 
 ---
 
@@ -34,7 +34,8 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
   composite; foreground/background colour pair with `X` swap and `D` reset.
 - **Selections** — rectangle marquee, freehand lasso, polygonal lasso, and
   magic wand (tolerance-based, Shift adds / Alt subtracts, contiguous
-  toggle for colour-range selection); delete selection, copy
+  toggle for colour-range selection), and quick selection (`Shift+W`,
+  paint to grow); delete selection, copy
   selection, paste as new layer.
 - **Cross-image workflow** — multiple documents in tabs; copy a layer (or a
   selection) in one image and paste it into another.
