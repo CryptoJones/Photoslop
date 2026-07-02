@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.16.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v0.17.0-orange)]()
 
 ---
 
@@ -56,7 +56,8 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
   (`.ora`, interoperable with GIMP and Krita); imports/exports PNG, JPEG, BMP,
   and WebP. The Open dialog shows a live thumbnail preview with dimensions,
   format, layer count, and file size — decoded scaled-down, so browsing huge
-  folders stays fast.
+  folders stays fast. Export As offers format/quality/scale controls with a
+  live preview and the real encoded size.
 
 ## Why the memory frugality
 

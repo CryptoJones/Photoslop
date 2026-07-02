@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.17.0] — 2026-07-02
+
+### Added
+
+- Export As dialog: format (PNG/JPEG/WebP/BMP), quality slider for lossy
+  formats, export scale (1–400%) with live dimensions, a preview thumbnail,
+  and the real encoded file size computed in-memory (debounced) so you see
+  the trade-off before saving.
+
 ## [0.16.0] — 2026-07-02
 
 ### Added
