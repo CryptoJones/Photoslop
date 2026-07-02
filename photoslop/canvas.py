@@ -250,7 +250,10 @@ class CanvasView(QWidget):
             if tool is not None:
                 tool.move(self.doc, self, pos, ev)
         else:
-            self.update()  # brush outline follows the cursor
+            tool = self.editor.active_tool()
+            if tool is not None:
+                tool.hover(self.doc, self, pos)
+            self.update()  # brush outline / previews follow the cursor
 
     def mouseReleaseEvent(self, ev) -> None:
         if ev.button() == Qt.MouseButton.LeftButton:
@@ -262,6 +265,12 @@ class CanvasView(QWidget):
             tool = self.editor.active_tool()
             if tool is not None:
                 tool.release(self.doc, self, self._canvas_pos(ev), ev)
+
+    def mouseDoubleClickEvent(self, ev) -> None:
+        if ev.button() == Qt.MouseButton.LeftButton:
+            tool = self.editor.active_tool()
+            if tool is not None:
+                tool.double_click(self.doc, self, self._canvas_pos(ev), ev)
 
     def leaveEvent(self, ev) -> None:
         self.hover_pos = None
@@ -282,6 +291,9 @@ class CanvasView(QWidget):
             self.setCursor(Qt.CursorShape.OpenHandCursor)
             return
         if key == Qt.Key.Key_Escape:
+            tool = self.editor.active_tool()
+            if tool is not None:
+                tool.cancel(self.doc)
             self.doc.set_selection(None)
             return
         nudges = {

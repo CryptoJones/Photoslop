@@ -55,6 +55,14 @@ class Tool:
 
     def release(self, doc, canvas, pos: QPointF, ev) -> None: ...
 
+    def hover(self, doc, canvas, pos: QPointF) -> None:
+        """Mouse moved with no button held."""
+
+    def double_click(self, doc, canvas, pos: QPointF, ev) -> None: ...
+
+    def cancel(self, doc=None) -> None:
+        """Escape pressed — abandon any in-progress gesture."""
+
     def overlay(self, doc, painter: QPainter, canvas) -> None:
         """Draw tool feedback. Painter is in widget coords (unscaled)."""
 
@@ -348,6 +356,72 @@ class LassoTool(Tool):
         if close:
             path.closeSubpath()
         return path
+
+
+class PolyLassoTool(Tool):
+    """Click to place vertices; close by clicking the first vertex or
+    double-clicking. Escape cancels."""
+
+    name = "poly-lasso"
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._points: list[QPointF] = []
+        self._hover: QPointF | None = None
+
+    def press(self, doc, canvas, pos, ev):
+        if not self._points:
+            doc.set_selection(None)
+            self._points = [pos]
+            return
+        close_tol = 8.0 / max(canvas.zoom, 0.01)
+        if len(self._points) >= 3 and (pos - self._points[0]).manhattanLength() <= close_tol:
+            self._close(doc)
+            return
+        self._points.append(pos)
+        self._preview(doc)
+
+    def hover(self, doc, canvas, pos):
+        if self._points:
+            self._hover = pos
+            self._preview(doc)
+
+    def double_click(self, doc, canvas, pos, ev):
+        if len(self._points) >= 3:
+            self._close(doc)
+        else:
+            self.cancel(doc)
+
+    def cancel(self, doc=None) -> None:
+        self._points = []
+        self._hover = None
+
+    def _path(self) -> QPainterPath:
+        path = QPainterPath(self._points[0])
+        for pt in self._points[1:]:
+            path.lineTo(pt)
+        if self._hover is not None:
+            path.lineTo(self._hover)
+        path.closeSubpath()
+        return path
+
+    def _preview(self, doc) -> None:
+        if len(self._points) + (1 if self._hover is not None else 0) >= 2:
+            doc.set_selection(self._path())
+
+    def _close(self, doc) -> None:
+        self._hover = None
+        doc.set_selection(self._path())
+        self._points = []
+
+    def overlay(self, doc, painter, canvas):
+        if not self._points:
+            return
+        z = canvas.zoom
+        painter.setPen(QPen(QColor(0, 0, 0, 200), 1))
+        painter.setBrush(QBrush(QColor(255, 255, 255, 220)))
+        for pt in self._points:
+            painter.drawRect(QRectF(pt.x() * z - 2, pt.y() * z - 2, 4, 4))
 
 
 class MoveTool(Tool):

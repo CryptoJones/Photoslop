@@ -128,12 +128,29 @@ def zoom_icon() -> QIcon:
     return _make(draw)
 
 
+def poly_lasso_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        pen = QPen(_INK, 1.6, Qt.PenStyle.DashLine)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        path = QPainterPath(QPointF(5, 9))
+        path.lineTo(QPointF(12, 5))
+        path.lineTo(QPointF(18, 9))
+        path.lineTo(QPointF(15, 16))
+        path.lineTo(QPointF(7, 15))
+        path.closeSubpath()
+        p.drawPath(path)
+
+    return _make(draw)
+
+
 TOOL_ICONS = {
     "brush": brush_icon,
     "bucket": bucket_icon,
     "eyedropper": eyedropper_icon,
     "rect-select": rect_select_icon,
     "lasso": lasso_icon,
+    "poly-lasso": poly_lasso_icon,
     "move": move_icon,
     "hand": hand_icon,
     "zoom": zoom_icon,
