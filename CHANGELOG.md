@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.9.0] — 2026-07-02
+
+### Added
+
+- Photoshop-style bracket shortcuts: `[` / `]` step the brush size down/up
+  (fine steps at small sizes, coarser as it grows), `Shift+[` / `Shift+]`
+  step brush hardness in 25% increments. The toolbar spinboxes stay in sync.
+
 ## [0.8.0] — 2026-07-02
 
 ### Added

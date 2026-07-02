@@ -195,6 +195,7 @@ class MainWindow(QMainWindow):
         size.setToolTip("Brush size")
         size.valueChanged.connect(lambda v: setattr(self.options, "size", v))
         size_act = bar.addWidget(size)
+        self._size_spin = size
 
         hardness = QSpinBox()
         hardness.setRange(0, 100)
@@ -203,6 +204,7 @@ class MainWindow(QMainWindow):
         hardness.setToolTip("Brush hardness")
         hardness.valueChanged.connect(lambda v: setattr(self.options, "hardness", v))
         hard_act = bar.addWidget(hardness)
+        self._hardness_spin = hardness
 
         opacity = QSpinBox()
         opacity.setRange(1, 100)
@@ -235,6 +237,32 @@ class MainWindow(QMainWindow):
         self._all_option_actions = [
             color_act, bg_act, size_act, hard_act, opacity_act, eraser_act, tol_act,
         ]
+
+        # PS-style bracket shortcuts; window-level, invisible in menus
+        for key, slot in (
+            ("[", lambda: self._step_brush_size(-1)),
+            ("]", lambda: self._step_brush_size(+1)),
+            ("Shift+[", lambda: self._step_brush_hardness(-1)),
+            ("Shift+]", lambda: self._step_brush_hardness(+1)),
+        ):
+            act = QAction(self)
+            act.setShortcut(QKeySequence(key))
+            act.triggered.connect(slot)
+            self.addAction(act)
+
+    def _step_brush_size(self, direction: int) -> None:
+        size = self.options.size
+        if size < 10 or (size == 10 and direction < 0):
+            step = 1
+        elif size < 50 or (size == 50 and direction < 0):
+            step = 5
+        else:
+            step = 10
+        self._size_spin.setValue(max(1, min(500, size + direction * step)))
+
+    def _step_brush_hardness(self, direction: int) -> None:
+        hardness = self.options.hardness + direction * 25
+        self._hardness_spin.setValue(max(0, min(100, hardness)))
 
     def _sync_option_visibility(self) -> None:
         visible = set(self._option_actions[self._active_tool_name])
