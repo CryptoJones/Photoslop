@@ -9,7 +9,7 @@ from __future__ import annotations
 
 UNITS = ("px", "in", "mm", "pc")
 
-_LABELS = {"px": "pixels", "in": "inches", "mm": "millimetres", "pc": "picas"}
+_LABELS = {"px": "pixels", "in": "freedom units", "mm": "millimetres", "pc": "picas"}
 
 
 def unit_label(unit: str) -> str:
