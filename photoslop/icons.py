@@ -189,6 +189,30 @@ def pencil_icon() -> QIcon:
     return _make(draw)
 
 
+def dodge_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.8))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QPointF(11, 11), 4.0, 4.0)  # sun disc
+        p.setPen(QPen(_INK, 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+            p.drawLine(QPointF(11 + dx * 6, 11 + dy * 6),
+                       QPointF(11 + dx * 8.5, 11 + dy * 8.5))
+
+    return _make(draw)
+
+
+def burn_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.8))
+        p.setBrush(QBrush(_INK))
+        p.drawEllipse(QPointF(11, 11), 4.0, 4.0)  # filled = darkened disc
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QPointF(11, 11), 7.5, 7.5)
+
+    return _make(draw)
+
+
 def clone_stamp_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
@@ -218,6 +242,8 @@ TOOL_ICONS = {
     "gradient": gradient_icon,
     "eyedropper": eyedropper_icon,
     "clone-stamp": clone_stamp_icon,
+    "dodge": dodge_icon,
+    "burn": burn_icon,
     "rect-select": rect_select_icon,
     "lasso": lasso_icon,
     "poly-lasso": poly_lasso_icon,

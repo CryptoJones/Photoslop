@@ -58,7 +58,9 @@ from photoslop.opendialog import OpenImageDialog
 from photoslop.tools import (
     BrushTool,
     BucketTool,
+    BurnTool,
     CloneStampTool,
+    DodgeTool,
     EyedropperTool,
     GradientTool,
     HandTool,
@@ -100,6 +102,8 @@ class MainWindow(QMainWindow):
                 MagicWandTool(self.options),
                 QuickSelectTool(self.options),
                 CloneStampTool(self.options),
+                DodgeTool(self.options),
+                BurnTool(self.options),
                 MoveTool(self.options),
                 HandTool(self.options),
                 ZoomTool(self.options),
@@ -187,7 +191,8 @@ class MainWindow(QMainWindow):
             "brush": "B", "pencil": "Shift+B", "bucket": "G", "gradient": "Shift+G",
             "eyedropper": "I", "rect-select": "M", "lasso": "L",
             "poly-lasso": "Shift+L", "wand": "W", "quick-select": "Shift+W",
-            "clone-stamp": "S", "move": "V", "hand": "H", "zoom": "Z",
+            "clone-stamp": "S", "dodge": "O", "burn": "Shift+O",
+            "move": "V", "hand": "H", "zoom": "Z",
         }
         labels = {
             "brush": "Brush", "pencil": "Pencil", "bucket": "Paint Bucket",
@@ -196,12 +201,14 @@ class MainWindow(QMainWindow):
             "lasso": "Lasso Select", "poly-lasso": "Polygonal Lasso",
             "wand": "Magic Wand", "quick-select": "Quick Selection",
             "clone-stamp": "Clone Stamp (Alt+click sets source)",
+            "dodge": "Dodge (lighten)", "burn": "Burn (darken)",
             "move": "Move", "hand": "Hand (pan)", "zoom": "Zoom",
         }
         self._tool_actions = {}
         for name in ("brush", "pencil", "bucket", "gradient", "eyedropper",
                      "rect-select", "lasso", "poly-lasso", "wand",
-                     "quick-select", "clone-stamp", "move", "hand", "zoom"):
+                     "quick-select", "clone-stamp", "dodge", "burn",
+                     "move", "hand", "zoom"):
             act = QAction(TOOL_ICONS[name](), labels[name], self)
             act.setCheckable(True)
             act.setShortcut(shortcuts[name])
@@ -302,6 +309,8 @@ class MainWindow(QMainWindow):
             "wand": [tol_act, contig_act],
             "quick-select": [size_act, tol_act],
             "clone-stamp": [size_act, opacity_act],
+            "dodge": [size_act, hard_act, opacity_act],
+            "burn": [size_act, hard_act, opacity_act],
             "move": [],
             "hand": [],
             "zoom": [],

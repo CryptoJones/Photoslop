@@ -164,13 +164,17 @@ class BrushTool(Tool):
             p.setPen(pen)
             p.drawLine(a, b)
 
-    def _stamp_segment(self, p: QPainter, a: QPointF, b: QPointF, alpha: int, first: bool):
+    def _stamp_segment(self, p: QPainter, a: QPointF, b: QPointF, alpha: int,
+                       first: bool, color: QColor | None = None):
         radius = max(0.5, self.opts.size / 2.0)
         spacing = max(1.0, self.opts.size * 0.25)
         delta = b - a
         dist = math.hypot(delta.x(), delta.y())
 
-        if self.opts.eraser:
+        if color is not None:
+            base = QColor(color)
+            base.setAlpha(alpha)
+        elif self.opts.eraser:
             p.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationOut)
             base = QColor(0, 0, 0, alpha)
         else:
@@ -236,6 +240,28 @@ class PencilTool(BrushTool):
         else:
             p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
         self._pen_segment(p, la, lb, color, first)
+
+
+class DodgeTool(BrushTool):
+    """Lighten as you paint: soft-light white stamps, strength = opacity."""
+
+    name = "dodge"
+    _tone = QColor(255, 255, 255)
+
+    def _stroke_name(self) -> str:
+        return self.name.capitalize()
+
+    def _paint(self, p: QPainter, la: QPointF, lb: QPointF, first: bool) -> None:
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SoftLight)
+        alpha = round(self.opts.opacity * 2.55)
+        self._stamp_segment(p, la, lb, alpha, first, self._tone)
+
+
+class BurnTool(DodgeTool):
+    """Darken as you paint: soft-light black stamps."""
+
+    name = "burn"
+    _tone = QColor(0, 0, 0)
 
 
 class CloneStampTool(BrushTool):
