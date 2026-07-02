@@ -261,6 +261,21 @@ def liquify_icon() -> QIcon:
     return _make(draw)
 
 
+def puppet_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        path = QPainterPath(QPointF(5, 15))
+        path.cubicTo(QPointF(9, 11), QPointF(13, 15), QPointF(17, 9))
+        p.drawPath(path)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(_INK))
+        for cx, cy in ((5, 15), (11, 13.2), (17, 9)):
+            p.drawEllipse(QPointF(cx, cy), 2.0, 2.0)
+
+    return _make(draw)
+
+
 def text_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
@@ -368,6 +383,7 @@ TOOL_ICONS = {
     "heal": heal_icon,
     "patch": patch_icon,
     "liquify": liquify_icon,
+    "puppet": puppet_icon,
     "text": text_icon,
     "crop": crop_icon,
     "dodge": dodge_icon,

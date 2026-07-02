@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.60.0] — 2026-07-02
+
+### Added
+
+- Puppet Warp (`Shift+Y`): click to drop pins, drag one and the image bends
+  around the anchored others — live preview, Enter commits (one undo step),
+  Escape cancels exactly.
+
 ## [0.59.0] — 2026-07-02
 
 ### Added
