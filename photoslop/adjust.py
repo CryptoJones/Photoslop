@@ -64,6 +64,53 @@ def build_luts(s: AdjustSettings) -> np.ndarray:
     return luts
 
 
+def levels_lut(in_black: int, in_white: int, gamma: float,
+               out_black: int = 0, out_white: int = 255) -> np.ndarray:
+    """Classic Levels mapping as a single 256-entry LUT (same for R/G/B)."""
+    x = np.arange(256, dtype=np.float64)
+    span = max(in_white - in_black, 1)
+    x = np.clip((x - in_black) / span, 0.0, 1.0)
+    x = x ** (1.0 / max(gamma, 0.01))
+    out = out_black + x * (out_white - out_black)
+    return np.clip(np.round(out), 0, 255).astype(np.uint8)
+
+
+def apply_luts(img: QImage, luts: np.ndarray) -> None:
+    """Apply (3, 256) per-channel LUTs in place, premultiplication-aware and
+    processed in row bands (same frugality contract as apply_settings)."""
+    arr = view_u32(img)
+    height = arr.shape[0]
+    for y0 in range(0, height, CHUNK_ROWS):
+        chunk = arr[y0 : y0 + CHUNK_ROWS]
+        a = (chunk >> np.uint32(24)).astype(np.uint16)
+        r = ((chunk >> np.uint32(16)) & 0xFF).astype(np.uint16)
+        g = ((chunk >> np.uint32(8)) & 0xFF).astype(np.uint16)
+        b = (chunk & 0xFF).astype(np.uint16)
+
+        opaque = bool((a == 255).all())
+        if not opaque:
+            safe_a = np.maximum(a, 1)
+            r = np.minimum(255, r * 255 // safe_a)
+            g = np.minimum(255, g * 255 // safe_a)
+            b = np.minimum(255, b * 255 // safe_a)
+
+        r = luts[0][r].astype(np.uint16)
+        g = luts[1][g].astype(np.uint16)
+        b = luts[2][b].astype(np.uint16)
+
+        if not opaque:
+            r = r * a // 255
+            g = g * a // 255
+            b = b * a // 255
+
+        chunk[:] = (
+            (a.astype(np.uint32) << np.uint32(24))
+            | (r.astype(np.uint32) << np.uint32(16))
+            | (g.astype(np.uint32) << np.uint32(8))
+            | b.astype(np.uint32)
+        )
+
+
 def apply_settings(img: QImage, s: AdjustSettings) -> None:
     """Apply in place to a premultiplied ARGB32 QImage, in row bands."""
     if s.is_identity():

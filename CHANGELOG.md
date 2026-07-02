@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.18.0] — 2026-07-02
+
+### Added
+
+- Image → Adjustments → Levels… (`Ctrl+L`): input black/white points, gamma,
+  and output range with live preview on the active layer; **Auto** derives
+  0.1% percentile points from a downsampled luminance histogram. One undo
+  step on OK, Cancel restores exactly. Runs on the shared banded LUT engine.
+
 ## [0.17.0] — 2026-07-02
 
 ### Added

@@ -392,6 +392,9 @@ class MainWindow(QMainWindow):
         m_image.addAction(self._act("&Canvas Size…", "Ctrl+Alt+S", self.action_canvas_size))
         m_image.addAction(self._act("C&rop to Selection", "Ctrl+Alt+C", self.action_crop))
         m_image.addSeparator()
+        m_adjustments = m_image.addMenu("&Adjustments")
+        m_adjustments.addAction(self._act("&Levels…", "Ctrl+L", self.action_levels))
+        m_image.addSeparator()
         m_rotate = m_image.addMenu("Image &Rotation")
         m_rotate.addAction(self._act("Rotate 90° &CW", None,
                                      lambda: self._image_cmd(RotateImageCommand, 90)))
@@ -828,6 +831,14 @@ class MainWindow(QMainWindow):
         doc.undo_stack.push(
             ResizeCanvasCommand(doc, region.size(), -region.topLeft(), "Crop")
         )
+
+    def action_levels(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        from photoslop.levelsdialog import LevelsDialog
+
+        LevelsDialog(doc, self).exec()
 
     def action_image_size(self) -> None:
         doc = self.current_doc()
