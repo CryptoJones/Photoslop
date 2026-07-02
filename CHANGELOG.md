@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.75.0] — 2026-07-02
+
+### Added
+
+- Generative Fill (Edit → Generative Fill… (Model)): select a region, type
+  a prompt, and the configured model backend paints it — composited through
+  the standard selection plumbing (feather respected), one undo step. Works
+  with any backend via the v0.74.0 adapter framework.
+
 ## [0.74.0] — 2026-07-02
 
 ### Added
