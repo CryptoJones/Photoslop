@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.73.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v0.74.0-orange)]()
 
 ---
 
@@ -130,6 +130,20 @@ uv sync --extra dev
 uv run ruff check .
 QT_QPA_PLATFORM=offscreen uv run pytest
 ```
+
+## Model backends (bring your own model)
+
+Model-assisted features (Edit → **Select Subject (Model)**) never hardwire a
+model. Configure any backend under Edit → **Model Backend…**:
+
+- **Generic HTTP adapter** — point it at any server you run. The contract is
+  JSON with base64 PNGs: `POST <base>/select-subject {"image": …}` returns
+  `{"mask": …}`; `POST <base>/generative-fill {"image": …, "mask": …,
+  "prompt": …}` returns `{"image": …}`. Wrap ComfyUI, a rembg/SAM script, or
+  a cloud API in a few lines of Flask and you're in.
+- **pip plugins** — packages can register `photoslop.modeladapter.ModelAdapter`
+  subclasses under the `photoslop.model_adapters` entry-point group and they
+  appear in the picker automatically.
 
 ## License
 

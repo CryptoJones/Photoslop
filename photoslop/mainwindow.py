@@ -551,12 +551,16 @@ class MainWindow(QMainWindow):
         m_edit.addAction(self._act("&Delete Selection", "Del", self.action_delete_selection))
         m_edit.addSeparator()
         m_edit.addAction(self._act("Select &All", "Ctrl+A", self.action_select_all))
+        m_edit.addAction(self._act("Select Su&bject (Model)", None,
+                                   self.action_select_subject))
         m_edit.addAction(self._act("&Refine Selection…", "Ctrl+Alt+R",
                                    self.action_refine_selection))
         m_edit.addAction(self._act("Feat&her Selection…", "Ctrl+Alt+D",
                                    self.action_feather_selection))
         m_edit.addAction(self._act("D&eselect", "Ctrl+D", self.action_deselect))
         m_edit.addSeparator()
+        m_edit.addAction(self._act("Model Bac&kend…", None,
+                                   self.action_model_backend))
         m_action = m_edit.addMenu("Actio&ns")
         m_action.addAction(self._act("Start &Recording", None, self.action_record_start))
         m_action.addAction(self._act("Sto&p Recording", None, self.action_record_stop))
@@ -1655,6 +1659,81 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             f"Exported {len(written)} artboard(s) to {directory}", 5000)
         return written
+
+    def _model_adapter(self):
+        from PySide6.QtCore import QSettings
+
+        from photoslop.modeladapter import create_adapter
+
+        s = QSettings("CryptoJones", "Photoslop")
+        name = s.value("model/adapter", "")
+        if not name:
+            return None
+        return create_adapter(name, {"url": s.value("model/http_url", "")})
+
+    def action_model_backend(self) -> None:
+        from PySide6.QtCore import QSettings
+        from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLineEdit
+
+        from photoslop.modeladapter import available_adapters
+
+        s = QSettings("CryptoJones", "Photoslop")
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Model Backend")
+        form = QFormLayout(dialog)
+        combo = QComboBox()
+        combo.addItem("(none)", "")
+        for name, cls in sorted(available_adapters().items()):
+            combo.addItem(cls.label, name)
+        combo.setCurrentIndex(max(0, combo.findData(
+            s.value("model/adapter", ""))))
+        url = QLineEdit(s.value("model/http_url", ""))
+        url.setPlaceholderText("http://localhost:8188/photoslop")
+        form.addRow("&Adapter:", combo)
+        form.addRow("HTTP &URL:", url)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
+                                   | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        if dialog.exec():
+            s.setValue("model/adapter", combo.currentData())
+            s.setValue("model/http_url", url.text().strip())
+
+    def action_select_subject(self) -> None:
+        from photoslop.modeladapter import SELECT_SUBJECT
+
+        doc = self.current_doc()
+        if doc is None:
+            return
+        adapter = self._model_adapter()
+        if adapter is None:
+            self.statusBar().showMessage(
+                "No model backend configured — Edit → Model Backend…", 5000)
+            return
+        if SELECT_SUBJECT not in adapter.capabilities():
+            self.statusBar().showMessage(
+                f"“{adapter.label}” does not support Select Subject", 5000)
+            return
+        try:
+            mask_img = adapter.select_subject(doc.flatten())
+        except Exception as exc:
+            self.statusBar().showMessage(f"Select Subject failed: {exc}", 8000)
+            return
+        import numpy as np
+
+        from photoslop import npimage
+
+        gray = mask_img.convertToFormat(QImage.Format.Format_Grayscale8)
+        h, w = gray.height(), gray.width()
+        buf = np.frombuffer(gray.constBits(), np.uint8,
+                            count=h * gray.bytesPerLine())
+        mask = buf.reshape(h, gray.bytesPerLine())[:, :w] > 127
+        if not mask.any():
+            self.statusBar().showMessage("Backend found no subject", 5000)
+            return
+        doc.set_selection(npimage.mask_to_path(mask))
+        self.statusBar().showMessage("Subject selected", 3000)
 
     def action_convert_smart(self) -> None:
         doc = self.current_doc()

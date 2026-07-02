@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.74.0] — 2026-07-02
+
+### Added
+
+- Model-adapter framework: model-assisted features route through a
+  pluggable ModelAdapter — connect any backend via the generic HTTP
+  adapter (JSON/base64-PNG contract, Edit → Model Backend…) or a pip
+  plugin registered under the photoslop.model_adapters entry-point group.
+- Select Subject (Model) on the Edit menu: the configured backend returns
+  a mask that becomes the live selection.
+
 ## [0.73.0] — 2026-07-02
 
 ### Added
