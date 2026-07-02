@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from PySide6.QtCore import QPoint, QPointF, QRectF, Qt
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -236,6 +236,76 @@ class PencilTool(BrushTool):
         else:
             p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
         self._pen_segment(p, la, lb, color, first)
+
+
+class CloneStampTool(BrushTool):
+    """Alt+click sets the clone source; painting copies pixels from the
+    source, offset-locked on the first stroke (aligned mode)."""
+
+    name = "clone-stamp"
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._source: QPointF | None = None  # doc coords
+        self._clone_offset: QPointF | None = None  # dest - source, aligned
+
+    def press(self, doc, canvas, pos, ev):
+        if ev is not None and ev.modifiers() & Qt.KeyboardModifier.AltModifier:
+            self._source = QPointF(pos)
+            self._clone_offset = None  # next stroke re-locks the alignment
+            return
+        if self._source is None:
+            return  # no source set
+        if self._clone_offset is None:
+            self._clone_offset = pos - self._source
+        super().press(doc, canvas, pos, ev)
+
+    def _stroke_name(self) -> str:
+        return "Clone Stamp"
+
+    def _paint(self, p: QPainter, la: QPointF, lb: QPointF, first: bool) -> None:
+        layer = self._layer
+        offset = self._clone_offset
+        radius = max(0.5, self.opts.size / 2.0)
+        spacing = max(1.0, radius * 0.5)
+        pad = int(radius) + 1
+        p.setOpacity(self.opts.opacity / 100.0)
+
+        def stamp(center: QPointF) -> None:
+            src_center = center - offset
+            src_rect = QRect(round(src_center.x()) - pad, round(src_center.y()) - pad,
+                             2 * pad, 2 * pad)
+            chunk = layer.image.copy(src_rect)  # snapshot: source may overlap dest
+            path = QPainterPath()
+            path.addEllipse(center, radius, radius)
+            p.save()
+            p.setClipPath(path, Qt.ClipOperation.IntersectClip)
+            p.drawImage(QPointF(center.x() - pad, center.y() - pad), chunk)
+            p.restore()
+
+        delta = lb - la
+        dist = math.hypot(delta.x(), delta.y())
+        if first or dist == 0:
+            stamp(la)
+        if dist > 0:
+            steps = int(dist / spacing)
+            for i in range(1, steps + 1):
+                t = (i * spacing) / dist
+                stamp(QPointF(la.x() + delta.x() * t, la.y() + delta.y() * t))
+
+    def overlay(self, doc, painter, canvas):
+        z = canvas.zoom
+        if self._source is not None:
+            c = QPointF(self._source.x() * z, self._source.y() * z)
+            painter.setPen(QPen(QColor(255, 80, 255, 220), 1))
+            painter.drawLine(QPointF(c.x() - 6, c.y()), QPointF(c.x() + 6, c.y()))
+            painter.drawLine(QPointF(c.x(), c.y() - 6), QPointF(c.x(), c.y() + 6))
+        if canvas.hover_pos is not None:
+            center = QPointF(canvas.hover_pos.x() * z, canvas.hover_pos.y() * z)
+            r = max(2.0, self.opts.size / 2.0 * z)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor(255, 255, 255, 180), 1))
+            painter.drawEllipse(center, r, r)
 
 
 class BucketTool(Tool):
