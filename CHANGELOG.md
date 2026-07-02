@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.78.0] — 2026-07-02
+
+### Added
+
+- Headless CLI (`photoslop-cli`): the full engine as ordered pipeline
+  options — geometry, adjustments, filters, selections (with feather),
+  layer styles, layers, text/shapes, smart objects, artboards, camera-raw
+  input, ORA in/out, and the model-adapter ops. GUI/CLI feature parity
+  (interactive brushes excepted); documented in the README.
+- ~1180 new tests: every option alone (with a completeness guard pinning
+  the op catalog to the tests), every ordered pair of operations (1122
+  pairwise cases), order-sensitivity pixel assertions, a kitchen-sink
+  pipeline, model ops against a live local server, and I/O/error paths.
+
 ## [0.77.0] — 2026-07-02
 
 ### Added
