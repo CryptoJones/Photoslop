@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.62.0] — 2026-07-02
+
+### Added
+
+- Group opacity & blend (Layer → Group Opacity/Blend…): a group now
+  composites into a single buffer and blends as one unit — overlapping
+  members no longer double-blend at reduced opacity, exactly like nesting
+  in Photoshop. Default-value groups keep the zero-copy fast path.
+
 ## [0.61.0] — 2026-07-02
 
 ### Added

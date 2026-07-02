@@ -160,7 +160,7 @@ class CanvasView(QWidget):
             int(clip.x() / z), int(clip.y() / z),
             int(clip.width() / z) + 2, int(clip.height() / z) + 2)
         transform_session = self._transform_session()
-        if self.doc.has_adjustments():
+        if self.doc.needs_offscreen():
             region = clip_canvas.intersected(self.doc.canvas_rect())
             if not region.isEmpty():
                 exclude = (transform_session.layer

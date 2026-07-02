@@ -53,7 +53,7 @@ from photoslop.document import Document
 from photoslop.exportdialog import ExportDialog
 from photoslop.icons import TOOL_ICONS
 from photoslop.io_ora import load_ora, save_ora
-from photoslop.layer import FORMAT, Layer, blank_image
+from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
 from photoslop.opendialog import OpenImageDialog
 from photoslop.tools import (
     BrushTool,
@@ -600,6 +600,8 @@ class MainWindow(QMainWindow):
                                     self.action_group_layer))
         m_layer.addAction(self._act("U&ngroup Layer", "Ctrl+Shift+G",
                                     self.action_ungroup_layer))
+        m_layer.addAction(self._act("Group &Opacity/Blend…", None,
+                                    self.action_group_props))
         m_layer.addSeparator()
         m_layer.addAction(self._act("&Copy Layer", "Ctrl+Shift+C", self.action_copy_layer))
         m_layer.addAction(self._act("&Paste Layer", "Ctrl+Shift+V", self.action_paste_layer))
@@ -1428,6 +1430,44 @@ class MainWindow(QMainWindow):
         from photoslop.commands import SetLayerGroupCommand
 
         doc.undo_stack.push(SetLayerGroupCommand(doc, doc.active_layer, None))
+
+    def action_group_props(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None or not doc.active_layer.group:
+            if doc is not None:
+                self.statusBar().showMessage(
+                    "Group Opacity/Blend needs a grouped layer (Ctrl+G)", 4000)
+            return
+        group = doc.active_layer.group
+        current = doc.group_props.get(group, {})
+        from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QSpinBox
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Group: {group}")
+        form = QFormLayout(dialog)
+        opacity = QSpinBox()
+        opacity.setRange(0, 100)
+        opacity.setValue(round(current.get("opacity", 1.0) * 100))
+        opacity.setSuffix(" %")
+        blend = QComboBox()
+        blend.addItems(list(BLEND_MODES))
+        blend.setCurrentText(current.get("blend_mode", "normal"))
+        form.addRow("Group opacity", opacity)
+        form.addRow("Group blend", blend)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        if not dialog.exec():
+            return
+        from photoslop.commands import SetGroupPropsCommand
+
+        props = {"opacity": opacity.value() / 100.0,
+                 "blend_mode": blend.currentText()}
+        if props == {"opacity": 1.0, "blend_mode": "normal"}:
+            props = None  # defaults: back to the pass-through fast path
+        doc.undo_stack.push(SetGroupPropsCommand(doc, group, props))
 
     def action_toggle_clip(self) -> None:
         doc = self.current_doc()

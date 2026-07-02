@@ -36,18 +36,46 @@ def render_region(doc: Document, region: QRect,
     out = blank_image(region.size())
     p = QPainter(out)
     p.translate(-region.topLeft())
-    for layer in doc.layers:
+    index = 0
+    layers = doc.layers
+    while index < len(layers):
+        layer = layers[index]
         if not layer.visible or layer is exclude:
+            index += 1
             continue
         if layer.adjustment is not None:
             p.end()
             apply_luts(out, layer.adjustment)
             p = QPainter(out)
             p.translate(-region.topLeft())
+            index += 1
+            continue
+        props = doc.group_props.get(layer.group) if layer.group else None
+        if props is not None:
+            run = []
+            j = index
+            while j < len(layers) and layers[j].group == layer.group:
+                if layers[j].visible and layers[j] is not exclude:
+                    run.append(layers[j])
+                j += 1
+            group_buf = blank_image(region.size())
+            gp = QPainter(group_buf)
+            gp.translate(-region.topLeft())
+            for member in run:
+                gp.setOpacity(member.opacity)
+                gp.setCompositionMode(BLEND_MODES[member.blend_mode])
+                draw_layer(gp, doc, member, region)
+            gp.end()
+            p.setOpacity(props.get("opacity", 1.0))
+            p.setCompositionMode(
+                BLEND_MODES[props.get("blend_mode", "normal")])
+            p.drawImage(region.topLeft(), group_buf)
+            index = j
             continue
         p.setOpacity(layer.opacity)
         p.setCompositionMode(BLEND_MODES[layer.blend_mode])
         draw_layer(p, doc, layer, region)
+        index += 1
     p.end()
     return out
 
@@ -103,6 +131,7 @@ class Document(QObject):
         self.active_index = -1
         self.selection: QPainterPath | None = None
         self.selection_feather = 0.0  # px; consumed by filters/fills
+        self.group_props: dict[str, dict] = {}  # group -> {opacity, blend_mode}
         self.guides_h: list[float] = []  # y positions, canvas px
         self.guides_v: list[float] = []  # x positions, canvas px
         self.path: str | None = None
@@ -120,6 +149,11 @@ class Document(QObject):
     def has_adjustments(self) -> bool:
         return any(layer.visible and layer.adjustment is not None
                    for layer in self.layers)
+
+    def needs_offscreen(self) -> bool:
+        """True when compositing needs the buffered path: adjustment layers
+        or groups with non-default opacity/blend."""
+        return self.has_adjustments() or bool(self.group_props)
 
     def canvas_rect(self) -> QRect:
         return QRect(QPoint(0, 0), self.size)
@@ -183,7 +217,7 @@ class Document(QObject):
         out = blank_image(self.size)
         if background is not None:
             out.fill(background)
-        if self.has_adjustments():
+        if self.needs_offscreen():
             return render_region(self, self.canvas_rect())
         p = QPainter(out)
         for layer in self.layers:
@@ -201,7 +235,7 @@ class Document(QObject):
             return None
         out = blank_image(QSize(1, 1))
         point = QRect(x, y, 1, 1)
-        if self.has_adjustments():
+        if self.needs_offscreen():
             return render_region(self, point).pixelColor(0, 0)
         p = QPainter(out)
         p.translate(-x, -y)
