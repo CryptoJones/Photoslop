@@ -1,6 +1,6 @@
 [project]
 name = "photoslop"
-version = "0.72.0"
+version = "0.73.0"
 description = "A memory-frugal, multiplatform, layered raster image editor built with Qt (PySide6)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -32,10 +32,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+raw = [
+    "rawpy>=0.21",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",
     "mypy>=1.9",
+    "rawpy>=0.21",
 ]
 
 [project.gui-scripts]
