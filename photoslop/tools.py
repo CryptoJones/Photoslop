@@ -389,7 +389,9 @@ class MoveTool(Tool):
         else:
             _, layer, orig, start = self._mode
             old_bounds = layer.bounds()
-            layer.offset = orig + (pos - start).toPoint()
+            proposed = orig + (pos - start).toPoint()
+            layer.offset = canvas.editor.snap_layer_offset(
+                layer, proposed, ev.modifiers() if ev else None)
             doc.notify_pixels(old_bounds.united(layer.bounds()))
 
     def release(self, doc, canvas, pos, ev):

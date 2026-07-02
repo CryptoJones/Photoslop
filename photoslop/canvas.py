@@ -132,6 +132,8 @@ class CanvasView(QWidget):
         p.restore()
         p.setOpacity(1.0)
 
+        if getattr(self.editor.host, "show_grid", False):
+            self._paint_grid(p)
         self._paint_guides(p)
         self._paint_selection(p)
         self._paint_guide_label(p)
@@ -139,6 +141,24 @@ class CanvasView(QWidget):
         if tool is not None:
             tool.overlay(self.doc, p, self)
         p.end()
+
+    def _paint_grid(self, p: QPainter) -> None:
+        host = self.editor.host
+        step = (units.minor_tick_step(host.unit, self.doc.dpi, self.zoom)
+                * units.px_per_unit(host.unit, self.doc.dpi))
+        if step * self.zoom < 4:  # too dense to be useful
+            return
+        p.setPen(QPen(QColor(128, 128, 128, 70), 1))
+        x = step
+        while x < self.doc.size.width():
+            wx = round(x * self.zoom)
+            p.drawLine(wx, 0, wx, self.height())
+            x += step
+        y = step
+        while y < self.doc.size.height():
+            wy = round(y * self.zoom)
+            p.drawLine(0, wy, self.width(), wy)
+            y += step
 
     def _paint_guides(self, p: QPainter) -> None:
         z = self.zoom
@@ -415,6 +435,37 @@ class EditorView(QWidget):
         self.set_zoom(max(ZOOM_LEVELS[0], min(zw, zh)))
 
     # -- guides --
+
+    def snap_layer_offset(self, layer, proposed: QPoint, modifiers=None) -> QPoint:
+        """Snap a dragged layer's edges to guides and canvas edges (View →
+        Snap; Shift overrides)."""
+        host = self.host
+        if not getattr(host, "snap_enabled", False):
+            return proposed
+        if modifiers is None:
+            from PySide6.QtGui import QGuiApplication
+
+            modifiers = QGuiApplication.queryKeyboardModifiers()
+        if modifiers & Qt.KeyboardModifier.ShiftModifier:
+            return proposed
+        tol = 6.0 / max(self.canvas.zoom, 0.01)
+        doc = self.doc
+
+        def best_shift(edges: list[float], targets: list[float]) -> float:
+            distance, shift = tol + 1.0, 0.0
+            for edge in edges:
+                for target in targets:
+                    d = target - edge
+                    if abs(d) < distance:
+                        distance, shift = abs(d), d
+            return shift if distance <= tol else 0.0
+
+        w, h = layer.image.width(), layer.image.height()
+        sx = best_shift([float(proposed.x()), float(proposed.x() + w)],
+                        [0.0, float(doc.size.width()), *doc.guides_v])
+        sy = best_shift([float(proposed.y()), float(proposed.y() + h)],
+                        [0.0, float(doc.size.height()), *doc.guides_h])
+        return QPoint(proposed.x() + round(sx), proposed.y() + round(sy))
 
     def snap_guide(self, value: float, modifiers=None) -> float:
         """Snap a guide position to the visible minor ruler ticks. Hold Shift

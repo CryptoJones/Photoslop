@@ -74,6 +74,8 @@ class MainWindow(QMainWindow):
         self.settings = QSettings("CryptoJones", "Photoslop")
         unit = str(self.settings.value("units", "px"))
         self.unit = unit if unit in units.UNITS else "px"
+        self.show_grid = self.settings.value("grid", "false") == "true"
+        self.snap_enabled = self.settings.value("snap", "true") == "true"
 
         self.options = ToolOptions()
         self.tools = {
@@ -415,6 +417,18 @@ class MainWindow(QMainWindow):
             self._rulers_menu.addAction(act)  # same action: Edit → Options → Rulers
             self._unit_actions[u] = act
         m_view.addSeparator()
+        self._grid_action = QAction("Show &Grid", self)
+        self._grid_action.setCheckable(True)
+        self._grid_action.setChecked(self.show_grid)
+        self._grid_action.setShortcut(QKeySequence("Ctrl+'"))
+        self._grid_action.toggled.connect(self._toggle_grid)
+        m_view.addAction(self._grid_action)
+        self._snap_action = QAction("S&nap", self)
+        self._snap_action.setCheckable(True)
+        self._snap_action.setChecked(self.snap_enabled)
+        self._snap_action.setShortcut(QKeySequence("Ctrl+Shift+;"))
+        self._snap_action.toggled.connect(self._toggle_snap)
+        m_view.addAction(self._snap_action)
         m_view.addAction(self._act("Clear &Guides", None, self.action_clear_guides))
 
         m_help = menu.addMenu("&Help")
@@ -820,6 +834,18 @@ class MainWindow(QMainWindow):
             editor = self.tabs.widget(i)
             if isinstance(editor, EditorView):
                 editor.sync_rulers()
+
+    def _toggle_grid(self, checked: bool) -> None:
+        self.show_grid = checked
+        self.settings.setValue("grid", "true" if checked else "false")
+        for i in range(self.tabs.count()):
+            editor = self.tabs.widget(i)
+            if isinstance(editor, EditorView):
+                editor.canvas.update()
+
+    def _toggle_snap(self, checked: bool) -> None:
+        self.snap_enabled = checked
+        self.settings.setValue("snap", "true" if checked else "false")
 
     def action_clear_guides(self) -> None:
         doc = self.current_doc()
