@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.8.0] — 2026-07-02
+
+### Added
+
+- Eyedropper tool (`I`): samples the merged composite under the cursor
+  (composited one pixel at a time — free at any document size); click sets
+  the foreground colour, Shift-click sets the background, dragging samples
+  live.
+- Foreground/background colour pair with two toolbar swatches; `X` swaps,
+  `D` resets to black/white (also in the Edit menu). Brush and bucket paint
+  with the foreground.
+
 ## [0.7.0] — 2026-07-02
 
 ### Added

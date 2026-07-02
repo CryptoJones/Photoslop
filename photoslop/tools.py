@@ -26,12 +26,20 @@ class ToolOptions:
     """Shared, toolbar-backed options."""
 
     def __init__(self) -> None:
-        self.color = QColor(0, 0, 0)
+        self.foreground = QColor(0, 0, 0)
+        self.background = QColor(255, 255, 255)
         self.size = 16
         self.hardness = 100  # percent
         self.opacity = 100  # percent
         self.eraser = False
         self.tolerance = 32  # 0..255
+
+    def swap_colors(self) -> None:
+        self.foreground, self.background = self.background, self.foreground
+
+    def reset_colors(self) -> None:
+        self.foreground = QColor(0, 0, 0)
+        self.background = QColor(255, 255, 255)
 
 
 class Tool:
@@ -118,7 +126,7 @@ class BrushTool(Tool):
             p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
             self._pen_segment(p, la, lb, QColor(0, 0, 0), first)
         elif not self.opts.eraser and hard and opaque:
-            self._pen_segment(p, la, lb, self.opts.color, first)
+            self._pen_segment(p, la, lb, self.opts.foreground, first)
         else:
             self._stamp_segment(p, la, lb, alpha, first)
         p.end()
@@ -148,7 +156,7 @@ class BrushTool(Tool):
             p.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationOut)
             base = QColor(0, 0, 0, alpha)
         else:
-            base = QColor(self.opts.color)
+            base = QColor(self.opts.foreground)
             base.setAlpha(alpha)
 
         grad_stop = max(0.0, min(self.opts.hardness / 100.0, 0.999))
@@ -207,7 +215,7 @@ class BucketTool(Tool):
         if doc.selection is not None:
             sel_mask = npimage.selection_mask(doc.selection, img.size(), layer.offset)
 
-        c = self.opts.color
+        c = self.opts.foreground
         color = npimage.premultiplied_u32(c.red(), c.green(), c.blue(),
                                           round(self.opts.opacity * 2.55))
         # Shared handle to the pre-fill pixels; the fill's first write detaches.
@@ -222,6 +230,28 @@ class BucketTool(Tool):
         )
         doc.undo_stack.push(cmd)
         doc.notify_pixels(dirty.translated(layer.offset))
+
+
+class EyedropperTool(Tool):
+    name = "eyedropper"
+
+    def press(self, doc, canvas, pos, ev):
+        self._sample(doc, canvas, pos, ev)
+
+    def move(self, doc, canvas, pos, ev):
+        self._sample(doc, canvas, pos, ev)  # live sampling while dragging
+
+    def _sample(self, doc, canvas, pos, ev) -> None:
+        color = doc.sample_color(int(pos.x()), int(pos.y()))
+        if color is None or color.alpha() == 0:
+            return
+        color = QColor(color.red(), color.green(), color.blue())
+        shift = ev is not None and bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+        if shift:
+            self.opts.background = color
+        else:
+            self.opts.foreground = color
+        canvas.editor.host.refresh_swatches()
 
 
 class RectSelectTool(Tool):

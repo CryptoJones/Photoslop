@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.7.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v0.8.0-orange)]()
 
 ---
 
@@ -28,7 +28,8 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
   and 13 blend modes (multiply, screen, overlay, dodge/burn, difference…)
   saved interoperably in `.ora`.
 - **Painting** — round brush with size/hardness/opacity and an eraser mode; paint
-  bucket with adjustable tolerance.
+  bucket with adjustable tolerance; eyedropper (`I`) sampling the merged
+  composite; foreground/background colour pair with `X` swap and `D` reset.
 - **Selections** — rectangle marquee and freehand lasso; delete selection, copy
   selection, paste as new layer.
 - **Cross-image workflow** — multiple documents in tabs; copy a layer (or a
@@ -83,6 +84,8 @@ uvx --from git+https://github.com/CryptoJones/Photoslop photoslop
 | -------------------- | ------------ |
 | Brush                | `B`          |
 | Paint bucket         | `G`          |
+| Eyedropper           | `I` (Shift-click → background) |
+| Swap / reset colours | `X` / `D`    |
 | Rectangle select     | `M`          |
 | Lasso (area) select  | `L`          |
 | Move layer           | `V`          |

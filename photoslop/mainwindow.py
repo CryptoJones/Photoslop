@@ -55,6 +55,7 @@ from photoslop.opendialog import OpenImageDialog
 from photoslop.tools import (
     BrushTool,
     BucketTool,
+    EyedropperTool,
     LassoTool,
     MoveTool,
     RectSelectTool,
@@ -78,6 +79,7 @@ class MainWindow(QMainWindow):
             for tool in (
                 BrushTool(self.options),
                 BucketTool(self.options),
+                EyedropperTool(self.options),
                 RectSelectTool(self.options),
                 LassoTool(self.options),
                 MoveTool(self.options),
@@ -141,14 +143,15 @@ class MainWindow(QMainWindow):
         self.addToolBar(Qt.ToolBarArea.LeftToolBarArea, bar)
         group = QActionGroup(self)
         shortcuts = {
-            "brush": "B", "bucket": "G", "rect-select": "M", "lasso": "L", "move": "V",
+            "brush": "B", "bucket": "G", "eyedropper": "I",
+            "rect-select": "M", "lasso": "L", "move": "V",
         }
         labels = {
-            "brush": "Brush", "bucket": "Paint Bucket", "rect-select": "Rectangle Select",
-            "lasso": "Lasso Select", "move": "Move",
+            "brush": "Brush", "bucket": "Paint Bucket", "eyedropper": "Eyedropper",
+            "rect-select": "Rectangle Select", "lasso": "Lasso Select", "move": "Move",
         }
         self._tool_actions = {}
-        for name in ("brush", "bucket", "rect-select", "lasso", "move"):
+        for name in ("brush", "bucket", "eyedropper", "rect-select", "lasso", "move"):
             act = QAction(TOOL_ICONS[name](), labels[name], self)
             act.setCheckable(True)
             act.setShortcut(shortcuts[name])
@@ -175,10 +178,15 @@ class MainWindow(QMainWindow):
         self._option_actions: dict[str, list] = {}
 
         self.color_btn = QToolButton()
-        self.color_btn.setToolTip("Brush colour")
-        self.color_btn.clicked.connect(self._pick_color)
-        self._update_swatch()
+        self.color_btn.setToolTip("Foreground colour (X swaps, D resets)")
+        self.color_btn.clicked.connect(self._pick_foreground)
         color_act = bar.addWidget(self.color_btn)
+
+        self.bg_btn = QToolButton()
+        self.bg_btn.setToolTip("Background colour (X swaps, D resets)")
+        self.bg_btn.clicked.connect(self._pick_background)
+        bg_act = bar.addWidget(self.bg_btn)
+        self.refresh_swatches()
 
         size = QSpinBox()
         size.setRange(1, 500)
@@ -217,14 +225,15 @@ class MainWindow(QMainWindow):
         tol_act = bar.addWidget(tolerance)
 
         self._option_actions = {
-            "brush": [color_act, size_act, hard_act, opacity_act, eraser_act],
-            "bucket": [color_act, opacity_act, tol_act],
+            "brush": [color_act, bg_act, size_act, hard_act, opacity_act, eraser_act],
+            "bucket": [color_act, bg_act, opacity_act, tol_act],
+            "eyedropper": [color_act, bg_act],
             "rect-select": [],
             "lasso": [],
             "move": [],
         }
         self._all_option_actions = [
-            color_act, size_act, hard_act, opacity_act, eraser_act, tol_act,
+            color_act, bg_act, size_act, hard_act, opacity_act, eraser_act, tol_act,
         ]
 
     def _sync_option_visibility(self) -> None:
@@ -232,20 +241,39 @@ class MainWindow(QMainWindow):
         for act in self._all_option_actions:
             act.setVisible(act in visible)
 
-    def _pick_color(self) -> None:
-        color = QColorDialog.getColor(self.options.color, self, "Brush colour")
+    def _pick_foreground(self) -> None:
+        color = QColorDialog.getColor(self.options.foreground, self, "Foreground colour")
         if color.isValid():
-            self.options.color = color
-            self._update_swatch()
+            self.options.foreground = color
+            self.refresh_swatches()
 
-    def _update_swatch(self) -> None:
+    def _pick_background(self) -> None:
+        color = QColorDialog.getColor(self.options.background, self, "Background colour")
+        if color.isValid():
+            self.options.background = color
+            self.refresh_swatches()
+
+    @staticmethod
+    def _swatch_icon(color: QColor) -> QIcon:
         pm = QPixmap(20, 20)
-        pm.fill(self.options.color)
+        pm.fill(color)
         p = QPainter(pm)
         p.setPen(QColor(0, 0, 0))
         p.drawRect(0, 0, 19, 19)
         p.end()
-        self.color_btn.setIcon(QIcon(pm))
+        return QIcon(pm)
+
+    def refresh_swatches(self) -> None:
+        self.color_btn.setIcon(self._swatch_icon(self.options.foreground))
+        self.bg_btn.setIcon(self._swatch_icon(self.options.background))
+
+    def action_swap_colors(self) -> None:
+        self.options.swap_colors()
+        self.refresh_swatches()
+
+    def action_reset_colors(self) -> None:
+        self.options.reset_colors()
+        self.refresh_swatches()
 
     # ------------------------------------------------------------------ menus
 
@@ -277,6 +305,9 @@ class MainWindow(QMainWindow):
         m_edit.addSeparator()
         m_edit.addAction(self._act("Select &All", "Ctrl+A", self.action_select_all))
         m_edit.addAction(self._act("D&eselect", "Ctrl+D", self.action_deselect))
+        m_edit.addSeparator()
+        m_edit.addAction(self._act("S&wap Colours", "X", self.action_swap_colors))
+        m_edit.addAction(self._act("Rese&t Colours", "D", self.action_reset_colors))
         m_edit.addSeparator()
         self._options_menu = m_edit.addMenu("&Options")
         self._rulers_menu = self._options_menu.addMenu("&Rulers")  # unit actions added below

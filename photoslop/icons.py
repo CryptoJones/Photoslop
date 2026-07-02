@@ -85,9 +85,26 @@ def move_icon() -> QIcon:
     return _make(draw)
 
 
+def eyedropper_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 2.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.drawLine(QPointF(15, 7), QPointF(8, 14))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(_INK))
+        p.drawEllipse(QPointF(16.5, 5.5), 2.8, 2.8)  # bulb
+        path = QPainterPath(QPointF(8, 14))  # tip
+        path.lineTo(QPointF(5, 15.5))
+        path.lineTo(QPointF(6.5, 17))
+        path.closeSubpath()
+        p.drawPath(path)
+
+    return _make(draw)
+
+
 TOOL_ICONS = {
     "brush": brush_icon,
     "bucket": bucket_icon,
+    "eyedropper": eyedropper_icon,
     "rect-select": rect_select_icon,
     "lasso": lasso_icon,
     "move": move_icon,
