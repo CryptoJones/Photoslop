@@ -1,0 +1,64 @@
+[project]
+name = "photoslop"
+version = "0.1.0"
+description = "A memory-frugal, multiplatform, layered raster image editor built with Qt (PySide6)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Aaron K. Clark", email = "cryptojones@owasp.org" }]
+keywords = [
+    "image-editor",
+    "graphics",
+    "raster",
+    "layers",
+    "qt",
+    "pyside6",
+    "painting",
+    "photoshop-alternative",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Environment :: X11 Applications :: Qt",
+    "Topic :: Multimedia :: Graphics :: Editors :: Raster-Based",
+]
+dependencies = [
+    "PySide6>=6.7",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+    "mypy>=1.9",
+]
+
+[project.gui-scripts]
+photoslop = "photoslop.app:main"
+
+[project.urls]
+Homepage = "https://github.com/CryptoJones/Photoslop"
+Repository = "https://github.com/CryptoJones/Photoslop"
+Issues = "https://github.com/CryptoJones/Photoslop/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
