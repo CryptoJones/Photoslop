@@ -344,6 +344,11 @@ class MainWindow(QMainWindow):
     def show_zoom(self, zoom: float) -> None:
         self.zoom_label.setText(f"{zoom * 100:.0f}%")
 
+    def show_guide_value(self, orient: str, pos: float, dpi: float) -> None:
+        axis = "Y" if orient == "h" else "X"
+        value = units.format_value_precise(pos, self.unit, dpi)
+        self.statusBar().showMessage(f"Guide {axis}: {value}", 2000)
+
     def _update_mem(self) -> None:
         doc = self.current_doc()
         if doc is None:

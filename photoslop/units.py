@@ -43,6 +43,13 @@ def format_value(px: float, unit: str, dpi: float) -> str:
     return f"{px_to_unit(px, unit, dpi):.2f}"
 
 
+def format_value_precise(px: float, unit: str, dpi: float) -> str:
+    """Float readout with the unit suffix — used for live guide positions."""
+    if unit == "px":
+        return f"{px:.1f} px"
+    return f"{px_to_unit(px, unit, dpi):.2f} {unit}"
+
+
 # Candidate tick steps, in display units. Sub-unit steps let inch/pica rulers
 # subdivide when zoomed in.
 _STEPS = (

@@ -315,9 +315,11 @@ class MoveTool(Tool):
         if kind == "gh":
             doc.guides_h[self._mode[1]] = pos.y()
             doc.guidesChanged.emit()
+            canvas.editor.show_guide_feedback("h", pos.y())
         elif kind == "gv":
             doc.guides_v[self._mode[1]] = pos.x()
             doc.guidesChanged.emit()
+            canvas.editor.show_guide_feedback("v", pos.x())
         else:
             _, layer, orig, start = self._mode
             old_bounds = layer.bounds()
@@ -329,6 +331,7 @@ class MoveTool(Tool):
             return
         kind = self._mode[0]
         if kind in ("gh", "gv"):
+            canvas.editor.clear_guide_feedback()
             # Dropping a guide outside the canvas removes it.
             extent = QRectF(QPointF(0, 0), QPointF(doc.size.width(), doc.size.height()))
             if not extent.contains(pos):
