@@ -25,7 +25,7 @@ from PySide6.QtGui import (
 
 from photoslop import npimage
 from photoslop.commands import LayerRegionCommand, SetLayerOffsetCommand, TileRecorder
-from photoslop.layer import blank_image
+from photoslop.layer import Layer, blank_image
 
 
 class ToolOptions:
@@ -40,6 +40,7 @@ class ToolOptions:
         self.eraser = False
         self.tolerance = 32  # 0..255
         self.gradient_shape = "linear"  # or "radial"
+        self.shape = "rect"  # or "ellipse" / "line"
         self.contiguous = True  # wand: connected region vs global colour range
         self.fill_source = "color"  # bucket: "color" or "pattern"
         self.spacing = 25  # stamp spacing, % of brush size
@@ -770,6 +771,85 @@ class PuppetTool(Tool):
             painter.setBrush(QColor(255, 210, 60, 230) if i != self._drag
                              else QColor(255, 80, 80, 230))
             painter.drawEllipse(centre, 5, 5)
+
+
+class ShapeTool(Tool):
+    """Shape (U): drag to draw a rectangle, ellipse, or line onto a NEW
+    layer (foreground fill; the line's width is the brush size). Shift+U
+    cycles the shape. The layer is bounded to the shape, not the canvas."""
+
+    name = "shape"
+    cursor = Qt.CursorShape.CrossCursor
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._start: QPointF | None = None
+        self._end: QPointF | None = None
+
+    def press(self, doc, canvas, pos, ev):
+        self._start = pos
+        self._end = pos
+
+    def move(self, doc, canvas, pos, ev):
+        if self._start is None:
+            return
+        self._end = pos
+        canvas.update()
+
+    def overlay(self, doc, painter, canvas):
+        if self._start is None or self._end is None:
+            return
+        z = canvas.zoom
+        painter.setPen(QPen(QColor(30, 144, 255), 1, Qt.PenStyle.DashLine))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        a = QPointF(self._start.x() * z, self._start.y() * z)
+        b = QPointF(self._end.x() * z, self._end.y() * z)
+        if self.opts.shape == "line":
+            painter.drawLine(a, b)
+        elif self.opts.shape == "ellipse":
+            painter.drawEllipse(QRectF(a, b).normalized())
+        else:
+            painter.drawRect(QRectF(a, b).normalized())
+
+    def release(self, doc, canvas, pos, ev):
+        from photoslop.commands import InsertLayerCommand
+
+        start, end = self._start, self._end
+        self._start = self._end = None
+        if canvas is not None:
+            canvas.update()
+        if start is None or end is None:
+            return
+        raw = QRectF(start, end).normalized()
+        if raw.width() < 2 and raw.height() < 2:
+            return  # a click, not a drag
+        margin = max(2, self.opts.size) if self.opts.shape == "line" else 2
+        bounds = (raw.toAlignedRect()
+                  .adjusted(-margin, -margin, margin, margin)
+                  .intersected(doc.canvas_rect().adjusted(-margin, -margin,
+                                                          margin, margin)))
+        layer = Layer.blank(f"Shape {len(doc.layers)}", bounds.size(),
+                            bounds.topLeft())
+        p = QPainter(layer.image)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.translate(-bounds.topLeft())
+        color = self.opts.foreground
+        if self.opts.shape == "line":
+            pen = QPen(color, max(1, self.opts.size))
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen)
+            p.drawLine(start, end)
+        else:
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(color)
+            rect = QRectF(start, end).normalized()
+            if self.opts.shape == "ellipse":
+                p.drawEllipse(rect)
+            else:
+                p.drawRect(rect)
+        p.end()
+        doc.undo_stack.push(InsertLayerCommand(
+            doc, len(doc.layers), layer, "Add Shape"))
 
 
 class TextTool(Tool):
