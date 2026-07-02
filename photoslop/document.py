@@ -102,6 +102,7 @@ class Document(QObject):
         self.layers: list[Layer] = []  # index 0 = bottom
         self.active_index = -1
         self.selection: QPainterPath | None = None
+        self.selection_feather = 0.0  # px; consumed by filters/fills
         self.guides_h: list[float] = []  # y positions, canvas px
         self.guides_v: list[float] = []  # x positions, canvas px
         self.path: str | None = None
@@ -154,6 +155,7 @@ class Document(QObject):
 
     def set_selection(self, path: QPainterPath | None) -> None:
         self.selection = path if path is not None and not path.isEmpty() else None
+        self.selection_feather = 0.0  # feather belongs to one selection
         self.selectionChanged.emit()
 
     def selection_bounds(self) -> QRect | None:

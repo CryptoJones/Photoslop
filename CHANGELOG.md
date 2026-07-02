@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.56.0] — 2026-07-02
+
+### Added
+
+- Feather Selection (`Ctrl+Alt+D`): give the active selection a soft edge —
+  filters (and future fills) blend smoothly across the feather radius
+  instead of cutting hard. Border-normalised so weights stay exact at image
+  edges; replacing the selection clears the feather.
+
 ## [0.55.0] — 2026-07-02
 
 ### Added

@@ -591,6 +591,35 @@ def inpaint_diffuse(img: QImage, mask: np.ndarray, blend_passes: int = 3) -> QRe
     return QRect(int(x0), int(y0), int(x1 - x0), int(y1 - y0))
 
 
+def blend_by_weights(filtered: QImage, original: QImage,
+                     weights: np.ndarray) -> None:
+    """filtered = original*(1-w) + filtered*w, per premultiplied channel."""
+    f = view_u32(filtered)
+    o = view_u32(original)
+    w = weights[..., None]
+    fp = np.stack([((f >> np.uint32(k)) & 0xFF).astype(np.float32)
+                   for k in (24, 16, 8, 0)], axis=-1)
+    op = np.stack([((o >> np.uint32(k)) & 0xFF).astype(np.float32)
+                   for k in (24, 16, 8, 0)], axis=-1)
+    out = op * (1.0 - w) + fp * w
+    a, r, g, b = [np.clip(out[..., i] + 0.5, 0, 255).astype(np.uint32)
+                  for i in range(4)]
+    f[:] = (a << np.uint32(24)) | (r << np.uint32(16)) | (g << np.uint32(8)) | b
+
+
+def feathered_weights(path, size, offset, feather: float) -> np.ndarray:
+    """Float32 0..1 weights for a selection with a feathered (blurred) edge.
+    Normalised by an identically-blurred ones-plane so image borders don't
+    darken the weights (the box blur truncates its window at array edges)."""
+    hard = selection_mask(path, size, offset).astype(np.float32)
+    norm = np.ones_like(hard)
+    r = max(1, int(feather) // 2 + 1)
+    for _ in range(3):
+        hard = _box_blur_plane(hard, r)
+        norm = _box_blur_plane(norm, r)
+    return np.clip(hard / np.maximum(norm, 1e-6), 0.0, 1.0)
+
+
 def _dilate(mask: np.ndarray) -> np.ndarray:
     out = mask.copy()
     out[1:, :] |= mask[:-1, :]

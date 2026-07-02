@@ -507,6 +507,8 @@ class MainWindow(QMainWindow):
         m_edit.addAction(self._act("Select &All", "Ctrl+A", self.action_select_all))
         m_edit.addAction(self._act("&Refine Selection…", "Ctrl+Alt+R",
                                    self.action_refine_selection))
+        m_edit.addAction(self._act("Feat&her Selection…", "Ctrl+Alt+D",
+                                   self.action_feather_selection))
         m_edit.addAction(self._act("D&eselect", "Ctrl+D", self.action_deselect))
         m_edit.addSeparator()
         m_edit.addAction(self._act("Fill Selection (Content-&Aware)", "Shift+F5",
@@ -972,14 +974,22 @@ class MainWindow(QMainWindow):
 
         layer = doc.active_layer
         mask = None
+        weights = None
         if doc.selection is not None:
-            mask = npimage.selection_mask(doc.selection, layer.image.size(),
-                                          layer.offset)
-            if not mask.any():
-                mask = None
+            if doc.selection_feather > 0:
+                weights = npimage.feathered_weights(
+                    doc.selection, layer.image.size(), layer.offset,
+                    doc.selection_feather)
+            else:
+                mask = npimage.selection_mask(doc.selection, layer.image.size(),
+                                              layer.offset)
+                if not mask.any():
+                    mask = None
         before = QImage(layer.image)
         layer.image = QImage(before)  # fresh COW handle; filter write detaches
         apply(layer.image, mask)
+        if weights is not None:
+            npimage.blend_by_weights(layer.image, before, weights)
         rect = layer.image.rect()
         doc.undo_stack.push(LayerRegionCommand(
             doc, layer, rect, before.copy(rect), layer.image.copy(rect),
@@ -1066,6 +1076,24 @@ class MainWindow(QMainWindow):
             action = self._tool_actions.get(self._pre_transform_tool)
             if action is not None:
                 action.setChecked(True)
+
+    def action_feather_selection(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.selection is None:
+            if doc is not None:
+                self.statusBar().showMessage("Feather needs a selection", 4000)
+            return
+        from PySide6.QtWidgets import QInputDialog
+
+        radius, ok = QInputDialog.getInt(
+            self, "Feather Selection", "Feather radius (px):",
+            max(1, int(doc.selection_feather)) or 8, 0, 100)
+        if not ok:
+            return
+        doc.selection_feather = float(radius)
+        self.statusBar().showMessage(
+            f"Selection feathered {radius} px — filters and fills blend softly",
+            5000)
 
     def action_refine_selection(self) -> None:
         doc = self.current_doc()
