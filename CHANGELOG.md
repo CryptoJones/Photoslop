@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.27.0] — 2026-07-02
+
+### Added
+
+- Clipping masks (Layer → Clip to Layer Below, `Ctrl+Alt+G`): confine a
+  layer's visibility to the alpha of the layer beneath it; consecutive
+  clipped layers share one base. Clipped layers show italic in the panel,
+  round-trip in `.ora` (Photoslop extension), and the toggle is undoable.
+  Compositing is factored into one shared `draw_layer` path (canvas,
+  flatten, and sampler all agree), still viewport-bounded.
+
 ## [0.26.0] — 2026-07-02
 
 ### Added

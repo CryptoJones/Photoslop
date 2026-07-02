@@ -250,6 +250,23 @@ class SetLayerMaskCommand(QUndoCommand):
         self._apply(self.old_mask)
 
 
+class SetLayerClippedCommand(QUndoCommand):
+    def __init__(self, doc: Document, layer: Layer, clipped: bool):
+        super().__init__("Clip to Layer Below" if clipped else "Release Clip")
+        self.doc, self.layer, self.clipped = doc, layer, clipped
+
+    def _apply(self, value: bool) -> None:
+        self.layer.clipped = value
+        self.doc.notify_structure()
+        self.doc.notify_pixels(self.layer.bounds())
+
+    def redo(self) -> None:
+        self._apply(self.clipped)
+
+    def undo(self) -> None:
+        self._apply(not self.clipped)
+
+
 class ApplyLayerMaskCommand(QUndoCommand):
     """Bake the mask into the layer's alpha and drop the mask."""
 

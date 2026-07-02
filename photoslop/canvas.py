@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QGridLayout, QScrollArea, QToolButton, QWidget
 
 from photoslop import units
 from photoslop.commands import SetLayerOffsetCommand
-from photoslop.document import Document
+from photoslop.document import Document, draw_layer
 from photoslop.layer import BLEND_MODES
 from photoslop.rulers import Ruler
 
@@ -152,13 +152,8 @@ class CanvasView(QWidget):
                 base = transform_session.base_image
                 p.drawImage(QPointF(-base.width() / 2.0, -base.height() / 2.0), base)
                 p.restore()
-            elif layer.mask is None:
-                p.drawImage(QPointF(layer.offset), layer.image)
             else:
-                region = clip_canvas.intersected(layer.bounds())
-                if not region.isEmpty():
-                    local = region.translated(-layer.offset)
-                    p.drawImage(region.topLeft(), layer.paint_image(local))
+                draw_layer(p, self.doc, layer, clip_canvas)
         p.restore()
         p.setOpacity(1.0)
 
