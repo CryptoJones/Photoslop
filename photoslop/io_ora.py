@@ -57,12 +57,12 @@ def save_ora(doc: Document, path: str) -> None:
         if layer.source is not None:
             source_src = f"data/layer{i}_source.png"
             attrib["photoslop-source"] = source_src
+            entries.append((source_src, _png_bytes(layer.source)))
         if layer.smart_filters:
             import json
 
             attrib["photoslop-smart-filters"] = json.dumps(
                 [list(f) for f in layer.smart_filters])
-            entries.append((source_src, _png_bytes(layer.source)))
         ET.SubElement(
             stack,
             "layer",
