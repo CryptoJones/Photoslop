@@ -99,14 +99,24 @@ class MainWindow(QMainWindow):
         self.tabs.tabCloseRequested.connect(self._on_tab_close)
         self.setCentralWidget(self.tabs)
 
+        from photoslop.adjustpanel import AdjustPanel
         from photoslop.layerpanel import LayerPanel
 
         self.layer_panel = LayerPanel()
-        dock = QDockWidget("Layers")
-        dock.setObjectName("layers-dock")
-        dock.setWidget(self.layer_panel)
-        dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        self._layers_dock = QDockWidget("Layers")
+        self._layers_dock.setObjectName("layers-dock")
+        self._layers_dock.setWidget(self.layer_panel)
+        self._layers_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._layers_dock)
+
+        self.adjust_panel = AdjustPanel()
+        self._adjust_dock = QDockWidget("Adjust")
+        self._adjust_dock.setObjectName("adjust-dock")
+        self._adjust_dock.setWidget(self.adjust_panel)
+        self._adjust_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._adjust_dock)
+        self.tabifyDockWidget(self._layers_dock, self._adjust_dock)
+        self._layers_dock.raise_()
 
         self._build_tool_bar()
         self._build_options_bar()
@@ -399,11 +409,13 @@ class MainWindow(QMainWindow):
         editor = self.current_editor()
         if editor is None:
             self.layer_panel.set_document(None)
+            self.adjust_panel.set_document(None)
             self.setWindowTitle(f"Photoslop {__version__}")
             return
         doc = editor.doc
         self.undo_group.setActiveStack(doc.undo_stack)
         self.layer_panel.set_document(doc)
+        self.adjust_panel.set_document(doc)
         self._refresh_tab(doc)
         self.show_zoom(editor.canvas.zoom)
         editor.sync_rulers()
@@ -428,6 +440,7 @@ class MainWindow(QMainWindow):
                 return
         self.undo_group.removeStack(doc.undo_stack)
         self.layer_panel.set_document(None)
+        self.adjust_panel.set_document(None)
         self.tabs.removeTab(index)
         editor.deleteLater()
 

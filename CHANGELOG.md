@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.3.0] — 2026-07-02
+
+### Added
+
+- **Adjust panel** (tabbed with Layers): Lightroom-style Basic sliders —
+  Temperature, Tint, Exposure (±4 stops), Contrast, Highlights, Shadows,
+  Whites, Blacks, Vibrance, Saturation. Live debounced preview against a
+  pristine copy of the active layer (sliders are absolute, not compounding);
+  **Apply** commits the whole session as one undo step, **Reset** discards.
+  The tone/white-balance chain folds into three 256-entry LUTs and the image
+  is processed in row bands, so transient memory stays bounded on any layer
+  size; vibrance/saturation mix in float only per band.
+
 ## [0.2.5] — 2026-07-02
 
 ### Added
