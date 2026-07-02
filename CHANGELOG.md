@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.33.0] — 2026-07-02
+
+### Added
+
+- Image → Image Rotation → Arbitrary…: rotate the whole image by any angle —
+  the canvas grows to the rotated bounding box, every layer resamples once
+  (smooth) about the canvas centre, and undo restores the stored originals
+  exactly (no second resample). Guides/selection clear, as axis-aligned
+  concepts should.
+
 ## [0.32.0] — 2026-07-02
 
 ### Added

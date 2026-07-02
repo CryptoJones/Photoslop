@@ -462,6 +462,7 @@ class MainWindow(QMainWindow):
                                      lambda: self._image_cmd(RotateImageCommand, 90)))
         m_rotate.addAction(self._act("Rotate 90° CC&W", None,
                                      lambda: self._image_cmd(RotateImageCommand, 270)))
+        m_rotate.addAction(self._act("&Arbitrary…", None, self.action_rotate_arbitrary))
         m_rotate.addAction(self._act("Rotate &180°", None,
                                      lambda: self._image_cmd(RotateImageCommand, 180)))
         m_rotate.addSeparator()
@@ -1005,6 +1006,21 @@ class MainWindow(QMainWindow):
         doc = self.current_doc()
         if doc is not None and doc.active_layer is not None:
             doc.undo_stack.push(command(doc, doc.active_layer, arg))
+
+    def action_rotate_arbitrary(self) -> None:
+        doc = self.current_doc()
+        if doc is None:
+            return
+        from PySide6.QtWidgets import QInputDialog
+
+        angle, ok = QInputDialog.getDouble(
+            self, "Rotate Canvas", "Angle (\u00b0 clockwise, negative = CCW):",
+            0.0, -359.99, 359.99, 2)
+        if not ok or angle == 0.0:
+            return
+        from photoslop.commands import ArbitraryRotateCommand
+
+        doc.undo_stack.push(ArbitraryRotateCommand(doc, angle))
 
     def action_crop(self) -> None:
         doc = self.current_doc()
