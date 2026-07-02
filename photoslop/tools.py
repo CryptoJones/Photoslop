@@ -384,6 +384,68 @@ class EraserTool(BrushTool):
             self._stamp_segment(p, la, lb, alpha, first, QColor(0, 0, 0))
 
 
+class SmudgeTool(BrushTool):
+    """Mixer/smudge brush: each stamp deposits the paint carried from the
+    previous stamp (strength = opacity slider), then picks up what's now
+    under the brush — dragging colour along the stroke."""
+
+    name = "smudge"
+    scratch_stroke = False
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._pickup: QImage | None = None
+
+    def press(self, doc, canvas, pos, ev):
+        self._pickup = None
+        super().press(doc, canvas, pos, ev)
+
+    def _stroke_name(self) -> str:
+        return "Smudge"
+
+    def _segment(self, doc, a: QPointF, b: QPointF, first: bool = False) -> None:
+        layer = self._layer
+        assert layer is not None and self._recorder is not None
+        off = QPointF(layer.offset)
+        la, lb = a - off, b - off
+        radius = max(1.0, self.opts.size / 2.0)
+        pad = int(radius) + 2
+        rect = QRectF(la, lb).normalized().adjusted(-pad, -pad, pad, pad).toAlignedRect()
+        self._recorder.will_change(rect)
+
+        strength = self.opts.opacity / 100.0
+        side = int(radius) + 1
+
+        def stamp(center: QPointF) -> None:
+            region = QRect(round(center.x()) - side, round(center.y()) - side,
+                           2 * side, 2 * side)
+            if self._pickup is not None:
+                p = QPainter(layer.image)
+                p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+                path = QPainterPath()
+                path.addEllipse(center, radius, radius)
+                if self._clip is not None:
+                    path = path.intersected(self._clip)
+                p.setClipPath(path)
+                p.setOpacity(strength)
+                p.drawImage(region.topLeft(), self._pickup)
+                p.end()
+            self._pickup = layer.image.copy(region)
+
+        spacing = max(1.0, radius * 0.35)  # smudge needs a dense trail
+        delta = lb - la
+        dist = math.hypot(delta.x(), delta.y())
+        if first or dist == 0:
+            stamp(la)
+        if dist > 0:
+            steps = int(dist / spacing)
+            for i in range(1, steps + 1):
+                t = (i * spacing) / dist
+                stamp(QPointF(la.x() + delta.x() * t, la.y() + delta.y() * t))
+
+        doc.notify_pixels(rect.translated(layer.offset))
+
+
 class DodgeTool(BrushTool):
     scratch_stroke = False
     """Lighten as you paint: soft-light white stamps, strength = opacity."""

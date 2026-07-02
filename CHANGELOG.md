@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.38.0] — 2026-07-02
+
+### Added
+
+- Smudge / Mixer brush (`Shift+S`): drags colour along the stroke — each
+  stamp deposits the carried paint (strength = opacity) then picks up
+  what's under the brush. Selection-clipped, stroke undo.
+
 ## [0.37.0] — 2026-07-02
 
 ### Added
