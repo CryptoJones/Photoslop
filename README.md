@@ -4,14 +4,9 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 
 [![Tests](https://github.com/CryptoJones/Photoslop/actions/workflows/test.yml/badge.svg)](https://github.com/CryptoJones/Photoslop/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
-[![Codeberg](https://img.shields.io/badge/Codeberg-CryptoJones%2FPhotoslop-2185D0?logo=codeberg&logoColor=white)](https://codeberg.org/CryptoJones/Photoslop)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.1.0-orange)]()
-
-> Mirrored on both [GitHub](https://github.com/CryptoJones/Photoslop) and
-> [Codeberg](https://codeberg.org/CryptoJones/Photoslop). Issues filed on
-> either are welcome; commits are pushed to both.
+[![Version](https://img.shields.io/badge/version-v0.1.1-orange)]()
 
 ---
 
