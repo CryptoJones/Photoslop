@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt
 from PySide6.QtGui import (
     QBrush,
@@ -501,6 +502,87 @@ class MagicWandTool(Tool):
         elif doc.selection is not None and mods & Qt.KeyboardModifier.AltModifier:
             path = doc.selection.subtracted(path)
         doc.set_selection(path)
+
+
+class QuickSelectTool(Tool):
+    """Paint a selection: every brush seed floods its contiguous colour
+    region (shared tolerance) and unions into the selection live. Plain drag
+    adds to the existing selection; Alt-drag subtracts."""
+
+    name = "quick-select"
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._layer = None
+        self._mask = None
+        self._base_path: QPainterPath | None = None
+        self._subtract = False
+        self._last_seed: QPointF | None = None
+
+    def press(self, doc, canvas, pos, ev):
+        layer = doc.active_layer
+        if layer is None:
+            return
+        self._layer = layer
+        self._mask = np.zeros(
+            (layer.image.height(), layer.image.width()), dtype=bool)
+        self._subtract = ev is not None and bool(
+            ev.modifiers() & Qt.KeyboardModifier.AltModifier)
+        self._base_path = doc.selection
+        self._last_seed = None
+        self._seed(doc, pos)
+
+    def move(self, doc, canvas, pos, ev):
+        if self._mask is None:
+            return
+        step = max(2.0, self.opts.size / 4.0)
+        if (self._last_seed is not None
+                and (pos - self._last_seed).manhattanLength() < step):
+            return
+        self._seed(doc, pos)
+
+    def release(self, doc, canvas, pos, ev):
+        self._layer = None
+        self._mask = None
+        self._base_path = None
+        self._last_seed = None
+
+    def cancel(self, doc=None) -> None:
+        self.release(doc, None, None, None)
+
+    def _seed(self, doc, pos: QPointF) -> None:
+        layer = self._layer
+        lx = int(pos.x() - layer.offset.x())
+        ly = int(pos.y() - layer.offset.y())
+        img = layer.image
+        if not (0 <= lx < img.width() and 0 <= ly < img.height()):
+            return
+        self._last_seed = pos
+        if self._mask[ly, lx]:
+            return  # already captured by an earlier seed
+        result = npimage.flood_mask(img, lx, ly, self.opts.tolerance)
+        if result is None:
+            return
+        self._mask |= result[0]
+        path = npimage.mask_to_path(self._mask, layer.offset)
+        if self._base_path is not None:
+            path = (self._base_path.subtracted(path) if self._subtract
+                    else self._base_path.united(path))
+        elif self._subtract:
+            path = QPainterPath()
+        doc.set_selection(path)
+
+    def overlay(self, doc, painter, canvas):
+        if canvas.hover_pos is None:
+            return
+        z = canvas.zoom
+        center = QPointF(canvas.hover_pos.x() * z, canvas.hover_pos.y() * z)
+        r = max(2.0, self.opts.size / 2.0 * z)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor(255, 255, 255, 180), 1))
+        painter.drawEllipse(center, r, r)
+        painter.setPen(QPen(QColor(0, 0, 0, 180), 1, Qt.PenStyle.DotLine))
+        painter.drawEllipse(center, r, r)
 
 
 class PolyLassoTool(Tool):

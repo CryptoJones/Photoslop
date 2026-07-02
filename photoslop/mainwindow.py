@@ -66,6 +66,7 @@ from photoslop.tools import (
     MoveTool,
     PencilTool,
     PolyLassoTool,
+    QuickSelectTool,
     RectSelectTool,
     ToolOptions,
     ZoomTool,
@@ -96,6 +97,7 @@ class MainWindow(QMainWindow):
                 LassoTool(self.options),
                 PolyLassoTool(self.options),
                 MagicWandTool(self.options),
+                QuickSelectTool(self.options),
                 MoveTool(self.options),
                 HandTool(self.options),
                 ZoomTool(self.options),
@@ -182,7 +184,7 @@ class MainWindow(QMainWindow):
         shortcuts = {
             "brush": "B", "pencil": "Shift+B", "bucket": "G", "gradient": "Shift+G",
             "eyedropper": "I", "rect-select": "M", "lasso": "L",
-            "poly-lasso": "Shift+L", "wand": "W",
+            "poly-lasso": "Shift+L", "wand": "W", "quick-select": "Shift+W",
             "move": "V", "hand": "H", "zoom": "Z",
         }
         labels = {
@@ -190,13 +192,13 @@ class MainWindow(QMainWindow):
             "gradient": "Gradient", "eyedropper": "Eyedropper",
             "rect-select": "Rectangle Select",
             "lasso": "Lasso Select", "poly-lasso": "Polygonal Lasso",
-            "wand": "Magic Wand", "move": "Move",
-            "hand": "Hand (pan)", "zoom": "Zoom",
+            "wand": "Magic Wand", "quick-select": "Quick Selection",
+            "move": "Move", "hand": "Hand (pan)", "zoom": "Zoom",
         }
         self._tool_actions = {}
         for name in ("brush", "pencil", "bucket", "gradient", "eyedropper",
-                     "rect-select", "lasso", "poly-lasso", "wand", "move",
-                     "hand", "zoom"):
+                     "rect-select", "lasso", "poly-lasso", "wand",
+                     "quick-select", "move", "hand", "zoom"):
             act = QAction(TOOL_ICONS[name](), labels[name], self)
             act.setCheckable(True)
             act.setShortcut(shortcuts[name])
@@ -295,6 +297,7 @@ class MainWindow(QMainWindow):
             "lasso": [],
             "poly-lasso": [],
             "wand": [tol_act, contig_act],
+            "quick-select": [size_act, tol_act],
             "move": [],
             "hand": [],
             "zoom": [],

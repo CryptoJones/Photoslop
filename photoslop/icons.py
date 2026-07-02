@@ -189,6 +189,17 @@ def pencil_icon() -> QIcon:
     return _make(draw)
 
 
+def quick_select_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.5, Qt.PenStyle.DashLine))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QPointF(10, 12), 6.5, 6.5)
+        p.setPen(QPen(_INK, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.drawLine(QPointF(13.5, 8.5), QPointF(17.5, 4.5))
+
+    return _make(draw)
+
+
 TOOL_ICONS = {
     "brush": brush_icon,
     "pencil": pencil_icon,
@@ -199,6 +210,7 @@ TOOL_ICONS = {
     "lasso": lasso_icon,
     "poly-lasso": poly_lasso_icon,
     "wand": wand_icon,
+    "quick-select": quick_select_icon,
     "move": move_icon,
     "hand": hand_icon,
     "zoom": zoom_icon,
