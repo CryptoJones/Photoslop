@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QPixmap
+from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QPixmap, QTransform
 from PySide6.QtWidgets import QGridLayout, QScrollArea, QToolButton, QWidget
 
 from photoslop import units
@@ -63,15 +63,34 @@ class CanvasView(QWidget):
         doc.structureChanged.connect(self._on_structure)
         doc.selectionChanged.connect(self._on_selection)
         doc.guidesChanged.connect(self.update)
+        self.view_rotation = 0  # view-only, 90-degree steps
         self._resize_to_zoom()
 
     # -- geometry --
 
     def _resize_to_zoom(self) -> None:
-        self.setFixedSize(
-            max(1, math.ceil(self.doc.size.width() * self.zoom)),
-            max(1, math.ceil(self.doc.size.height() * self.zoom)),
-        )
+        w = max(1, math.ceil(self.doc.size.width() * self.zoom))
+        h = max(1, math.ceil(self.doc.size.height() * self.zoom))
+        if self.view_rotation % 180:
+            w, h = h, w
+        self.setFixedSize(w, h)
+
+    def rotate_view(self, delta_deg: int) -> None:
+        self.view_rotation = (self.view_rotation + delta_deg) % 360
+        self._resize_to_zoom()
+        self.update()
+        self.editor.sync_rulers()
+
+    def _view_transform(self) -> QTransform:
+        """Widget <- content transform for the view rotation (identity at 0)."""
+        t = QTransform()
+        if self.view_rotation:
+            t.translate(self.width() / 2.0, self.height() / 2.0)
+            t.rotate(self.view_rotation)
+            cw = self.doc.size.width() * self.zoom
+            ch = self.doc.size.height() * self.zoom
+            t.translate(-cw / 2.0, -ch / 2.0)
+        return t
 
     def set_zoom(self, zoom: float) -> None:
         self.zoom = max(ZOOM_LEVELS[0], min(zoom, ZOOM_LEVELS[-1]))
@@ -125,6 +144,11 @@ class CanvasView(QWidget):
         p = QPainter(self)
         exposed = ev.rect()
         p.fillRect(exposed, self._checker)
+        if self.view_rotation:
+            view_t = self._view_transform()
+            p.setTransform(view_t)
+            inverse, _ok = view_t.inverted()
+            exposed = inverse.mapRect(QRectF(exposed)).toAlignedRect()
 
         z = self.zoom
         p.save()
@@ -244,6 +268,9 @@ class CanvasView(QWidget):
 
     def _canvas_pos(self, ev) -> QPointF:
         wp = ev.position()
+        if self.view_rotation:
+            inverse, _ok = self._view_transform().inverted()
+            wp = inverse.map(wp)
         return QPointF(wp.x() / self.zoom, wp.y() / self.zoom)
 
     def mousePressEvent(self, ev) -> None:

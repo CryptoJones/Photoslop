@@ -584,6 +584,13 @@ class MainWindow(QMainWindow):
         m_view.addAction(self._snap_action)
         m_view.addAction(self._act("Clear &Guides", None, self.action_clear_guides))
         m_view.addSeparator()
+        m_view.addAction(self._act("Rotate Vie&w 90\u00b0 CW", "R",
+                                   lambda: self.action_rotate_view(90)))
+        m_view.addAction(self._act("Rotate View 90\u00b0 CC&W", "Shift+R",
+                                   lambda: self.action_rotate_view(-90)))
+        m_view.addAction(self._act("Reset View Rotation", None,
+                                   self.action_reset_view_rotation))
+        m_view.addSeparator()
         m_workspace = m_view.addMenu("&Workspace")
         m_workspace.addAction(self._act("&Save Workspace", None, self.save_workspace))
         m_workspace.addAction(self._act("&Restore Saved", None, self.restore_workspace))
@@ -1218,6 +1225,21 @@ class MainWindow(QMainWindow):
     def _toggle_snap(self, checked: bool) -> None:
         self.snap_enabled = checked
         self.settings.setValue("snap", "true" if checked else "false")
+
+    def action_rotate_view(self, delta: int) -> None:
+        editor = self.current_editor()
+        if editor is None:
+            return
+        editor.canvas.rotate_view(delta)
+        rotation = editor.canvas.view_rotation
+        self.statusBar().showMessage(
+            f"View rotated {rotation}\u00b0 (display only \u2014 pixels untouched; "
+            "rulers show unrotated space)", 4000)
+
+    def action_reset_view_rotation(self) -> None:
+        editor = self.current_editor()
+        if editor is not None and editor.canvas.view_rotation:
+            editor.canvas.rotate_view(-editor.canvas.view_rotation)
 
     def save_workspace(self) -> None:
         self.settings.setValue("workspace/state", self.saveState())
