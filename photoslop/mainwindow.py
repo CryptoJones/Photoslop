@@ -464,6 +464,8 @@ class MainWindow(QMainWindow):
                                    self.action_refine_selection))
         m_edit.addAction(self._act("D&eselect", "Ctrl+D", self.action_deselect))
         m_edit.addSeparator()
+        m_edit.addAction(self._act("Fill Selection (Content-&Aware)", "Shift+F5",
+                                   self.action_content_aware_fill))
         m_edit.addAction(self._act("Define &Pattern from Selection", None,
                                    self.action_define_pattern))
         m_edit.addSeparator()
@@ -892,6 +894,27 @@ class MainWindow(QMainWindow):
             LayerRegionCommand(doc, layer, local, before, after, "Delete Selection")
         )
         doc.notify_pixels(region)
+
+    def action_content_aware_fill(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        if doc.selection is None:
+            self.statusBar().showMessage("Content-Aware Fill needs a selection", 4000)
+            return
+        from photoslop import npimage
+
+        layer = doc.active_layer
+        mask = npimage.selection_mask(doc.selection, layer.image.size(),
+                                      layer.offset)
+        if not mask.any():
+            return
+        before = QImage(layer.image)  # COW; first write below detaches
+        dirty = npimage.inpaint_diffuse(layer.image, mask)
+        doc.undo_stack.push(LayerRegionCommand(
+            doc, layer, dirty, before.copy(dirty), layer.image.copy(dirty),
+            "Content-Aware Fill", applied=True))
+        doc.notify_pixels(dirty.translated(layer.offset))
 
     def action_define_pattern(self) -> None:
         doc = self.current_doc()
