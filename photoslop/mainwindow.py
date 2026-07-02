@@ -58,6 +58,7 @@ from photoslop.opendialog import OpenImageDialog
 from photoslop.tools import (
     BrushTool,
     BucketTool,
+    CloneStampTool,
     EyedropperTool,
     GradientTool,
     HandTool,
@@ -98,6 +99,7 @@ class MainWindow(QMainWindow):
                 PolyLassoTool(self.options),
                 MagicWandTool(self.options),
                 QuickSelectTool(self.options),
+                CloneStampTool(self.options),
                 MoveTool(self.options),
                 HandTool(self.options),
                 ZoomTool(self.options),
@@ -185,7 +187,7 @@ class MainWindow(QMainWindow):
             "brush": "B", "pencil": "Shift+B", "bucket": "G", "gradient": "Shift+G",
             "eyedropper": "I", "rect-select": "M", "lasso": "L",
             "poly-lasso": "Shift+L", "wand": "W", "quick-select": "Shift+W",
-            "move": "V", "hand": "H", "zoom": "Z",
+            "clone-stamp": "S", "move": "V", "hand": "H", "zoom": "Z",
         }
         labels = {
             "brush": "Brush", "pencil": "Pencil", "bucket": "Paint Bucket",
@@ -193,12 +195,13 @@ class MainWindow(QMainWindow):
             "rect-select": "Rectangle Select",
             "lasso": "Lasso Select", "poly-lasso": "Polygonal Lasso",
             "wand": "Magic Wand", "quick-select": "Quick Selection",
+            "clone-stamp": "Clone Stamp (Alt+click sets source)",
             "move": "Move", "hand": "Hand (pan)", "zoom": "Zoom",
         }
         self._tool_actions = {}
         for name in ("brush", "pencil", "bucket", "gradient", "eyedropper",
                      "rect-select", "lasso", "poly-lasso", "wand",
-                     "quick-select", "move", "hand", "zoom"):
+                     "quick-select", "clone-stamp", "move", "hand", "zoom"):
             act = QAction(TOOL_ICONS[name](), labels[name], self)
             act.setCheckable(True)
             act.setShortcut(shortcuts[name])
@@ -298,6 +301,7 @@ class MainWindow(QMainWindow):
             "poly-lasso": [],
             "wand": [tol_act, contig_act],
             "quick-select": [size_act, tol_act],
+            "clone-stamp": [size_act, opacity_act],
             "move": [],
             "hand": [],
             "zoom": [],

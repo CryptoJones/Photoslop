@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.28.0] — 2026-07-02
+
+### Added
+
+- Clone Stamp (`S`): Alt+click sets the source, then paint to copy pixels
+  from it — aligned mode (the source offset locks on the first stroke),
+  brush-size stamps with opacity, selection clipping, full stroke undo.
+
 ## [0.27.0] — 2026-07-02
 
 ### Added

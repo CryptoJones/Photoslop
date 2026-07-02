@@ -189,6 +189,17 @@ def pencil_icon() -> QIcon:
     return _make(draw)
 
 
+def clone_stamp_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QPointF(11, 8), 4.5, 4.5)  # stamp head
+        p.drawLine(QPointF(11, 12.5), QPointF(11, 15))  # handle
+        p.drawLine(QPointF(5, 17.5), QPointF(17, 17.5))  # base
+
+    return _make(draw)
+
+
 def quick_select_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 1.5, Qt.PenStyle.DashLine))
@@ -206,6 +217,7 @@ TOOL_ICONS = {
     "bucket": bucket_icon,
     "gradient": gradient_icon,
     "eyedropper": eyedropper_icon,
+    "clone-stamp": clone_stamp_icon,
     "rect-select": rect_select_icon,
     "lasso": lasso_icon,
     "poly-lasso": poly_lasso_icon,
