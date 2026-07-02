@@ -1196,6 +1196,47 @@ class PolyLassoTool(Tool):
             painter.drawRect(QRectF(pt.x() * z - 2, pt.y() * z - 2, 4, 4))
 
 
+class MagneticLassoTool(PolyLassoTool):
+    """Poly lasso whose segments hug edges: each anchor-to-cursor stretch is
+    a livewire (minimum-cost path along strong gradients)."""
+
+    name = "magnetic-lasso"
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._doc = None
+
+    def press(self, doc, canvas, pos, ev):
+        self._doc = doc
+        super().press(doc, canvas, pos, ev)
+
+    def _wire(self, a: QPointF, b: QPointF) -> list[QPointF]:
+        doc = self._doc
+        layer = doc.active_layer if doc is not None else None
+        if layer is None:
+            return [b]
+        off = layer.offset
+        points = npimage.livewire_path(
+            layer.image,
+            (a.x() - off.x(), a.y() - off.y()),
+            (b.x() - off.x(), b.y() - off.y()))
+        return [QPointF(x + off.x() + 0.5, y + off.y() + 0.5)
+                for x, y in points[1:]]
+
+    def _path(self) -> QPainterPath:
+        path = QPainterPath(self._points[0])
+        prev = self._points[0]
+        for pt in self._points[1:]:
+            for wp in self._wire(prev, pt):
+                path.lineTo(wp)
+            prev = pt
+        if self._hover is not None:
+            for wp in self._wire(prev, self._hover):
+                path.lineTo(wp)
+        path.closeSubpath()
+        return path
+
+
 class MoveTool(Tool):
     name = "move"
     cursor = Qt.CursorShape.SizeAllCursor

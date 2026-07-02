@@ -1,6 +1,6 @@
 [project]
 name = "photoslop"
-version = "0.51.0"
+version = "0.52.0"
 description = "A memory-frugal, multiplatform, layered raster image editor built with Qt (PySide6)"
 readme = "README.md"
 requires-python = ">=3.10"

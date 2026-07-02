@@ -236,6 +236,79 @@ def drop_shadow_image(img: QImage, color, blur: int) -> QImage:
     return out
 
 
+def livewire_path(img: QImage, a, b, margin: int = 16,
+                  max_area: int = 60000) -> list:
+    """Minimum-cost 8-connected path from a to b (layer coords) where cost is
+    low along strong edges — the magnetic-lasso livewire. Runs Dijkstra in a
+    corridor around the endpoints; falls back to a straight segment when the
+    corridor would be too large. Returns [(x, y), ...] including endpoints."""
+    import heapq
+
+    h, w = img.height(), img.width()
+    ax, ay = int(a[0]), int(a[1])
+    bx, by = int(b[0]), int(b[1])
+    ax, ay = max(0, min(w - 1, ax)), max(0, min(h - 1, ay))
+    bx, by = max(0, min(w - 1, bx)), max(0, min(h - 1, by))
+    x0 = max(0, min(ax, bx) - margin)
+    x1 = min(w, max(ax, bx) + margin + 1)
+    y0 = max(0, min(ay, by) - margin)
+    y1 = min(h, max(ay, by) + margin + 1)
+    cw, ch = x1 - x0, y1 - y0
+    if cw * ch > max_area or cw < 2 or ch < 2:
+        return [(ax, ay), (bx, by)]
+
+    arr = view_u32(img)[y0:y1, x0:x1]
+    r = ((arr >> np.uint32(16)) & 0xFF).astype(np.float32)
+    g = ((arr >> np.uint32(8)) & 0xFF).astype(np.float32)
+    bl = (arr & 0xFF).astype(np.float32)
+    gray = 0.299 * r + 0.587 * g + 0.114 * bl
+    dx = np.abs(np.diff(gray, axis=1, prepend=gray[:, :1]))
+    dy = np.abs(np.diff(gray, axis=0, prepend=gray[:1, :]))
+    grad = dx + dy
+    top = max(1.0, float(grad.max()))
+    cost = 1.0 - grad / top + 0.02  # strong edges are nearly free
+
+    start = (ay - y0) * cw + (ax - x0)
+    goal = (by - y0) * cw + (bx - x0)
+    dist = np.full(cw * ch, np.inf, dtype=np.float64)
+    parent = np.full(cw * ch, -1, dtype=np.int64)
+    dist[start] = 0.0
+    flat_cost = cost.ravel()
+    heap = [(0.0, start)]
+    neighbours = (-cw - 1, -cw, -cw + 1, -1, 1, cw - 1, cw, cw + 1)
+    diag = {-cw - 1, -cw + 1, cw - 1, cw + 1}
+    while heap:
+        d, node = heapq.heappop(heap)
+        if node == goal:
+            break
+        if d > dist[node]:
+            continue
+        nx = node % cw
+        for step in neighbours:
+            other = node + step
+            ox = other % cw
+            if other < 0 or other >= cw * ch or abs(ox - nx) > 1:
+                continue
+            weight = flat_cost[other] * (1.4142 if step in diag else 1.0)
+            nd = d + weight
+            if nd < dist[other]:
+                dist[other] = nd
+                parent[other] = node
+                heapq.heappush(heap, (nd, other))
+
+    if parent[goal] < 0 and goal != start:
+        return [(ax, ay), (bx, by)]
+    path = []
+    node = goal
+    while node >= 0:
+        path.append((node % cw + x0, node // cw + y0))
+        if node == start:
+            break
+        node = parent[node]
+    path.reverse()
+    return path
+
+
 def patch_heal(img: QImage, mask: np.ndarray, dx: int, dy: int) -> QRect:
     """Patch-tool blend: fill the masked region with texture sampled at
     (dx, dy) away, tone-matched to the destination (src - blur(src) +
