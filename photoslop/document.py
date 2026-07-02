@@ -119,6 +119,22 @@ class Document(QObject):
         p.end()
         return out
 
+    def sample_color(self, x: int, y: int) -> QColor | None:
+        """Merged-composite color at one canvas point — composites exactly one
+        pixel, so sampling is free no matter how big the document is."""
+        if not self.canvas_rect().contains(x, y):
+            return None
+        out = blank_image(QSize(1, 1))
+        p = QPainter(out)
+        p.translate(-x, -y)
+        for layer in self.layers:
+            if layer.visible:
+                p.setOpacity(layer.opacity)
+                p.setCompositionMode(BLEND_MODES[layer.blend_mode])
+                p.drawImage(layer.offset, layer.image)
+        p.end()
+        return out.pixelColor(0, 0)
+
     def memory_bytes(self) -> int:
         return sum(layer.memory_bytes() for layer in self.layers)
 
