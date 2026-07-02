@@ -134,6 +134,7 @@ class Document(QObject):
         self.group_props: dict[str, dict] = {}  # group -> {opacity, blend_mode}
         self.guides_h: list[float] = []  # y positions, canvas px
         self.guides_v: list[float] = []  # x positions, canvas px
+        self.artboards: list[tuple[str, QRect]] = []  # named export regions
         self.path: str | None = None
         self.undo_stack = QUndoStack()
         self.undo_stack.setUndoLimit(UNDO_LIMIT)

@@ -188,6 +188,8 @@ class CanvasView(QWidget):
         p.restore()
         p.setOpacity(1.0)
 
+        if self.doc.artboards:
+            self._paint_artboards(p)
         if getattr(self.editor.host, "show_grid", False):
             self._paint_grid(p)
         self._paint_guides(p)
@@ -197,6 +199,19 @@ class CanvasView(QWidget):
         if tool is not None:
             tool.overlay(self.doc, p, self)
         p.end()
+
+    def _paint_artboards(self, p: QPainter) -> None:
+        z = self.zoom
+        p.setPen(QPen(QColor(80, 160, 255, 200), 1, Qt.PenStyle.DashDotLine))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        font = p.font()
+        font.setPointSizeF(8.0)
+        p.setFont(font)
+        for name, rect in self.doc.artboards:
+            wr = QRectF(rect.x() * z, rect.y() * z,
+                        rect.width() * z, rect.height() * z)
+            p.drawRect(wr)
+            p.drawText(QPointF(wr.x() + 3, max(10.0, wr.y() - 3)), name)
 
     def _paint_grid(self, p: QPainter) -> None:
         host = self.editor.host

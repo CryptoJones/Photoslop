@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.72.0] — 2026-07-02
+
+### Added
+
+- Artboards (Image → Artboards): turn a selection into a named export
+  region, see dashed frames with labels on the canvas, and Export
+  Artboards… writes each region as its own PNG. Artboards persist in ORA.
+
 ## [0.71.0] — 2026-07-02
 
 ### Added

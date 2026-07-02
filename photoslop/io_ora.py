@@ -7,7 +7,7 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 import zipfile
 
-from PySide6.QtCore import QBuffer, QIODevice, QPoint, QSize, Qt
+from PySide6.QtCore import QBuffer, QIODevice, QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QImage
 
 from photoslop.document import Document
@@ -33,6 +33,12 @@ def save_ora(doc: Document, path: str) -> None:
         yres=str(int(round(doc.dpi))),
         version="0.0.3",
     )
+    if doc.artboards:
+        import json
+
+        image.set("photoslop-artboards", json.dumps(
+            [[n, r.x(), r.y(), r.width(), r.height()]
+             for n, r in doc.artboards]))
     stack = ET.SubElement(image, "stack")
 
     entries: list[tuple[str, bytes]] = []
@@ -147,6 +153,12 @@ def load_ora(path: str) -> Document:
     name = path.replace("\\", "/").rsplit("/", 1)[-1]
     doc = Document(QSize(w, h), dpi, name)
     doc.layers = list(reversed(top_first))  # internal order is bottom-first
+    boards_json = root.get("photoslop-artboards")
+    if boards_json:
+        import json
+
+        doc.artboards = [(n, QRect(x, y, w2, h2))
+                         for n, x, y, w2, h2 in json.loads(boards_json)]
     doc.active_index = len(doc.layers) - 1
     doc.path = path
     return doc
