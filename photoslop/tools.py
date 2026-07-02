@@ -254,6 +254,40 @@ class EyedropperTool(Tool):
         canvas.editor.host.refresh_swatches()
 
 
+class HandTool(Tool):
+    name = "hand"
+    cursor = Qt.CursorShape.OpenHandCursor
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._last: QPointF | None = None
+
+    def press(self, doc, canvas, pos, ev):
+        if ev is not None:
+            self._last = ev.globalPosition()
+            canvas.setCursor(Qt.CursorShape.ClosedHandCursor)
+
+    def move(self, doc, canvas, pos, ev):
+        if self._last is None or ev is None:
+            return
+        current = ev.globalPosition()
+        canvas.editor.pan_by(current.x() - self._last.x(), current.y() - self._last.y())
+        self._last = current
+
+    def release(self, doc, canvas, pos, ev):
+        self._last = None
+        canvas.setCursor(self.cursor)
+
+
+class ZoomTool(Tool):
+    name = "zoom"
+
+    def press(self, doc, canvas, pos, ev):
+        alt = ev is not None and bool(ev.modifiers() & Qt.KeyboardModifier.AltModifier)
+        anchor = QPointF(pos.x() * canvas.zoom, pos.y() * canvas.zoom)
+        canvas.editor.zoom_step(-1 if alt else 1, anchor)
+
+
 class RectSelectTool(Tool):
     name = "rect-select"
 

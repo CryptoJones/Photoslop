@@ -48,6 +48,8 @@ class CanvasView(QWidget):
         self.temp_guide: tuple[str, float] | None = None
         # (orient, canvas value, anchor in widget coords) while a guide is dragged
         self.guide_label: tuple[str, float, QPointF] | None = None
+        self._space_pan = False  # Space held: temporary hand tool
+        self._pan_last: QPointF | None = None
         self._ants_offset = 0.0
         self._ants = QTimer(self)
         self._ants.setInterval(120)
@@ -205,11 +207,21 @@ class CanvasView(QWidget):
 
     def mousePressEvent(self, ev) -> None:
         if ev.button() == Qt.MouseButton.LeftButton:
+            if self._space_pan:
+                self._pan_last = ev.globalPosition()
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
+                return
             tool = self.editor.active_tool()
             if tool is not None:
                 tool.press(self.doc, self, self._canvas_pos(ev), ev)
 
     def mouseMoveEvent(self, ev) -> None:
+        if self._pan_last is not None:
+            current = ev.globalPosition()
+            self.editor.pan_by(current.x() - self._pan_last.x(),
+                               current.y() - self._pan_last.y())
+            self._pan_last = current
+            return
         pos = self._canvas_pos(ev)
         self.hover_pos = pos
         self.mousePos.emit(pos)
@@ -222,6 +234,11 @@ class CanvasView(QWidget):
 
     def mouseReleaseEvent(self, ev) -> None:
         if ev.button() == Qt.MouseButton.LeftButton:
+            if self._pan_last is not None:
+                self._pan_last = None
+                self.setCursor(Qt.CursorShape.OpenHandCursor if self._space_pan
+                               else self.editor.active_tool().cursor)
+                return
             tool = self.editor.active_tool()
             if tool is not None:
                 tool.release(self.doc, self, self._canvas_pos(ev), ev)
@@ -240,6 +257,10 @@ class CanvasView(QWidget):
 
     def keyPressEvent(self, ev) -> None:
         key = ev.key()
+        if key == Qt.Key.Key_Space and not ev.isAutoRepeat():
+            self._space_pan = True
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+            return
         if key == Qt.Key.Key_Escape:
             self.doc.set_selection(None)
             return
@@ -262,6 +283,15 @@ class CanvasView(QWidget):
                     SetLayerOffsetCommand(self.doc, layer, old, layer.offset))
             return
         super().keyPressEvent(ev)
+
+    def keyReleaseEvent(self, ev) -> None:
+        if ev.key() == Qt.Key.Key_Space and not ev.isAutoRepeat():
+            self._space_pan = False
+            self._pan_last = None
+            tool = self.editor.active_tool()
+            self.setCursor(tool.cursor if tool is not None else Qt.CursorShape.ArrowCursor)
+            return
+        super().keyReleaseEvent(ev)
 
 
 class EditorView(QWidget):
@@ -336,6 +366,12 @@ class EditorView(QWidget):
         self.hruler.set_marker(None if pos is None else pos.x())
         self.vruler.set_marker(None if pos is None else pos.y())
         self.host.show_mouse_pos(self.doc, pos)
+
+    def pan_by(self, dx: float, dy: float) -> None:
+        hbar = self.scroll.horizontalScrollBar()
+        vbar = self.scroll.verticalScrollBar()
+        hbar.setValue(hbar.value() - round(dx))
+        vbar.setValue(vbar.value() - round(dy))
 
     # -- zoom --
 

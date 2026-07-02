@@ -101,6 +101,33 @@ def eyedropper_icon() -> QIcon:
     return _make(draw)
 
 
+def hand_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.6))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        palm = QPainterPath()
+        palm.addRoundedRect(QRectF(6.5, 9, 9, 8), 3, 3)
+        p.drawPath(palm)
+        for i, x in enumerate((8.2, 10.6, 13.0, 15.2)):
+            p.drawLine(QPointF(x, 9), QPointF(x, 5.5 if i in (1, 2) else 6.5))
+
+    return _make(draw)
+
+
+def zoom_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.8))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QPointF(9.5, 9.5), 5.2, 5.2)
+        p.setPen(QPen(_INK, 2.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.drawLine(QPointF(13.6, 13.6), QPointF(17.5, 17.5))
+        p.setPen(QPen(_INK, 1.4))
+        p.drawLine(QPointF(7.2, 9.5), QPointF(11.8, 9.5))
+        p.drawLine(QPointF(9.5, 7.2), QPointF(9.5, 11.8))
+
+    return _make(draw)
+
+
 TOOL_ICONS = {
     "brush": brush_icon,
     "bucket": bucket_icon,
@@ -108,4 +135,6 @@ TOOL_ICONS = {
     "rect-select": rect_select_icon,
     "lasso": lasso_icon,
     "move": move_icon,
+    "hand": hand_icon,
+    "zoom": zoom_icon,
 }

@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.10.0] — 2026-07-02
+
+### Added
+
+- Hand tool (`H`): drag to pan the view; grab-cursor feedback. Holding
+  **Space** gives a temporary hand with any tool active, Photoshop-style.
+- Zoom tool (`Z`): click to zoom in one step anchored at the click point,
+  Alt-click to zoom out.
+
 ## [0.9.0] — 2026-07-02
 
 ### Added

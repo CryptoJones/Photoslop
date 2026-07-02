@@ -56,10 +56,12 @@ from photoslop.tools import (
     BrushTool,
     BucketTool,
     EyedropperTool,
+    HandTool,
     LassoTool,
     MoveTool,
     RectSelectTool,
     ToolOptions,
+    ZoomTool,
 )
 
 _EXPORT_FILTER = "PNG (*.png);;JPEG (*.jpg *.jpeg);;WebP (*.webp);;BMP (*.bmp)"
@@ -83,6 +85,8 @@ class MainWindow(QMainWindow):
                 RectSelectTool(self.options),
                 LassoTool(self.options),
                 MoveTool(self.options),
+                HandTool(self.options),
+                ZoomTool(self.options),
             )
         }
         self._active_tool_name = "brush"
@@ -145,13 +149,16 @@ class MainWindow(QMainWindow):
         shortcuts = {
             "brush": "B", "bucket": "G", "eyedropper": "I",
             "rect-select": "M", "lasso": "L", "move": "V",
+            "hand": "H", "zoom": "Z",
         }
         labels = {
             "brush": "Brush", "bucket": "Paint Bucket", "eyedropper": "Eyedropper",
             "rect-select": "Rectangle Select", "lasso": "Lasso Select", "move": "Move",
+            "hand": "Hand (pan)", "zoom": "Zoom",
         }
         self._tool_actions = {}
-        for name in ("brush", "bucket", "eyedropper", "rect-select", "lasso", "move"):
+        for name in ("brush", "bucket", "eyedropper", "rect-select", "lasso", "move",
+                     "hand", "zoom"):
             act = QAction(TOOL_ICONS[name](), labels[name], self)
             act.setCheckable(True)
             act.setShortcut(shortcuts[name])
@@ -233,6 +240,8 @@ class MainWindow(QMainWindow):
             "rect-select": [],
             "lasso": [],
             "move": [],
+            "hand": [],
+            "zoom": [],
         }
         self._all_option_actions = [
             color_act, bg_act, size_act, hard_act, opacity_act, eraser_act, tol_act,
