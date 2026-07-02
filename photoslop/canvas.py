@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QGridLayout, QScrollArea, QToolButton, QWidget
 from photoslop import units
 from photoslop.commands import SetLayerOffsetCommand
 from photoslop.document import Document
+from photoslop.layer import BLEND_MODES
 from photoslop.rulers import Ruler
 
 ZOOM_LEVELS = (0.125, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0)
@@ -124,6 +125,7 @@ class CanvasView(QWidget):
         for layer in self.doc.layers:
             if layer.visible:
                 p.setOpacity(layer.opacity)
+                p.setCompositionMode(BLEND_MODES[layer.blend_mode])
                 p.drawImage(QPointF(layer.offset), layer.image)
         p.restore()
         p.setOpacity(1.0)
