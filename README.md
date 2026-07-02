@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.77.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v0.78.0-orange)]()
 
 ---
 
@@ -130,6 +130,23 @@ uv sync --extra dev
 uv run ruff check .
 QT_QPA_PLATFORM=offscreen uv run pytest
 ```
+
+## Command line (headless)
+
+Everything scripts without a window via `photoslop-cli` — operations apply in
+command-line order, so pipelines compose left to right:
+
+```bash
+photoslop-cli shot.cr2 --resize 1600x1067 --auto-levels --gaussian-blur 2 \
+              --select 200,150,400,300 --generative-fill "wildflowers" \
+              --drop-shadow 6,6,10,140 --output final.png
+```
+
+`--output x.ora` keeps layers (effects and all); raster extensions flatten.
+`--info` prints the document as JSON; `--export-artboards DIR` batch-exports.
+Model ops use the same bring-your-own-backend contract as the GUI via
+`--model-url`. See `photoslop-cli --help` for the full operation set —
+every GUI engine feature is exposed (interactive brushes excepted).
 
 ## Model backends (bring your own model)
 
