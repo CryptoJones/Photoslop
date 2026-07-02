@@ -297,6 +297,14 @@ class MainWindow(QMainWindow):
             lambda v: setattr(self.options, "gradient_shape", v))
         shape_act = bar.addWidget(shape)
 
+        spacing = QSpinBox()
+        spacing.setRange(5, 200)
+        spacing.setValue(self.options.spacing)
+        spacing.setSuffix("% gap")
+        spacing.setToolTip("Stamp spacing as % of brush size (soft strokes)")
+        spacing.valueChanged.connect(lambda v: setattr(self.options, "spacing", v))
+        spacing_act = bar.addWidget(spacing)
+
         fill_source = QComboBox()
         fill_source.addItems(["color", "pattern"])
         fill_source.setToolTip("Bucket fills with the foreground colour or "
@@ -313,9 +321,10 @@ class MainWindow(QMainWindow):
         contig_act = bar.addWidget(contiguous)
 
         self._option_actions = {
-            "brush": [color_act, bg_act, size_act, hard_act, opacity_act, eraser_act],
+            "brush": [color_act, bg_act, size_act, hard_act, opacity_act,
+                      eraser_act, spacing_act],
             "pencil": [color_act, bg_act, size_act, opacity_act, eraser_act],
-            "eraser": [size_act, hard_act, opacity_act],
+            "eraser": [size_act, hard_act, opacity_act, spacing_act],
             "bucket": [color_act, bg_act, opacity_act, tol_act, fill_source_act],
             "gradient": [color_act, bg_act, opacity_act, shape_act],
             "eyedropper": [color_act, bg_act],
@@ -325,8 +334,8 @@ class MainWindow(QMainWindow):
             "wand": [tol_act, contig_act],
             "quick-select": [size_act, tol_act],
             "clone-stamp": [size_act, opacity_act],
-            "dodge": [size_act, hard_act, opacity_act],
-            "burn": [size_act, hard_act, opacity_act],
+            "dodge": [size_act, hard_act, opacity_act, spacing_act],
+            "burn": [size_act, hard_act, opacity_act, spacing_act],
             "crop": [],
             "move": [],
             "hand": [],
@@ -335,7 +344,7 @@ class MainWindow(QMainWindow):
         }
         self._all_option_actions = [
             color_act, bg_act, size_act, hard_act, opacity_act, eraser_act,
-            tol_act, shape_act, contig_act, fill_source_act,
+            tol_act, shape_act, contig_act, fill_source_act, spacing_act,
         ]
 
         # PS-style bracket shortcuts; window-level, invisible in menus

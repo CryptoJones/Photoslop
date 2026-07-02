@@ -38,6 +38,7 @@ class ToolOptions:
         self.gradient_shape = "linear"  # or "radial"
         self.contiguous = True  # wand: connected region vs global colour range
         self.fill_source = "color"  # bucket: "color" or "pattern"
+        self.spacing = 25  # stamp spacing, % of brush size
         self.pattern = None  # QImage tile from Edit > Define Pattern
 
     def swap_colors(self) -> None:
@@ -169,7 +170,7 @@ class BrushTool(Tool):
     def _stamp_segment(self, p: QPainter, a: QPointF, b: QPointF, alpha: int,
                        first: bool, color: QColor | None = None):
         radius = max(0.5, self.opts.size / 2.0)
-        spacing = max(1.0, self.opts.size * 0.25)
+        spacing = max(1.0, self.opts.size * self.opts.spacing / 100.0)
         delta = b - a
         dist = math.hypot(delta.x(), delta.y())
 
@@ -389,7 +390,7 @@ class CloneStampTool(BrushTool):
         layer = self._layer
         offset = self._clone_offset
         radius = max(0.5, self.opts.size / 2.0)
-        spacing = max(1.0, radius * 0.5)
+        spacing = max(1.0, self.opts.size * self.opts.spacing / 100.0)
         pad = int(radius) + 1
         p.setOpacity(self.opts.opacity / 100.0)
 
