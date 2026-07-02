@@ -315,6 +315,27 @@ class CropTool(Tool):
             painter.drawLine(QPointF(r.left(), y), QPointF(r.right(), y))
 
 
+class EraserTool(BrushTool):
+    """A first-class eraser: always erases, whatever the eraser checkbox
+    says. Hard 100% strokes clear outright; soft/partial strokes fade
+    alpha via DestinationOut stamps."""
+
+    name = "eraser"
+
+    def _stroke_name(self) -> str:
+        return "Eraser"
+
+    def _paint(self, p: QPainter, la: QPointF, lb: QPointF, first: bool) -> None:
+        alpha = round(self.opts.opacity * 2.55)
+        if self.opts.hardness >= 100 and self.opts.opacity >= 100:
+            p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
+            self._pen_segment(p, la, lb, QColor(0, 0, 0), first)
+        else:
+            p.setCompositionMode(
+                QPainter.CompositionMode.CompositionMode_DestinationOut)
+            self._stamp_segment(p, la, lb, alpha, first, QColor(0, 0, 0))
+
+
 class DodgeTool(BrushTool):
     """Lighten as you paint: soft-light white stamps, strength = opacity."""
 

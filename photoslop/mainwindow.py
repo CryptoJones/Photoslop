@@ -62,6 +62,7 @@ from photoslop.tools import (
     CloneStampTool,
     CropTool,
     DodgeTool,
+    EraserTool,
     EyedropperTool,
     GradientTool,
     HandTool,
@@ -94,6 +95,7 @@ class MainWindow(QMainWindow):
             for tool in (
                 BrushTool(self.options),
                 PencilTool(self.options),
+                EraserTool(self.options),
                 BucketTool(self.options),
                 GradientTool(self.options),
                 EyedropperTool(self.options),
@@ -190,14 +192,16 @@ class MainWindow(QMainWindow):
         self.addToolBar(Qt.ToolBarArea.LeftToolBarArea, bar)
         group = QActionGroup(self)
         shortcuts = {
-            "brush": "B", "pencil": "Shift+B", "bucket": "G", "gradient": "Shift+G",
+            "brush": "B", "pencil": "Shift+B", "eraser": "E",
+            "bucket": "G", "gradient": "Shift+G",
             "eyedropper": "I", "rect-select": "M", "lasso": "L",
             "poly-lasso": "Shift+L", "wand": "W", "quick-select": "Shift+W",
             "clone-stamp": "S", "dodge": "O", "burn": "Shift+O", "crop": "C",
             "move": "V", "hand": "H", "zoom": "Z",
         }
         labels = {
-            "brush": "Brush", "pencil": "Pencil", "bucket": "Paint Bucket",
+            "brush": "Brush", "pencil": "Pencil", "eraser": "Eraser",
+            "bucket": "Paint Bucket",
             "gradient": "Gradient", "eyedropper": "Eyedropper",
             "rect-select": "Rectangle Select",
             "lasso": "Lasso Select", "poly-lasso": "Polygonal Lasso",
@@ -208,7 +212,7 @@ class MainWindow(QMainWindow):
             "move": "Move", "hand": "Hand (pan)", "zoom": "Zoom",
         }
         self._tool_actions = {}
-        for name in ("brush", "pencil", "bucket", "gradient", "eyedropper",
+        for name in ("brush", "pencil", "eraser", "bucket", "gradient", "eyedropper",
                      "rect-select", "lasso", "poly-lasso", "wand",
                      "quick-select", "clone-stamp", "dodge", "burn", "crop",
                      "move", "hand", "zoom"):
@@ -303,6 +307,7 @@ class MainWindow(QMainWindow):
         self._option_actions = {
             "brush": [color_act, bg_act, size_act, hard_act, opacity_act, eraser_act],
             "pencil": [color_act, bg_act, size_act, opacity_act, eraser_act],
+            "eraser": [size_act, hard_act, opacity_act],
             "bucket": [color_act, bg_act, opacity_act, tol_act],
             "gradient": [color_act, bg_act, opacity_act, shape_act],
             "eyedropper": [color_act, bg_act],
