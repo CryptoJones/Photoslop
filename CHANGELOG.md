@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.31.0] — 2026-07-02
+
+### Added
+
+- Eraser tool (`E`): a first-class toolbar eraser — hard 100% strokes clear
+  outright, soft or partial-opacity strokes fade alpha. The brush/pencil
+  eraser checkbox still works; `E` just stops making you hunt for it.
+
 ## [0.30.0] — 2026-07-02
 
 ### Added

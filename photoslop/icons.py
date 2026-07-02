@@ -189,6 +189,22 @@ def pencil_icon() -> QIcon:
     return _make(draw)
 
 
+def eraser_tool_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.6))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.save()
+        p.translate(11, 11)
+        p.rotate(-35)
+        p.drawRect(QRectF(-6, -3.5, 12, 7))
+        p.drawLine(QPointF(-2, -3.5), QPointF(-2, 3.5))  # ferrule line
+        p.restore()
+        p.setPen(QPen(_INK, 1.4))
+        p.drawLine(QPointF(6, 18), QPointF(16, 18))  # rubbed-out streak
+
+    return _make(draw)
+
+
 def dodge_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 1.8))
@@ -250,6 +266,7 @@ def quick_select_icon() -> QIcon:
 TOOL_ICONS = {
     "brush": brush_icon,
     "pencil": pencil_icon,
+    "eraser": eraser_tool_icon,
     "bucket": bucket_icon,
     "gradient": gradient_icon,
     "eyedropper": eyedropper_icon,
