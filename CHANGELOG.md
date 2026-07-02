@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.35.0] — 2026-07-02
+
+### Added
+
+- Brush spacing control (5–200% of brush size) in the options bar for the
+  brush, eraser, dodge, and burn soft-stamp paths and the clone stamp —
+  tight spacing for smooth strokes, wide spacing for dotted/textured ones.
+
 ## [0.34.0] — 2026-07-02
 
 ### Added
