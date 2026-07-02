@@ -285,6 +285,52 @@ def warp_push(img: QImage, cx: float, cy: float, radius: float,
     return QRect(x0, y0, x1 - x0, y1 - y0)
 
 
+def puppet_warp(img: QImage, pins: list) -> QImage:
+    """Pin-based deformation: `pins` is a list of ((sx, sy), (tx, ty)) pairs —
+    anchors have source == target, moved pins pull their neighbourhood.
+    The displacement field is inverse-distance-squared weighted over the
+    pins' target positions; pixels resample backward bilinearly. Returns a
+    new image the same size."""
+    h, w = img.height(), img.width()
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    num_x = np.zeros((h, w), dtype=np.float32)
+    num_y = np.zeros((h, w), dtype=np.float32)
+    den = np.zeros((h, w), dtype=np.float32)
+    for (sx, sy), (tx, ty) in pins:
+        dx, dy = tx - sx, ty - sy
+        dist2 = (xx - tx) ** 2 + (yy - ty) ** 2 + 4.0
+        weight = 1.0 / dist2
+        num_x += weight * dx
+        num_y += weight * dy
+        den += weight
+    disp_x = num_x / den
+    disp_y = num_y / den
+
+    src = view_u32(img)
+    sx = np.clip(xx - disp_x, 0, w - 1)
+    sy = np.clip(yy - disp_y, 0, h - 1)
+    fx0 = np.floor(sx).astype(np.int64)
+    fy0 = np.floor(sy).astype(np.int64)
+    fx1 = np.minimum(fx0 + 1, w - 1)
+    fy1 = np.minimum(fy0 + 1, h - 1)
+    tx = (sx - fx0)[..., None]
+    ty = (sy - fy0)[..., None]
+
+    def planes(a):
+        return np.stack([((a >> np.uint32(k)) & 0xFF).astype(np.float32)
+                         for k in (24, 16, 8, 0)], axis=-1)
+
+    top = planes(src[fy0, fx0]) * (1 - tx) + planes(src[fy0, fx1]) * tx
+    bot = planes(src[fy1, fx0]) * (1 - tx) + planes(src[fy1, fx1]) * tx
+    out_p = top * (1 - ty) + bot * ty
+    a, r, g, b = [np.clip(out_p[..., i] + 0.5, 0, 255).astype(np.uint32)
+                  for i in range(4)]
+    out = QImage(w, h, img.format())
+    view_u32(out)[:] = ((a << np.uint32(24)) | (r << np.uint32(16))
+                        | (g << np.uint32(8)) | b)
+    return out
+
+
 def _box_blur_plane(c: np.ndarray, r: int) -> np.ndarray:
     k = 2 * r + 1
     csum = np.cumsum(c, axis=0)
