@@ -17,8 +17,8 @@ from PySide6.QtWidgets import (
 )
 
 from photoslop.adjust import apply_luts, curve_lut, curves_luts
-from photoslop.commands import LayerRegionCommand
 from photoslop.document import Document
+from photoslop.scopedadjust import ScopedAdjustMixin
 
 IDENTITY = [(0.0, 0.0), (255.0, 255.0)]
 
@@ -114,7 +114,7 @@ class CurveWidget(QWidget):
         p.end()
 
 
-class CurvesDialog(QDialog):
+class CurvesDialog(ScopedAdjustMixin, QDialog):
     def __init__(self, doc: Document, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Curves")
@@ -145,9 +145,14 @@ class CurvesDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
+        from PySide6.QtWidgets import QFormLayout
+
+        scope_row = QFormLayout()
         box = QVBoxLayout(self)
         box.addLayout(top)
         box.addWidget(self.curve, 1)
+        self.init_scope(scope_row)
+        box.addLayout(scope_row)
         box.addWidget(buttons)
 
         self._debounce = QTimer(self)
@@ -168,25 +173,18 @@ class CurvesDialog(QDialog):
         self.channel_points[self._channel] = list(self.curve.points)
         self._debounce.start()
 
-    def _preview(self) -> None:
-        img = QImage(self._pristine)
+    def transform(self, img: QImage) -> None:
         apply_luts(img, curves_luts(self.channel_points))
-        self._layer.image = img
-        self._doc.notify_pixels(self._layer.bounds())
+
+    def _preview(self) -> None:
+        self.preview_scope()
 
     def accept(self) -> None:
         self._debounce.stop()
-        self._preview()
-        if self._layer.image != self._pristine:
-            self._doc.undo_stack.push(LayerRegionCommand(
-                self._doc, self._layer, self._layer.image.rect(),
-                QImage(self._pristine), QImage(self._layer.image),
-                "Curves", applied=True,
-            ))
+        self.accept_scope("Curves")
         super().accept()
 
     def reject(self) -> None:
         self._debounce.stop()
-        self._layer.image = QImage(self._pristine)
-        self._doc.notify_pixels(self._layer.bounds())
+        self.reject_scope()
         super().reject()
