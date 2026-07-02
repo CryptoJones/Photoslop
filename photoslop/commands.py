@@ -296,6 +296,71 @@ class ApplyLayerMaskCommand(QUndoCommand):
         self.doc.notify_pixels(self.layer.bounds())
 
 
+class ArbitraryRotateCommand(QUndoCommand):
+    """Rotate the whole image by any angle: canvas grows to the rotated
+    bounding box, every layer resamples once (smooth) about the canvas
+    centre. Undo restores the stored pre-rotation refs exactly — no second
+    resample. Guides and selection are cleared (axis-aligned notions)."""
+
+    def __init__(self, doc: Document, angle_deg: float):
+        super().__init__(f"Rotate {angle_deg:g}\u00b0")
+        self.doc = doc
+        self.angle = float(angle_deg)
+        self.old_size = QSize(doc.size)
+        self.old_guides = (list(doc.guides_h), list(doc.guides_v))
+        self.old_layers = [(layer, QImage(layer.image), QPoint(layer.offset))
+                           for layer in doc.layers]
+        self.new_state: tuple | None = None
+
+    def redo(self) -> None:
+        from PySide6.QtCore import QPointF, QRectF
+        from PySide6.QtGui import QTransform
+
+        doc = self.doc
+        if self.new_state is None:
+            t = QTransform().rotate(self.angle)
+            w, h = self.old_size.width(), self.old_size.height()
+            bounds = t.mapRect(QRectF(0, 0, w, h))
+            new_size = QSize(round(bounds.width()), round(bounds.height()))
+            old_c = QPointF(w / 2.0, h / 2.0)
+            new_c = QPointF(new_size.width() / 2.0, new_size.height() / 2.0)
+            entries = []
+            for layer, old_img, old_offset in self.old_layers:
+                new_img = old_img.transformed(
+                    t, Qt.TransformationMode.SmoothTransformation)
+                centre = QPointF(old_offset.x() + old_img.width() / 2.0,
+                                 old_offset.y() + old_img.height() / 2.0)
+                rotated = t.map(centre - old_c) + new_c
+                new_offset = QPoint(round(rotated.x() - new_img.width() / 2.0),
+                                    round(rotated.y() - new_img.height() / 2.0))
+                entries.append((layer, new_img, new_offset))
+            self.new_state = (new_size, entries)
+        new_size, entries = self.new_state
+        doc.size = QSize(new_size)
+        for layer, img, offset in entries:
+            layer.image = QImage(img)
+            layer.offset = QPoint(offset)
+        doc.guides_h.clear()
+        doc.guides_v.clear()
+        doc.guidesChanged.emit()
+        doc.set_selection(None)
+        doc.notify_structure()
+        doc.notify_pixels(QRect(QPoint(0, 0), doc.size))
+
+    def undo(self) -> None:
+        doc = self.doc
+        doc.size = QSize(self.old_size)
+        for layer, img, offset in self.old_layers:
+            layer.image = QImage(img)
+            layer.offset = QPoint(offset)
+        doc.guides_h[:] = self.old_guides[0]
+        doc.guides_v[:] = self.old_guides[1]
+        doc.guidesChanged.emit()
+        doc.set_selection(None)
+        doc.notify_structure()
+        doc.notify_pixels(QRect(QPoint(0, 0), doc.size))
+
+
 class MergeVisibleCommand(QUndoCommand):
     """Composite every visible layer into one (at the lowest visible slot),
     leaving hidden layers untouched. Undo restores the exact stack."""
