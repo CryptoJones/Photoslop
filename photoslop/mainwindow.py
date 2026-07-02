@@ -66,7 +66,7 @@ _EXPORT_FILTER = "PNG (*.png);;JPEG (*.jpg *.jpeg);;WebP (*.webp);;BMP (*.bmp)"
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Photoslop")
+        self.setWindowTitle(f"Photoslop {__version__}")
         self.settings = QSettings("CryptoJones", "Photoslop")
         unit = str(self.settings.value("units", "px"))
         self.unit = unit if unit in units.UNITS else "px"
@@ -389,13 +389,13 @@ class MainWindow(QMainWindow):
         star = "" if doc.undo_stack.isClean() else "*"
         self.tabs.setTabText(index, doc.name + star)
         if editor is self.current_editor():
-            self.setWindowTitle(f"{doc.name}{star} — Photoslop")
+            self.setWindowTitle(f"{doc.name}{star} — Photoslop {__version__}")
 
     def _on_tab_changed(self, index: int) -> None:
         editor = self.current_editor()
         if editor is None:
             self.layer_panel.set_document(None)
-            self.setWindowTitle("Photoslop")
+            self.setWindowTitle(f"Photoslop {__version__}")
             return
         doc = editor.doc
         self.undo_group.setActiveStack(doc.undo_stack)
