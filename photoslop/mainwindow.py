@@ -134,6 +134,8 @@ class MainWindow(QMainWindow):
         }
         self._active_tool_name = "brush"
         self._pre_transform_tool = "brush"
+        self.action_recording: list | None = None  # [(label, replay_fn)]
+        self.recorded_action: list = []
 
         self.pixel_clip: tuple[QImage, QPoint] | None = None
         self.layer_clip: Layer | None = None
@@ -519,6 +521,11 @@ class MainWindow(QMainWindow):
         m_edit.addAction(self._act("Feat&her Selection…", "Ctrl+Alt+D",
                                    self.action_feather_selection))
         m_edit.addAction(self._act("D&eselect", "Ctrl+D", self.action_deselect))
+        m_edit.addSeparator()
+        m_action = m_edit.addMenu("Actio&ns")
+        m_action.addAction(self._act("Start &Recording", None, self.action_record_start))
+        m_action.addAction(self._act("Sto&p Recording", None, self.action_record_stop))
+        m_action.addAction(self._act("&Play Action", "F9", self.action_play))
         m_edit.addSeparator()
         m_edit.addAction(self._act("Fill Selection (Content-&Aware)", "Shift+F5",
                                    self.action_content_aware_fill))
@@ -983,6 +990,55 @@ class MainWindow(QMainWindow):
         )
         doc.notify_pixels(region)
 
+    def _record_step(self, label: str, replay) -> None:
+        if self.action_recording is not None:
+            self.action_recording.append((label, replay))
+
+    def action_gaussian_blur_direct(self, radius: int) -> None:
+        from photoslop import npimage
+
+        self._run_filter("Gaussian Blur",
+                         lambda img, m: npimage.gaussian_blur(img, radius, m))
+        self._record_step(f"Gaussian Blur {radius}px",
+                          lambda w: w.action_gaussian_blur_direct(radius))
+
+    def action_unsharp_direct(self, amount: int) -> None:
+        from photoslop import npimage
+
+        self._run_filter("Unsharp Mask",
+                         lambda img, m: npimage.unsharp_mask(img, 4, amount / 100.0, m))
+        self._record_step(f"Unsharp Mask {amount}%",
+                          lambda w: w.action_unsharp_direct(amount))
+
+    def action_record_start(self) -> None:
+        self.action_recording = []
+        self.statusBar().showMessage(
+            "Recording action — apply filters/adjustments, then Stop", 5000)
+
+    def action_record_stop(self) -> None:
+        if self.action_recording is None:
+            return
+        self.recorded_action = self.action_recording
+        self.action_recording = None
+        names = ", ".join(label for label, _fn in self.recorded_action) or "empty"
+        self.statusBar().showMessage(
+            f"Action recorded ({len(self.recorded_action)} steps): {names}", 6000)
+
+    def action_play(self) -> None:
+        doc = self.current_doc()
+        if doc is None or not self.recorded_action:
+            if doc is not None:
+                self.statusBar().showMessage("No recorded action to play", 4000)
+            return
+        doc.undo_stack.beginMacro("Play Action")
+        try:
+            for _label, replay in self.recorded_action:
+                replay(self)
+        finally:
+            doc.undo_stack.endMacro()
+        self.statusBar().showMessage(
+            f"Action played ({len(self.recorded_action)} steps)", 4000)
+
     def _run_filter(self, title: str, apply) -> None:
         """Shared filter plumbing: selection-aware, full undo step."""
         doc = self.current_doc()
@@ -1025,6 +1081,8 @@ class MainWindow(QMainWindow):
 
         self._run_filter("Gaussian Blur",
                          lambda img, m: npimage.gaussian_blur(img, radius, m))
+        self._record_step(f"Gaussian Blur {radius}px",
+                          lambda w: w.action_gaussian_blur_direct(radius))
 
     def action_unsharp_mask(self) -> None:
         from PySide6.QtWidgets import QInputDialog
@@ -1037,6 +1095,8 @@ class MainWindow(QMainWindow):
 
         self._run_filter("Unsharp Mask",
                          lambda img, m: npimage.unsharp_mask(img, 4, amount / 100.0, m))
+        self._record_step(f"Unsharp Mask {amount}%",
+                          lambda w: w.action_unsharp_direct(amount))
 
     def action_tilt_shift(self) -> None:
         doc = self.current_doc()
@@ -1094,6 +1154,11 @@ class MainWindow(QMainWindow):
             doc, layer, rect, before.copy(rect), blurred.copy(rect),
             "Tilt-Shift", applied=True))
         doc.notify_pixels(layer.bounds())
+        self._record_step(
+            f"Tilt-Shift {radius}px",
+            lambda w: w.apply_tilt_shift(w.current_doc(),
+                                         w.current_doc().active_layer,
+                                         centre, band, transition, radius))
 
     def action_content_aware_fill(self) -> None:
         doc = self.current_doc()
