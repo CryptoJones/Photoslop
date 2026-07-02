@@ -14,11 +14,11 @@ from PySide6.QtWidgets import (
 )
 
 from photoslop.adjust import apply_hsl
-from photoslop.commands import LayerRegionCommand
 from photoslop.document import Document
+from photoslop.scopedadjust import ScopedAdjustMixin
 
 
-class HueSatDialog(QDialog):
+class HueSatDialog(ScopedAdjustMixin, QDialog):
     def __init__(self, doc: Document, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Hue/Saturation")
@@ -49,6 +49,7 @@ class HueSatDialog(QDialog):
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        self.init_scope(form)
         form.addRow(buttons)
 
         self._debounce = QTimer(self)
@@ -66,26 +67,19 @@ class HueSatDialog(QDialog):
             self._labels[key].setText(f"{slider.value():+d}")
         self._debounce.start()
 
-    def _preview(self) -> None:
+    def transform(self, img: QImage) -> None:
         hue, sat, light = self.values()
-        img = QImage(self._pristine)
-        apply_hsl(img, hue, sat, light)  # first write detaches the copy
-        self._layer.image = img
-        self._doc.notify_pixels(self._layer.bounds())
+        apply_hsl(img, hue, sat, light)
+
+    def _preview(self) -> None:
+        self.preview_scope()
 
     def accept(self) -> None:
         self._debounce.stop()
-        self._preview()
-        if self._layer.image != self._pristine:
-            self._doc.undo_stack.push(LayerRegionCommand(
-                self._doc, self._layer, self._layer.image.rect(),
-                QImage(self._pristine), QImage(self._layer.image),
-                "Hue/Saturation", applied=True,
-            ))
+        self.accept_scope("Hue/Saturation")
         super().accept()
 
     def reject(self) -> None:
         self._debounce.stop()
-        self._layer.image = QImage(self._pristine)
-        self._doc.notify_pixels(self._layer.bounds())
+        self.reject_scope()
         super().reject()

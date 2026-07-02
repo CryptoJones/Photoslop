@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.66.0] — 2026-07-02
+
+### Added
+
+- Levels, Curves, Hue/Saturation, and Color Balance gain an "Apply to all
+  layers (full image)" checkbox — preview updates live across every visible
+  layer, OK lands as one undo step for the whole image, Cancel restores
+  every touched layer exactly.
+
 ## [0.65.0] — 2026-07-02
 
 ### Added

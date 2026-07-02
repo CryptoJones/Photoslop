@@ -17,12 +17,12 @@ from PySide6.QtWidgets import (
 )
 
 from photoslop.adjust import apply_luts, levels_lut
-from photoslop.commands import LayerRegionCommand
 from photoslop.document import Document
 from photoslop.npimage import view_u32
+from photoslop.scopedadjust import ScopedAdjustMixin
 
 
-class LevelsDialog(QDialog):
+class LevelsDialog(ScopedAdjustMixin, QDialog):
     def __init__(self, doc: Document, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Levels")
@@ -65,6 +65,7 @@ class LevelsDialog(QDialog):
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        self.init_scope(form)
         form.addRow(buttons)
 
         self._debounce = QTimer(self)
@@ -85,11 +86,11 @@ class LevelsDialog(QDialog):
             self.in_white.setValue(self.in_black.value() + 1)
         self._debounce.start()
 
+    def transform(self, img: QImage) -> None:
+        apply_luts(img, self.current_lut())
+
     def _preview(self) -> None:
-        img = QImage(self._pristine)
-        apply_luts(img, self.current_lut())  # first write detaches the copy
-        self._layer.image = img
-        self._doc.notify_pixels(self._layer.bounds())
+        self.preview_scope()
 
     def auto_levels(self) -> None:
         """0.1% percentile black/white points from a downsampled luminance
@@ -110,17 +111,10 @@ class LevelsDialog(QDialog):
 
     def accept(self) -> None:
         self._debounce.stop()
-        self._preview()
-        if self._layer.image != self._pristine:
-            self._doc.undo_stack.push(LayerRegionCommand(
-                self._doc, self._layer, self._layer.image.rect(),
-                QImage(self._pristine), QImage(self._layer.image),
-                "Levels", applied=True,
-            ))
+        self.accept_scope("Levels")
         super().accept()
 
     def reject(self) -> None:
         self._debounce.stop()
-        self._layer.image = QImage(self._pristine)
-        self._doc.notify_pixels(self._layer.bounds())
+        self.reject_scope()
         super().reject()

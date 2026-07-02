@@ -18,14 +18,14 @@ from PySide6.QtWidgets import (
 )
 
 from photoslop.adjust import apply_luts, color_balance_luts
-from photoslop.commands import LayerRegionCommand
 from photoslop.document import Document
+from photoslop.scopedadjust import ScopedAdjustMixin
 
 _BANDS = ("shadows", "midtones", "highlights")
 _AXES = (("Cyan", "Red"), ("Magenta", "Green"), ("Yellow", "Blue"))
 
 
-class ColorBalanceDialog(QDialog):
+class ColorBalanceDialog(ScopedAdjustMixin, QDialog):
     def __init__(self, doc: Document, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Color Balance")
@@ -67,6 +67,7 @@ class ColorBalanceDialog(QDialog):
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        self.init_scope(form)
         form.addRow(buttons)
 
         self._debounce = QTimer(self)
@@ -91,25 +92,18 @@ class ColorBalanceDialog(QDialog):
     def balance_values(self) -> dict[str, tuple[float, float, float]]:
         return {band: tuple(vals) for band, vals in self._values.items()}
 
-    def _preview(self) -> None:
-        img = QImage(self._pristine)
+    def transform(self, img: QImage) -> None:
         apply_luts(img, color_balance_luts(self.balance_values()))
-        self._layer.image = img
-        self._doc.notify_pixels(self._layer.bounds())
+
+    def _preview(self) -> None:
+        self.preview_scope()
 
     def accept(self) -> None:
         self._debounce.stop()
-        self._preview()
-        if self._layer.image != self._pristine:
-            self._doc.undo_stack.push(LayerRegionCommand(
-                self._doc, self._layer, self._layer.image.rect(),
-                QImage(self._pristine), QImage(self._layer.image),
-                "Color Balance", applied=True,
-            ))
+        self.accept_scope("Color Balance")
         super().accept()
 
     def reject(self) -> None:
         self._debounce.stop()
-        self._layer.image = QImage(self._pristine)
-        self._doc.notify_pixels(self._layer.bounds())
+        self.reject_scope()
         super().reject()
