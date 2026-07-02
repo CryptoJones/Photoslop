@@ -263,6 +263,18 @@ class MainWindow(QMainWindow):
             self._tool_actions[name] = act
         self._tool_actions["brush"].setChecked(True)
 
+        from photoslop.icons import zoom_in_icon, zoom_out_icon
+
+        bar.addSeparator()
+        zoom_in_btn = QAction(zoom_in_icon(), "Zoom In (Ctrl +)", self)
+        zoom_in_btn.triggered.connect(lambda: self._zoom(+1))
+        bar.addAction(zoom_in_btn)
+        zoom_out_btn = QAction(zoom_out_icon(), "Zoom Out (Ctrl -)", self)
+        zoom_out_btn.triggered.connect(lambda: self._zoom(-1))
+        bar.addAction(zoom_out_btn)
+        self.zoom_in_button = zoom_in_btn
+        self.zoom_out_button = zoom_out_btn
+
         from PySide6.QtGui import QShortcut
 
         cycle = QShortcut(QKeySequence("G"), self)
@@ -635,8 +647,15 @@ class MainWindow(QMainWindow):
                                     lambda: self._layer_cmd(FlipLayerCommand, False)))
 
         m_view = menu.addMenu("&View")
-        m_view.addAction(self._act("Zoom &In", "Ctrl++", lambda: self._zoom(+1)))
-        m_view.addAction(self._act("Zoom &Out", "Ctrl+-", lambda: self._zoom(-1)))
+        zoom_in = self._act("Zoom &In", "Ctrl++", lambda: self._zoom(+1))
+        # a US keyboard's plus key is "=" unshifted — bind every physical form
+        zoom_in.setShortcuts([QKeySequence("Ctrl++"), QKeySequence("Ctrl+="),
+                              QKeySequence("Ctrl+Shift+=")])
+        m_view.addAction(zoom_in)
+        zoom_out = self._act("Zoom &Out", "Ctrl+-", lambda: self._zoom(-1))
+        zoom_out.setShortcuts([QKeySequence("Ctrl+-"),
+                               QKeySequence("Ctrl+Shift+-")])
+        m_view.addAction(zoom_out)
         m_view.addAction(self._act("Zoom &100%", "Ctrl+1", lambda: self._zoom_to(1.0)))
         m_view.addAction(self._act("Zoom to &Fit", "Ctrl+0", self._zoom_fit))
         m_view.addSeparator()
