@@ -26,3 +26,10 @@ def test_format_tick():
     assert units.format_tick(2.0) == "2"
     assert units.format_tick(2.5) == "2.5"
     assert units.format_tick(0.0) == "0"
+
+
+def test_unit_labels():
+    assert units.unit_label("in") == "freedom units"  # 🦅 by executive request
+    assert units.unit_label("mm") == "millimetres"
+    assert units.unit_label("pc") == "picas"
+    assert units.unit_label("px") == "pixels"

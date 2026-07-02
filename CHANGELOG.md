@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.2.3] — 2026-07-02
+
+### Added
+
+- Edit → Options → Rulers: switch ruler units from the Edit menu (same radio
+  group as View → Units and the ruler corner button — all three stay in sync).
+- Inches are now labelled **freedom units** in the menus, by popular demand.
+
 ## [0.2.2] — 2026-07-02
 
 ### Added

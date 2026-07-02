@@ -266,6 +266,9 @@ class MainWindow(QMainWindow):
         m_edit.addSeparator()
         m_edit.addAction(self._act("Select &All", "Ctrl+A", self.action_select_all))
         m_edit.addAction(self._act("D&eselect", "Ctrl+D", self.action_deselect))
+        m_edit.addSeparator()
+        self._options_menu = m_edit.addMenu("&Options")
+        self._rulers_menu = self._options_menu.addMenu("&Rulers")  # unit actions added below
 
         m_image = menu.addMenu("&Image")
         m_image.addAction(self._act("&Image Size…", "Ctrl+Alt+I", self.action_image_size))
@@ -306,6 +309,7 @@ class MainWindow(QMainWindow):
             act.triggered.connect(lambda _=False, uu=u: self.set_unit(uu))
             unit_group.addAction(act)
             m_units.addAction(act)
+            self._rulers_menu.addAction(act)  # same action: Edit → Options → Rulers
             self._unit_actions[u] = act
         m_view.addSeparator()
         m_view.addAction(self._act("Clear &Guides", None, self.action_clear_guides))
