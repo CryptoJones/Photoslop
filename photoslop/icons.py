@@ -172,8 +172,26 @@ def gradient_icon() -> QIcon:
     return _make(draw)
 
 
+def pencil_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.5))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.save()
+        p.translate(11, 11)
+        p.rotate(45)
+        p.drawRect(QRectF(-2.5, -8, 5, 12))
+        tip = QPainterPath(QPointF(-2.5, 4))
+        tip.lineTo(QPointF(0, 8.5))
+        tip.lineTo(QPointF(2.5, 4))
+        p.drawPath(tip)
+        p.restore()
+
+    return _make(draw)
+
+
 TOOL_ICONS = {
     "brush": brush_icon,
+    "pencil": pencil_icon,
     "bucket": bucket_icon,
     "gradient": gradient_icon,
     "eyedropper": eyedropper_icon,
