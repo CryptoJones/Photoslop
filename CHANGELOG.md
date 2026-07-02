@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.36.0] — 2026-07-02
+
+### Added
+
+- Flow control for brush and eraser, with true Photoshop semantics: flow is
+  how much paint each stamp lays down (builds up within a stroke); opacity
+  is now a hard per-stroke ceiling — overlapping stamps in one stroke can
+  never exceed it. Soft strokes composite through a per-stroke scratch
+  buffer; the hard fully-opaque path stays zero-allocation.
+
 ## [0.35.0] — 2026-07-02
 
 ### Added
