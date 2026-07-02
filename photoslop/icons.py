@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QBrush, QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPolygonF
 
 SIZE = 22
 _INK = QColor(70, 70, 70)
@@ -409,6 +409,19 @@ def zoom_out_icon() -> QIcon:
     return _make(draw)
 
 
+def pen_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.4))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        nib = QPolygonF([QPointF(10.5, 3), QPointF(15, 12), QPointF(10.5, 17),
+                         QPointF(6, 12)])
+        p.drawPolygon(nib)
+        p.drawLine(QPointF(10.5, 8), QPointF(10.5, 13))  # slit
+        p.drawEllipse(QPointF(10.5, 13), 1.2, 1.2)  # breather hole
+
+    return _make(draw)
+
+
 def shape_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 1.6))
@@ -436,6 +449,7 @@ TOOL_ICONS = {
     "perspective": perspective_icon,
     "text": text_icon,
     "shape": shape_icon,
+    "pen": pen_icon,
     "crop": crop_icon,
     "dodge": dodge_icon,
     "burn": burn_icon,
