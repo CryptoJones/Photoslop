@@ -69,6 +69,13 @@ def save_ora(doc: Document, path: str) -> None:
 
             attrib["photoslop-smart-filters"] = json.dumps(
                 [list(f) for f in layer.smart_filters])
+        if layer.effects:
+            import json
+
+            attrib["photoslop-effects"] = json.dumps(
+                [list(f) for f in layer.effects])
+        if layer.fill_opacity != 1.0:
+            attrib["photoslop-fill-opacity"] = f"{layer.fill_opacity:.4f}"
         ET.SubElement(
             stack,
             "layer",
@@ -131,6 +138,14 @@ def _walk_layers(zf: zipfile.ZipFile, node: ET.Element, base: QPoint, out: list[
                 import json
 
                 layer.smart_filters = [tuple(f) for f in json.loads(filters_json)]
+            effects_json = child.get("photoslop-effects")
+            if effects_json:
+                import json
+
+                layer.effects = [tuple(f) for f in json.loads(effects_json)]
+            fill = child.get("photoslop-fill-opacity")
+            if fill:
+                layer.fill_opacity = float(fill)
             adj_src = child.get("photoslop-adjustment")
             if adj_src and adj_src in zf.namelist():
                 import numpy as np

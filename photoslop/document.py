@@ -80,10 +80,78 @@ def render_region(doc: Document, region: QRect,
     return out
 
 
+def _effects_margin(effects: list) -> int:
+    """How far (px) any of these effects can reach beyond the layer."""
+    pad = 0
+    for fx in effects:
+        if fx[0] == "drop-shadow":
+            pad = max(pad, int(fx[3]) + max(abs(int(fx[1])), abs(int(fx[2]))))
+        elif fx[0] == "glow" or fx[0] == "stroke":
+            pad = max(pad, int(fx[1]))
+    return pad
+
+
+def _effect_images(layer: Layer) -> list:
+    """Rendered live effects: [(image, canvas_offset, draws_under_fill)].
+    Cached against the layer image's cacheKey + the effects tuple."""
+    key = (layer.image.cacheKey(), tuple(tuple(f) for f in layer.effects))
+    if layer.fx_cache is not None and layer.fx_cache[0] == key:
+        return layer.fx_cache[1]
+    from PySide6.QtGui import QColor
+
+    from photoslop import npimage
+
+    out = []
+    for fx in layer.effects:
+        kind = fx[0]
+        if kind == "drop-shadow":
+            _, dx, dy, blur, rgba = fx
+            img = npimage.drop_shadow_image(layer.image, QColor(*rgba), blur)
+            pad = max(0, int(blur))
+            out.append((img, layer.offset + QPoint(int(dx) - pad, int(dy) - pad),
+                        True))
+        elif kind == "glow":
+            _, blur, rgba = fx
+            img = npimage.drop_shadow_image(layer.image, QColor(*rgba), blur)
+            pad = max(0, int(blur))
+            out.append((img, layer.offset - QPoint(pad, pad), True))
+        elif kind == "stroke":
+            _, width, rgba = fx
+            img = npimage.stroke_outline_image(layer.image, QColor(*rgba), width)
+            pad = max(1, int(width))
+            out.append((img, layer.offset - QPoint(pad, pad), False))
+    layer.fx_cache = (key, out)
+    return out
+
+
+def _draw_effects(p: QPainter, images: list, region: QRect, under: bool) -> None:
+    for img, off, is_under in images:
+        if is_under != under:
+            continue
+        area = region.intersected(QRect(off, img.size()))
+        if not area.isEmpty():
+            p.drawImage(area.topLeft(), img, area.translated(-off))
+
+
 def draw_layer(p: QPainter, doc: Document, layer: Layer, region: QRect) -> None:
     """Draw one layer's contribution to a canvas-space region, honouring its
-    mask and clipping. Transient buffers never exceed the region. The caller
-    sets opacity and composition mode; the painter is in canvas coords."""
+    mask, clipping, live effects, and fill opacity. Transient buffers never
+    exceed the region (effect images are layer-sized + effect padding). The
+    caller sets opacity and composition mode; the painter is in canvas
+    coords."""
+    if layer.effects or layer.fill_opacity != 1.0:
+        base = p.opacity()
+        images = _effect_images(layer)
+        _draw_effects(p, images, region, under=True)
+        p.setOpacity(base * layer.fill_opacity)
+        _draw_fill(p, doc, layer, region)
+        p.setOpacity(base)
+        _draw_effects(p, images, region, under=False)
+        return
+    _draw_fill(p, doc, layer, region)
+
+
+def _draw_fill(p: QPainter, doc: Document, layer: Layer, region: QRect) -> None:
     area = region.intersected(layer.bounds())
     if area.isEmpty():
         return
@@ -181,6 +249,17 @@ class Document(QObject):
         self.pixelsChanged.emit(layer.bounds())
 
     def notify_pixels(self, rect: QRect) -> None:
+        # live effects (shadows, strokes) reach beyond layer bounds — pad the
+        # dirty rect by the largest effect margin of any intersecting layer
+        pad = 0
+        for layer in self.layers:
+            if layer.effects and layer.visible:
+                margin = _effects_margin(layer.effects)
+                if rect.adjusted(-margin, -margin, margin, margin).intersects(
+                        layer.bounds()):
+                    pad = max(pad, margin)
+        if pad:
+            rect = rect.adjusted(-pad, -pad, pad, pad)
         self.pixelsChanged.emit(rect)
 
     def notify_structure(self) -> None:

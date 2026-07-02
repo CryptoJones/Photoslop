@@ -51,9 +51,9 @@ def mask_to_alpha(mask: QImage) -> QImage:
 
 
 class Layer:
-    __slots__ = ("adjustment", "blend_mode", "clipped", "group", "image",
-                 "mask", "name", "offset", "opacity", "smart_filters",
-                 "source", "visible")
+    __slots__ = ("adjustment", "blend_mode", "clipped", "effects",
+                 "fill_opacity", "fx_cache", "group", "image", "mask", "name",
+                 "offset", "opacity", "smart_filters", "source", "visible")
 
     def __init__(
         self,
@@ -76,6 +76,9 @@ class Layer:
         self.adjustment = None  # (3, 256) uint8 LUTs: applies to composite below
         self.source: QImage | None = None  # smart-object pristine snapshot
         self.smart_filters: list = []  # (kind, *params) applied to a smart object
+        self.effects: list = []  # live layer styles: (kind, *params) tuples
+        self.fill_opacity = 1.0  # scales the fill only, never the effects
+        self.fx_cache = None  # (key, rendered effect images) — derived
 
     @classmethod
     def blank(cls, name: str, size: QSize, offset: QPoint | None = None) -> Layer:
@@ -100,6 +103,8 @@ class Layer:
         if self.source is not None:
             layer.source = QImage(self.source)
         layer.smart_filters = [tuple(f) for f in self.smart_filters]
+        layer.effects = [tuple(f) for f in self.effects]
+        layer.fill_opacity = self.fill_opacity
         return layer
 
     def paint_image(self, local_region: QRect) -> QImage:
