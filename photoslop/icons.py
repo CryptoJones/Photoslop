@@ -247,6 +247,20 @@ def patch_icon() -> QIcon:
     return _make(draw)
 
 
+def liquify_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        path = QPainterPath(QPointF(4, 12))
+        path.cubicTo(QPointF(8, 6), QPointF(10, 18), QPointF(14, 10))
+        path.cubicTo(QPointF(16, 7), QPointF(18, 9), QPointF(18.5, 8))
+        p.drawPath(path)
+        p.drawLine(QPointF(15.5, 5.5), QPointF(18.5, 8))
+        p.drawLine(QPointF(15.8, 10.8), QPointF(18.5, 8))
+
+    return _make(draw)
+
+
 def text_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
@@ -353,6 +367,7 @@ TOOL_ICONS = {
     "spot-heal": spot_heal_icon,
     "heal": heal_icon,
     "patch": patch_icon,
+    "liquify": liquify_icon,
     "text": text_icon,
     "crop": crop_icon,
     "dodge": dodge_icon,
