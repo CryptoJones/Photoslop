@@ -20,7 +20,7 @@ def test_edit_options_rulers_switches_units(qapp):
     assert rulers.menuAction() in win._options_menu.actions()
 
     by_label = {a.text(): a for a in rulers.actions()}
-    assert set(by_label) == {"pixels", "freedom units", "millimetres", "picas"}
+    assert set(by_label) == {"pixels", "freedom units", "millimetres", "centimetres", "picas"}
 
     by_label["millimetres"].trigger()
     assert win.unit == "mm"
