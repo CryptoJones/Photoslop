@@ -144,6 +144,18 @@ def poly_lasso_icon() -> QIcon:
     return _make(draw)
 
 
+def wand_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 2.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.drawLine(QPointF(8, 14), QPointF(16, 6))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(_INK))
+        for cx, cy, r in ((6, 7, 1.2), (11, 4, 1.0), (17.5, 12, 1.2), (5.5, 17, 1.0)):
+            p.drawEllipse(QPointF(cx, cy), r, r)
+
+    return _make(draw)
+
+
 TOOL_ICONS = {
     "brush": brush_icon,
     "bucket": bucket_icon,
@@ -151,6 +163,7 @@ TOOL_ICONS = {
     "rect-select": rect_select_icon,
     "lasso": lasso_icon,
     "poly-lasso": poly_lasso_icon,
+    "wand": wand_icon,
     "move": move_icon,
     "hand": hand_icon,
     "zoom": zoom_icon,

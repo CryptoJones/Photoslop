@@ -58,6 +58,7 @@ from photoslop.tools import (
     EyedropperTool,
     HandTool,
     LassoTool,
+    MagicWandTool,
     MoveTool,
     PolyLassoTool,
     RectSelectTool,
@@ -88,6 +89,7 @@ class MainWindow(QMainWindow):
                 RectSelectTool(self.options),
                 LassoTool(self.options),
                 PolyLassoTool(self.options),
+                MagicWandTool(self.options),
                 MoveTool(self.options),
                 HandTool(self.options),
                 ZoomTool(self.options),
@@ -152,18 +154,18 @@ class MainWindow(QMainWindow):
         group = QActionGroup(self)
         shortcuts = {
             "brush": "B", "bucket": "G", "eyedropper": "I",
-            "rect-select": "M", "lasso": "L", "poly-lasso": "Shift+L", "move": "V",
-            "hand": "H", "zoom": "Z",
+            "rect-select": "M", "lasso": "L", "poly-lasso": "Shift+L", "wand": "W",
+            "move": "V", "hand": "H", "zoom": "Z",
         }
         labels = {
             "brush": "Brush", "bucket": "Paint Bucket", "eyedropper": "Eyedropper",
             "rect-select": "Rectangle Select", "lasso": "Lasso Select",
-            "poly-lasso": "Polygonal Lasso", "move": "Move",
+            "poly-lasso": "Polygonal Lasso", "wand": "Magic Wand", "move": "Move",
             "hand": "Hand (pan)", "zoom": "Zoom",
         }
         self._tool_actions = {}
         for name in ("brush", "bucket", "eyedropper", "rect-select", "lasso",
-                     "poly-lasso", "move", "hand", "zoom"):
+                     "poly-lasso", "wand", "move", "hand", "zoom"):
             act = QAction(TOOL_ICONS[name](), labels[name], self)
             act.setCheckable(True)
             act.setShortcut(shortcuts[name])
@@ -245,6 +247,7 @@ class MainWindow(QMainWindow):
             "rect-select": [],
             "lasso": [],
             "poly-lasso": [],
+            "wand": [tol_act],
             "move": [],
             "hand": [],
             "zoom": [],

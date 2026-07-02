@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.13.0] — 2026-07-02
+
+### Added
+
+- Magic Wand (`W`): selects the contiguous colour region under the click
+  within the shared tolerance, using the same vectorised scanline engine as
+  the paint bucket (now refactored into a non-destructive mask pass).
+  Shift-click adds to the selection, Alt-click subtracts.
+
 ## [0.12.0] — 2026-07-02
 
 ### Added
