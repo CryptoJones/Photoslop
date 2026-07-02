@@ -50,3 +50,20 @@ def test_apply_content_aware_scale_undo(qapp):
     doc.undo_stack.undo()
     assert layer.image.size() == QSize(80, 40)
     assert count_red_columns(layer.image) == 6  # byte-exact restore
+
+
+def test_seam_insert_grows_and_keeps_detail(qapp):
+    img = striped_image()
+    grown = npimage.seam_carve(img, 100, 40)  # +20 columns
+    assert grown.width() == 100 and grown.height() == 40
+    assert count_red_columns(grown) >= 6  # the stripe survives intact
+
+    both = npimage.seam_carve(striped_image(), 96, 50)  # grow both axes
+    assert both.width() == 96 and both.height() == 50
+
+    # flat field grows without artefacts: still uniform gray
+    flat = blank_image(QSize(30, 20))
+    flat.fill(QColor(128, 128, 128))
+    bigger = npimage.seam_carve(flat, 45, 20)
+    assert bigger.width() == 45
+    assert bigger.pixelColor(22, 10) == QColor(128, 128, 128)

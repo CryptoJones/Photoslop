@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.57.0] — 2026-07-02
+
+### Added
+
+- Content-Aware Scale can now grow (up to 4×): the lowest-energy seams are
+  found distinctly and duplicated with blending — flat areas stretch,
+  detail stays put. Same dialog, both directions, exact undo.
+
 ## [0.56.0] — 2026-07-02
 
 ### Added

@@ -499,8 +499,8 @@ def _seam_energy(arr: np.ndarray) -> np.ndarray:
     return dx + dy
 
 
-def _remove_one_seam(arr: np.ndarray) -> np.ndarray:
-    """Remove the lowest-energy vertical seam from an (h, w) uint32 array."""
+def _min_seam(arr: np.ndarray) -> np.ndarray:
+    """Lowest-energy vertical seam of an (h, w) uint32 array: one x per row."""
     h, w = arr.shape
     m = _seam_energy(arr)
     for y in range(1, h):
@@ -515,25 +515,74 @@ def _remove_one_seam(arr: np.ndarray) -> np.ndarray:
         x = seam[y + 1]
         x0 = max(0, x - 1)
         seam[y] = x0 + int(np.argmin(m[y, x0:min(w, x + 2)]))
+    return seam
 
+
+def _remove_one_seam(arr: np.ndarray) -> np.ndarray:
+    h, w = arr.shape
+    seam = _min_seam(arr)
     keep = np.ones((h, w), dtype=bool)
     keep[np.arange(h), seam] = False
     return arr[keep].reshape(h, w - 1)
 
 
+def _average_u32(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    out = np.zeros_like(a)
+    for shift in (24, 16, 8, 0):
+        av = (a >> np.uint32(shift)) & 0xFF
+        bv = (b >> np.uint32(shift)) & 0xFF
+        out |= (((av + bv) // 2) & 0xFF) << np.uint32(shift)
+    return out
+
+
+def _insert_seams(arr: np.ndarray, count: int) -> np.ndarray:
+    """Grow width by `count` px: find the `count` lowest-energy DISTINCT
+    seams (by removing them from a working copy while tracking original
+    columns), then duplicate each — the new pixel averages the seam pixel
+    with its right neighbour so no hard stripes appear."""
+    h, w = arr.shape
+    work = arr.copy()
+    mapping = np.tile(np.arange(w, dtype=np.int64), (h, 1))
+    seams = []
+    for _ in range(count):
+        seam = _min_seam(work)
+        rows = np.arange(work.shape[0])
+        seams.append(mapping[rows, seam])
+        keep = np.ones(work.shape, dtype=bool)
+        keep[rows, seam] = False
+        new_w = work.shape[1] - 1
+        work = work[keep].reshape(h, new_w)
+        mapping = mapping[keep].reshape(h, new_w)
+
+    per_row = np.stack(seams, axis=1)  # (h, count) original column indices
+    out = np.empty((h, w + count), dtype=arr.dtype)
+    for y in range(h):
+        cols = np.sort(per_row[y])
+        row = arr[y]
+        right = row[np.minimum(cols + 1, w - 1)]
+        values = _average_u32(row[cols], right)
+        out[y] = np.insert(row, cols + 1, values)
+    return out
+
+
 def seam_carve(img: QImage, target_w: int, target_h: int) -> QImage:
-    """Content-aware shrink to (target_w, target_h): repeatedly remove the
-    lowest-energy seam — vertical seams for width, horizontal (via
-    transpose) for height. Detail survives; flat areas give way."""
+    """Content-aware scale to (target_w, target_h): shrink by removing the
+    lowest-energy seams, grow by duplicating them (blended) — vertical seams
+    for width, horizontal via transpose for height. Detail survives; flat
+    areas give way (or stretch)."""
     arr = view_u32(img).copy()
-    target_w = max(2, min(target_w, arr.shape[1]))
-    target_h = max(2, min(target_h, arr.shape[0]))
+    target_w = max(2, min(target_w, 4 * arr.shape[1]))
+    target_h = max(2, min(target_h, 4 * arr.shape[0]))
     while arr.shape[1] > target_w:
         arr = _remove_one_seam(arr)
-    if arr.shape[0] > target_h:
+    if arr.shape[1] < target_w:
+        arr = _insert_seams(arr, target_w - arr.shape[1])
+    if arr.shape[0] != target_h:
         arr = np.ascontiguousarray(arr.T)
         while arr.shape[1] > target_h:
             arr = _remove_one_seam(arr)
+        if arr.shape[1] < target_h:
+            arr = _insert_seams(arr, target_h - arr.shape[1])
         arr = np.ascontiguousarray(arr.T)
 
     out = QImage(arr.shape[1], arr.shape[0], img.format())
