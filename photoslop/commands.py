@@ -9,7 +9,7 @@ from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QImage, QPainter, QTransform, QUndoCommand
 
 from photoslop.document import Document
-from photoslop.layer import BLEND_MODES, Layer, blank_image
+from photoslop.layer import BLEND_MODES, Layer, blank_image, mask_to_alpha
 
 TILE = 128
 
@@ -226,6 +226,57 @@ class MergeDownCommand(QUndoCommand):
         lower.image, lower.offset, lower.opacity = self.old_lower
         doc.insert_layer(self.index, self.upper)
         doc.notify_pixels(dirty)
+
+
+class SetLayerMaskCommand(QUndoCommand):
+    """Add, replace, or delete a layer mask (new_mask=None deletes)."""
+
+    def __init__(self, doc: Document, layer: Layer, new_mask: QImage | None,
+                 text: str = "Layer Mask"):
+        super().__init__(text)
+        self.doc, self.layer = doc, layer
+        self.old_mask = QImage(layer.mask) if layer.mask is not None else None
+        self.new_mask = new_mask
+
+    def _apply(self, mask: QImage | None) -> None:
+        self.layer.mask = QImage(mask) if mask is not None else None
+        self.doc.notify_structure()
+        self.doc.notify_pixels(self.layer.bounds())
+
+    def redo(self) -> None:
+        self._apply(self.new_mask)
+
+    def undo(self) -> None:
+        self._apply(self.old_mask)
+
+
+class ApplyLayerMaskCommand(QUndoCommand):
+    """Bake the mask into the layer's alpha and drop the mask."""
+
+    def __init__(self, doc: Document, layer: Layer):
+        super().__init__("Apply Layer Mask")
+        self.doc, self.layer = doc, layer
+        self.old_image = QImage(layer.image)
+        self.old_mask = QImage(layer.mask)
+
+    def redo(self) -> None:
+        layer = self.layer
+        baked = QImage(self.old_image)
+        alpha = mask_to_alpha(self.old_mask)
+        p = QPainter(baked)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+        p.drawImage(0, 0, alpha)
+        p.end()
+        layer.image = baked
+        layer.mask = None
+        self.doc.notify_structure()
+        self.doc.notify_pixels(layer.bounds())
+
+    def undo(self) -> None:
+        self.layer.image = QImage(self.old_image)
+        self.layer.mask = QImage(self.old_mask)
+        self.doc.notify_structure()
+        self.doc.notify_pixels(self.layer.bounds())
 
 
 class MergeVisibleCommand(QUndoCommand):

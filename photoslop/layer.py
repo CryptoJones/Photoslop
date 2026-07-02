@@ -42,8 +42,17 @@ def blank_image(size: QSize) -> QImage:
     return img
 
 
+def mask_to_alpha(mask: QImage) -> QImage:
+    """Reinterpret a Grayscale8 mask's bytes as Alpha8 (convertToFormat would
+    route through ARGB and produce opaque alpha everywhere)."""
+    alpha = QImage(mask.constBits(), mask.width(), mask.height(),
+                   mask.bytesPerLine(), QImage.Format.Format_Alpha8)
+    return alpha.copy()  # detach from the mask's buffer
+
+
 class Layer:
-    __slots__ = ("blend_mode", "image", "name", "offset", "opacity", "visible")
+    __slots__ = ("blend_mode", "image", "mask", "name", "offset", "opacity",
+                 "visible")
 
     def __init__(
         self,
@@ -60,6 +69,7 @@ class Layer:
         self.visible = visible
         self.opacity = float(opacity)
         self.blend_mode = blend_mode if blend_mode in BLEND_MODES else "normal"
+        self.mask: QImage | None = None  # Grayscale8, white = opaque
 
     @classmethod
     def blank(cls, name: str, size: QSize, offset: QPoint | None = None) -> Layer:
@@ -67,7 +77,7 @@ class Layer:
 
     def clone(self, name: str | None = None) -> Layer:
         # QImage(...) copy construction shares pixel data (copy-on-write).
-        return Layer(
+        layer = Layer(
             name if name is not None else self.name,
             QImage(self.image),
             QPoint(self.offset),
@@ -75,6 +85,23 @@ class Layer:
             self.opacity,
             self.blend_mode,
         )
+        if self.mask is not None:
+            layer.mask = QImage(self.mask)
+        return layer
+
+    def paint_image(self, local_region: QRect) -> QImage:
+        """The drawable content for a layer-local region: the image with the
+        mask applied (transient, region-sized). Masked compositing goes
+        through here so the transient buffer never exceeds the region."""
+        if self.mask is None:
+            return self.image.copy(local_region)
+        out = self.image.copy(local_region)
+        alpha = mask_to_alpha(self.mask.copy(local_region))
+        p = QPainter(out)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+        p.drawImage(0, 0, alpha)
+        p.end()
+        return out
 
     def bounds(self) -> QRect:
         """Layer extent in canvas coordinates."""
