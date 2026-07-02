@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.2.1] — 2026-07-02
+
+### Fixed
+
+- Ruler hairlines, guide markers, and ruler ticks were offset from the canvas
+  by the scroll-area frame inset (hairline sat left of vertical guides and
+  above horizontal ones). Rulers now compute their origin in their own
+  coordinate space and round markers exactly like the canvas rounds guides,
+  so a hairline over a guide renders as one continuous line at every zoom.
+
 ## [0.2.0] — 2026-07-02
 
 ### Added
