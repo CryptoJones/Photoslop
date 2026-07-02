@@ -358,6 +358,34 @@ class LassoTool(Tool):
         return path
 
 
+class MagicWandTool(Tool):
+    """Select the contiguous color region under the click, within the shared
+    tolerance. Shift-click adds to the selection, Alt-click subtracts."""
+
+    name = "wand"
+
+    def press(self, doc, canvas, pos, ev):
+        layer = doc.active_layer
+        if layer is None:
+            return
+        img = layer.image
+        lx = int(pos.x() - layer.offset.x())
+        ly = int(pos.y() - layer.offset.y())
+        if not (0 <= lx < img.width() and 0 <= ly < img.height()):
+            return
+        result = npimage.flood_mask(img, lx, ly, self.opts.tolerance)
+        if result is None:
+            return
+        mask, _bbox = result
+        path = npimage.mask_to_path(mask, layer.offset)
+        mods = ev.modifiers() if ev is not None else Qt.KeyboardModifier.NoModifier
+        if doc.selection is not None and mods & Qt.KeyboardModifier.ShiftModifier:
+            path = doc.selection.united(path)
+        elif doc.selection is not None and mods & Qt.KeyboardModifier.AltModifier:
+            path = doc.selection.subtracted(path)
+        doc.set_selection(path)
+
+
 class PolyLassoTool(Tool):
     """Click to place vertices; close by clicking the first vertex or
     double-clicking. Escape cancels."""
