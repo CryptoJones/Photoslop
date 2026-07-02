@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.6.0] — 2026-07-02
+
+### Added
+
+- Image → Image Rotation: rotate the whole document 90° CW/CCW or 180°, or
+  flip the canvas horizontally/vertically — every layer, offset, and guide
+  transforms together, and undo is exact and memory-free (rotations invert,
+  flips are involutions).
+- Layer menu: rotate the active layer 90° CW/CCW/180° about its own centre,
+  or flip it horizontally/vertically.
+
 ## [0.5.0] — 2026-07-02
 
 ### Added

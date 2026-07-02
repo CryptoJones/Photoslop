@@ -6,7 +6,7 @@ it actually changed (tiles or a region), never whole-canvas snapshots.
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
-from PySide6.QtGui import QImage, QPainter, QUndoCommand
+from PySide6.QtGui import QImage, QPainter, QTransform, QUndoCommand
 
 from photoslop.document import Document
 from photoslop.layer import Layer, blank_image
@@ -267,6 +267,133 @@ class ResizeImageCommand(QUndoCommand):
         doc.size = QSize(self.old_size)
         doc.notify_structure()
         doc.notify_pixels(QRect(QPoint(0, 0), doc.size))
+
+
+def _rotate_doc(doc: Document, deg: int) -> None:
+    """Rotate the whole document (layers, offsets, canvas, guides) by a
+    multiple of 90° clockwise. Exact and lossless — undo just rotates back,
+    so rotation costs no undo memory at all."""
+    deg %= 360
+    if deg == 0:
+        return
+    old_w, old_h = doc.size.width(), doc.size.height()
+    transform = QTransform().rotate(deg)
+    for layer in doc.layers:
+        lw, lh = layer.image.width(), layer.image.height()
+        x0, y0 = layer.offset.x(), layer.offset.y()
+        layer.image = layer.image.transformed(transform)
+        if deg == 90:
+            layer.offset = QPoint(old_h - (y0 + lh), x0)
+        elif deg == 180:
+            layer.offset = QPoint(old_w - (x0 + lw), old_h - (y0 + lh))
+        else:  # 270 (== 90 CCW)
+            layer.offset = QPoint(y0, old_w - (x0 + lw))
+    if deg in (90, 270):
+        doc.size = QSize(old_h, old_w)
+    gh, gv = doc.guides_h[:], doc.guides_v[:]
+    if deg == 90:
+        doc.guides_v = [old_h - g for g in gh]
+        doc.guides_h = gv
+    elif deg == 180:
+        doc.guides_h = [old_h - g for g in gh]
+        doc.guides_v = [old_w - g for g in gv]
+    else:
+        doc.guides_h = [old_w - g for g in gv]
+        doc.guides_v = gh
+    doc.set_selection(None)
+    doc.notify_structure()
+    doc.guidesChanged.emit()
+    doc.notify_pixels(QRect(QPoint(0, 0), doc.size))
+
+
+def _flip_doc(doc: Document, horizontal: bool) -> None:
+    w, h = doc.size.width(), doc.size.height()
+    axis = Qt.Orientation.Horizontal if horizontal else Qt.Orientation.Vertical
+    for layer in doc.layers:
+        layer.image = layer.image.flipped(axis)
+        if horizontal:
+            layer.offset = QPoint(w - (layer.offset.x() + layer.image.width()),
+                                  layer.offset.y())
+        else:
+            layer.offset = QPoint(layer.offset.x(),
+                                  h - (layer.offset.y() + layer.image.height()))
+    if horizontal:
+        doc.guides_v = [w - g for g in doc.guides_v]
+    else:
+        doc.guides_h = [h - g for g in doc.guides_h]
+    doc.set_selection(None)
+    doc.notify_structure()
+    doc.guidesChanged.emit()
+    doc.notify_pixels(QRect(QPoint(0, 0), doc.size))
+
+
+class RotateImageCommand(QUndoCommand):
+    def __init__(self, doc: Document, degrees: int):
+        super().__init__(f"Rotate Image {degrees}°")
+        self.doc = doc
+        self.degrees = degrees % 360
+
+    def redo(self) -> None:
+        _rotate_doc(self.doc, self.degrees)
+
+    def undo(self) -> None:
+        _rotate_doc(self.doc, 360 - self.degrees)
+
+
+class FlipImageCommand(QUndoCommand):
+    def __init__(self, doc: Document, horizontal: bool):
+        super().__init__("Flip Image " + ("Horizontal" if horizontal else "Vertical"))
+        self.doc = doc
+        self.horizontal = horizontal
+
+    def redo(self) -> None:
+        _flip_doc(self.doc, self.horizontal)
+
+    undo = redo  # flipping is an involution
+
+
+class RotateLayerCommand(QUndoCommand):
+    """Rotate the active layer about its own centre."""
+
+    def __init__(self, doc: Document, layer: Layer, degrees: int):
+        super().__init__(f"Rotate Layer {degrees}°")
+        self.doc, self.layer = doc, layer
+        self.degrees = degrees % 360
+        self.old_offset = QPoint(layer.offset)
+
+    def _apply(self, deg: int) -> None:
+        layer = self.layer
+        dirty = layer.bounds()
+        cx = layer.offset.x() + layer.image.width() / 2.0
+        cy = layer.offset.y() + layer.image.height() / 2.0
+        layer.image = layer.image.transformed(QTransform().rotate(deg))
+        layer.offset = QPoint(round(cx - layer.image.width() / 2.0),
+                              round(cy - layer.image.height() / 2.0))
+        self.doc.notify_pixels(dirty.united(layer.bounds()))
+
+    def redo(self) -> None:
+        self._apply(self.degrees)
+
+    def undo(self) -> None:
+        self._apply(360 - self.degrees)
+        self.layer.offset = QPoint(self.old_offset)  # exact, no rounding drift
+        self.doc.notify_pixels(self.layer.bounds())
+
+
+class FlipLayerCommand(QUndoCommand):
+    def __init__(self, doc: Document, layer: Layer, horizontal: bool):
+        super().__init__("Flip Layer " + ("Horizontal" if horizontal else "Vertical"))
+        self.doc, self.layer = doc, layer
+        self.horizontal = horizontal
+
+    def redo(self) -> None:
+        layer = self.layer
+        axis = (Qt.Orientation.Horizontal if self.horizontal
+                else Qt.Orientation.Vertical)
+        layer.image = layer.image.flipped(axis)
+        self.doc.notify_pixels(layer.bounds())
+
+    undo = redo
 
 
 class ResizeCanvasCommand(QUndoCommand):
