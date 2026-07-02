@@ -54,6 +54,10 @@ def save_ora(doc: Document, path: str) -> None:
             adj_src = f"data/layer{i}_adj.bin"
             attrib["photoslop-adjustment"] = adj_src
             entries.append((adj_src, layer.adjustment.tobytes()))
+        if layer.source is not None:
+            source_src = f"data/layer{i}_source.png"
+            attrib["photoslop-source"] = source_src
+            entries.append((source_src, _png_bytes(layer.source)))
         ET.SubElement(
             stack,
             "layer",
@@ -107,6 +111,10 @@ def _walk_layers(zf: zipfile.ZipFile, node: ET.Element, base: QPoint, out: list[
                     QImage.Format.Format_Grayscale8)
             layer.clipped = child.get("photoslop-clipped") == "1"
             layer.group = child.get("photoslop-group") or None
+            source_src = child.get("photoslop-source")
+            if source_src and source_src in zf.namelist():
+                layer.source = QImage.fromData(
+                    zf.read(source_src)).convertToFormat(FORMAT)
             adj_src = child.get("photoslop-adjustment")
             if adj_src and adj_src in zf.namelist():
                 import numpy as np

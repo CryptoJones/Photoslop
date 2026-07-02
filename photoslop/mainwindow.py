@@ -603,6 +603,11 @@ class MainWindow(QMainWindow):
         m_layer.addAction(self._act("Group &Opacity/Blend…", None,
                                     self.action_group_props))
         m_layer.addSeparator()
+        m_layer.addAction(self._act("Convert to Smart Ob&ject", None,
+                                    self.action_convert_smart))
+        m_layer.addAction(self._act("Restore Smart Object Or&iginal", None,
+                                    self.action_restore_smart))
+        m_layer.addSeparator()
         m_layer.addAction(self._act("&Copy Layer", "Ctrl+Shift+C", self.action_copy_layer))
         m_layer.addAction(self._act("&Paste Layer", "Ctrl+Shift+V", self.action_paste_layer))
         m_layer.addSeparator()
@@ -1430,6 +1435,36 @@ class MainWindow(QMainWindow):
         from photoslop.commands import SetLayerGroupCommand
 
         doc.undo_stack.push(SetLayerGroupCommand(doc, doc.active_layer, None))
+
+    def action_convert_smart(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        layer = doc.active_layer
+        layer.source = QImage(layer.image)  # COW pristine snapshot
+        doc.notify_structure()
+        self.statusBar().showMessage(
+            f"“{layer.name}” is now a smart object — its current pixels are "
+            "the restorable original", 5000)
+
+    def action_restore_smart(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        layer = doc.active_layer
+        if layer.source is None:
+            self.statusBar().showMessage(
+                "Not a smart object — Convert to Smart Object first", 4000)
+            return
+        from photoslop.transform import TransformLayerCommand
+
+        command = TransformLayerCommand(
+            doc, layer, QImage(layer.image), QPoint(layer.offset),
+            QImage(layer.source), QPoint(layer.offset))
+        command.setText("Restore Smart Object")
+        layer.image = QImage(layer.source)
+        doc.undo_stack.push(command)
+        doc.notify_pixels(doc.canvas_rect())
 
     def action_group_props(self) -> None:
         doc = self.current_doc()

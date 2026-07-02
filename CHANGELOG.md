@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.63.0] — 2026-07-02
+
+### Added
+
+- Smart objects (Layer menu): Convert to Smart Object snapshots the layer's
+  pristine pixels; Restore Smart Object Original brings them back after any
+  amount of destructive editing — undoable, cloned with the layer, and
+  saved in `.ora`.
+
 ## [0.62.0] — 2026-07-02
 
 ### Added

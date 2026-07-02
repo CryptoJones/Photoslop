@@ -52,7 +52,7 @@ def mask_to_alpha(mask: QImage) -> QImage:
 
 class Layer:
     __slots__ = ("adjustment", "blend_mode", "clipped", "group", "image",
-                 "mask", "name", "offset", "opacity", "visible")
+                 "mask", "name", "offset", "opacity", "source", "visible")
 
     def __init__(
         self,
@@ -73,6 +73,7 @@ class Layer:
         self.clipped = False  # confined to the alpha of the layer below
         self.group: str | None = None  # group name; members move as a unit
         self.adjustment = None  # (3, 256) uint8 LUTs: applies to composite below
+        self.source: QImage | None = None  # smart-object pristine snapshot
 
     @classmethod
     def blank(cls, name: str, size: QSize, offset: QPoint | None = None) -> Layer:
@@ -94,6 +95,8 @@ class Layer:
         layer.group = self.group
         if self.adjustment is not None:
             layer.adjustment = self.adjustment.copy()
+        if self.source is not None:
+            layer.source = QImage(self.source)
         return layer
 
     def paint_image(self, local_region: QRect) -> QImage:
