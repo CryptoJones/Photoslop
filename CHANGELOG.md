@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.2.2] — 2026-07-02
+
+### Added
+
+- The running version now shows in the window title ("docA — Photoslop
+  0.2.2"), so you can tell which build you're looking at without opening
+  Help → About.
+
 ## [0.2.1] — 2026-07-02
 
 ### Fixed
