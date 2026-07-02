@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.2.5] — 2026-07-02
+
+### Added
+
+- README hero art: Le Basilisk rendered via FLUX.2-Klein in the house
+  rotoscope style (`docs/le-basilisk.jpg`), as chosen by the management.
+
 ## [0.2.4] — 2026-07-02
 
 ### Added
