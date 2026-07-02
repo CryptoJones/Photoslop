@@ -304,6 +304,30 @@ class MoveGroupCommand(QUndoCommand):
         self._shift(-self.delta)
 
 
+class SetGroupPropsCommand(QUndoCommand):
+    """Set or clear a group's compositing properties (opacity/blend)."""
+
+    def __init__(self, doc: Document, group: str, props: dict | None):
+        super().__init__("Group Properties")
+        self.doc, self.group = doc, group
+        self.old = doc.group_props.get(group)
+        self.new = props
+
+    def _apply(self, props: dict | None) -> None:
+        if props is None:
+            self.doc.group_props.pop(self.group, None)
+        else:
+            self.doc.group_props[self.group] = dict(props)
+        self.doc.notify_structure()
+        self.doc.notify_pixels(QRect(QPoint(0, 0), self.doc.size))
+
+    def redo(self) -> None:
+        self._apply(self.new)
+
+    def undo(self) -> None:
+        self._apply(self.old)
+
+
 class SetLayerClippedCommand(QUndoCommand):
     def __init__(self, doc: Document, layer: Layer, clipped: bool):
         super().__init__("Clip to Layer Below" if clipped else "Release Clip")
