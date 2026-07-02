@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.2.5-orange)]()
+[![Version](https://img.shields.io/badge/version-v0.3.0-orange)]()
 
 ---
 
@@ -37,6 +37,9 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
   units (inches); drag guides out of the rulers, drag them back off to
   remove. While a guide is dragged, a marker tracks it on the matching ruler
   and a floating label shows its live X/Y position in the current unit.
+- **Adjust panel** — Lightroom-style Basic sliders (Temp, Tint, Exposure,
+  Contrast, Highlights, Shadows, Whites, Blacks, Vibrance, Saturation) in a
+  tab next to Layers; live preview, one undo step per Apply.
 - **Undo/redo** — region-based undo that stores only the pixels a stroke touched.
 - **Files** — opens and saves layered [OpenRaster](https://www.openraster.org/)
   (`.ora`, interoperable with GIMP and Krita); imports/exports PNG, JPEG, BMP,
