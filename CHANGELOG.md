@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.37.0] — 2026-07-02
+
+### Added
+
+- Distort / Skew / Perspective inside Free Transform: Ctrl+drag a corner to
+  place it freely (full perspective quad via QTransform.quadToQuad),
+  Ctrl+drag an edge to skew it, drag inside to move the quad. Same live
+  preview, single resample on commit, exact undo.
+
 ## [0.36.0] — 2026-07-02
 
 ### Added

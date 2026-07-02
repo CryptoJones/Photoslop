@@ -145,12 +145,8 @@ class CanvasView(QWidget):
                 # live Free Transform preview: draw through the painter
                 # transform instead of resampling pixels
                 p.save()
-                center = transform_session.center
-                p.translate(center)
-                p.rotate(transform_session.rotation)
-                p.scale(transform_session.scale_x, transform_session.scale_y)
-                base = transform_session.base_image
-                p.drawImage(QPointF(-base.width() / 2.0, -base.height() / 2.0), base)
+                p.setTransform(transform_session.full_matrix(), True)
+                p.drawImage(QPointF(0, 0), transform_session.base_image)
                 p.restore()
             else:
                 draw_layer(p, self.doc, layer, clip_canvas)
