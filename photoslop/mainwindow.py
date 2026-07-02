@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QToolBar,
     QToolButton,
+    QUndoView,
 )
 
 from photoslop import __version__, units
@@ -129,6 +130,16 @@ class MainWindow(QMainWindow):
         self._adjust_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._adjust_dock)
         self.tabifyDockWidget(self._layers_dock, self._adjust_dock)
+
+        self.history_view = QUndoView(self.undo_group)
+        self.history_view.setEmptyLabel("Document opened")
+        self._history_dock = QDockWidget("History")
+        self._history_dock.setObjectName("history-dock")
+        self._history_dock.setWidget(self.history_view)
+        self._history_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._history_dock)
+        self.tabifyDockWidget(self._adjust_dock, self._history_dock)
+
         self._layers_dock.raise_()
 
         self._build_tool_bar()
