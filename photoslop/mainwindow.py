@@ -648,6 +648,10 @@ class MainWindow(QMainWindow):
         m_workspace.addAction(self._act("&Restore Saved", None, self.restore_workspace))
         m_workspace.addAction(self._act("Reset to &Default", None, self.reset_workspace))
 
+        m_filter = menu.addMenu("Fi&lter")
+        m_filter.addAction(self._act("Gaussian &Blur…", None, self.action_gaussian_blur))
+        m_filter.addAction(self._act("&Unsharp Mask…", None, self.action_unsharp_mask))
+
         m_help = menu.addMenu("&Help")
         m_help.addAction(self._act("&About Photoslop", None, self.action_about))
 
@@ -953,6 +957,53 @@ class MainWindow(QMainWindow):
             LayerRegionCommand(doc, layer, local, before, after, "Delete Selection")
         )
         doc.notify_pixels(region)
+
+    def _run_filter(self, title: str, apply) -> None:
+        """Shared filter plumbing: selection-aware, full undo step."""
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        from photoslop import npimage
+
+        layer = doc.active_layer
+        mask = None
+        if doc.selection is not None:
+            mask = npimage.selection_mask(doc.selection, layer.image.size(),
+                                          layer.offset)
+            if not mask.any():
+                mask = None
+        before = QImage(layer.image)
+        layer.image = QImage(before)  # fresh COW handle; filter write detaches
+        apply(layer.image, mask)
+        rect = layer.image.rect()
+        doc.undo_stack.push(LayerRegionCommand(
+            doc, layer, rect, before.copy(rect), layer.image.copy(rect),
+            title, applied=True))
+        doc.notify_pixels(layer.bounds())
+
+    def action_gaussian_blur(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+
+        radius, ok = QInputDialog.getInt(self, "Gaussian Blur", "Radius (px):",
+                                         8, 1, 100)
+        if not ok:
+            return
+        from photoslop import npimage
+
+        self._run_filter("Gaussian Blur",
+                         lambda img, m: npimage.gaussian_blur(img, radius, m))
+
+    def action_unsharp_mask(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+
+        amount, ok = QInputDialog.getInt(self, "Unsharp Mask", "Amount (%):",
+                                         80, 10, 500)
+        if not ok:
+            return
+        from photoslop import npimage
+
+        self._run_filter("Unsharp Mask",
+                         lambda img, m: npimage.unsharp_mask(img, 4, amount / 100.0, m))
 
     def action_content_aware_fill(self) -> None:
         doc = self.current_doc()

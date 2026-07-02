@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.54.0] — 2026-07-02
+
+### Added
+
+- Filter menu: Gaussian Blur… (1–100 px) and Unsharp Mask… (10–500%) — both
+  selection-aware (filter only inside the selection when one exists),
+  premultiplication-safe, one undo step.
+
 ## [0.53.0] — 2026-07-02
 
 ### Added
