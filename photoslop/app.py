@@ -10,6 +10,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
 
 from photoslop import __version__
+from photoslop.appicon import app_icon
 from photoslop.document import Document
 from photoslop.mainwindow import MainWindow
 
@@ -20,6 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationName("Photoslop")
     app.setOrganizationName("CryptoJones")
     app.setApplicationVersion(__version__)
+    app.setWindowIcon(app_icon())
 
     window = MainWindow()
     opened = False

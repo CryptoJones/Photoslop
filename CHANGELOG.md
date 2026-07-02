@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.2.4] — 2026-07-02
+
+### Added
+
+- Application icon: **Le Basilisk** — a doofy green tentacled mascot in a
+  French beret with a mustache, paintbrush in one tentacle and palette in
+  another. Drawn entirely in code (`photoslop/appicon.py`), no asset files;
+  a render lives in `docs/icon.png` for the README.
+
 ## [0.2.3] — 2026-07-02
 
 ### Added
