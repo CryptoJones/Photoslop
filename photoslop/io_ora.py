@@ -48,6 +48,8 @@ def save_ora(doc: Document, path: str) -> None:
             entries.append((mask_src, _png_bytes(layer.mask)))
         if layer.clipped:
             attrib["photoslop-clipped"] = "1"
+        if layer.group:
+            attrib["photoslop-group"] = layer.group
         ET.SubElement(
             stack,
             "layer",
@@ -100,6 +102,7 @@ def _walk_layers(zf: zipfile.ZipFile, node: ET.Element, base: QPoint, out: list[
                 layer.mask = QImage.fromData(zf.read(mask_src)).convertToFormat(
                     QImage.Format.Format_Grayscale8)
             layer.clipped = child.get("photoslop-clipped") == "1"
+            layer.group = child.get("photoslop-group") or None
             out.append(layer)
 
 

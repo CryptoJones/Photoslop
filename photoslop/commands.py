@@ -250,6 +250,60 @@ class SetLayerMaskCommand(QUndoCommand):
         self._apply(self.old_mask)
 
 
+class SetLayerGroupCommand(QUndoCommand):
+    def __init__(self, doc: Document, layer: Layer, group: str | None):
+        super().__init__("Group Layer" if group else "Ungroup Layer")
+        self.doc, self.layer = doc, layer
+        self.old_group, self.new_group = layer.group, group
+
+    def _apply(self, group: str | None) -> None:
+        self.layer.group = group
+        self.doc.notify_structure()
+
+    def redo(self) -> None:
+        self._apply(self.new_group)
+
+    def undo(self) -> None:
+        self._apply(self.old_group)
+
+
+class MoveGroupCommand(QUndoCommand):
+    """Shift every member of a group by one delta; merges like layer moves."""
+
+    def __init__(self, doc: Document, layers: list[Layer], delta: QPoint):
+        super().__init__("Move Group")
+        self.doc = doc
+        self.layers = list(layers)
+        self.delta = QPoint(delta)
+        self._applied = True
+
+    def id(self) -> int:
+        return 0x47525550  # "GRUP"
+
+    def mergeWith(self, other) -> bool:
+        if not isinstance(other, MoveGroupCommand) or other.layers != self.layers:
+            return False
+        self.delta += other.delta
+        return True
+
+    def _shift(self, delta: QPoint) -> None:
+        dirty = QRect()
+        for layer in self.layers:
+            dirty = dirty.united(layer.bounds())
+            layer.offset += delta
+            dirty = dirty.united(layer.bounds())
+        self.doc.notify_pixels(dirty)
+
+    def redo(self) -> None:
+        if self._applied:
+            self._applied = False
+            return
+        self._shift(self.delta)
+
+    def undo(self) -> None:
+        self._shift(-self.delta)
+
+
 class SetLayerClippedCommand(QUndoCommand):
     def __init__(self, doc: Document, layer: Layer, clipped: bool):
         super().__init__("Clip to Layer Below" if clipped else "Release Clip")

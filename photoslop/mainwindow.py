@@ -520,6 +520,11 @@ class MainWindow(QMainWindow):
         m_layer.addAction(self._act("Clip to Layer Belo&w (toggle)", "Ctrl+Alt+G",
                                     self.action_toggle_clip))
         m_layer.addSeparator()
+        m_layer.addAction(self._act("&Group with Layer Below", "Ctrl+G",
+                                    self.action_group_layer))
+        m_layer.addAction(self._act("U&ngroup Layer", "Ctrl+Shift+G",
+                                    self.action_ungroup_layer))
+        m_layer.addSeparator()
         m_layer.addAction(self._act("&Copy Layer", "Ctrl+Shift+C", self.action_copy_layer))
         m_layer.addAction(self._act("&Paste Layer", "Ctrl+Shift+V", self.action_paste_layer))
         m_layer.addSeparator()
@@ -1002,6 +1007,33 @@ class MainWindow(QMainWindow):
 
         doc.undo_stack.push(SetLayerMaskCommand(doc, doc.active_layer, None,
                                                 "Delete Layer Mask"))
+
+    def action_group_layer(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None or doc.active_index == 0:
+            return
+        layer = doc.active_layer
+        below = doc.layers[doc.active_index - 1]
+        group = below.group
+        if group is None:
+            existing = {lyr.group for lyr in doc.layers if lyr.group}
+            group = f"Group {len(existing) + 1}"
+        from photoslop.commands import SetLayerGroupCommand
+
+        doc.undo_stack.beginMacro("Group Layers")
+        if below.group is None:
+            doc.undo_stack.push(SetLayerGroupCommand(doc, below, group))
+        doc.undo_stack.push(SetLayerGroupCommand(doc, layer, group))
+        doc.undo_stack.endMacro()
+        self.statusBar().showMessage(f"Grouped into “{group}”", 3000)
+
+    def action_ungroup_layer(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None or doc.active_layer.group is None:
+            return
+        from photoslop.commands import SetLayerGroupCommand
+
+        doc.undo_stack.push(SetLayerGroupCommand(doc, doc.active_layer, None))
 
     def action_toggle_clip(self) -> None:
         doc = self.current_doc()

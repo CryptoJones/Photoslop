@@ -5,7 +5,7 @@ opacity slider, and the stack operations."""
 from __future__ import annotations
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -129,6 +129,9 @@ class LayerPanel(QWidget):
                     font = item.font()
                     font.setItalic(True)  # clipped-to-below indicator
                     item.setFont(font)
+                if layer.group:
+                    item.setBackground(QColor(70, 105, 150, 60))
+                    item.setToolTip(f"Group: {layer.group}")
                 item.setCheckState(
                     Qt.CheckState.Checked if layer.visible else Qt.CheckState.Unchecked
                 )
