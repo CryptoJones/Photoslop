@@ -73,6 +73,7 @@ from photoslop.tools import (
     PolyLassoTool,
     QuickSelectTool,
     RectSelectTool,
+    SmudgeTool,
     ToolOptions,
     ZoomTool,
 )
@@ -105,6 +106,7 @@ class MainWindow(QMainWindow):
                 MagicWandTool(self.options),
                 QuickSelectTool(self.options),
                 CloneStampTool(self.options),
+                SmudgeTool(self.options),
                 DodgeTool(self.options),
                 CropTool(self.options),
                 BurnTool(self.options),
@@ -196,7 +198,8 @@ class MainWindow(QMainWindow):
             "bucket": "G", "gradient": "Shift+G",
             "eyedropper": "I", "rect-select": "M", "lasso": "L",
             "poly-lasso": "Shift+L", "wand": "W", "quick-select": "Shift+W",
-            "clone-stamp": "S", "dodge": "O", "burn": "Shift+O", "crop": "C",
+            "clone-stamp": "S", "smudge": "Shift+S",
+            "dodge": "O", "burn": "Shift+O", "crop": "C",
             "move": "V", "hand": "H", "zoom": "Z",
         }
         labels = {
@@ -207,6 +210,7 @@ class MainWindow(QMainWindow):
             "lasso": "Lasso Select", "poly-lasso": "Polygonal Lasso",
             "wand": "Magic Wand", "quick-select": "Quick Selection",
             "clone-stamp": "Clone Stamp (Alt+click sets source)",
+            "smudge": "Smudge / Mixer (drags colour)",
             "dodge": "Dodge (lighten)", "burn": "Burn (darken)",
             "crop": "Crop (drag, Enter commits)",
             "move": "Move", "hand": "Hand (pan)", "zoom": "Zoom",
@@ -214,7 +218,7 @@ class MainWindow(QMainWindow):
         self._tool_actions = {}
         for name in ("brush", "pencil", "eraser", "bucket", "gradient", "eyedropper",
                      "rect-select", "lasso", "poly-lasso", "wand",
-                     "quick-select", "clone-stamp", "dodge", "burn", "crop",
+                     "quick-select", "clone-stamp", "smudge", "dodge", "burn", "crop",
                      "move", "hand", "zoom"):
             act = QAction(TOOL_ICONS[name](), labels[name], self)
             act.setCheckable(True)
@@ -342,6 +346,7 @@ class MainWindow(QMainWindow):
             "wand": [tol_act, contig_act],
             "quick-select": [size_act, tol_act],
             "clone-stamp": [size_act, opacity_act],
+            "smudge": [size_act, opacity_act],
             "dodge": [size_act, hard_act, opacity_act, spacing_act],
             "burn": [size_act, hard_act, opacity_act, spacing_act],
             "crop": [],

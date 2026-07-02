@@ -205,6 +205,20 @@ def eraser_tool_icon() -> QIcon:
     return _make(draw)
 
 
+def smudge_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        path = QPainterPath(QPointF(5, 16))
+        path.cubicTo(QPointF(9, 16), QPointF(9, 8), QPointF(13, 8))
+        path.cubicTo(QPointF(16, 8), QPointF(17, 5), QPointF(17.5, 4))
+        p.drawPath(path)
+        p.setPen(QPen(_INK, 1.2))
+        p.drawLine(QPointF(5, 18.5), QPointF(11, 18.5))
+
+    return _make(draw)
+
+
 def dodge_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 1.8))
@@ -271,6 +285,7 @@ TOOL_ICONS = {
     "gradient": gradient_icon,
     "eyedropper": eyedropper_icon,
     "clone-stamp": clone_stamp_icon,
+    "smudge": smudge_icon,
     "crop": crop_icon,
     "dodge": dodge_icon,
     "burn": burn_icon,
