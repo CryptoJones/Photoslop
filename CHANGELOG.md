@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.47.0] — 2026-07-02
+
+### Added
+
+- Healing Brush (`Shift+J`): Alt+click a source like the clone stamp, but
+  stamps transplant the source's texture onto the destination's tone
+  (src − blur(src) + blur(dst)) — repairs blend instead of pasting.
+
 ## [0.46.0] — 2026-07-02
 
 ### Added

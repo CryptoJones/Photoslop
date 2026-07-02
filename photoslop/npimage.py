@@ -167,6 +167,43 @@ def flood_fill(
     return bbox
 
 
+def heal_patch(src: QImage, dst: QImage) -> QImage:
+    """Healing-brush blend: the source's high-frequency texture transplanted
+    onto the destination's low-frequency tone (src - blur(src) + blur(dst))."""
+    s = view_u32(src)
+    d = view_u32(dst)
+    h = min(s.shape[0], d.shape[0])
+    w = min(s.shape[1], d.shape[1])
+    s, d = s[:h, :w], d[:h, :w]
+
+    def channels(arr):
+        return [((arr >> np.uint32(k)) & 0xFF).astype(np.float32)
+                for k in (16, 8, 0)]
+
+    def blur(c):
+        out = c
+        for _ in range(3):
+            padded = np.pad(out, 1, mode="edge")
+            out = (padded[:-2, 1:-1] + padded[2:, 1:-1] + padded[1:-1, :-2]
+                   + padded[1:-1, 2:] + padded[1:-1, 1:-1]) / 5.0
+        return out
+
+    healed = []
+    for sc, dc in zip(channels(s), channels(d), strict=True):
+        healed.append(np.clip(sc - blur(sc) + blur(dc), 0, 255))
+
+    alpha = (d >> np.uint32(24)) & 0xFF  # destination alpha wins
+    r, g, b = [(c + 0.5).astype(np.uint32) for c in healed]
+    # premultiplied clamp: channels may not exceed alpha
+    r = np.minimum(r, alpha)
+    g = np.minimum(g, alpha)
+    b = np.minimum(b, alpha)
+    out = QImage(w, h, src.format())
+    view_u32(out)[:] = ((alpha << np.uint32(24)) | (r << np.uint32(16))
+                        | (g << np.uint32(8)) | b)
+    return out
+
+
 def drop_shadow_image(img: QImage, color, blur: int) -> QImage:
     """A blurred, tinted silhouette of `img`'s alpha, padded by `blur` px on
     every side (so offsets never clip)."""

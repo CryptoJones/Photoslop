@@ -648,6 +648,50 @@ class CloneStampTool(BrushTool):
             painter.drawEllipse(center, r, r)
 
 
+class HealBrushTool(CloneStampTool):
+    """Sampled Healing Brush: Alt+click a source like the clone stamp, but
+    stamps transplant the source's texture onto the destination's tone."""
+
+    name = "heal"
+
+    def _stroke_name(self) -> str:
+        return "Healing Brush"
+
+    def _paint(self, p: QPainter, la: QPointF, lb: QPointF, first: bool) -> None:
+        layer = self._layer
+        offset = self._clone_offset
+        radius = max(0.5, self.opts.size / 2.0)
+        spacing = max(1.0, self.opts.size * self.opts.spacing / 100.0)
+        pad = int(radius) + 1
+        p.setOpacity(self.opts.opacity / 100.0)
+
+        def stamp(center: QPointF) -> None:
+            src_center = center - offset
+            src_rect = QRect(round(src_center.x()) - pad, round(src_center.y()) - pad,
+                             2 * pad, 2 * pad)
+            dst_rect = QRect(round(center.x()) - pad, round(center.y()) - pad,
+                             2 * pad, 2 * pad)
+            src_chunk = layer.image.copy(src_rect)
+            dst_chunk = layer.image.copy(dst_rect)
+            healed = npimage.heal_patch(src_chunk, dst_chunk)
+            path = QPainterPath()
+            path.addEllipse(center, radius, radius)
+            p.save()
+            p.setClipPath(path, Qt.ClipOperation.IntersectClip)
+            p.drawImage(QPointF(dst_rect.x(), dst_rect.y()), healed)
+            p.restore()
+
+        delta = lb - la
+        dist = math.hypot(delta.x(), delta.y())
+        if first or dist == 0:
+            stamp(la)
+        if dist > 0:
+            steps = int(dist / spacing)
+            for i in range(1, steps + 1):
+                t = (i * spacing) / dist
+                stamp(QPointF(la.x() + delta.x() * t, la.y() + delta.y() * t))
+
+
 class BucketTool(Tool):
     name = "bucket"
 

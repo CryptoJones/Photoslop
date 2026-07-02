@@ -205,6 +205,21 @@ def eraser_tool_icon() -> QIcon:
     return _make(draw)
 
 
+def heal_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.6))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.save()
+        p.translate(11, 11)
+        p.rotate(-45)
+        p.drawRoundedRect(QRectF(-8, -3, 16, 6), 3, 3)  # plaster
+        p.drawLine(QPointF(-2.5, -3), QPointF(-2.5, 3))
+        p.drawLine(QPointF(2.5, -3), QPointF(2.5, 3))
+        p.restore()
+
+    return _make(draw)
+
+
 def text_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
@@ -309,6 +324,7 @@ TOOL_ICONS = {
     "clone-stamp": clone_stamp_icon,
     "smudge": smudge_icon,
     "spot-heal": spot_heal_icon,
+    "heal": heal_icon,
     "text": text_icon,
     "crop": crop_icon,
     "dodge": dodge_icon,
