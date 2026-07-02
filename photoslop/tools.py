@@ -37,6 +37,8 @@ class ToolOptions:
         self.tolerance = 32  # 0..255
         self.gradient_shape = "linear"  # or "radial"
         self.contiguous = True  # wand: connected region vs global colour range
+        self.fill_source = "color"  # bucket: "color" or "pattern"
+        self.pattern = None  # QImage tile from Edit > Define Pattern
 
     def swap_colors(self) -> None:
         self.foreground, self.background = self.background, self.foreground
@@ -445,14 +447,26 @@ class BucketTool(Tool):
         if doc.selection is not None:
             sel_mask = npimage.selection_mask(doc.selection, img.size(), layer.offset)
 
-        c = self.opts.foreground
-        color = npimage.premultiplied_u32(c.red(), c.green(), c.blue(),
-                                          round(self.opts.opacity * 2.55))
         # Shared handle to the pre-fill pixels; the fill's first write detaches.
         before_full = QImage(img)
-        dirty = npimage.flood_fill(img, lx, ly, color, self.opts.tolerance, sel_mask)
-        if dirty is None:
-            return
+        if self.opts.fill_source == "pattern" and self.opts.pattern is not None:
+            result = npimage.flood_mask(img, lx, ly, self.opts.tolerance, sel_mask)
+            if result is None:
+                return
+            mask, dirty = result
+            path = npimage.mask_to_path(mask)
+            p = QPainter(img)
+            p.setOpacity(self.opts.opacity / 100.0)
+            p.fillPath(path, QBrush(self.opts.pattern))
+            p.end()
+        else:
+            c = self.opts.foreground
+            color = npimage.premultiplied_u32(c.red(), c.green(), c.blue(),
+                                              round(self.opts.opacity * 2.55))
+            dirty = npimage.flood_fill(img, lx, ly, color, self.opts.tolerance,
+                                       sel_mask)
+            if dirty is None:
+                return
         cmd = LayerRegionCommand(
             doc, layer, dirty,
             before_full.copy(dirty), img.copy(dirty),

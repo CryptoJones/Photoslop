@@ -297,6 +297,14 @@ class MainWindow(QMainWindow):
             lambda v: setattr(self.options, "gradient_shape", v))
         shape_act = bar.addWidget(shape)
 
+        fill_source = QComboBox()
+        fill_source.addItems(["color", "pattern"])
+        fill_source.setToolTip("Bucket fills with the foreground colour or "
+                               "the defined pattern")
+        fill_source.currentTextChanged.connect(
+            lambda v: setattr(self.options, "fill_source", v))
+        fill_source_act = bar.addWidget(fill_source)
+
         contiguous = QCheckBox("Contiguous")
         contiguous.setChecked(self.options.contiguous)
         contiguous.setToolTip("Off: select every pixel in colour range, "
@@ -308,7 +316,7 @@ class MainWindow(QMainWindow):
             "brush": [color_act, bg_act, size_act, hard_act, opacity_act, eraser_act],
             "pencil": [color_act, bg_act, size_act, opacity_act, eraser_act],
             "eraser": [size_act, hard_act, opacity_act],
-            "bucket": [color_act, bg_act, opacity_act, tol_act],
+            "bucket": [color_act, bg_act, opacity_act, tol_act, fill_source_act],
             "gradient": [color_act, bg_act, opacity_act, shape_act],
             "eyedropper": [color_act, bg_act],
             "rect-select": [],
@@ -327,7 +335,7 @@ class MainWindow(QMainWindow):
         }
         self._all_option_actions = [
             color_act, bg_act, size_act, hard_act, opacity_act, eraser_act,
-            tol_act, shape_act, contig_act,
+            tol_act, shape_act, contig_act, fill_source_act,
         ]
 
         # PS-style bracket shortcuts; window-level, invisible in menus
@@ -425,6 +433,9 @@ class MainWindow(QMainWindow):
         m_edit.addSeparator()
         m_edit.addAction(self._act("Select &All", "Ctrl+A", self.action_select_all))
         m_edit.addAction(self._act("D&eselect", "Ctrl+D", self.action_deselect))
+        m_edit.addSeparator()
+        m_edit.addAction(self._act("Define &Pattern from Selection", None,
+                                   self.action_define_pattern))
         m_edit.addSeparator()
         m_edit.addAction(self._act("Free &Transform", "Ctrl+T", self.action_free_transform))
         m_edit.addSeparator()
@@ -844,6 +855,18 @@ class MainWindow(QMainWindow):
             LayerRegionCommand(doc, layer, local, before, after, "Delete Selection")
         )
         doc.notify_pixels(region)
+
+    def action_define_pattern(self) -> None:
+        doc = self.current_doc()
+        if doc is None:
+            return
+        region = doc.selection_bounds()
+        if region is None:
+            self.statusBar().showMessage("Define Pattern needs a selection", 4000)
+            return
+        self.options.pattern = doc.flatten().copy(region)
+        self.statusBar().showMessage(
+            f"Pattern defined: {region.width()}\u00d7{region.height()} px", 4000)
 
     def action_free_transform(self) -> None:
         doc = self.current_doc()
