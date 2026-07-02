@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.11.0] — 2026-07-02
+
+### Added
+
+- Grid overlay (View → Show Grid, `Ctrl+'`): light grid drawn at the minor
+  ruler tick spacing of the current unit — unit-aware and zoom-adaptive,
+  automatically hidden when it would be denser than 4px on screen.
+- Move-tool snapping (View → Snap, on by default): dragged layers snap their
+  edges to guides and to the canvas edges within a 6-screen-px threshold;
+  hold Shift to drag freely.
+
 ## [0.10.0] — 2026-07-02
 
 ### Added
