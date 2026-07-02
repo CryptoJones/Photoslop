@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.45.0] — 2026-07-02
+
+### Added
+
+- Content-Aware Scale (Image menu): shrink the active layer by seam
+  carving — the lowest-energy seams vanish first, so detail survives while
+  flat areas give way. Width and height, exact undo.
+
 ## [0.44.0] — 2026-07-02
 
 ### Added

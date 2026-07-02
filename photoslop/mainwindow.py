@@ -484,6 +484,8 @@ class MainWindow(QMainWindow):
         m_image = menu.addMenu("&Image")
         m_image.addAction(self._act("&Image Size…", "Ctrl+Alt+I", self.action_image_size))
         m_image.addAction(self._act("&Canvas Size…", "Ctrl+Alt+S", self.action_canvas_size))
+        m_image.addAction(self._act("Content-A&ware Scale…", None,
+                                    self.action_content_aware_scale))
         m_image.addAction(self._act("C&rop to Selection", "Ctrl+Alt+C", self.action_crop))
         m_image.addSeparator()
         m_adjustments = m_image.addMenu("&Adjustments")
@@ -1173,6 +1175,53 @@ class MainWindow(QMainWindow):
         from photoslop.colorbalancedialog import ColorBalanceDialog
 
         ColorBalanceDialog(doc, self).exec()
+
+    def action_content_aware_scale(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        layer = doc.active_layer
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QSpinBox
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Content-Aware Scale (shrink)")
+        form = QFormLayout(dialog)
+        w_spin = QSpinBox()
+        w_spin.setRange(2, layer.image.width())
+        w_spin.setValue(layer.image.width())
+        w_spin.setSuffix(" px")
+        h_spin = QSpinBox()
+        h_spin.setRange(2, layer.image.height())
+        h_spin.setValue(layer.image.height())
+        h_spin.setSuffix(" px")
+        form.addRow("Target width", w_spin)
+        form.addRow("Target height", h_spin)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        if not dialog.exec():
+            return
+        target_w, target_h = w_spin.value(), h_spin.value()
+        if (target_w, target_h) == (layer.image.width(), layer.image.height()):
+            return
+        self.apply_content_aware_scale(doc, layer, target_w, target_h)
+
+    def apply_content_aware_scale(self, doc, layer, target_w: int,
+                                  target_h: int) -> None:
+        from photoslop import npimage
+        from photoslop.transform import TransformLayerCommand
+
+        old_image = QImage(layer.image)
+        carved = npimage.seam_carve(layer.image, target_w, target_h)
+        dirty = layer.bounds()
+        layer.image = carved
+        cmd = TransformLayerCommand(
+            doc, layer, old_image, layer.offset, QImage(carved), layer.offset)
+        cmd.setText("Content-Aware Scale")
+        doc.undo_stack.push(cmd)
+        doc.notify_pixels(dirty)
 
     def action_image_size(self) -> None:
         doc = self.current_doc()
