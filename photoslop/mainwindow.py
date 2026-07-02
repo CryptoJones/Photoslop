@@ -396,6 +396,8 @@ class MainWindow(QMainWindow):
         m_adjustments.addAction(self._act("&Levels…", "Ctrl+L", self.action_levels))
         m_adjustments.addAction(self._act("&Hue/Saturation…", "Ctrl+U",
                                           self.action_hue_saturation))
+        m_adjustments.addAction(self._act("Color &Balance…", "Ctrl+B",
+                                          self.action_color_balance))
         m_image.addSeparator()
         m_rotate = m_image.addMenu("Image &Rotation")
         m_rotate.addAction(self._act("Rotate 90° &CW", None,
@@ -873,6 +875,14 @@ class MainWindow(QMainWindow):
         from photoslop.huesatdialog import HueSatDialog
 
         HueSatDialog(doc, self).exec()
+
+    def action_color_balance(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        from photoslop.colorbalancedialog import ColorBalanceDialog
+
+        ColorBalanceDialog(doc, self).exec()
 
     def action_image_size(self) -> None:
         doc = self.current_doc()

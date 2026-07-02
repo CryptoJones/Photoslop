@@ -111,6 +111,33 @@ def apply_luts(img: QImage, luts: np.ndarray) -> None:
         )
 
 
+def color_balance_luts(values: dict[str, tuple[float, float, float]]) -> np.ndarray:
+    """(3, 256) LUTs for Photoshop-style Color Balance.
+
+    `values` maps band name ("shadows"/"midtones"/"highlights") to a
+    (cyan-red, magenta-green, yellow-blue) triple in [-100, 100]; positive
+    pushes toward red/green/blue respectively. Band weights are smooth bumps
+    over the tonal range, so the three bands blend into one monotone-ish LUT
+    per channel.
+    """
+    x = np.linspace(0.0, 1.0, 256)
+    weights = {
+        "shadows": np.clip(1.0 - x / 0.5, 0.0, 1.0) ** 1.5,
+        "midtones": np.clip(1.0 - np.abs(x - 0.5) / 0.5, 0.0, 1.0) ** 1.5,
+        "highlights": np.clip((x - 0.5) / 0.5, 0.0, 1.0) ** 1.5,
+    }
+    luts = np.empty((3, 256), dtype=np.uint8)
+    for channel in range(3):
+        v = x.copy()
+        for band, weight in weights.items():
+            amount = values.get(band, (0.0, 0.0, 0.0))[channel]
+            v = v + 0.3 * (amount / 100.0) * weight
+        v = np.clip(v, 0.0, 1.0)
+        v = np.maximum.accumulate(v)
+        luts[channel] = np.round(v * 255.0).astype(np.uint8)
+    return luts
+
+
 def apply_hsl(img: QImage, hue_deg: float, saturation: float,
               lightness: float) -> None:
     """Hue rotation (luminance-preserving RGB matrix), saturation mix toward

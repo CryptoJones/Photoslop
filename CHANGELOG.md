@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.21.0] — 2026-07-02
+
+### Added
+
+- Image → Adjustments → Color Balance… (`Ctrl+B`): shadows/midtones/highlights
+  band selector with cyan–red, magenta–green, and yellow–blue sliders (nine
+  values stored across bands), smooth tonal weighting, live preview, one undo
+  step on OK. Pure per-channel LUTs on the shared banded engine.
+
 ## [0.20.0] — 2026-07-02
 
 ### Added
