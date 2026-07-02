@@ -26,6 +26,32 @@ def clip_base_for(doc: Document, layer: Layer) -> Layer | None:
     return None
 
 
+def render_region(doc: Document, region: QRect,
+                  exclude: Layer | None = None) -> QImage:
+    """Composite every visible layer's contribution to a canvas-space region
+    into a region-sized image — the offscreen path used when adjustment
+    layers exist (they post-process the accumulated composite below them)."""
+    from photoslop.adjust import apply_luts
+
+    out = blank_image(region.size())
+    p = QPainter(out)
+    p.translate(-region.topLeft())
+    for layer in doc.layers:
+        if not layer.visible or layer is exclude:
+            continue
+        if layer.adjustment is not None:
+            p.end()
+            apply_luts(out, layer.adjustment)
+            p = QPainter(out)
+            p.translate(-region.topLeft())
+            continue
+        p.setOpacity(layer.opacity)
+        p.setCompositionMode(BLEND_MODES[layer.blend_mode])
+        draw_layer(p, doc, layer, region)
+    p.end()
+    return out
+
+
 def draw_layer(p: QPainter, doc: Document, layer: Layer, region: QRect) -> None:
     """Draw one layer's contribution to a canvas-space region, honouring its
     mask and clipping. Transient buffers never exceed the region. The caller
@@ -90,6 +116,10 @@ class Document(QObject):
             return self.layers[self.active_index]
         return None
 
+    def has_adjustments(self) -> bool:
+        return any(layer.visible and layer.adjustment is not None
+                   for layer in self.layers)
+
     def canvas_rect(self) -> QRect:
         return QRect(QPoint(0, 0), self.size)
 
@@ -151,6 +181,8 @@ class Document(QObject):
         out = blank_image(self.size)
         if background is not None:
             out.fill(background)
+        if self.has_adjustments():
+            return render_region(self, self.canvas_rect())
         p = QPainter(out)
         for layer in self.layers:
             if layer.visible:
@@ -166,9 +198,11 @@ class Document(QObject):
         if not self.canvas_rect().contains(x, y):
             return None
         out = blank_image(QSize(1, 1))
+        point = QRect(x, y, 1, 1)
+        if self.has_adjustments():
+            return render_region(self, point).pixelColor(0, 0)
         p = QPainter(out)
         p.translate(-x, -y)
-        point = QRect(x, y, 1, 1)
         for layer in self.layers:
             if layer.visible:
                 p.setOpacity(layer.opacity)

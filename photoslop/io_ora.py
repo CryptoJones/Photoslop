@@ -50,6 +50,10 @@ def save_ora(doc: Document, path: str) -> None:
             attrib["photoslop-clipped"] = "1"
         if layer.group:
             attrib["photoslop-group"] = layer.group
+        if layer.adjustment is not None:
+            adj_src = f"data/layer{i}_adj.bin"
+            attrib["photoslop-adjustment"] = adj_src
+            entries.append((adj_src, layer.adjustment.tobytes()))
         ET.SubElement(
             stack,
             "layer",
@@ -103,6 +107,12 @@ def _walk_layers(zf: zipfile.ZipFile, node: ET.Element, base: QPoint, out: list[
                     QImage.Format.Format_Grayscale8)
             layer.clipped = child.get("photoslop-clipped") == "1"
             layer.group = child.get("photoslop-group") or None
+            adj_src = child.get("photoslop-adjustment")
+            if adj_src and adj_src in zf.namelist():
+                import numpy as np
+
+                layer.adjustment = np.frombuffer(
+                    zf.read(adj_src), dtype=np.uint8).reshape(3, 256).copy()
             out.append(layer)
 
 

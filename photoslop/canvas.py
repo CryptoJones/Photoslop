@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QGridLayout, QScrollArea, QToolButton, QWidget
 
 from photoslop import units
 from photoslop.commands import SetLayerOffsetCommand
-from photoslop.document import Document, draw_layer
+from photoslop.document import Document, draw_layer, render_region
 from photoslop.layer import BLEND_MODES
 from photoslop.rulers import Ruler
 
@@ -160,7 +160,22 @@ class CanvasView(QWidget):
             int(clip.x() / z), int(clip.y() / z),
             int(clip.width() / z) + 2, int(clip.height() / z) + 2)
         transform_session = self._transform_session()
-        for layer in self.doc.layers:
+        if self.doc.has_adjustments():
+            region = clip_canvas.intersected(self.doc.canvas_rect())
+            if not region.isEmpty():
+                exclude = (transform_session.layer
+                           if transform_session is not None else None)
+                p.drawImage(region.topLeft(),
+                            render_region(self.doc, region, exclude))
+                if transform_session is not None:
+                    p.save()
+                    p.setTransform(transform_session.full_matrix(), True)
+                    p.drawImage(QPointF(0, 0), transform_session.base_image)
+                    p.restore()
+            layers_to_paint = ()
+        else:
+            layers_to_paint = self.doc.layers
+        for layer in layers_to_paint:
             if not layer.visible:
                 continue
             p.setOpacity(layer.opacity)

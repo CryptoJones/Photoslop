@@ -132,6 +132,9 @@ class LayerPanel(QWidget):
                 if layer.group:
                     item.setBackground(QColor(70, 105, 150, 60))
                     item.setToolTip(f"Group: {layer.group}")
+                if layer.adjustment is not None:
+                    item.setForeground(QColor(150, 200, 255))
+                    item.setToolTip("Adjustment layer (non-destructive)")
                 item.setCheckState(
                     Qt.CheckState.Checked if layer.visible else Qt.CheckState.Unchecked
                 )
