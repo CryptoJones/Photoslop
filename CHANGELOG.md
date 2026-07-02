@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.51.0] — 2026-07-02
+
+### Changed
+
+- `G` now cycles Bucket ↔ Gradient, Photoshop's same-key tool-group
+  behaviour (`Shift+G` still jumps straight to Gradient).
+
 ## [0.50.0] — 2026-07-02
 
 ### Added
