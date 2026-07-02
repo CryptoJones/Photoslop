@@ -79,6 +79,14 @@ class CanvasView(QWidget):
         self.update()
         self.editor.sync_rulers()
 
+    def _transform_session(self):
+        tool = self.editor.active_tool()
+        if tool is not None and tool.name == "transform":
+            session = tool.session
+            if session is not None and session.doc is self.doc:
+                return session
+        return None
+
     def _canvas_to_widget(self, rect: QRect) -> QRect:
         z = self.zoom
         return QRect(
@@ -124,10 +132,24 @@ class CanvasView(QWidget):
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, z < 1.0)
         clip = QRectF(exposed).adjusted(-1, -1, 1, 1)
         p.setClipRect(QRectF(clip.x() / z, clip.y() / z, clip.width() / z, clip.height() / z))
+        transform_session = self._transform_session()
         for layer in self.doc.layers:
-            if layer.visible:
-                p.setOpacity(layer.opacity)
-                p.setCompositionMode(BLEND_MODES[layer.blend_mode])
+            if not layer.visible:
+                continue
+            p.setOpacity(layer.opacity)
+            p.setCompositionMode(BLEND_MODES[layer.blend_mode])
+            if transform_session is not None and layer is transform_session.layer:
+                # live Free Transform preview: draw through the painter
+                # transform instead of resampling pixels
+                p.save()
+                center = transform_session.center
+                p.translate(center)
+                p.rotate(transform_session.rotation)
+                p.scale(transform_session.scale_x, transform_session.scale_y)
+                base = transform_session.base_image
+                p.drawImage(QPointF(-base.width() / 2.0, -base.height() / 2.0), base)
+                p.restore()
+            else:
                 p.drawImage(QPointF(layer.offset), layer.image)
         p.restore()
         p.setOpacity(1.0)
@@ -290,10 +312,16 @@ class CanvasView(QWidget):
             self._space_pan = True
             self.setCursor(Qt.CursorShape.OpenHandCursor)
             return
+        tool = self.editor.active_tool()
+        if (key in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+                and tool is not None and tool.name == "transform"):
+            tool.commit(self)
+            return
         if key == Qt.Key.Key_Escape:
-            tool = self.editor.active_tool()
             if tool is not None:
                 tool.cancel(self.doc)
+                if tool.name == "transform":
+                    self.editor.host.end_transform()
             self.doc.set_selection(None)
             return
         nudges = {

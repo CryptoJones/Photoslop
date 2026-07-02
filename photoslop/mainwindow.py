@@ -70,6 +70,7 @@ from photoslop.tools import (
     ToolOptions,
     ZoomTool,
 )
+from photoslop.transform import TransformTool
 
 
 class MainWindow(QMainWindow):
@@ -98,9 +99,11 @@ class MainWindow(QMainWindow):
                 MoveTool(self.options),
                 HandTool(self.options),
                 ZoomTool(self.options),
+                TransformTool(self.options),
             )
         }
         self._active_tool_name = "brush"
+        self._pre_transform_tool = "brush"
 
         self.pixel_clip: tuple[QImage, QPoint] | None = None
         self.layer_clip: Layer | None = None
@@ -286,6 +289,7 @@ class MainWindow(QMainWindow):
             "move": [],
             "hand": [],
             "zoom": [],
+            "transform": [],
         }
         self._all_option_actions = [
             color_act, bg_act, size_act, hard_act, opacity_act, eraser_act,
@@ -387,6 +391,8 @@ class MainWindow(QMainWindow):
         m_edit.addSeparator()
         m_edit.addAction(self._act("Select &All", "Ctrl+A", self.action_select_all))
         m_edit.addAction(self._act("D&eselect", "Ctrl+D", self.action_deselect))
+        m_edit.addSeparator()
+        m_edit.addAction(self._act("Free &Transform", "Ctrl+T", self.action_free_transform))
         m_edit.addSeparator()
         m_edit.addAction(self._act("S&wap Colours", "X", self.action_swap_colors))
         m_edit.addAction(self._act("Rese&t Colours", "D", self.action_reset_colors))
@@ -789,6 +795,30 @@ class MainWindow(QMainWindow):
             LayerRegionCommand(doc, layer, local, before, after, "Delete Selection")
         )
         doc.notify_pixels(region)
+
+    def action_free_transform(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        tool = self.tools["transform"]
+        if tool.session is not None:  # already transforming: commit instead
+            editor = self.current_editor()
+            tool.commit(editor.canvas if editor else None)
+            return
+        self._pre_transform_tool = self._active_tool_name
+        tool.begin(doc, doc.active_layer)
+        self._set_tool("transform")
+        self.statusBar().showMessage(
+            "Free Transform: drag inside to move, handles to scale, outside "
+            "to rotate — Enter/double-click commits, Esc cancels", 6000)
+
+    def end_transform(self) -> None:
+        """Called after a transform commit/cancel: restore the prior tool."""
+        if self._active_tool_name == "transform":
+            self._set_tool(self._pre_transform_tool)
+            action = self._tool_actions.get(self._pre_transform_tool)
+            if action is not None:
+                action.setChecked(True)
 
     def action_select_all(self) -> None:
         doc = self.current_doc()

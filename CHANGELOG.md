@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.23.0] — 2026-07-02
+
+### Added
+
+- Free Transform (`Ctrl+T`): scale (handles; Shift = uniform, cross the
+  centre to flip), rotate (drag outside; Shift snaps to 15°), and move the
+  active layer with a live painter-transform preview — pixels resample only
+  once, on commit (Enter or double-click; Esc cancels; Ctrl+T again commits).
+  One undo step, exact restore.
+
 ## [0.22.0] — 2026-07-02
 
 ### Added
