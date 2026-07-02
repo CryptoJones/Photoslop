@@ -384,6 +384,28 @@ class EraserTool(BrushTool):
             self._stamp_segment(p, la, lb, alpha, first, QColor(0, 0, 0))
 
 
+class TextTool(Tool):
+    """Text (T): click to place text — a dialog takes the content and font,
+    and the text rasterises onto a new layer at the click point."""
+
+    name = "text"
+    cursor = Qt.CursorShape.IBeamCursor
+
+    def press(self, doc, canvas, pos, ev):
+        from photoslop.commands import InsertLayerCommand
+        from photoslop.textdialog import TextDialog, render_text_layer
+
+        dialog = TextDialog(self.opts.foreground, canvas.window())
+        if not dialog.exec():
+            return
+        layer = render_text_layer(dialog.text(), dialog.chosen_font(),
+                                  dialog.color, pos.toPoint())
+        if layer is None:
+            return
+        doc.undo_stack.push(InsertLayerCommand(
+            doc, len(doc.layers), layer, "Add Text"))
+
+
 class SpotHealTool(Tool):
     """Spot Healing (J): paint over a blemish; on release the covered region
     fills by diffusion from its boundary and blends in."""
