@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.34.0] — 2026-07-02
+
+### Added
+
+- Image → Adjustments → Curves… (`Ctrl+M`): a proper curve editor — click to
+  add points, drag to shape, right-click to remove — with a monotone cubic
+  spline (no overshoot), an RGB master curve composing with per-channel
+  R/G/B curves, live preview, and one undo step. Rides the shared banded
+  LUT engine.
+
 ## [0.33.0] — 2026-07-02
 
 ### Added

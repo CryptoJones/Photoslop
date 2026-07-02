@@ -111,6 +111,57 @@ def apply_luts(img: QImage, luts: np.ndarray) -> None:
         )
 
 
+def curve_lut(points: list[tuple[float, float]]) -> np.ndarray:
+    """(256,) uint8 LUT through control points (x, y in 0..255) using a
+    monotone cubic (Fritsch–Carlson): no overshoot, no oscillation."""
+    pts = sorted((float(x), float(y)) for x, y in points)
+    if len(pts) == 1:
+        return np.full(256, np.clip(round(pts[0][1]), 0, 255), dtype=np.uint8)
+    xs = np.array([p[0] for p in pts])
+    ys = np.array([p[1] for p in pts])
+    h = np.diff(xs)
+    h[h == 0] = 1e-6
+    delta = np.diff(ys) / h
+    m = np.empty(len(xs))
+    m[0], m[-1] = delta[0], delta[-1]
+    if len(xs) > 2:
+        inner = np.zeros(len(xs) - 2)
+        same_sign = delta[:-1] * delta[1:] > 0
+        with np.errstate(divide="ignore", invalid="ignore"):
+            harmonic = 2.0 / (1.0 / np.where(delta[:-1] == 0, 1, delta[:-1])
+                              + 1.0 / np.where(delta[1:] == 0, 1, delta[1:]))
+        inner[same_sign] = harmonic[same_sign]
+        m[1:-1] = inner
+
+    x = np.arange(256, dtype=np.float64)
+    seg = np.clip(np.searchsorted(xs, x, side="right") - 1, 0, len(xs) - 2)
+    t = (x - xs[seg]) / h[seg]
+    t = np.clip(t, 0.0, 1.0)
+    h00 = (1 + 2 * t) * (1 - t) ** 2
+    h10 = t * (1 - t) ** 2
+    h01 = t * t * (3 - 2 * t)
+    h11 = t * t * (t - 1)
+    y = (h00 * ys[seg] + h10 * h[seg] * m[seg]
+         + h01 * ys[seg + 1] + h11 * h[seg] * m[seg + 1])
+    y[x <= xs[0]] = ys[0]
+    y[x >= xs[-1]] = ys[-1]
+    y = np.clip(y, 0.0, 255.0)
+    y = np.maximum.accumulate(y) if ys[-1] >= ys[0] else y
+    return np.round(y).astype(np.uint8)
+
+
+def curves_luts(channel_points: dict) -> np.ndarray:
+    """(3, 256) LUTs from per-channel curve points. The "rgb" master curve
+    applies first, then each channel's own curve composes on top."""
+    identity = [(0.0, 0.0), (255.0, 255.0)]
+    master = curve_lut(channel_points.get("rgb", identity))
+    luts = np.empty((3, 256), dtype=np.uint8)
+    for i, key in enumerate(("r", "g", "b")):
+        own = curve_lut(channel_points.get(key, identity))
+        luts[i] = own[master]
+    return luts
+
+
 def color_balance_luts(values: dict[str, tuple[float, float, float]]) -> np.ndarray:
     """(3, 256) LUTs for Photoshop-style Color Balance.
 
