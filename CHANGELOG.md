@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.71.0] — 2026-07-02
+
+### Added
+
+- Smart Filters: filters applied to a smart-object layer record themselves
+  (Gaussian Blur, Unsharp Mask, Tilt-Shift with exact parameters); Layer →
+  Re-apply Smart Filters restores the pristine source and replays the stack
+  as one undo step. The filter stack survives ORA save/load.
+
 ## [0.70.0] — 2026-07-02
 
 ### Added
