@@ -156,9 +156,26 @@ def wand_icon() -> QIcon:
     return _make(draw)
 
 
+def gradient_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        from PySide6.QtGui import QLinearGradient
+
+        grad = QLinearGradient(QPointF(5, 11), QPointF(17, 11))
+        grad.setColorAt(0.0, _INK)
+        faded = QColor(_INK)
+        faded.setAlpha(20)
+        grad.setColorAt(1.0, faded)
+        p.setPen(QPen(_INK, 1.4))
+        p.setBrush(QBrush(grad))
+        p.drawRect(QRectF(4.5, 6.5, 13, 9))
+
+    return _make(draw)
+
+
 TOOL_ICONS = {
     "brush": brush_icon,
     "bucket": bucket_icon,
+    "gradient": gradient_icon,
     "eyedropper": eyedropper_icon,
     "rect-select": rect_select_icon,
     "lasso": lasso_icon,

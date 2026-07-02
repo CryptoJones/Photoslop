@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.15.0] — 2026-07-02
+
+### Added
+
+- Gradient tool (`Shift+G`): drag start→end to fill the active layer (or the
+  selection) with a foreground→background gradient, linear or radial, at the
+  shared opacity; a guide line previews the drag, and the fill lands as one
+  undo step.
+
 ## [0.14.0] — 2026-07-02
 
 ### Added

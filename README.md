@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.14.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v0.15.0-orange)]()
 
 ---
 
@@ -28,7 +28,8 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
   and 13 blend modes (multiply, screen, overlay, dodge/burn, difference…)
   saved interoperably in `.ora`.
 - **Painting** — round brush with size/hardness/opacity and an eraser mode; paint
-  bucket with adjustable tolerance; eyedropper (`I`) sampling the merged
+  bucket with adjustable tolerance; linear/radial gradients (`Shift+G`,
+  foreground→background); eyedropper (`I`) sampling the merged
   composite; foreground/background colour pair with `X` swap and `D` reset.
 - **Selections** — rectangle marquee, freehand lasso, polygonal lasso, and
   magic wand (tolerance-based, Shift adds / Alt subtracts); delete selection, copy
@@ -88,6 +89,7 @@ uvx --from git+https://github.com/CryptoJones/Photoslop photoslop
 | -------------------- | ------------ |
 | Brush                | `B`          |
 | Paint bucket         | `G`          |
+| Gradient             | `Shift+G` (linear/radial) |
 | Eyedropper           | `I` (Shift-click → background) |
 | Swap / reset colours | `X` / `D`    |
 | Rectangle select     | `M`          |
