@@ -167,6 +167,56 @@ def flood_fill(
     return bbox
 
 
+def inpaint_diffuse(img: QImage, mask: np.ndarray, blend_passes: int = 3) -> QRect:
+    """Fill the masked pixels by diffusing inward from the boundary (each
+    unknown pixel takes the mean of its known 4-neighbours, layer by layer),
+    then smooth the healed region. Operates on the mask's bbox only.
+    Returns the dirty rect."""
+    ys, xs = np.nonzero(mask)
+    if len(ys) == 0:
+        return QRect()
+    pad = 2
+    y0, y1 = max(0, ys.min() - pad), min(mask.shape[0], ys.max() + 1 + pad)
+    x0, x1 = max(0, xs.min() - pad), min(mask.shape[1], xs.max() + 1 + pad)
+
+    arr = view_u32(img)[y0:y1, x0:x1]
+    hole = mask[y0:y1, x0:x1].copy()
+    channels = [((arr >> np.uint32(shift)) & 0xFF).astype(np.float32)
+                for shift in (24, 16, 8, 0)]
+    known = ~hole
+
+    shifts = (((slice(1, None), slice(None)), (slice(None, -1), slice(None))),
+              ((slice(None, -1), slice(None)), (slice(1, None), slice(None))),
+              ((slice(None), slice(1, None)), (slice(None), slice(None, -1))),
+              ((slice(None), slice(None, -1)), (slice(None), slice(1, None))))
+    while not known.all():
+        cnt = np.zeros_like(channels[0])
+        for src, dst in shifts:
+            cnt[dst] += known[src]
+        newly = (~known) & (cnt > 0)
+        if not newly.any():
+            break
+        for c in channels:
+            acc = np.zeros_like(c)
+            for src, dst in shifts:
+                acc[dst] += c[src] * known[src]
+            c[newly] = acc[newly] / cnt[newly]
+        known |= newly
+
+    healed = hole
+    for _ in range(blend_passes):  # soften the fill against its surroundings
+        for c in channels:
+            blur = c.copy()
+            blur[1:-1, 1:-1] = (c[:-2, 1:-1] + c[2:, 1:-1] + c[1:-1, :-2]
+                                + c[1:-1, 2:] + c[1:-1, 1:-1]) / 5.0
+            c[healed] = blur[healed]
+
+    a, r, g, b = [np.clip(c + 0.5, 0, 255).astype(np.uint32) for c in channels]
+    out = (a << np.uint32(24)) | (r << np.uint32(16)) | (g << np.uint32(8)) | b
+    arr[hole] = out[hole]
+    return QRect(int(x0), int(y0), int(x1 - x0), int(y1 - y0))
+
+
 def _dilate(mask: np.ndarray) -> np.ndarray:
     out = mask.copy()
     out[1:, :] |= mask[:-1, :]

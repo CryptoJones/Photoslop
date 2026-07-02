@@ -384,6 +384,92 @@ class EraserTool(BrushTool):
             self._stamp_segment(p, la, lb, alpha, first, QColor(0, 0, 0))
 
 
+class SpotHealTool(Tool):
+    """Spot Healing (J): paint over a blemish; on release the covered region
+    fills by diffusion from its boundary and blends in."""
+
+    name = "spot-heal"
+    cursor = Qt.CursorShape.CrossCursor
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._layer = None
+        self._mask = None
+        self._trail: list[QPointF] = []
+
+    def press(self, doc, canvas, pos, ev):
+        layer = doc.active_layer
+        if layer is None:
+            return
+        self._layer = layer
+        self._mask = np.zeros(
+            (layer.image.height(), layer.image.width()), dtype=bool)
+        self._trail = []
+        self._stamp(pos)
+        canvas.update()
+
+    def move(self, doc, canvas, pos, ev):
+        if self._mask is None:
+            return
+        self._stamp(pos)
+        canvas.update()
+
+    def _stamp(self, pos: QPointF) -> None:
+        layer = self._layer
+        radius = max(1, int(self.opts.size / 2))
+        cx = int(pos.x() - layer.offset.x())
+        cy = int(pos.y() - layer.offset.y())
+        h, w = self._mask.shape
+        y0, y1 = max(0, cy - radius), min(h, cy + radius + 1)
+        x0, x1 = max(0, cx - radius), min(w, cx + radius + 1)
+        if y0 >= y1 or x0 >= x1:
+            return
+        yy, xx = np.ogrid[y0:y1, x0:x1]
+        self._mask[y0:y1, x0:x1] |= ((yy - cy) ** 2 + (xx - cx) ** 2
+                                     <= radius * radius)
+        self._trail.append(QPointF(pos))
+
+    def release(self, doc, canvas, pos, ev):
+        layer, mask = self._layer, self._mask
+        self._layer = None
+        self._mask = None
+        self._trail = []
+        if layer is None or mask is None or not mask.any():
+            return
+        recorder = TileRecorder(doc, layer)
+        ys, xs = np.nonzero(mask)
+        pad = 2
+        rect = QRect(int(xs.min()) - pad, int(ys.min()) - pad,
+                     int(xs.max() - xs.min()) + 1 + 2 * pad,
+                     int(ys.max() - ys.min()) + 1 + 2 * pad)
+        recorder.will_change(rect)
+        dirty = npimage.inpaint_diffuse(layer.image, mask)
+        cmd = recorder.finish("Spot Heal")
+        if cmd is not None:
+            doc.undo_stack.push(cmd)
+        doc.notify_pixels(dirty.translated(layer.offset))
+        if canvas is not None:
+            canvas.update()
+
+    def cancel(self, doc=None) -> None:
+        self._layer = None
+        self._mask = None
+        self._trail = []
+
+    def overlay(self, doc, painter, canvas):
+        z = canvas.zoom
+        r = max(2.0, self.opts.size / 2.0 * z)
+        painter.setBrush(QColor(120, 200, 255, 70))
+        painter.setPen(Qt.PenStyle.NoPen)
+        for pos in self._trail:
+            painter.drawEllipse(QPointF(pos.x() * z, pos.y() * z), r, r)
+        if canvas.hover_pos is not None:
+            center = QPointF(canvas.hover_pos.x() * z, canvas.hover_pos.y() * z)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor(255, 255, 255, 180), 1))
+            painter.drawEllipse(center, r, r)
+
+
 class SmudgeTool(BrushTool):
     """Mixer/smudge brush: each stamp deposits the paint carried from the
     previous stamp (strength = opacity slider), then picks up what's now
