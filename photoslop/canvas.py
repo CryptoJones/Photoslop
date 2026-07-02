@@ -378,10 +378,21 @@ class EditorView(QWidget):
 
     # -- guides --
 
+    def snap_guide(self, value: float, modifiers=None) -> float:
+        """Snap a guide position to the visible minor ruler ticks. Hold Shift
+        for free positioning. `modifiers=None` means 'query the keyboard'."""
+        if modifiers is None:
+            from PySide6.QtGui import QGuiApplication
+
+            modifiers = QGuiApplication.queryKeyboardModifiers()
+        if modifiers & Qt.KeyboardModifier.ShiftModifier:
+            return value
+        return units.snap_px(value, self.host.unit, self.doc.dpi, self.canvas.zoom)
+
     def _guide_pos(self, orient: str, global_pos: QPoint) -> float:
         local = self.canvas.mapFromGlobal(global_pos)
         z = self.canvas.zoom
-        return (local.y() if orient == "h" else local.x()) / z
+        return self.snap_guide((local.y() if orient == "h" else local.x()) / z)
 
     def show_guide_feedback(self, orient: str, pos: float,
                             anchor: QPointF | None = None) -> None:

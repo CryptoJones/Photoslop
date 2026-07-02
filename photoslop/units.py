@@ -67,6 +67,22 @@ def pick_tick_step(unit: str, dpi: float, zoom: float, min_label_px: float = 60.
     return float(_STEPS[-1])
 
 
+def minor_tick_step(unit: str, dpi: float, zoom: float) -> float:
+    """Minor-tick spacing in display units — shared by ruler drawing and
+    guide snapping, so guides snap exactly to the ticks you can see."""
+    step = pick_tick_step(unit, dpi, zoom)
+    screen_px_per_unit = px_per_unit(unit, dpi) * zoom
+    return step / 5.0 if step * screen_px_per_unit >= 30.0 else step / 2.0
+
+
+def snap_px(px: float, unit: str, dpi: float, zoom: float) -> float:
+    """Snap a canvas-pixel position to the nearest visible minor ruler tick."""
+    step_px = minor_tick_step(unit, dpi, zoom) * px_per_unit(unit, dpi)
+    if step_px <= 0:
+        return px
+    return round(px / step_px) * step_px
+
+
 def format_tick(value: float) -> str:
     """Trim trailing zeros: 2.0 -> '2', 2.50 -> '2.5'."""
     text = f"{value:.2f}".rstrip("0").rstrip(".")
