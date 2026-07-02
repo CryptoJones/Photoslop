@@ -203,7 +203,7 @@ class MainWindow(QMainWindow):
         group = QActionGroup(self)
         shortcuts = {
             "brush": "B", "pencil": "Shift+B", "eraser": "E",
-            "bucket": "G", "gradient": "Shift+G",
+            "bucket": "G (cycles)", "gradient": "Shift+G",
             "eyedropper": "I", "rect-select": "M", "lasso": "L",
             "poly-lasso": "Shift+L", "wand": "W", "quick-select": "Shift+W",
             "clone-stamp": "S", "smudge": "Shift+S", "spot-heal": "J",
@@ -237,13 +237,25 @@ class MainWindow(QMainWindow):
                      "move", "hand", "zoom"):
             act = QAction(TOOL_ICONS[name](), labels[name], self)
             act.setCheckable(True)
-            act.setShortcut(shortcuts[name])
+            if " " not in shortcuts[name]:
+                act.setShortcut(shortcuts[name])
             act.setToolTip(f"{labels[name]} ({shortcuts[name]})")
             act.triggered.connect(lambda _=False, n=name: self._set_tool(n))
             group.addAction(act)
             bar.addAction(act)
             self._tool_actions[name] = act
         self._tool_actions["brush"].setChecked(True)
+
+        from PySide6.QtGui import QShortcut
+
+        cycle = QShortcut(QKeySequence("G"), self)
+        cycle.activated.connect(self._cycle_fill_tool)
+
+    def _cycle_fill_tool(self) -> None:
+        """G cycles Bucket <-> Gradient, PS-style same-key tool groups."""
+        name = "gradient" if self._active_tool_name == "bucket" else "bucket"
+        self._set_tool(name)
+        self._tool_actions[name].setChecked(True)
 
     def _set_tool(self, name: str) -> None:
         self._active_tool_name = name
