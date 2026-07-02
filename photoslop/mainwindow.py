@@ -541,6 +541,10 @@ class MainWindow(QMainWindow):
         m_layer.addSeparator()
         m_layer.addAction(self._act("Layer Style: Drop &Shadow…", None,
                                     self.action_drop_shadow))
+        m_layer.addAction(self._act("Layer Style: Outer G&low…", None,
+                                    self.action_outer_glow))
+        m_layer.addAction(self._act("Layer Style: Strok&e…", None,
+                                    self.action_stroke_style))
         m_layer.addSeparator()
         m_layer.addAction(self._act("&Group with Layer Below", "Ctrl+G",
                                     self.action_group_layer))
@@ -1100,6 +1104,55 @@ class MainWindow(QMainWindow):
                        layer.offset + QPoint(dx - pad, dy - pad))
         index = doc.layers.index(layer)
         doc.undo_stack.push(InsertLayerCommand(doc, index, shadow, "Drop Shadow"))
+
+    def action_outer_glow(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        layer = doc.active_layer
+        from PySide6.QtWidgets import QColorDialog, QInputDialog
+
+        size, ok = QInputDialog.getInt(self, "Outer Glow", "Glow size (px):",
+                                       10, 1, 50)
+        if not ok:
+            return
+        color = QColorDialog.getColor(QColor(255, 220, 120), self, "Glow colour")
+        if not color.isValid():
+            return
+        from photoslop import npimage
+
+        color.setAlpha(200)
+        glow_img = npimage.drop_shadow_image(layer.image, color, size)
+        glow = Layer(f"{layer.name} glow", glow_img,
+                     layer.offset - QPoint(size, size))
+        index = doc.layers.index(layer)
+        doc.undo_stack.push(InsertLayerCommand(doc, index, glow, "Outer Glow"))
+
+    def action_stroke_style(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        layer = doc.active_layer
+        from PySide6.QtWidgets import QColorDialog, QInputDialog
+
+        width, ok = QInputDialog.getInt(self, "Stroke", "Stroke width (px):",
+                                        3, 1, 30)
+        if not ok:
+            return
+        color = QColorDialog.getColor(self.options.foreground, self, "Stroke colour")
+        if not color.isValid():
+            return
+        self.apply_stroke_style(doc, layer, width, color)
+
+    def apply_stroke_style(self, doc, layer, width: int, color) -> None:
+        from photoslop import npimage
+
+        outline = npimage.stroke_outline_image(layer.image, color, width)
+        pad = max(1, width)
+        stroke = Layer(f"{layer.name} stroke", outline,
+                       layer.offset - QPoint(pad, pad))
+        index = doc.layers.index(layer)
+        doc.undo_stack.push(InsertLayerCommand(doc, index, stroke, "Stroke"))
 
     def action_group_layer(self) -> None:
         doc = self.current_doc()

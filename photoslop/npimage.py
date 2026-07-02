@@ -236,6 +236,29 @@ def drop_shadow_image(img: QImage, color, blur: int) -> QImage:
     return out
 
 
+def stroke_outline_image(img: QImage, color, width: int) -> QImage:
+    """A solid outline `width` px around `img`'s alpha silhouette, padded so
+    the outline never clips (outside stroke)."""
+    pad = max(1, int(width))
+    h, w = img.height(), img.width()
+    solid = np.zeros((h + 2 * pad, w + 2 * pad), dtype=bool)
+    src = view_u32(img)
+    solid[pad:pad + h, pad:pad + w] = (src >> np.uint32(24)) > 12
+    grown = solid.copy()
+    for _ in range(pad):
+        grown = _dilate(grown)
+    ring = grown & ~solid
+
+    a = np.where(ring, np.uint32(color.alpha()), np.uint32(0))
+    scale = color.alpha() / 255.0
+    out = QImage(solid.shape[1], solid.shape[0], img.format())
+    view_u32(out)[:] = ((a << np.uint32(24))
+                        | (np.where(ring, np.uint32(int(color.red() * scale)), 0) << np.uint32(16))
+                        | (np.where(ring, np.uint32(int(color.green() * scale)), 0) << np.uint32(8))
+                        | np.where(ring, np.uint32(int(color.blue() * scale)), 0))
+    return out
+
+
 def _seam_energy(arr: np.ndarray) -> np.ndarray:
     r = ((arr >> np.uint32(16)) & 0xFF).astype(np.float32)
     g = ((arr >> np.uint32(8)) & 0xFF).astype(np.float32)
