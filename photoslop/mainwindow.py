@@ -582,6 +582,14 @@ class MainWindow(QMainWindow):
                                     self.action_content_aware_scale))
         m_image.addAction(self._act("C&rop to Selection", "Ctrl+Alt+C", self.action_crop))
         m_image.addSeparator()
+        m_boards = m_image.addMenu("Art&boards")
+        m_boards.addAction(self._act("&Add Artboard from Selection", None,
+                                     self.action_add_artboard))
+        m_boards.addAction(self._act("&Clear Artboards", None,
+                                     self.action_clear_artboards))
+        m_boards.addAction(self._act("&Export Artboards…", None,
+                                     self.action_export_artboards))
+        m_image.addSeparator()
         m_adjustments = m_image.addMenu("&Adjustments")
         m_adjustments.addAction(self._act("&Levels…", "Ctrl+L", self.action_levels))
         m_adjustments.addAction(self._act("&Hue/Saturation…", "Ctrl+U",
@@ -1586,6 +1594,63 @@ class MainWindow(QMainWindow):
         from photoslop.commands import SetLayerGroupCommand
 
         doc.undo_stack.push(SetLayerGroupCommand(doc, doc.active_layer, None))
+
+    def action_add_artboard(self) -> None:
+        doc = self.current_doc()
+        if doc is None:
+            return
+        bounds = doc.selection_bounds()
+        if bounds is None or bounds.isEmpty():
+            self.statusBar().showMessage(
+                "Make a selection first — it becomes the artboard", 4000)
+            return
+        name = f"Artboard {len(doc.artboards) + 1}"
+        doc.artboards.append((name, QRect(bounds)))
+        doc.set_selection(None)
+        self.statusBar().showMessage(
+            f"{name}: {bounds.width()}×{bounds.height()} at "
+            f"({bounds.x()}, {bounds.y()})", 4000)
+        editor = self.current_editor()
+        if editor is not None:
+            editor.canvas.update()
+
+    def action_clear_artboards(self) -> None:
+        doc = self.current_doc()
+        if doc is None or not doc.artboards:
+            return
+        doc.artboards.clear()
+        self.statusBar().showMessage("Artboards cleared", 3000)
+        editor = self.current_editor()
+        if editor is not None:
+            editor.canvas.update()
+
+    def action_export_artboards(self, directory: str | None = None) -> list:
+        doc = self.current_doc()
+        if doc is None or not doc.artboards:
+            if doc is not None:
+                self.statusBar().showMessage("No artboards to export", 4000)
+            return []
+        if directory is None:
+            from PySide6.QtWidgets import QFileDialog
+
+            directory = QFileDialog.getExistingDirectory(
+                self, "Export Artboards to Folder")
+            if not directory:
+                return []
+        flat = doc.flatten()
+        written = []
+        for name, rect in doc.artboards:
+            region = rect.intersected(doc.canvas_rect())
+            if region.isEmpty():
+                continue
+            safe = "".join(c if c.isalnum() or c in "-_ " else "_"
+                           for c in name).strip() or "artboard"
+            out = f"{directory}/{safe}.png"
+            flat.copy(region).save(out, "PNG")
+            written.append(out)
+        self.statusBar().showMessage(
+            f"Exported {len(written)} artboard(s) to {directory}", 5000)
+        return written
 
     def action_convert_smart(self) -> None:
         doc = self.current_doc()
