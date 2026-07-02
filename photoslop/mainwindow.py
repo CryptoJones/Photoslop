@@ -559,6 +559,8 @@ class MainWindow(QMainWindow):
                                    self.action_feather_selection))
         m_edit.addAction(self._act("D&eselect", "Ctrl+D", self.action_deselect))
         m_edit.addSeparator()
+        m_edit.addAction(self._act("Generative &Fill… (Model)", None,
+                                   self.action_generative_fill))
         m_edit.addAction(self._act("Model Bac&kend…", None,
                                    self.action_model_backend))
         m_action = m_edit.addMenu("Actio&ns")
@@ -1699,6 +1701,72 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             s.setValue("model/adapter", combo.currentData())
             s.setValue("model/http_url", url.text().strip())
+
+    def action_generative_fill(self, prompt: str | None = None) -> None:
+        from photoslop.modeladapter import GENERATIVE_FILL
+
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        if doc.selection is None:
+            self.statusBar().showMessage(
+                "Make a selection — it becomes the fill region", 5000)
+            return
+        adapter = self._model_adapter()
+        if adapter is None:
+            self.statusBar().showMessage(
+                "No model backend configured — Edit → Model Backend…", 5000)
+            return
+        if GENERATIVE_FILL not in adapter.capabilities():
+            self.statusBar().showMessage(
+                f"“{adapter.label}” does not support Generative Fill", 5000)
+            return
+        if prompt is None:
+            from PySide6.QtWidgets import QInputDialog
+
+            prompt, ok = QInputDialog.getText(
+                self, "Generative Fill", "Prompt (what should appear?):")
+            if not ok:
+                return
+        import numpy as np
+
+        from photoslop import npimage
+
+        flat = doc.flatten()
+        sel = npimage.selection_mask(doc.selection, doc.size, QPoint(0, 0))
+        mask_img = QImage(doc.size, QImage.Format.Format_Grayscale8)
+        mask_img.fill(0)
+        buf = np.frombuffer(mask_img.bits(), np.uint8,
+                            count=doc.size.height() * mask_img.bytesPerLine())
+        view = buf.reshape(doc.size.height(), mask_img.bytesPerLine())
+        view[:, : doc.size.width()][sel] = 255
+        try:
+            result = adapter.generative_fill(flat, mask_img, prompt)
+        except Exception as exc:
+            self.statusBar().showMessage(f"Generative Fill failed: {exc}", 8000)
+            return
+        if result.size() != doc.size:
+            self.statusBar().showMessage(
+                "Backend returned an image of the wrong size", 8000)
+            return
+        result = result.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
+        layer = doc.active_layer
+        offset = QPoint(layer.offset)
+
+        def paste(img: QImage, mask) -> None:
+            aligned = QImage(img.size(), QImage.Format.Format_ARGB32_Premultiplied)
+            aligned.fill(0)
+            p = QPainter(aligned)
+            p.drawImage(-offset, result)
+            p.end()
+            src = npimage.view_u32(aligned)
+            dst = npimage.view_u32(img)
+            if mask is None:
+                dst[:] = src
+            else:
+                dst[mask] = src[mask]
+
+        self._run_filter("Generative Fill", paste)
 
     def action_select_subject(self) -> None:
         from photoslop.modeladapter import SELECT_SUBJECT
