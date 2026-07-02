@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.63.1] — 2026-07-02
+
+### Fixed
+
+- LICENSE replaced with the verbatim Apache-2.0 text from apache.org (the
+  previous file was a paraphrase, so GitHub's license detection reported
+  "Other"/NOASSERTION). Only the appendix boilerplate line carries the
+  copyright fill-in, which the detector tolerates.
+
 ## [0.63.0] — 2026-07-02
 
 ### Added
