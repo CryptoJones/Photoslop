@@ -66,6 +66,7 @@ from photoslop.tools import (
     EyedropperTool,
     GradientTool,
     HandTool,
+    HealBrushTool,
     LassoTool,
     MagicWandTool,
     MoveTool,
@@ -110,6 +111,7 @@ class MainWindow(QMainWindow):
                 CloneStampTool(self.options),
                 SmudgeTool(self.options),
                 SpotHealTool(self.options),
+                HealBrushTool(self.options),
                 TextTool(self.options),
                 DodgeTool(self.options),
                 CropTool(self.options),
@@ -202,7 +204,8 @@ class MainWindow(QMainWindow):
             "bucket": "G", "gradient": "Shift+G",
             "eyedropper": "I", "rect-select": "M", "lasso": "L",
             "poly-lasso": "Shift+L", "wand": "W", "quick-select": "Shift+W",
-            "clone-stamp": "S", "smudge": "Shift+S", "spot-heal": "J", "text": "T",
+            "clone-stamp": "S", "smudge": "Shift+S", "spot-heal": "J",
+            "heal": "Shift+J", "text": "T",
             "dodge": "O", "burn": "Shift+O", "crop": "C",
             "move": "V", "hand": "H", "zoom": "Z",
         }
@@ -216,6 +219,7 @@ class MainWindow(QMainWindow):
             "clone-stamp": "Clone Stamp (Alt+click sets source)",
             "smudge": "Smudge / Mixer (drags colour)",
             "spot-heal": "Spot Healing (paint a blemish)",
+            "heal": "Healing Brush (Alt+click source, tone-matched)",
             "text": "Text (click to place)",
             "dodge": "Dodge (lighten)", "burn": "Burn (darken)",
             "crop": "Crop (drag, Enter commits)",
@@ -224,7 +228,8 @@ class MainWindow(QMainWindow):
         self._tool_actions = {}
         for name in ("brush", "pencil", "eraser", "bucket", "gradient", "eyedropper",
                      "rect-select", "lasso", "poly-lasso", "wand",
-                     "quick-select", "clone-stamp", "smudge", "spot-heal", "text",
+                     "quick-select", "clone-stamp", "smudge", "spot-heal", "heal",
+                     "text",
                      "dodge", "burn", "crop",
                      "move", "hand", "zoom"):
             act = QAction(TOOL_ICONS[name](), labels[name], self)
@@ -355,6 +360,7 @@ class MainWindow(QMainWindow):
             "clone-stamp": [size_act, opacity_act],
             "smudge": [size_act, opacity_act],
             "spot-heal": [size_act],
+            "heal": [size_act, opacity_act, spacing_act],
             "text": [color_act],
             "dodge": [size_act, hard_act, opacity_act, spacing_act],
             "burn": [size_act, hard_act, opacity_act, spacing_act],
