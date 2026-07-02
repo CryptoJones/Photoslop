@@ -16,6 +16,47 @@ from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
 UNDO_LIMIT = 64
 
 
+def clip_base_for(doc: Document, layer: Layer) -> Layer | None:
+    """The layer a clipped layer confines to: nearest non-clipped layer
+    below it (a run of clipped layers shares one base)."""
+    index = doc.layers.index(layer)
+    for i in range(index - 1, -1, -1):
+        if not doc.layers[i].clipped:
+            return doc.layers[i]
+    return None
+
+
+def draw_layer(p: QPainter, doc: Document, layer: Layer, region: QRect) -> None:
+    """Draw one layer's contribution to a canvas-space region, honouring its
+    mask and clipping. Transient buffers never exceed the region. The caller
+    sets opacity and composition mode; the painter is in canvas coords."""
+    area = region.intersected(layer.bounds())
+    if area.isEmpty():
+        return
+    local = area.translated(-layer.offset)
+    base = clip_base_for(doc, layer) if layer.clipped else None
+    if base is None:
+        if layer.mask is None:
+            p.drawImage(area.topLeft(), layer.image, local)
+        else:
+            p.drawImage(area.topLeft(), layer.paint_image(local))
+        return
+
+    content = layer.paint_image(local)
+    base_alpha = blank_image(area.size())
+    base_area = area.intersected(base.bounds())
+    if not base_area.isEmpty():
+        bp = QPainter(base_alpha)
+        bp.drawImage(base_area.topLeft() - area.topLeft(),
+                     base.paint_image(base_area.translated(-base.offset)))
+        bp.end()
+    cp = QPainter(content)
+    cp.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+    cp.drawImage(0, 0, base_alpha)
+    cp.end()
+    p.drawImage(area.topLeft(), content)
+
+
 class Document(QObject):
     pixelsChanged = Signal(QRect)  # canvas-space dirty rect
     structureChanged = Signal()  # layer list / geometry / properties
@@ -115,13 +156,7 @@ class Document(QObject):
             if layer.visible:
                 p.setOpacity(layer.opacity)
                 p.setCompositionMode(BLEND_MODES[layer.blend_mode])
-                if layer.mask is None:
-                    p.drawImage(layer.offset, layer.image)
-                else:
-                    region = self.canvas_rect().intersected(layer.bounds())
-                    if not region.isEmpty():
-                        local = region.translated(-layer.offset)
-                        p.drawImage(region.topLeft(), layer.paint_image(local))
+                draw_layer(p, self, layer, self.canvas_rect())
         p.end()
         return out
 
@@ -138,13 +173,7 @@ class Document(QObject):
             if layer.visible:
                 p.setOpacity(layer.opacity)
                 p.setCompositionMode(BLEND_MODES[layer.blend_mode])
-                if layer.mask is None:
-                    p.drawImage(layer.offset, layer.image)
-                else:
-                    region = point.intersected(layer.bounds())
-                    if not region.isEmpty():
-                        local = region.translated(-layer.offset)
-                        p.drawImage(region.topLeft(), layer.paint_image(local))
+                draw_layer(p, self, layer, point)
         p.end()
         return out.pixelColor(0, 0)
 

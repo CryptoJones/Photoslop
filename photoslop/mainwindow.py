@@ -457,6 +457,8 @@ class MainWindow(QMainWindow):
                                     lambda: self.action_add_mask(True)))
         m_layer.addAction(self._act("Apply Layer Mask", None, self.action_apply_mask))
         m_layer.addAction(self._act("Delete Layer Mask", None, self.action_delete_mask))
+        m_layer.addAction(self._act("Clip to Layer Belo&w (toggle)", "Ctrl+Alt+G",
+                                    self.action_toggle_clip))
         m_layer.addSeparator()
         m_layer.addAction(self._act("&Copy Layer", "Ctrl+Shift+C", self.action_copy_layer))
         m_layer.addAction(self._act("&Paste Layer", "Ctrl+Shift+V", self.action_paste_layer))
@@ -917,6 +919,15 @@ class MainWindow(QMainWindow):
 
         doc.undo_stack.push(SetLayerMaskCommand(doc, doc.active_layer, None,
                                                 "Delete Layer Mask"))
+
+    def action_toggle_clip(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None or doc.active_index == 0:
+            return  # the bottom layer has nothing to clip to
+        from photoslop.commands import SetLayerClippedCommand
+
+        layer = doc.active_layer
+        doc.undo_stack.push(SetLayerClippedCommand(doc, layer, not layer.clipped))
 
     def action_merge_visible(self) -> None:
         doc = self.current_doc()

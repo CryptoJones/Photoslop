@@ -51,8 +51,8 @@ def mask_to_alpha(mask: QImage) -> QImage:
 
 
 class Layer:
-    __slots__ = ("blend_mode", "image", "mask", "name", "offset", "opacity",
-                 "visible")
+    __slots__ = ("blend_mode", "clipped", "image", "mask", "name", "offset",
+                 "opacity", "visible")
 
     def __init__(
         self,
@@ -70,6 +70,7 @@ class Layer:
         self.opacity = float(opacity)
         self.blend_mode = blend_mode if blend_mode in BLEND_MODES else "normal"
         self.mask: QImage | None = None  # Grayscale8, white = opaque
+        self.clipped = False  # confined to the alpha of the layer below
 
     @classmethod
     def blank(cls, name: str, size: QSize, offset: QPoint | None = None) -> Layer:
@@ -87,6 +88,7 @@ class Layer:
         )
         if self.mask is not None:
             layer.mask = QImage(self.mask)
+        layer.clipped = self.clipped
         return layer
 
     def paint_image(self, local_region: QRect) -> QImage:

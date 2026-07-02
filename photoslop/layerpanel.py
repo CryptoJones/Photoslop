@@ -125,6 +125,10 @@ class LayerPanel(QWidget):
                     | Qt.ItemFlag.ItemIsUserCheckable
                     | Qt.ItemFlag.ItemIsEditable
                 )
+                if layer.clipped:
+                    font = item.font()
+                    font.setItalic(True)  # clipped-to-below indicator
+                    item.setFont(font)
                 item.setCheckState(
                     Qt.CheckState.Checked if layer.visible else Qt.CheckState.Unchecked
                 )
