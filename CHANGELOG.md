@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.41.0] — 2026-07-02
+
+### Added
+
+- Spot Healing Brush (`J`): paint over a blemish (translucent highlight
+  shows the coverage) and on release the region fills by diffusion from its
+  boundary, then blends in — great for dust, spots, and small defects.
+  Works on the mask's bounding box only; one undo step.
+
 ## [0.40.0] — 2026-07-02
 
 ### Added
