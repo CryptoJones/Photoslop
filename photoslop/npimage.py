@@ -167,6 +167,38 @@ def flood_fill(
     return bbox
 
 
+def drop_shadow_image(img: QImage, color, blur: int) -> QImage:
+    """A blurred, tinted silhouette of `img`'s alpha, padded by `blur` px on
+    every side (so offsets never clip)."""
+    pad = max(0, int(blur))
+    h, w = img.height(), img.width()
+    alpha = np.zeros((h + 2 * pad, w + 2 * pad), dtype=np.float32)
+    src = view_u32(img)
+    alpha[pad:pad + h, pad:pad + w] = (src >> np.uint32(24)).astype(np.float32)
+
+    if pad:
+        r = max(1, pad // 2)
+        for _ in range(3):  # triple box blur ~ gaussian
+            k = 2 * r + 1
+            csum = np.cumsum(alpha, axis=0)
+            alpha = (np.vstack((csum[r:], np.repeat(csum[-1:], r, axis=0)))
+                     - np.vstack((np.zeros((r + 1, alpha.shape[1]), np.float32),
+                                  csum[:-r - 1]))) / k
+            csum = np.cumsum(alpha, axis=1)
+            alpha = (np.hstack((csum[:, r:], np.repeat(csum[:, -1:], r, axis=1)))
+                     - np.hstack((np.zeros((alpha.shape[0], r + 1), np.float32),
+                                  csum[:, :-r - 1]))) / k
+
+    a = np.clip(alpha * (color.alpha() / 255.0), 0, 255).astype(np.uint32)
+    scale = a / 255.0
+    out = QImage(alpha.shape[1], alpha.shape[0], img.format())
+    view_u32(out)[:] = ((a << np.uint32(24))
+                        | ((color.red() * scale).astype(np.uint32) << np.uint32(16))
+                        | ((color.green() * scale).astype(np.uint32) << np.uint32(8))
+                        | (color.blue() * scale).astype(np.uint32))
+    return out
+
+
 def _seam_energy(arr: np.ndarray) -> np.ndarray:
     r = ((arr >> np.uint32(16)) & 0xFF).astype(np.float32)
     g = ((arr >> np.uint32(8)) & 0xFF).astype(np.float32)
