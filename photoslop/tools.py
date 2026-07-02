@@ -71,6 +71,7 @@ class Tool:
 
 class BrushTool(Tool):
     name = "brush"
+    antialias = True
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
@@ -104,12 +105,15 @@ class BrushTool(Tool):
     def release(self, doc, canvas, pos, ev):
         if self._recorder is None:
             return
-        cmd = self._recorder.finish("Eraser" if self.opts.eraser else "Brush Stroke")
+        cmd = self._recorder.finish(self._stroke_name())
         if cmd is not None:
             doc.undo_stack.push(cmd)
         self._recorder = None
         self._layer = None
         self._last = None
+
+    def _stroke_name(self) -> str:
+        return "Eraser" if self.opts.eraser else "Brush Stroke"
 
     # -- painting --
 
@@ -124,10 +128,15 @@ class BrushTool(Tool):
         self._recorder.will_change(rect)
 
         p = QPainter(layer.image)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, self.antialias)
         if self._clip is not None:
             p.setClipPath(self._clip)
+        self._paint(p, la, lb, first)
+        p.end()
 
+        doc.notify_pixels(rect.translated(layer.offset))
+
+    def _paint(self, p: QPainter, la: QPointF, lb: QPointF, first: bool) -> None:
         hard = self.opts.hardness >= 100
         opaque = self.opts.opacity >= 100
         alpha = round(self.opts.opacity * 2.55)
@@ -139,9 +148,6 @@ class BrushTool(Tool):
             self._pen_segment(p, la, lb, self.opts.foreground, first)
         else:
             self._stamp_segment(p, la, lb, alpha, first)
-        p.end()
-
-        doc.notify_pixels(rect.translated(layer.offset))
 
     def _pen_segment(self, p: QPainter, a: QPointF, b: QPointF, color: QColor, first: bool):
         radius = self.opts.size / 2.0
@@ -206,6 +212,28 @@ class BrushTool(Tool):
         painter.drawEllipse(center, r, r)
         painter.setPen(QPen(QColor(0, 0, 0, 180), 1, Qt.PenStyle.DashLine))
         painter.drawEllipse(center, r, r)
+
+
+class PencilTool(BrushTool):
+    """Hard-edged aliased strokes: every painted pixel is exactly the
+    foreground colour at the shared opacity — no antialiasing, no hardness
+    falloff. Paints with replace semantics (like the bucket), so overlapping
+    segments within a stroke stay perfectly uniform."""
+
+    name = "pencil"
+    antialias = False
+
+    def _stroke_name(self) -> str:
+        return "Pencil Eraser" if self.opts.eraser else "Pencil"
+
+    def _paint(self, p: QPainter, la: QPointF, lb: QPointF, first: bool) -> None:
+        color = QColor(self.opts.foreground)
+        color.setAlpha(round(self.opts.opacity * 2.55))
+        if self.opts.eraser:
+            p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
+        else:
+            p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+        self._pen_segment(p, la, lb, color, first)
 
 
 class BucketTool(Tool):

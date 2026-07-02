@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.16.0] — 2026-07-02
+
+### Added
+
+- Pencil tool (`Shift+B`): hard-edged aliased strokes — every painted pixel
+  is exactly the foreground colour at the shared opacity, no antialiasing,
+  no hardness falloff. Includes an aliased eraser mode. Perfect for pixel
+  work.
+
 ## [0.15.0] — 2026-07-02
 
 ### Added
