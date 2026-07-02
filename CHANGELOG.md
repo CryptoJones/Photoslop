@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.50.0] — 2026-07-02
+
+### Added
+
+- Brush scattering (0–200% of brush size): stamps jitter randomly around
+  the stroke for sprays, foliage, and texture work — brush and eraser,
+  deterministic per stroke, undo covers the whole scattered stroke.
+
 ## [0.49.0] — 2026-07-02
 
 ### Added
