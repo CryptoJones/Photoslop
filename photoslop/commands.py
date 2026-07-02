@@ -228,6 +228,31 @@ class MergeDownCommand(QUndoCommand):
         doc.notify_pixels(dirty)
 
 
+class SetLayerStyleCommand(QUndoCommand):
+    """Swap a layer's live effects list and/or fill opacity."""
+
+    def __init__(self, doc, layer, effects: list, fill_opacity: float,
+                 text: str = "Layer Style") -> None:
+        super().__init__(text)
+        self._doc = doc
+        self._layer = layer
+        self._old = ([tuple(f) for f in layer.effects], layer.fill_opacity)
+        self._new = ([tuple(f) for f in effects], float(fill_opacity))
+
+    def _apply(self, state) -> None:
+        effects, fill = state
+        self._layer.effects = [tuple(f) for f in effects]
+        self._layer.fill_opacity = fill
+        self._layer.fx_cache = None
+        self._doc.notify_pixels(self._doc.canvas_rect())
+
+    def redo(self) -> None:
+        self._apply(self._new)
+
+    def undo(self) -> None:
+        self._apply(self._old)
+
+
 class SetLayerMaskCommand(QUndoCommand):
     """Add, replace, or delete a layer mask (new_mask=None deletes)."""
 

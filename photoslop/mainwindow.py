@@ -655,6 +655,10 @@ class MainWindow(QMainWindow):
                                     self.action_outer_glow))
         m_layer.addAction(self._act("Layer Style: Strok&e…", None,
                                     self.action_stroke_style))
+        m_layer.addAction(self._act("Layer Style: &Fill Opacity…", None,
+                                    self.action_fill_opacity))
+        m_layer.addAction(self._act("Layer Style: Clea&r", None,
+                                    self.action_clear_style))
         m_layer.addSeparator()
         m_layer.addAction(self._act("&Group with Layer Below", "Ctrl+G",
                                     self.action_group_layer))
@@ -1517,9 +1521,14 @@ class MainWindow(QMainWindow):
         form.addRow(buttons)
         if not dialog.exec():
             return
-        self.apply_drop_shadow(doc, layer, spins["offset_x"].value(),
-                               spins["offset_y"].value(), spins["blur"].value(),
-                               spins["opacity"].value())
+        from photoslop.commands import SetLayerStyleCommand
+
+        effect = ("drop-shadow", spins["offset_x"].value(),
+                  spins["offset_y"].value(), spins["blur"].value(),
+                  [0, 0, 0, round(spins["opacity"].value() * 2.55)])
+        doc.undo_stack.push(SetLayerStyleCommand(
+            doc, layer, [*layer.effects, effect], layer.fill_opacity,
+            "Drop Shadow"))
 
     def apply_drop_shadow(self, doc, layer, dx: int, dy: int, blur: int,
                           opacity: int) -> None:
@@ -1547,14 +1556,15 @@ class MainWindow(QMainWindow):
         color = QColorDialog.getColor(QColor(255, 220, 120), self, "Glow colour")
         if not color.isValid():
             return
-        from photoslop import npimage
 
         color.setAlpha(200)
-        glow_img = npimage.drop_shadow_image(layer.image, color, size)
-        glow = Layer(f"{layer.name} glow", glow_img,
-                     layer.offset - QPoint(size, size))
-        index = doc.layers.index(layer)
-        doc.undo_stack.push(InsertLayerCommand(doc, index, glow, "Outer Glow"))
+        from photoslop.commands import SetLayerStyleCommand
+
+        effect = ("glow", size, [color.red(), color.green(), color.blue(),
+                                 color.alpha()])
+        doc.undo_stack.push(SetLayerStyleCommand(
+            doc, layer, [*layer.effects, effect], layer.fill_opacity,
+            "Outer Glow"))
 
     def action_stroke_style(self) -> None:
         doc = self.current_doc()
@@ -1570,7 +1580,13 @@ class MainWindow(QMainWindow):
         color = QColorDialog.getColor(self.options.foreground, self, "Stroke colour")
         if not color.isValid():
             return
-        self.apply_stroke_style(doc, layer, width, color)
+        from photoslop.commands import SetLayerStyleCommand
+
+        effect = ("stroke", width, [color.red(), color.green(), color.blue(),
+                                    color.alpha()])
+        doc.undo_stack.push(SetLayerStyleCommand(
+            doc, layer, [*layer.effects, effect], layer.fill_opacity,
+            "Stroke"))
 
     def apply_stroke_style(self, doc, layer, width: int, color) -> None:
         from photoslop import npimage
@@ -1806,6 +1822,35 @@ class MainWindow(QMainWindow):
             return
         doc.set_selection(npimage.mask_to_path(mask))
         self.statusBar().showMessage("Subject selected", 3000)
+
+    def action_fill_opacity(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        from PySide6.QtWidgets import QInputDialog
+
+        from photoslop.commands import SetLayerStyleCommand
+
+        layer = doc.active_layer
+        value, ok = QInputDialog.getInt(
+            self, "Fill Opacity", "Fill opacity (%) — effects keep full "
+            "strength:", round(layer.fill_opacity * 100), 0, 100)
+        if not ok:
+            return
+        doc.undo_stack.push(SetLayerStyleCommand(
+            doc, layer, layer.effects, value / 100.0, "Fill Opacity"))
+
+    def action_clear_style(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        layer = doc.active_layer
+        if not layer.effects and layer.fill_opacity == 1.0:
+            return
+        from photoslop.commands import SetLayerStyleCommand
+
+        doc.undo_stack.push(SetLayerStyleCommand(
+            doc, layer, [], 1.0, "Clear Layer Style"))
 
     def action_convert_smart(self) -> None:
         doc = self.current_doc()

@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.77.0] — 2026-07-02
+
+### Added
+
+- Live layer effects: Drop Shadow, Outer Glow, and Stroke are now
+  non-destructive layer styles rendered at composite time (cached per
+  image generation) instead of baked pixel layers. Layer Style → Clear
+  removes them; effects persist in ORA.
+- Fill Opacity (Layer Style → Fill Opacity…): scales the layer's own
+  pixels while effects keep full strength — the classic PS semantic,
+  now possible because styles are live.
+
 ## [0.76.0] — 2026-07-02
 
 ### Added
