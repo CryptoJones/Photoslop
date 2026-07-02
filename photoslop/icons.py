@@ -213,6 +213,18 @@ def burn_icon() -> QIcon:
     return _make(draw)
 
 
+def crop_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawLine(QPointF(7, 3), QPointF(7, 15))   # left crop mark
+        p.drawLine(QPointF(7, 15), QPointF(19, 15))
+        p.drawLine(QPointF(3, 7), QPointF(15, 7))   # top crop mark
+        p.drawLine(QPointF(15, 7), QPointF(15, 19))
+
+    return _make(draw)
+
+
 def clone_stamp_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
@@ -242,6 +254,7 @@ TOOL_ICONS = {
     "gradient": gradient_icon,
     "eyedropper": eyedropper_icon,
     "clone-stamp": clone_stamp_icon,
+    "crop": crop_icon,
     "dodge": dodge_icon,
     "burn": burn_icon,
     "rect-select": rect_select_icon,

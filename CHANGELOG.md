@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.30.0] — 2026-07-02
+
+### Added
+
+- Crop tool (`C`): drag a rectangle — the discard area darkens and a
+  rule-of-thirds grid appears — then Enter or double-click commits (the
+  instant offset-shift crop; no pixels copied), Escape clears.
+
 ## [0.29.0] — 2026-07-02
 
 ### Added
