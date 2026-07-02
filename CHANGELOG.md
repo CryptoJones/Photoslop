@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.65.0] — 2026-07-02
+
+### Added
+
+- Rulers now mark the exact end of the image: a full-height tick and the
+  true extent label (8192, 11648, …) at the boundary, with colliding round
+  labels suppressed — the scale reads to the edge on any camera's frame.
+- Zoom levels extend down to 1/32 so Fit fits 100MP-class images (Fuji GFX
+  11648px and up) inside an ordinary viewport.
+
 ## [0.64.0] — 2026-07-02
 
 ### Added

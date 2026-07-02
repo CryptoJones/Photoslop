@@ -20,7 +20,10 @@ from photoslop.document import Document, draw_layer, render_region
 from photoslop.layer import BLEND_MODES
 from photoslop.rulers import Ruler
 
-ZOOM_LEVELS = (0.125, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0)
+# extends down to 1/32 so zoom-fit can hold 100MP-class frames
+# (Fuji GFX 11648px) inside an ordinary viewport
+ZOOM_LEVELS = (0.03125, 0.0625, 0.125, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0,
+               3.0, 4.0, 6.0, 8.0, 12.0, 16.0)
 
 _GUIDE_COLOR = QColor(0, 200, 255)
 _TEMP_GUIDE_COLOR = QColor(255, 0, 200)
