@@ -313,13 +313,15 @@ class MoveTool(Tool):
             return
         kind = self._mode[0]
         if kind == "gh":
-            doc.guides_h[self._mode[1]] = pos.y()
+            snapped = canvas.editor.snap_guide(pos.y(), ev.modifiers() if ev else None)
+            doc.guides_h[self._mode[1]] = snapped
             doc.guidesChanged.emit()
-            canvas.editor.show_guide_feedback("h", pos.y())
+            canvas.editor.show_guide_feedback("h", snapped)
         elif kind == "gv":
-            doc.guides_v[self._mode[1]] = pos.x()
+            snapped = canvas.editor.snap_guide(pos.x(), ev.modifiers() if ev else None)
+            doc.guides_v[self._mode[1]] = snapped
             doc.guidesChanged.emit()
-            canvas.editor.show_guide_feedback("v", pos.x())
+            canvas.editor.show_guide_feedback("v", snapped)
         else:
             _, layer, orig, start = self._mode
             old_bounds = layer.bounds()

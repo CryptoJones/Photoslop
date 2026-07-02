@@ -85,7 +85,7 @@ class Ruler(QWidget):
 
         ppu = units.px_per_unit(self.unit, self.dpi) * self.zoom  # screen px per unit
         step = units.pick_tick_step(self.unit, self.dpi, self.zoom)
-        minor = step / 5.0 if step * ppu >= 30.0 else step / 2.0
+        minor = units.minor_tick_step(self.unit, self.dpi, self.zoom)
 
         font = p.font()
         font.setPointSizeF(7.5)

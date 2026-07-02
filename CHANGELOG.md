@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [0.4.0] — 2026-07-02
+
+### Added
+
+- Guide snapping: dragged guides (both creation from a ruler and Move-tool
+  drags) snap to the visible **minor ruler ticks** of the current unit — the
+  same spacing the ruler draws, so what you see is what you snap to, and
+  zooming in refines the grid. Hold **Shift** for free positioning. The
+  drag readout always shows the final (snapped) value.
+
 ## [0.3.0] — 2026-07-02
 
 ### Added
