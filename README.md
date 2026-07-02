@@ -40,8 +40,9 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
 
 Image editors bloat because they cache everything. Photoslop instead:
 
-- keeps exactly **one pixel buffer per layer** (premultiplied ARGB32), sized to
-  the layer's content — no full-canvas mirrors, no flattened composite cache;
+- keeps exactly **one pixel buffer per layer** (premultiplied ARGB32; pasted
+  layers are sized to their content) — no full-canvas mirrors, no flattened
+  composite cache;
 - composites **only the viewport region** being repainted, at the current zoom;
 - relies on Qt's **copy-on-write** image sharing, so duplicating layers and
   copying selections cost nothing until pixels actually change;

@@ -1,0 +1,94 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Tiny programmatic tool icons — no asset files to ship or load."""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import QBrush, QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
+
+SIZE = 22
+_INK = QColor(70, 70, 70)
+
+
+def _make(draw) -> QIcon:
+    pm = QPixmap(SIZE, SIZE)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    draw(p)
+    p.end()
+    return QIcon(pm)
+
+
+def brush_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 2.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        p.drawLine(QPointF(5, 17), QPointF(13, 9))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(_INK))
+        p.drawEllipse(QPointF(15.5, 6.5), 2.6, 2.6)
+
+    return _make(draw)
+
+
+def bucket_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.8))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.save()
+        p.translate(10, 12)
+        p.rotate(45)
+        p.drawRect(QRectF(-4, -4, 8, 8))
+        p.restore()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(_INK))
+        p.drawEllipse(QPointF(17, 15), 2.0, 2.6)
+
+    return _make(draw)
+
+
+def rect_select_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        pen = QPen(_INK, 1.6, Qt.PenStyle.DashLine)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRect(QRectF(4, 6, 14, 10))
+
+    return _make(draw)
+
+
+def lasso_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        pen = QPen(_INK, 1.6, Qt.PenStyle.DashLine)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        path = QPainterPath(QPointF(6, 8))
+        path.cubicTo(QPointF(4, 14), QPointF(12, 18), QPointF(16, 14))
+        path.cubicTo(QPointF(19, 11), QPointF(15, 5), QPointF(10, 6))
+        path.closeSubpath()
+        p.drawPath(path)
+
+    return _make(draw)
+
+
+def move_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        p.setPen(QPen(_INK, 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        c = QPointF(11, 11)
+        for dx, dy in ((7, 0), (-7, 0), (0, 7), (0, -7)):
+            tip = QPointF(c.x() + dx, c.y() + dy)
+            p.drawLine(c, tip)
+            ux, uy = (dx / 7, dy / 7)
+            p.drawLine(tip, QPointF(tip.x() - 3 * ux + 2 * uy, tip.y() - 3 * uy + 2 * ux))
+            p.drawLine(tip, QPointF(tip.x() - 3 * ux - 2 * uy, tip.y() - 3 * uy - 2 * ux))
+
+    return _make(draw)
+
+
+TOOL_ICONS = {
+    "brush": brush_icon,
+    "bucket": bucket_icon,
+    "rect-select": rect_select_icon,
+    "lasso": lasso_icon,
+    "move": move_icon,
+}
