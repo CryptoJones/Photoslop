@@ -100,6 +100,23 @@ def test_select_menu_owns_the_selection_actions(qapp):
         assert moved not in edit_texts
 
 
+def test_model_backend_lives_in_options(qapp):
+    win = MainWindow()
+    edit_texts = _menu_texts(win, "&Edit")
+    assert "Model Backend…" not in edit_texts
+
+    # resolve within the loop (see _menu_texts) — Options is a submenu of Edit
+    for act in win.menuBar().actions():
+        if act.text() == "&Edit":
+            for sub in act.menu().actions():
+                if sub.text() == "&Options":
+                    options_texts = [a.text().replace("&", "")
+                                     for a in sub.menu().actions() if a.text()]
+                    assert "Model Backend…" in options_texts
+                    return
+    raise AssertionError("no Edit → Options menu found")
+
+
 def test_about_credits_sits_left_of_ok(qapp):
     from PySide6.QtWidgets import QMessageBox
 

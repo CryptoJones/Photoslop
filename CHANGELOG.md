@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.0.6] — 2026-07-03
+
+### Changed
+- Model Backend… moved into the settings menu (Edit → Options), next to
+  Rulers — it configures the app, so it lives with the app options.
+
 ## [1.0.5] — 2026-07-03
 
 ### Added
