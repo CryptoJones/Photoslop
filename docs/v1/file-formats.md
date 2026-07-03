@@ -21,6 +21,19 @@ Photoslop extensions as non-namespaced attributes other editors ignore:
 PNG, JPEG, BMP, WebP, GIF, TIFF open directly; Export As / `--output` writes
 flattened raster (live effects baked in).
 
+## AVIF + JPEG XL (`photoslop[formats]` extra)
+`.avif` and `.jxl` open, preview, export (with the quality slider), and work
+as CLI input/output once the extra is installed:
+
+```bash
+pip install "photoslop[formats]"    # Pillow ≥11 (AVIF) + pillow-jxl-plugin
+```
+
+Alpha survives both directions. Without the extra, opening or writing these
+extensions shows the exact install command instead of failing — same
+feature-detection pattern as camera raw. Both are quality-based lossy in
+Export As (Photoslop encodes at the chosen quality; use PNG for lossless).
+
 ## Camera raw (`photoslop[raw]` extra)
 NEF, CR2/CR3, DNG, ARW, RAF, ORF, PEF, RW2, NRW, SRW decode via rawpy with
 camera white balance into a normal document. Without the extra installed,

@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v1.1.2** against six
+An honest, category-by-category comparison of **Photoslop v1.2.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -15,7 +15,7 @@ than "missing".
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 1.1.2 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
+| **Photoslop** | 1.2.0 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
@@ -144,7 +144,7 @@ Photoslop is an editor, not a DAM — these rows are scope notes, not gaps.
 | Native layered format | ✅ .ora (open standard) [File Formats](file-formats.md) | ✅ .psd/.psb (proprietary) | ✅ .xcf + .ora | ✅ .pdn | — | — | — |
 | Layered interchange with other apps | ✅ (ORA ↔ GIMP/Krita) | 🟡 (PSD is the de-facto standard) | ✅ (ORA + improved PSD) | ❌ | — | — | — |
 | PNG/JPEG/BMP/WebP | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| AVIF / JPEG XL | ❌ | ✅ | ✅ | ❌ | ✅ | 🟡 | ✅ |
+| AVIF / JPEG XL | ✅ (`[formats]` extra) [File Formats](file-formats.md) | ✅ | ✅ | ❌ | ✅ | 🟡 | ✅ |
 | Named export regions (artboards) | ✅ [Artboards](artboards.md) | ✅ | ❌ | ❌ | — | — | — |
 | Export quality/scale preview | ✅ (Export As) | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ |
 
@@ -202,7 +202,7 @@ issue yet — this section is the menu to pick from.
 
 **Workflow.**
 - No on-disk action files (actions live per-session) *(small)*.
-- No AVIF/JPEG XL *(small, Qt plugin availability permitting)*.
+- ~~No AVIF/JPEG XL~~ *(shipped v1.2.0 via the `photoslop[formats]` extra)*.
 - History panel is linear; no snapshots *(medium)*.
 
 ## Sources

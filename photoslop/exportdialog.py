@@ -16,11 +16,14 @@ from PySide6.QtWidgets import (
     QSpinBox,
 )
 
+from photoslop import io_formats
 from photoslop.document import Document
 
 _FORMATS = ("PNG", "JPEG", "WebP", "BMP")
 _OPAQUE = {"JPEG", "BMP"}  # no alpha channel: flatten over white
-_LOSSY = {"JPEG", "WebP"}
+_LOSSY = {"JPEG", "WebP", "AVIF", "JPEG XL"}
+# extra formats appear only when the photoslop[formats] codecs are installed
+_EXTRA = {"AVIF": ".avif", "JPEG XL": ".jxl"}
 
 _PREVIEW = 220
 
@@ -35,6 +38,9 @@ class ExportDialog(QDialog):
 
         self.format_box = QComboBox()
         self.format_box.addItems(list(_FORMATS))
+        for name, ext in _EXTRA.items():
+            if io_formats.available("x" + ext):
+                self.format_box.addItem(name)
         self.format_box.currentTextChanged.connect(self._changed)
 
         self.quality = QSlider(Qt.Orientation.Horizontal)
@@ -103,8 +109,17 @@ class ExportDialog(QDialog):
                            Qt.TransformationMode.SmoothTransformation)
 
     def suggested_suffix(self) -> str:
-        return {"PNG": ".png", "JPEG": ".jpg", "WebP": ".webp", "BMP": ".bmp"}[
-            self.chosen_format()]
+        return {"PNG": ".png", "JPEG": ".jpg", "WebP": ".webp", "BMP": ".bmp",
+                "AVIF": ".avif", "JPEG XL": ".jxl"}[self.chosen_format()]
+
+    def write_to(self, path: str, image: QImage | None = None) -> bool:
+        """Encode the chosen export to `path`, routing extra formats through
+        the io_formats codecs (Qt can't write AVIF/JXL itself)."""
+        img = image if image is not None else self.export_image()
+        fmt = self.chosen_format()
+        if fmt in _EXTRA:
+            return io_formats.save_extra(img, path, max(1, self.chosen_quality()))
+        return img.save(path, fmt, self.chosen_quality())
 
     # ----- live feedback -----------------------------------------------------
 
@@ -125,10 +140,16 @@ class ExportDialog(QDialog):
         self._debounce.start()
 
     def _update_size(self) -> None:
-        buf = QBuffer()
-        buf.open(QIODevice.OpenModeFlag.WriteOnly)
-        self.export_image().save(buf, self.chosen_format(), self.chosen_quality())
-        n = buf.size()
-        buf.close()
+        fmt = self.chosen_format()
+        if fmt in _EXTRA:
+            data = io_formats.encode_extra(
+                self.export_image(), _EXTRA[fmt], max(1, self.chosen_quality()))
+            n = len(data) if data else 0
+        else:
+            buf = QBuffer()
+            buf.open(QIODevice.OpenModeFlag.WriteOnly)
+            self.export_image().save(buf, fmt, self.chosen_quality())
+            n = buf.size()
+            buf.close()
         self.size_label.setText(
             f"{n / 1024:.0f} KB" if n < 1024 * 1024 else f"{n / 1048576:.2f} MB")
