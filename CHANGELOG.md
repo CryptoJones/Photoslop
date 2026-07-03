@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.1.3] — 2026-07-03
+
+### Added
+- `docs/v1/feature-parity.md` — an honest, sourced feature-parity matrix
+  comparing Photoslop v1.1.2 against Photoshop 2026, GIMP 3.2, Paint.NET 5.1,
+  Lightroom Classic 15.4, darktable 5.6, and Capture One 16.8 (all versions
+  verified against official July 2026 documentation), with stand-out
+  strengths and a grouped gap list.
+
 ## [1.1.2] — 2026-07-03
 
 ### Added

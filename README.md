@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v1.1.2-orange)]()
+[![Version](https://img.shields.io/badge/version-v1.1.3-orange)]()
 
 ---
 
@@ -135,7 +135,9 @@ QT_QPA_PLATFORM=offscreen uv run pytest
 ## Documentation
 
 The full v1 feature library — every tool, menu, format, and CLI operation —
-lives in [docs/v1/](docs/v1/README.md).
+lives in [docs/v1/](docs/v1/README.md), including an honest
+[feature-parity matrix](docs/v1/feature-parity.md) against Photoshop, GIMP,
+Paint.NET, Lightroom Classic, darktable, and Capture One.
 
 ## Command line (headless)
 
