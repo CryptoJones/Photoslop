@@ -576,6 +576,14 @@ class MainWindow(QMainWindow):
         m_edit.addSeparator()
         m_edit.addAction(self._act("Free &Transform", "Ctrl+T", self.action_free_transform))
         m_edit.addAction(self._act("&Warp…", "Ctrl+Shift+T", self.action_warp))
+        m_edit.addAction(self._act("Rotate &90° CW", None,
+                                   lambda: self._layer_cmd(RotateLayerCommand, 90)))
+        m_edit.addAction(self._act("Rotate 9&0° CCW", None,
+                                   lambda: self._layer_cmd(RotateLayerCommand, 270)))
+        m_edit.addAction(self._act("Flip &Horizontal", None,
+                                   lambda: self._layer_cmd(FlipLayerCommand, True)))
+        m_edit.addAction(self._act("Flip &Vertical", None,
+                                   lambda: self._layer_cmd(FlipLayerCommand, False)))
         m_edit.addSeparator()
         m_edit.addAction(self._act("S&wap Colours", "X", self.action_swap_colors))
         m_edit.addAction(self._act("Rese&t Colours", "D", self.action_reset_colors))

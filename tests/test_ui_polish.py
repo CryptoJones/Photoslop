@@ -117,6 +117,31 @@ def test_model_backend_lives_in_options(qapp):
     raise AssertionError("no Edit → Options menu found")
 
 
+def test_edit_menu_layer_transforms(qapp):
+    from photoslop.document import Document
+
+    win = MainWindow()
+    win.add_document(Document.new(QSize(40, 30), 72.0, "t", QColor(90, 90, 90)))
+    doc = win.current_doc()
+
+    edit_texts = _menu_texts(win, "&Edit")
+    for expected in ("Rotate 90° CW", "Rotate 90° CCW",
+                     "Flip Horizontal", "Flip Vertical"):
+        assert expected in edit_texts
+
+    # the entries act on the ACTIVE LAYER (Photoshop's Edit → Transform)
+    for act in win.menuBar().actions():
+        if act.text() == "&Edit":
+            rotate = next(a for a in act.menu().actions()
+                          if a.text().replace("&", "") == "Rotate 90° CW")
+            rotate.trigger()
+    layer = doc.active_layer
+    assert layer.image.width() == 30 and layer.image.height() == 40
+    assert doc.undo_stack.count() == 1
+    doc.undo_stack.undo()
+    assert layer.image.width() == 40 and layer.image.height() == 30
+
+
 def test_about_credits_sits_left_of_ok(qapp):
     from PySide6.QtWidgets import QMessageBox
 
