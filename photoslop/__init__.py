@@ -1,4 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
 """Photoslop — a memory-frugal, multiplatform, layered raster image editor."""
 
-__version__ = "1.1.4"
+__version__ = "1.2.0"

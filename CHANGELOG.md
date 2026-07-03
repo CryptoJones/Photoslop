@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.2.0] — 2026-07-03
+
+### Added
+- **AVIF + JPEG XL** import/export via the optional `photoslop[formats]`
+  extra (Pillow ≥11 for AVIF, pillow-jxl-plugin for JXL), feature-detected:
+  Open (with dialog preview), Export As (quality slider, live size), and the
+  CLI accepts `.avif`/`.jxl` as both input and `--output`. Alpha preserved
+  both directions. Without the extra, the exact install command is shown
+  instead of an error. Closes #115.
+
 ## [1.1.4] — 2026-07-03
 
 ### Added

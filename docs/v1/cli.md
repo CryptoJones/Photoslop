@@ -21,7 +21,8 @@ photoslop-cli shot.cr2 --resize 1600x1067 --auto-levels \
   `Letter`, `Legal`) rendered at `--dpi N` (default 72). `--new A4 --dpi 300`
   gives 2480×3508.
 - `--output PATH` — `.ora` keeps layers (effects and all); raster extensions
-  flatten (effects baked).
+  flatten (effects baked). `.avif` / `.jxl` need the `photoslop[formats]`
+  extra and also work as inputs ([File Formats](file-formats.md)).
 - `--export-artboards DIR` — each artboard as `<name>.png`.
 - `--info` — document JSON (size, dpi, layers, effects, artboards) to stdout.
 - `--version`.

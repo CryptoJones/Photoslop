@@ -827,6 +827,15 @@ def _load_document(path: str):
     if is_raw_path(path):
         return Document.from_image(load_raw(path),
                                    os.path.basename(path), 72.0)
+    from photoslop import io_formats
+
+    if io_formats.is_extra_path(path):
+        if not io_formats.available(path):
+            raise _ValueError(io_formats.missing_hint(path))
+        img = io_formats.load_extra(path)
+        if img is None or img.isNull():
+            raise _ValueError(f"could not decode: {path}")
+        return Document.from_image(img, os.path.basename(path), 72.0)
     from PySide6.QtGui import QImage
 
     img = QImage(path)
@@ -862,11 +871,18 @@ RASTER_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff")
 
 
 def _write_output(doc, path: str) -> None:
+    from photoslop import io_formats
     from photoslop.io_ora import save_ora
 
     lower = path.lower()
     if lower.endswith(".ora"):
         save_ora(doc, path)
+        return
+    if io_formats.is_extra_path(path):
+        if not io_formats.available(path):
+            raise _ValueError(io_formats.missing_hint(path))
+        if not io_formats.save_extra(doc.flatten(), path):
+            raise RuntimeError(f"could not write {path}")
         return
     if not lower.endswith(RASTER_EXTS):
         raise _ValueError(f"unsupported output extension: {path}")

@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
     QUndoView,
 )
 
-from photoslop import __version__, units
+from photoslop import __version__, io_formats, units
 from photoslop.canvas import EditorView
 from photoslop.commands import (
     FlipImageCommand,
@@ -937,6 +937,15 @@ class MainWindow(QMainWindow):
             elif is_raw_path(path):
                 img = load_raw(path)
                 doc = Document.from_image(img, os.path.basename(path), 72.0)
+            elif io_formats.is_extra_path(path):
+                if not io_formats.available(path):
+                    self.statusBar().showMessage(io_formats.missing_hint(path), 8000)
+                    return False
+                img = io_formats.load_extra(path)
+                if img is None or img.isNull():
+                    self.statusBar().showMessage(f"Could not open {path}", 5000)
+                    return False
+                doc = Document.from_image(img, os.path.basename(path), 72.0)
             else:
                 img = QImage(path)
                 if img.isNull():
@@ -1003,7 +1012,7 @@ class MainWindow(QMainWindow):
         img = dialog.export_image()
         img.setDotsPerMeterX(round(doc.dpi / 0.0254))
         img.setDotsPerMeterY(round(doc.dpi / 0.0254))
-        if img.save(path, fmt, dialog.chosen_quality()):
+        if dialog.write_to(path, img):
             self.statusBar().showMessage(f"Exported {path}", 4000)
         else:
             self.statusBar().showMessage(f"Export failed: {path}", 6000)

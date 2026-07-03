@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QFileDialog, QGridLayout, QLabel, QVBoxLayout, QWi
 
 OPEN_FILTER = (
     "Images (*.ora *.png *.jpg *.jpeg *.bmp *.webp *.gif *.tif *.tiff "
+    "*.avif *.jxl "
     "*.arw *.cr2 *.cr3 *.dng *.nef *.nrw *.orf *.pef *.raf *.rw2 *.srw);;"
     "OpenRaster (*.ora);;All files (*)"
 )
@@ -49,6 +50,20 @@ def preview_info(path: str, max_dim: int = _PREVIEW_DIM) -> tuple[QImage | None,
             return img, f"{w}×{h} · {layers} layers · OpenRaster · {human}"
         except Exception:
             return None, f"Unreadable .ora · {human}"
+
+    from photoslop import io_formats
+
+    if io_formats.is_extra_path(path):
+        img = io_formats.load_extra(path)
+        if img is None or img.isNull():
+            why = "codec missing" if not io_formats.available(path) else "undecodable"
+            return None, f"No preview ({why}) · {human}"
+        w, h = img.width(), img.height()
+        if max(w, h) > max_dim:
+            img = img.scaled(max_dim, max_dim, Qt.AspectRatioMode.KeepAspectRatio,
+                             Qt.TransformationMode.SmoothTransformation)
+        fmt = path.rsplit(".", 1)[-1].upper()
+        return img, f"{w}×{h} · {fmt} · {human}"
 
     reader = QImageReader(path)
     reader.setAutoTransform(True)
