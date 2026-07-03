@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.0.0] — 2026-07-02
+
+Photoslop 1.0 — the flagship. One day, 77 releases, v0.1.0 → v1.0.0.
+
+### Added
+
+- `docs/v1/` — the authoritative documentation library: every GUI and CLI
+  feature (getting started, all 31 tools, the complete keymap, layers,
+  adjustments, selections, transforms, filters, actions, artboards, file
+  formats, model backends, the full CLI reference, and the memory-frugality
+  architecture).
+
+### Changed
+
+- Development status graduates to Production/Stable.
+
 ## [0.78.0] — 2026-07-02
 
 ### Added
