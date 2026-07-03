@@ -21,21 +21,12 @@ from PySide6.QtWidgets import (
 )
 
 from photoslop import units
+from photoslop.units import PAPER_SIZES  # noqa: F401 — re-export; canonical home is units
 
 _BACKGROUNDS = (
     ("White", QColor(255, 255, 255)),
     ("Transparent", None),
     ("Black", QColor(0, 0, 0)),
-)
-
-# name, exact mm (portrait), pretty labels — metric first, freedom units for
-# our dumb American friends
-PAPER_SIZES = (
-    ("A5", 148.0, 210.0, "148×210 mm", "5.8×8.3″"),
-    ("A4", 210.0, 297.0, "210×297 mm", "8.3×11.7″"),
-    ("A3", 297.0, 420.0, "297×420 mm", "11.7×16.5″"),
-    ("Letter", 215.9, 279.4, "216×279 mm", "8.5×11″"),
-    ("Legal", 215.9, 355.6, "216×356 mm", "8.5×14″"),
 )
 
 

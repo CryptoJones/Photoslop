@@ -9,6 +9,16 @@ from __future__ import annotations
 
 UNITS = ("px", "in", "mm", "cm", "pc")
 
+# name, exact mm (portrait), pretty labels — metric first, freedom units for
+# our dumb American friends. Shared by the New Document dialog and the CLI.
+PAPER_SIZES = (
+    ("A5", 148.0, 210.0, "148×210 mm", "5.8×8.3″"),
+    ("A4", 210.0, 297.0, "210×297 mm", "8.3×11.7″"),
+    ("A3", 297.0, 420.0, "297×420 mm", "11.7×16.5″"),
+    ("Letter", 215.9, 279.4, "216×279 mm", "8.5×11″"),
+    ("Legal", 215.9, 355.6, "216×356 mm", "8.5×14″"),
+)
+
 _LABELS = {"px": "pixels", "in": "freedom units", "mm": "millimetres",
            "cm": "centimetres", "pc": "picas"}
 

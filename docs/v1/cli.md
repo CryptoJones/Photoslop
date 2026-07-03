@@ -16,6 +16,10 @@ photoslop-cli shot.cr2 --resize 1600x1067 --auto-levels \
 ## Input & output
 - **input** (positional): PNG/JPG/BMP/WebP/GIF/TIFF, `.ora`, or camera raw
   (with the `photoslop[raw]` extra).
+- `--new WxH|PRESET` — start from a blank white document instead of an input
+  file: a pixel size (`800x600`) or a paper preset (`A5`, `A4`, `A3`,
+  `Letter`, `Legal`) rendered at `--dpi N` (default 72). `--new A4 --dpi 300`
+  gives 2480×3508.
 - `--output PATH` — `.ora` keeps layers (effects and all); raster extensions
   flatten (effects baked).
 - `--export-artboards DIR` — each artboard as `<name>.png`.
@@ -38,6 +42,7 @@ message on stderr.
 | `--hue-sat` `H,S,L` | hue/saturation/lightness (-180..180,-100..100) |
 | `--color-balance` `9 INTS` | shadows,midtones,highlights r,g,b each |
 | `--curves` `X:Y,...` | master curve points in 0..255 |
+| `--adjust` `"KEY=VAL,..."` | Lightroom Basic sliders (temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation) |
 | `--gaussian-blur` `RADIUS` | gaussian blur (selection-aware) |
 | `--unsharp` `AMOUNT` | unsharp mask, percent |
 | `--tilt-shift` `C,B,T,R` | tilt-shift blur: centre,band,transition,radius |
@@ -49,7 +54,9 @@ message on stderr.
 | `--all-layers` | apply following ops to every visible layer |
 | `--select` `X,Y,W,H` | rectangular selection for region-aware ops |
 | `--select-ellipse` `X,Y,W,H` | elliptical selection inscribed in the box |
+| `--select-poly` `"X,Y X,Y X,Y..."` | polygon selection from three or more points |
 | `--deselect` | clear the selection |
+| `--clear` | erase the selection to transparency (headless Cut) |
 | `--flip` `h|v` | mirror the target layer(s) |
 | `--fill` `R,G,B` | fill the whole target layer with a colour |
 | `--text` `"X,Y,SIZE[,R,G,B]:TEXT"` | rasterise text onto a new layer (default colour black) |
@@ -92,4 +99,8 @@ photoslop-cli photo.png --model-url http://localhost:8188/ps --select-subject \
 
 # inspect an ORA without opening the GUI
 photoslop-cli project.ora --info | jq '.layers[].name'
+
+# a print-ready A4 canvas from nothing, developed entirely headless
+photoslop-cli --new A4 --dpi 300 --fill 245,240,230 \
+              --text "200,200,64,40,40,40:Hello from the CLI" --output poster.png
 ```

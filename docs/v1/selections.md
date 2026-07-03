@@ -13,6 +13,8 @@ colour-range), Quick Select `Shift+W` (paint to grow), and **Select Subject
 (Model)** via any configured model backend (see
 [Model Backends](model-backends.md)). All selection commands live in the
 **Select** menu: All `Ctrl+A`, Deselect `Ctrl+D`, Subject (Model),
+Cut is `Ctrl+X` (headless: `--clear`). CLI selections: `--select`,
+`--select-ellipse`, `--select-poly`.
 Feather…, Refine….
 
 ## Refine (`Ctrl+Alt+R`)
