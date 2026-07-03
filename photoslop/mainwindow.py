@@ -2185,8 +2185,12 @@ class MainWindow(QMainWindow):
         doc.notify_pixels(layer.bounds())
 
     def _build_about(self) -> QMessageBox:
+        from photoslop.appicon import mascot_pixmap
+
         box = QMessageBox(self)
         box.setWindowTitle("About Photoslop")
+        # Le Basilisk himself — the QPainter original, not the FLUX render
+        box.setIconPixmap(mascot_pixmap(128))
         box.setTextFormat(Qt.TextFormat.RichText)
         box.setText(
             f"<h3>Photoslop {__version__}</h3>"

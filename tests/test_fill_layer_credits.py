@@ -35,3 +35,14 @@ def test_about_has_credits_button_with_the_names(qapp):
     assert any(b == QMessageBox.StandardButton.Ok
                for b in (box.standardButtons(),)) or "OK" in labels
     assert CREDITS_TEXT == "Programming: CryptoJones, GPT5.5, and Fable5"
+
+
+def test_about_shows_le_basilisk(qapp):
+    from photoslop.appicon import mascot_pixmap
+
+    win = MainWindow()
+    box = win._build_about()
+    shown = box.iconPixmap()
+    assert not shown.isNull()
+    # it is the QPainter mascot, pixel for pixel — not some other art
+    assert shown.toImage() == mascot_pixmap(128).toImage()
