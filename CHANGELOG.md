@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.0.7] — 2026-07-03
+
+### Added
+- Adjust panel: **Apply to all layers (full image)** checkbox — the same
+  layer↔document scope toggle the adjustment dialogs have. Live preview
+  re-scopes on the fly; Apply commits one undo step for all changed layers.
+- Edit → **Cut Selection** (`Ctrl+X`): copies the selection to the clipboard
+  and clears it, as a single "Cut" undo step.
+
 ## [1.0.6] — 2026-07-03
 
 ### Changed

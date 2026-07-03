@@ -1,12 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """The Adjust panel — Lightroom-style Basic sliders, tabbed with Layers.
 
-Working model: moving any slider starts a preview session against a pristine
-copy of the active layer; the preview recomputes live (debounced) from that
-pristine state, so sliders stay absolute, not compounding. Apply commits the
-whole session as ONE undo step; Reset discards it. If the undo stack moves
-mid-session (external edit), the session is discarded and current pixels
-become the new baseline.
+Working model: moving any slider starts a preview session against pristine
+copies of the target layers; the preview recomputes live (debounced) from
+that pristine state, so sliders stay absolute, not compounding. The scope
+checkbox switches targets between the active layer (default) and every
+visible layer ("full image") — same semantics as the adjustment dialogs.
+Apply commits the whole session as ONE undo step (a macro when several
+layers changed); Reset discards it. If the undo stack moves mid-session
+(external edit), the session is discarded and current pixels become the
+new baseline.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
+    QCheckBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -46,8 +50,8 @@ class AdjustPanel(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.doc: Document | None = None
-        self._pristine: QImage | None = None
-        self._layer = None
+        self._pristines: dict = {}  # layer -> pristine QImage for the session
+        self._layer = None  # active layer when the session started
         self._updating = False
 
         self._debounce = QTimer(self)
@@ -73,6 +77,9 @@ class AdjustPanel(QWidget):
             self._sliders[key] = slider
             self._values[key] = value
 
+        self.scope_all = QCheckBox("Apply to all layers (full image)")
+        self.scope_all.toggled.connect(self._scope_toggled)
+
         self.apply_btn = QPushButton("Apply")
         self.apply_btn.setEnabled(False)
         self.apply_btn.clicked.connect(self.apply)
@@ -86,6 +93,7 @@ class AdjustPanel(QWidget):
 
         box = QVBoxLayout(self)
         box.addLayout(grid)
+        box.addWidget(self.scope_all)
         box.addLayout(buttons)
         box.addStretch(1)
 
@@ -110,12 +118,27 @@ class AdjustPanel(QWidget):
     def _on_external_change(self) -> None:
         # An edit landed outside the preview session: current pixels become
         # the new baseline; slider positions no longer describe them.
-        if self._pristine is not None and not self._committing:
+        if self._pristines and not self._committing:
             self._discard_session()
 
     # ----- session ---------------------------------------------------------
 
     _committing = False
+
+    def _targets(self) -> list:
+        """Session layers under the current scope (mirrors the dialogs)."""
+        if self.doc is None or self._layer is None:
+            return []
+        if self.scope_all.isChecked():
+            return [layer for layer in self.doc.layers
+                    if layer.visible and layer.adjustment is None
+                    and not layer.image.isNull()]
+        return [self._layer]
+
+    def _pristine_for(self, layer) -> QImage:
+        if layer not in self._pristines:
+            self._pristines[layer] = QImage(layer.image)  # COW reference
+        return self._pristines[layer]
 
     def _on_slider(self) -> None:
         if self._updating or self.doc is None:
@@ -128,47 +151,67 @@ class AdjustPanel(QWidget):
         layer = self.doc.active_layer
         if layer is None:
             return
-        if self._pristine is None:
-            self._pristine = QImage(layer.image)  # copy-on-write reference
+        if self._layer is None:
             self._layer = layer
+            self._pristine_for(layer)
         self.apply_btn.setEnabled(True)
         self.reset_btn.setEnabled(True)
         self._debounce.start()
 
     def _recompute(self) -> None:
-        if self._pristine is None or self.doc is None or self._layer is None:
+        if self.doc is None or self._layer is None:
             return
-        img = QImage(self._pristine)
-        apply_settings(img, self.settings())  # first write detaches the copy
-        self._layer.image = img
-        self.doc.notify_pixels(self._layer.bounds())
+        for layer in self._targets():
+            img = QImage(self._pristine_for(layer))
+            apply_settings(img, self.settings())  # first write detaches
+            layer.image = img
+            self.doc.notify_pixels(layer.bounds())
+
+    def _scope_toggled(self, _on: bool) -> None:
+        # restore everything, then re-preview at the new scope with the
+        # same slider values
+        if self.doc is None or not self._pristines:
+            return
+        self._debounce.stop()
+        self._restore_all()
+        self._recompute()
+
+    def _restore_all(self) -> None:
+        for layer, pristine in self._pristines.items():
+            layer.image = QImage(pristine)
+            self.doc.notify_pixels(layer.bounds())
 
     def apply(self) -> None:
-        if self._pristine is None or self.doc is None or self._layer is None:
+        if self.doc is None or self._layer is None:
             return
         self._debounce.stop()
         self._recompute()
-        if not self.settings().is_identity():
+        changed = [(layer, pristine)
+                   for layer, pristine in self._pristines.items()
+                   if layer.image != pristine]
+        if changed and not self.settings().is_identity():
             self._committing = True
             try:
-                self.doc.undo_stack.push(LayerRegionCommand(
-                    self.doc, self._layer, self._layer.image.rect(),
-                    QImage(self._pristine), QImage(self._layer.image),
-                    "Adjust", applied=True,
-                ))
+                self.doc.undo_stack.beginMacro("Adjust")
+                for layer, pristine in changed:
+                    self.doc.undo_stack.push(LayerRegionCommand(
+                        self.doc, layer, layer.image.rect(),
+                        QImage(pristine), QImage(layer.image),
+                        "Adjust", applied=True,
+                    ))
+                self.doc.undo_stack.endMacro()
             finally:
                 self._committing = False
         self._discard_session()
 
     def reset(self) -> None:
-        if self._pristine is not None and self._layer is not None and self.doc is not None:
+        if self.doc is not None and self._pristines:
             self._debounce.stop()
-            self._layer.image = QImage(self._pristine)
-            self.doc.notify_pixels(self._layer.bounds())
+            self._restore_all()
         self._discard_session()
 
     def _discard_session(self) -> None:
-        self._pristine = None
+        self._pristines = {}
         self._layer = None
         self._updating = True
         for key, _label, _extent, _div in _SLIDERS:

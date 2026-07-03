@@ -21,7 +21,9 @@ every visible layer, one undo macro for the whole image, exact cancel.
 ## The Adjust panel
 Lightroom-style Basic sliders (exposure/contrast/highlights/shadows/whites/
 blacks/temperature/tint/vibrance/saturation) applied as one LUT pass with
-live preview.
+live preview. The **Apply to all layers (full image)** checkbox switches the
+scope from the active layer to every visible layer — same toggle as the
+adjustment dialogs; Apply is a single undo step either way.
 
 ## Adjustment layers
 For a non-destructive version of Levels, use Layer → New Adjustment Layer —

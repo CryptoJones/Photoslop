@@ -555,6 +555,7 @@ class MainWindow(QMainWindow):
         m_edit.addAction(undo)
         m_edit.addAction(redo)
         m_edit.addSeparator()
+        m_edit.addAction(self._act("Cu&t Selection", "Ctrl+X", self.action_cut))
         m_edit.addAction(self._act("&Copy Selection", "Ctrl+C", self.action_copy))
         m_edit.addAction(self._act("&Paste as New Layer", "Ctrl+V", self.action_paste))
         m_edit.addAction(self._act("&Delete Selection", "Del", self.action_delete_selection))
@@ -1034,6 +1035,18 @@ class MainWindow(QMainWindow):
         self._clip_from_us = True
         QGuiApplication.clipboard().setImage(img)
         self.statusBar().showMessage("Copied", 2000)
+
+    def action_cut(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        if doc.selection is None:
+            self.statusBar().showMessage("Cut needs a selection", 4000)
+            return
+        self.action_copy()
+        doc.undo_stack.beginMacro("Cut")
+        self.action_delete_selection()
+        doc.undo_stack.endMacro()
 
     def action_paste(self) -> None:
         doc = self.current_doc()
