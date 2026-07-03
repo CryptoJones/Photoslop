@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.1.1] — 2026-07-03
+
+### Added
+- Edit menu: Rotate 90° CW, Rotate 90° CCW, Flip Horizontal, Flip Vertical —
+  layer transforms in the transform section next to Free Transform/Warp
+  (Photoshop's Edit → Transform placement). Same commands as the Layer menu
+  entries.
+
 ## [1.1.0] — 2026-07-03
 
 Full GUI↔CLI parity restored: every headless gap from the post-1.0 patch run
