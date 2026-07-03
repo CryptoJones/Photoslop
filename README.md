@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v1.1.3-orange)]()
+[![Version](https://img.shields.io/badge/version-v1.1.4-orange)]()
 
 ---
 
@@ -123,6 +123,12 @@ uvx --from git+https://github.com/CryptoJones/Photoslop photoslop
 | Free Transform       | `Ctrl+T` (Enter commits, Esc cancels) |
 | Crop tool            | `C` (drag, Enter commits) |
 | Crop to selection    | `Ctrl+Alt+C` |
+
+## Design decisions
+
+What Photoslop deliberately won't do (and why) is recorded in
+[DESIGNDECISIONS.md](DESIGNDECISIONS.md) — memory performance beats
+features, and the reasoning is append-only.
 
 ## Development
 

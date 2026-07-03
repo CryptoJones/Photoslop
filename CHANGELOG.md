@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.1.4] — 2026-07-03
+
+### Added
+- `DESIGNDECISIONS.md` — the append-only record of what Photoslop
+  deliberately won't do and why, anchored on DD-001 (memory performance
+  beats features). Documents the backlog re-triage: deep bit depth and the
+  scene-referred/HDR pipeline rejected; ICC accepted as viewport-only work;
+  CMYK export-only; GIMP-bridge spawn-per-call only; raw develop transient
+  16-bit with 8-bit results; G'MIC float transients accepted with eyes open.
+  Linked from the README and the architecture guide.
+
 ## [1.1.3] — 2026-07-03
 
 ### Added

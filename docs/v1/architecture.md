@@ -1,6 +1,8 @@
 # Architecture — the memory-frugality design
 
 Photoslop's founding constraint: edit big layered images without big memory.
+The features this constraint deliberately rules out — and the reasoning —
+are recorded in [DESIGNDECISIONS.md](../../DESIGNDECISIONS.md).
 Every subsystem answers to it.
 
 ## Pixel model
