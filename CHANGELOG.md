@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.0.4] — 2026-07-03
+
+### Changed
+- README hero art is now CryptoJones's hand-drawn `docs/photoslop.png` —
+  made in Photoslop itself, 100% human-made slop — replacing the
+  FLUX-rendered `docs/le-basilisk.jpg`.
+
 ## [1.0.3] — 2026-07-02
 
 ### Changed

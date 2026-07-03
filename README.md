@@ -8,15 +8,15 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v1.0.3-orange)]()
+[![Version](https://img.shields.io/badge/version-v1.0.4-orange)]()
 
 ---
 
 <p align="center">
-  <img src="docs/le-basilisk.jpg" width="480"
-       alt="Le Basilisk — the Photoslop mascot in a green-lit studio: doofy green tentacled painter with a red beret, handlebar mustache, paintbrush, and palette">
+  <img src="docs/photoslop.png" width="480"
+       alt="Le Basilisk — the Photoslop mascot: doofy green tentacled painter with a red beret, handlebar mustache, paintbrush, and palette — under the words 'Hate AI slop? Let us fight against it! (using AI slop)'">
   <br>
-  <em>Le Basilisk</em>, the Photoslop mascot — rendered in the house rotoscope style.
+  <em>Le Basilisk</em>, the Photoslop mascot.
 </p>
 
 ## What it does
