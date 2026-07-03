@@ -42,6 +42,7 @@ message on stderr.
 | `--levels` `B,W,GAMMA` | levels adjustment |
 | `--auto-levels` | 0.1%-percentile auto levels |
 | `--hue-sat` `H,S,L` | hue/saturation/lightness (-180..180,-100..100) |
+| `--point-color` `"KEY=VAL,..."` | targeted hue-band HSL: `hue` (required), `range`, `dh`, `ds`, `dl`, `uniform` — skin tones ≈ `hue=20,range=28` |
 | `--color-balance` `9 INTS` | shadows,midtones,highlights r,g,b each |
 | `--curves` `X:Y,...` | master curve points in 0..255 |
 | `--adjust` `"KEY=VAL,..."` | Lightroom Basic sliders (temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation) |

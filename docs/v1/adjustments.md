@@ -11,6 +11,12 @@ OK lands one undo step.
   and per-channel curves.
 - **Hue/Saturation** (`Ctrl+U`): hue rotation (−180..180), saturation and
   lightness (−100..100).
+- **Point Color** (`Ctrl+Shift+U`): targeted hue-band HSL — click the
+  thumbnail to sample the target color straight from the composite, then
+  shift hue/saturation/lightness for just that band with a smooth cosine
+  falloff. Near-grays are protected. **Uniformity** pulls in-band hues
+  toward the centre (evens skin out); the **Skin Tones preset** loads the
+  classic band (`hue=20`, `range=28`). CLI mirror: `--point-color`.
 - **Color Balance** (`Ctrl+B`): shadows/midtones/highlights bands, each with
   cyan–red / magenta–green / yellow–blue axes.
 

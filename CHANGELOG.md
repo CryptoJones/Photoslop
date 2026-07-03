@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.3.0] — 2026-07-03
+
+### Added
+- **Point Color** (`Ctrl+Shift+U`, Image → Adjustments): targeted hue-band
+  HSL with click-to-sample from the composite thumbnail, smooth cosine
+  falloff, near-gray protection, a Uniformity slider that evens hues toward
+  the band centre, and a Skin Tones preset. Scope toggle (layer ↔ full
+  image), live preview, single undo macro. CLI mirror: `--point-color
+  "hue=20,range=28,dh=…"` — selection- and feather-aware. Closes #114.
+
 ## [1.2.0] — 2026-07-03
 
 ### Added

@@ -624,6 +624,8 @@ class MainWindow(QMainWindow):
         m_adjustments.addAction(self._act("&Levels…", "Ctrl+L", self.action_levels))
         m_adjustments.addAction(self._act("&Hue/Saturation…", "Ctrl+U",
                                           self.action_hue_saturation))
+        m_adjustments.addAction(self._act("&Point Color…", "Ctrl+Shift+U",
+                                          self.action_point_color))
         m_adjustments.addAction(self._act("Color &Balance…", "Ctrl+B",
                                           self.action_color_balance))
         m_adjustments.addAction(self._act("Cur&ves…", "Ctrl+M", self.action_curves))
@@ -2051,6 +2053,14 @@ class MainWindow(QMainWindow):
         from photoslop.huesatdialog import HueSatDialog
 
         HueSatDialog(doc, self).exec()
+
+    def action_point_color(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        from photoslop.pointcolordialog import PointColorDialog
+
+        PointColorDialog(doc, self).exec()
 
     def action_curves(self) -> None:
         doc = self.current_doc()

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import numpy as np
 from PySide6.QtCore import QSize
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QImage
 
 from photoslop.adjust import AdjustSettings, apply_settings, build_luts
 from photoslop.document import Document
@@ -135,3 +135,46 @@ def test_panel_reset_restores(qapp):
     panel.reset()
     assert layer.image.pixelColor(3, 3) == QColor(80, 90, 100)
     assert doc.undo_stack.count() == 0
+
+
+def test_point_color_targets_hue_band(qapp):
+    from photoslop.adjust import apply_point_color
+    img = QImage(3, 1, QImage.Format.Format_ARGB32_Premultiplied)
+    img.setPixelColor(0, 0, QColor(200, 60, 40))    # orange-red: in band
+    img.setPixelColor(1, 0, QColor(40, 60, 200))    # blue: out of band
+    img.setPixelColor(2, 0, QColor(128, 128, 128))  # gray: protected
+    apply_point_color(img, hue_deg=10, hue_range=40, d_hue=90, d_sat=0, d_light=0)
+    hit = img.pixelColor(0, 0)
+    assert hit.green() > hit.red()  # rotated toward green
+    assert img.pixelColor(1, 0) == QColor(40, 60, 200)
+    assert img.pixelColor(2, 0) == QColor(128, 128, 128)
+
+
+def test_point_color_uniformity_pulls_to_centre(qapp):
+    from photoslop.adjust import apply_point_color
+    img = QImage(2, 1, QImage.Format.Format_ARGB32_Premultiplied)
+    img.setPixelColor(0, 0, QColor.fromHsv(35, 200, 200))
+    img.setPixelColor(1, 0, QColor.fromHsv(5, 200, 200))
+    apply_point_color(img, hue_deg=20, hue_range=30, d_hue=0, d_sat=0,
+                      d_light=0, uniformity=100)
+    h0 = img.pixelColor(0, 0).hsvHue()
+    h1 = img.pixelColor(1, 0).hsvHue()
+    assert abs(h0 - 20) < abs(35 - 20)
+    assert abs(h1 - 20) < abs(5 - 20)
+
+
+def test_point_color_dialog_preset_pick_and_scope(qapp):
+    from photoslop.document import Document
+    from photoslop.pointcolordialog import PointColorDialog
+    doc = Document.new(QSize(24, 24), 72.0, "pc", QColor(200, 60, 40))
+    dlg = PointColorDialog(doc)
+    assert dlg.scope_all is not None            # layer<->document toggle
+    dlg._skin_preset()
+    assert dlg._sliders["hue"].value() == 20
+    assert dlg._sliders["range"].value() == 28
+    dlg._picked(QColor(40, 60, 200))            # sample a blue
+    assert abs(dlg._sliders["hue"].value() - QColor(40, 60, 200).hsvHue()) <= 1
+    dlg._skin_preset()                          # back to the doc's own band
+    dlg._sliders["dh"].setValue(45)
+    dlg.accept()
+    assert doc.undo_stack.count() >= 1          # one macro pushed
