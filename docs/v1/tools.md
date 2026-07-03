@@ -36,7 +36,7 @@ See [Selections](selections.md) for refine, feather, and content-aware fill.
 |---|---|---|
 | Shape | `U` | Drag a rect/ellipse/line onto a **new bounded layer**; `Shift+U` cycles the kind. |
 | Pen | `P` | Click anchors; the path smooths through them (Catmull-Rom). `Enter` strokes at brush size, `Ctrl+Enter` fills the closed path, double-click commits, `Esc` cancels. |
-| Text | `T` | Click to place; dialog takes content/font/colour; rasterises to a new layer. |
+| Text | `T` | Click to place; dialog takes content/font/colour (swatch button opens a picker); rasterises to a new layer. Clicking inside the **active** text layer re-opens the dialog pre-filled and edits it in place. |
 
 ## Transform & navigation
 | Tool | Key | Behaviour |

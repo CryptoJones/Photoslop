@@ -253,6 +253,36 @@ class SetLayerStyleCommand(QUndoCommand):
         self._apply(self._old)
 
 
+class EditTextLayerCommand(QUndoCommand):
+    """Replace a text layer's rendered content and remembered text data."""
+
+    def __init__(self, doc: Document, layer: Layer, rendered: Layer,
+                 text: str = "Edit Text") -> None:
+        super().__init__(text)
+        self._doc = doc
+        self._layer = layer
+        self._old = (QImage(layer.image), QPoint(layer.offset), layer.name,
+                     dict(layer.text_data or {}))
+        self._new = (QImage(rendered.image), QPoint(rendered.offset),
+                     rendered.name, dict(rendered.text_data or {}))
+
+    def _apply(self, state) -> None:
+        image, offset, name, data = state
+        dirty = self._layer.bounds()
+        self._layer.image = QImage(image)
+        self._layer.offset = QPoint(offset)
+        self._layer.name = name
+        self._layer.text_data = dict(data)
+        self._layer.fx_cache = None
+        self._doc.notify_pixels(dirty.united(self._layer.bounds()))
+
+    def redo(self) -> None:
+        self._apply(self._new)
+
+    def undo(self) -> None:
+        self._apply(self._old)
+
+
 class SetLayerMaskCommand(QUndoCommand):
     """Add, replace, or delete a layer mask (new_mask=None deletes)."""
 

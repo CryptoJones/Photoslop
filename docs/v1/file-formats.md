@@ -14,6 +14,7 @@ Photoslop extensions as non-namespaced attributes other editors ignore:
 | `photoslop-smart-filters` | recorded smart-filter stack (JSON) |
 | `photoslop-effects` | live layer effects (JSON) |
 | `photoslop-fill-opacity` | fill opacity |
+| `photoslop-text` | text-layer parameters for re-editing (JSON: text/family/size/color) |
 | `photoslop-artboards` (image element) | named export regions (JSON) |
 
 ## Raster

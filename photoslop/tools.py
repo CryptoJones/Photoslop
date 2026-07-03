@@ -13,6 +13,7 @@ from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt
 from PySide6.QtGui import (
     QBrush,
     QColor,
+    QFont,
     QImage,
     QLinearGradient,
     QPainter,
@@ -958,15 +959,34 @@ class ShapeTool(Tool):
 
 
 class TextTool(Tool):
-    """Text (T): click to place text — a dialog takes the content and font,
-    and the text rasterises onto a new layer at the click point."""
+    """Text (T): click to place text — a dialog takes the content, font, and
+    colour, and the text rasterises onto a new layer at the click point.
+    Clicking inside the active layer's text re-opens the dialog pre-filled
+    and replaces that layer's content instead of adding another."""
 
     name = "text"
     cursor = Qt.CursorShape.IBeamCursor
 
     def press(self, doc, canvas, pos, ev):
-        from photoslop.commands import InsertLayerCommand
+        from photoslop.commands import EditTextLayerCommand, InsertLayerCommand
         from photoslop.textdialog import TextDialog, render_text_layer
+
+        target = doc.active_layer
+        if (target is not None and target.text_data
+                and target.bounds().contains(pos.toPoint())):
+            data = target.text_data
+            font = QFont(data["family"])
+            font.setPointSize(max(1, int(data["size"])))
+            dialog = TextDialog(QColor(*data["color"]), canvas.window(),
+                                text=data["text"], font=font)
+            if not dialog.exec():
+                return
+            rendered = render_text_layer(dialog.text(), dialog.chosen_font(),
+                                         dialog.color, QPoint(target.offset))
+            if rendered is None:
+                return  # emptied out — treat as cancel, keep the layer
+            doc.undo_stack.push(EditTextLayerCommand(doc, target, rendered))
+            return
 
         dialog = TextDialog(self.opts.foreground, canvas.window())
         if not dialog.exec():

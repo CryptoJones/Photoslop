@@ -293,6 +293,30 @@ def test_text_and_shape_add_layers(qapp, tmp_path):
     assert flat_has_ink  # the text drew something
 
 
+def test_text_color(qapp, tmp_path):
+    src = make_input(tmp_path, QColor(255, 255, 255))
+    assert run([src, "--text", "5,5,14,255,0,0:Hi",
+                "--output", tmp_path / "out.ora"]) == 0
+    from photoslop.io_ora import load_ora
+
+    loaded = load_ora(str(tmp_path / "out.ora"))
+    text_layer = loaded.layers[1]
+    img = text_layer.image
+    assert any(
+        img.pixelColor(x, y).red() > 200 and img.pixelColor(x, y).green() < 60
+        and img.pixelColor(x, y).alpha() > 200
+        for x in range(img.width()) for y in range(img.height()))
+    # the text parameters round-trip through ORA for later re-editing
+    assert text_layer.text_data["text"] == "Hi"
+    assert text_layer.text_data["color"] == [255, 0, 0, 255]
+
+    # a head that is neither 3 nor 6 values is a usage error
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--text", "5,5,14,255:Hi", "--output", tmp_path / "bad.png"])
+    assert exc.value.code == 2
+    assert not (tmp_path / "bad.png").exists()
+
+
 def test_blend_mode_and_layer_opacity(qapp, tmp_path):
     src = make_input(tmp_path, QColor(100, 100, 100))
     assert run([src, "--shape", "rect,0,0,60,40,255,255,255",

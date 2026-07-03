@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.0.1] — 2026-07-02
+
+### Added
+
+- Text dialog: colour swatch button that opens a colour picker (defaults to
+  the foreground colour, as before).
+- Text tool: clicking inside the active text layer re-opens the dialog
+  pre-filled with its text, font, size, and colour, and replaces the layer
+  content in place (one undo step) instead of adding a new layer. Text
+  parameters persist in `.ora` files (`photoslop-text`), so layers stay
+  editable across save/load — including layers created by the CLI.
+- CLI: `--text` accepts an optional colour — `"X,Y,SIZE[,R,G,B]:TEXT"`;
+  the three-value form still renders black.
+
 ## [1.0.0] — 2026-07-02
 
 Photoslop 1.0 — the flagship. One day, 77 releases, v0.1.0 → v1.0.0.

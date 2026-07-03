@@ -51,7 +51,7 @@ message on stderr.
 | `--deselect` | clear the selection |
 | `--flip` `h|v` | mirror the target layer(s) |
 | `--fill` `R,G,B` | fill the whole target layer with a colour |
-| `--text` `"X,Y,SIZE:TEXT"` | rasterise text onto a new layer |
+| `--text` `"X,Y,SIZE[,R,G,B]:TEXT"` | rasterise text onto a new layer (default colour black) |
 | `--shape` `KIND,X,Y,W,H,R,G,B` | rect/ellipse/line onto a new layer |
 | `--blend-mode` `NAME` | set the target layer's blend mode |
 | `--layer-opacity` `PCT` | set the target layer's opacity |
@@ -83,7 +83,7 @@ Notes:
 for f in *.CR3; do photoslop-cli "$f" --auto-levels --unsharp 110 --output "${f%.CR3}.jpg"; done
 
 # thumbnail with a watermark-ish stamp
-photoslop-cli in.png --resize 400x300 --text "8,280,12:© CryptoJones" --output thumb.png
+photoslop-cli in.png --resize 400x300 --text "8,280,12,255,255,255:© CryptoJones" --output thumb.png
 
 # subject cut-out driven by your own model server
 photoslop-cli photo.png --model-url http://localhost:8188/ps --select-subject \
