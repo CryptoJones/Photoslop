@@ -15,7 +15,8 @@ commits, `Esc` cancels.
 - **Liquify** (`Y` tool): brush-local pixel pushing.
 - **Rotate**: Image → Rotate 90°/180°/flip (exact) for the whole canvas;
   Edit → Rotate 90° CW / CCW and Flip Horizontal / Vertical for the active
-  layer (also in the Layer menu); or **arbitrary angle**
+  layer (also in the Layer menu; headless: `--rotate-layer 90`, `--flip h`);
+  or **arbitrary angle**
   (canvas grows to the rotated bounding box; undo restores pre-rotation
   refs exactly).
 - **Content-Aware Scale** (Image menu): seam carving, shrink *and* grow
