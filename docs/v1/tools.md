@@ -23,8 +23,9 @@ All 31 tools, their keys, and what they do. Cycling variants share a key with
 | Tool | Key | Behaviour |
 |---|---|---|
 | Rectangular Marquee | `M` | Drag a rectangle. |
+| Elliptical Marquee | `Shift+M` | Drag an ellipse; hold Shift for a perfect circle. |
 | Lasso | `L` | Freehand. |
-| Polygonal Lasso | `Shift+L` | Click vertices; close on the first point or double-click. |
+| Polygonal Lasso | `Shift+L` | Click vertices; `Enter`, double-click, or clicking the first point closes. |
 | Magnetic Lasso | `Alt+L` | Live-wire edge snapping (Dijkstra over gradient). |
 | Magic Wand | `W` | Tolerance select; contiguous toggle = colour-range mode. |
 | Quick Select | `Shift+W` | Paint to grow a selection. |

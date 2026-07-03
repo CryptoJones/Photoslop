@@ -48,6 +48,7 @@ message on stderr.
 | `--layer` `N` | target layer index for following ops |
 | `--all-layers` | apply following ops to every visible layer |
 | `--select` `X,Y,W,H` | rectangular selection for region-aware ops |
+| `--select-ellipse` `X,Y,W,H` | elliptical selection inscribed in the box |
 | `--deselect` | clear the selection |
 | `--flip` `h|v` | mirror the target layer(s) |
 | `--fill` `R,G,B` | fill the whole target layer with a colour |

@@ -5,7 +5,9 @@ every selection-aware operation (fills, filters, adjustments, CLI ops)
 honours them.
 
 ## Making selections
-Marquee `M`, Lasso `L`, Polygonal `Shift+L`, **Magnetic Lasso** `Alt+L`
+Marquee `M`, Elliptical Marquee `Shift+M` (hold Shift while dragging for a
+perfect circle), Lasso `L`, Polygonal `Shift+L` (Enter, double-click, or
+clicking the first vertex closes), **Magnetic Lasso** `Alt+L`
 (live-wire edge snapping), Magic Wand `W` (tolerance; contiguous toggle for
 colour-range), Quick Select `Shift+W` (paint to grow), and **Select Subject
 (Model)** via any configured model backend (see

@@ -1,7 +1,8 @@
 # Keyboard Shortcuts
 
 ## Tools
-`V` Move · `M` Marquee · `L` Lasso · `Shift+L` Poly Lasso · `Alt+L` Magnetic ·
+`V` Move · `M` Marquee · `Shift+M` Ellipse Marquee · `L` Lasso ·
+`Shift+L` Poly Lasso (Enter/double-click closes) · `Alt+L` Magnetic ·
 `W` Wand · `Shift+W` Quick Select · `B` Brush · `Shift+B` Pencil · `E` Eraser ·
 `G` Bucket⇄Gradient (cycles) · `S` Clone · `Shift+S` Healing Brush ·
 `J` Spot Heal · `Shift+J` Smudge · `Alt+Shift+J` Patch · `O` Dodge ·

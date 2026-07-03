@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.0.2] — 2026-07-02
+
+### Fixed
+- Polygonal Lasso: `Enter` now closes the selection (it previously did
+  nothing, leaving the tool collecting vertices until `Esc`). Double-click
+  and clicking the first vertex still close it; the toolbar tooltip and docs
+  now say so.
+
+### Added
+- Elliptical Marquee tool (`Shift+M`): drag an ellipse selection; hold Shift
+  while dragging for a perfect circle.
+- CLI: `--select-ellipse X,Y,W,H` — elliptical selection inscribed in the
+  given box, gating following ops exactly like `--select`.
+
 ## [1.0.1] — 2026-07-02
 
 ### Added

@@ -35,6 +35,7 @@ CASES = {
     "layer": ("0", "99"),
     "all-layers": (None, None),
     "select": ("5,5,10,10", "5,5"),
+    "select-ellipse": ("5,5,20,16", "5,5"),
     "deselect": (None, None),
     "flip": ("h", "diagonal"),
     "fill": ("10,200,40", "10,200"),
@@ -242,6 +243,16 @@ def test_select_confines_and_deselect_releases(qapp, tmp_path):
     assert run([src, "--select", "5,5,10,10", "--deselect",
                 "--hue-sat", "0,0,50", "--output", tmp_path / "out.png"]) == 0
     assert out_image(tmp_path).pixelColor(30, 30).red() > 140
+
+
+def test_select_ellipse_excludes_box_corners(qapp, tmp_path):
+    src = make_input(tmp_path, QColor(100, 100, 100))
+    assert run([src, "--select-ellipse", "5,5,20,16", "--hue-sat", "0,0,50",
+                "--output", tmp_path / "out.png"]) == 0
+    out = out_image(tmp_path)
+    assert out.pixelColor(15, 13).red() > 140  # ellipse centre lifted
+    assert out.pixelColor(6, 6).red() == 100  # box corner outside the ellipse
+    assert out.pixelColor(30, 30).red() == 100  # outside the box entirely
 
 
 def test_model_ops_require_backend(qapp, tmp_path):
