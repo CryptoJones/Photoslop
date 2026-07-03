@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.0.5] — 2026-07-03
+
+### Added
+- New Document dialog: paper-size preset radio buttons — A5, A4, A3
+  (metric first) plus Letter and Legal, labelled like
+  `A4 — 210×297 mm (8.3×11.7″)`. Picking one fills the size in mm at the
+  chosen DPI; editing the size flips back to Custom; changing units keeps
+  the preset.
+- File → New pre-fills width/height from the clipboard image (in-app copy
+  or system clipboard), so New → Paste just fits.
+- Dedicated **Select** menu (All, Deselect, Subject (Model), Feather…,
+  Refine…) — moved out of Edit, shortcuts unchanged.
+
+### Changed
+- About window: Credits button now sits to the left of OK.
+
 ## [1.0.4] — 2026-07-03
 
 ### Changed

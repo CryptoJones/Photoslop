@@ -11,7 +11,9 @@ clicking the first vertex closes), **Magnetic Lasso** `Alt+L`
 (live-wire edge snapping), Magic Wand `W` (tolerance; contiguous toggle for
 colour-range), Quick Select `Shift+W` (paint to grow), and **Select Subject
 (Model)** via any configured model backend (see
-[Model Backends](model-backends.md)). `Ctrl+A` all, `Ctrl+D` deselect.
+[Model Backends](model-backends.md)). All selection commands live in the
+**Select** menu: All `Ctrl+A`, Deselect `Ctrl+D`, Subject (Model),
+Feather…, Refine….
 
 ## Refine (`Ctrl+Alt+R`)
 Grow / shrink / smooth the selection with numpy morphology, previewed live.
