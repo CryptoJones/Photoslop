@@ -468,11 +468,16 @@ def _op_text(ctx: Context, value: str) -> None:
 
     head, sep, body = value.partition(":")
     if not sep or not body.strip():
-        raise _ValueError('--text expects "x,y,size:the text"')
-    x, y, size = _ints(head, 3, "--text position")
+        raise _ValueError('--text expects "x,y,size[,r,g,b]:the text"')
+    if len(head.split(",")) == 6:
+        x, y, size, r, g, b = _ints(head, 6, "--text position/colour")
+        color = QColor(r, g, b)
+    else:
+        x, y, size = _ints(head, 3, "--text position")
+        color = QColor(0, 0, 0)
     font = QFont()
     font.setPointSize(max(1, size))
-    layer = render_text_layer(body, font, QColor(0, 0, 0), QPoint(x, y))
+    layer = render_text_layer(body, font, color, QPoint(x, y))
     if layer is None:
         raise _ValueError("--text: nothing to render")
     ctx.doc.layers.append(layer)
@@ -643,7 +648,8 @@ OPS: dict = {
     "deselect": (None, "clear the selection", _op_deselect),
     "flip": ("h|v", "mirror the target layer(s)", _op_flip),
     "fill": ("R,G,B", "fill the whole target layer with a colour", _op_fill),
-    "text": ('"X,Y,SIZE:TEXT"', "rasterise text onto a new layer", _op_text),
+    "text": ('"X,Y,SIZE[,R,G,B]:TEXT"',
+             "rasterise text onto a new layer (default colour black)", _op_text),
     "shape": ("KIND,X,Y,W,H,R,G,B", "rect/ellipse/line onto a new layer",
               _op_shape),
     "blend-mode": ("NAME", "set the target layer's blend mode",

@@ -7,12 +7,14 @@ from __future__ import annotations
 from PySide6.QtCore import QPoint, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter
 from PySide6.QtWidgets import (
+    QColorDialog,
     QDialog,
     QDialogButtonBox,
     QFontComboBox,
     QFormLayout,
     QHBoxLayout,
     QPlainTextEdit,
+    QPushButton,
     QSpinBox,
 )
 
@@ -44,6 +46,12 @@ def render_text_layer(text: str, font: QFont, color: QColor,
                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, line)
         y += metrics.lineSpacing()
     p.end()
+    layer.text_data = {
+        "text": text,
+        "family": font.family(),
+        "size": font.pointSize(),
+        "color": [color.red(), color.green(), color.blue(), color.alpha()],
+    }
     return layer
 
 
@@ -54,15 +62,17 @@ def _size(w: int, h: int):
 
 
 class TextDialog(QDialog):
-    def __init__(self, color: QColor, parent=None) -> None:
+    def __init__(self, color: QColor, parent=None, text: str = "",
+                 font: QFont | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Add Text")
+        self.setWindowTitle("Edit Text" if text else "Add Text")
         self.color = QColor(color)
 
         form = QFormLayout(self)
         self.edit = QPlainTextEdit()
         self.edit.setPlaceholderText("Type your text…")
         self.edit.setMinimumSize(320, 100)
+        self.edit.setPlainText(text)
         form.addRow(self.edit)
 
         row = QHBoxLayout()
@@ -71,8 +81,18 @@ class TextDialog(QDialog):
         self.size.setRange(6, 400)
         self.size.setValue(32)
         self.size.setSuffix(" pt")
+        if font is not None:
+            self.font_box.setCurrentFont(font)
+            if font.pointSize() > 0:
+                self.size.setValue(font.pointSize())
+        self.color_button = QPushButton()
+        self.color_button.setToolTip("Text colour")
+        self.color_button.setFixedSize(40, self.size.sizeHint().height())
+        self.color_button.clicked.connect(self.pick_color)
+        self._update_swatch()
         row.addWidget(self.font_box, 1)
         row.addWidget(self.size)
+        row.addWidget(self.color_button)
         form.addRow(row)
 
         buttons = QDialogButtonBox(
@@ -82,6 +102,18 @@ class TextDialog(QDialog):
         buttons.rejected.connect(self.reject)
         form.addRow(buttons)
         self.edit.setFocus()
+
+    def pick_color(self) -> None:
+        picked = QColorDialog.getColor(
+            self.color, self, "Text Colour",
+            QColorDialog.ColorDialogOption.ShowAlphaChannel)
+        if picked.isValid():
+            self.color = picked
+            self._update_swatch()
+
+    def _update_swatch(self) -> None:
+        self.color_button.setStyleSheet(
+            f"background-color: {self.color.name()}; border: 1px solid gray;")
 
     def chosen_font(self) -> QFont:
         font = self.font_box.currentFont()
