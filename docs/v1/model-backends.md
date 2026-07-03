@@ -5,7 +5,7 @@ Subject** and **Generative Fill** — route through a pluggable `ModelAdapter`,
 and you connect whatever you run.
 
 ## Configure
-Edit → **Model Backend…**: pick an adapter and (for the HTTP adapter) enter
+Edit → Options → **Model Backend…**: pick an adapter and (for the HTTP adapter) enter
 your server's base URL. CLI: `--model-url URL` before any model op.
 
 ## The generic HTTP contract

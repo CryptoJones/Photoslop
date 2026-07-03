@@ -561,8 +561,6 @@ class MainWindow(QMainWindow):
         m_edit.addSeparator()
         m_edit.addAction(self._act("Generative &Fill… (Model)", None,
                                    self.action_generative_fill))
-        m_edit.addAction(self._act("Model Bac&kend…", None,
-                                   self.action_model_backend))
         m_action = m_edit.addMenu("Actio&ns")
         m_action.addAction(self._act("Start &Recording", None, self.action_record_start))
         m_action.addAction(self._act("Sto&p Recording", None, self.action_record_stop))
@@ -583,6 +581,8 @@ class MainWindow(QMainWindow):
         m_edit.addSeparator()
         self._options_menu = m_edit.addMenu("&Options")
         self._rulers_menu = self._options_menu.addMenu("&Rulers")  # unit actions added below
+        self._options_menu.addAction(self._act("&Model Backend…", None,
+                                               self.action_model_backend))
 
         m_select = menu.addMenu("&Select")
         m_select.addAction(self._act("&All", "Ctrl+A", self.action_select_all))
@@ -1753,7 +1753,7 @@ class MainWindow(QMainWindow):
         adapter = self._model_adapter()
         if adapter is None:
             self.statusBar().showMessage(
-                "No model backend configured — Edit → Model Backend…", 5000)
+                "No model backend configured — Edit → Options → Model Backend…", 5000)
             return
         if GENERATIVE_FILL not in adapter.capabilities():
             self.statusBar().showMessage(
@@ -1815,7 +1815,7 @@ class MainWindow(QMainWindow):
         adapter = self._model_adapter()
         if adapter is None:
             self.statusBar().showMessage(
-                "No model backend configured — Edit → Model Backend…", 5000)
+                "No model backend configured — Edit → Options → Model Backend…", 5000)
             return
         if SELECT_SUBJECT not in adapter.capabilities():
             self.statusBar().showMessage(

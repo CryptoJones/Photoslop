@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v1.0.5-orange)]()
+[![Version](https://img.shields.io/badge/version-v1.0.6-orange)]()
 
 ---
 
@@ -156,7 +156,7 @@ every GUI engine feature is exposed (interactive brushes excepted).
 ## Model backends (bring your own model)
 
 Model-assisted features (Edit → **Select Subject (Model)**) never hardwire a
-model. Configure any backend under Edit → **Model Backend…**:
+model. Configure any backend under Edit → Options → **Model Backend…**:
 
 - **Generic HTTP adapter** — point it at any server you run. The contract is
   JSON with base64 PNGs: `POST <base>/select-subject {"image": …}` returns
