@@ -23,7 +23,8 @@ Lightroom-style Basic sliders (exposure/contrast/highlights/shadows/whites/
 blacks/temperature/tint/vibrance/saturation) applied as one LUT pass with
 live preview. The **Apply to all layers (full image)** checkbox switches the
 scope from the active layer to every visible layer — same toggle as the
-adjustment dialogs; Apply is a single undo step either way.
+adjustment dialogs; Apply is a single undo step either way. Headless, the
+same pass is `photoslop-cli --adjust "exposure=1,contrast=10,..."`.
 
 ## Adjustment layers
 For a non-destructive version of Levels, use Layer → New Adjustment Layer —

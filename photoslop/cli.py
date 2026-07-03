@@ -365,6 +365,59 @@ def _op_select(ctx: Context, value: str) -> None:
     ctx.doc.set_selection(path)
 
 
+def _op_select_poly(ctx: Context, value: str) -> None:
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QPainterPath, QPolygonF
+
+    points = []
+    for chunk in value.replace(";", " ").split():
+        x, y = _ints(chunk, 2, "--select-poly point")
+        points.append(QPointF(x, y))
+    if len(points) < 3:
+        raise _ValueError("--select-poly needs at least three X,Y points")
+    path = QPainterPath()
+    path.addPolygon(QPolygonF(points))
+    path.closeSubpath()
+    ctx.doc.set_selection(path)
+
+
+def _op_clear(ctx: Context, value: str) -> None:
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPainter
+
+    doc = ctx.doc
+    if doc.selection is None:
+        raise _ValueError("--clear needs a selection earlier in the pipeline")
+    for layer in _target_layers(ctx):
+        p = QPainter(layer.image)
+        p.setClipPath(doc.selection.translated(-layer.offset.x(),
+                                               -layer.offset.y()))
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
+        p.fillRect(layer.image.rect(), Qt.GlobalColor.black)
+        p.end()
+        layer.fx_cache = None
+
+
+def _op_adjust(ctx: Context, value: str) -> None:
+    from photoslop.adjust import AdjustSettings, apply_settings
+
+    values = {}
+    for chunk in value.split(","):
+        key, sep, num = chunk.partition("=")
+        key = key.strip()
+        if not sep or key not in AdjustSettings.FIELDS:
+            raise _ValueError("--adjust expects KEY=VALUE pairs from: "
+                              + ", ".join(AdjustSettings.FIELDS))
+        try:
+            values[key] = float(num)
+        except ValueError as exc:
+            raise _ValueError(f"--adjust {key}: {exc}") from exc
+    settings = AdjustSettings(**values)
+    for layer in _target_layers(ctx):
+        _filter_region(ctx, layer,
+                       lambda img, m: apply_settings(img, settings))
+
+
 def _op_select_ellipse(ctx: Context, value: str) -> None:
     from PySide6.QtCore import QRectF
     from PySide6.QtGui import QPainterPath
@@ -641,6 +694,10 @@ OPS: dict = {
     "color-balance": ("9 INTS", "shadows,midtones,highlights r,g,b each",
                       _op_color_balance),
     "curves": ("X:Y,...", "master curve points in 0..255", _op_curves),
+    "adjust": ('"KEY=VAL,..."',
+               "Lightroom Basic sliders (temperature, tint, exposure, "
+               "contrast, highlights, shadows, whites, blacks, vibrance, "
+               "saturation)", _op_adjust),
     "gaussian-blur": ("RADIUS", "gaussian blur (selection-aware)",
                       _op_gaussian_blur),
     "unsharp": ("AMOUNT", "unsharp mask, percent", _op_unsharp),
@@ -659,7 +716,12 @@ OPS: dict = {
                _op_select),
     "select-ellipse": ("X,Y,W,H", "elliptical selection inscribed in the box",
                        _op_select_ellipse),
+    "select-poly": ('"X,Y X,Y X,Y..."',
+                    "polygon selection from three or more points",
+                    _op_select_poly),
     "deselect": (None, "clear the selection", _op_deselect),
+    "clear": (None, "erase the selection to transparency (headless Cut)",
+              _op_clear),
     "flip": ("h|v", "mirror the target layer(s)", _op_flip),
     "fill": ("R,G,B", "fill the whole target layer with a colour", _op_fill),
     "text": ('"X,Y,SIZE[,R,G,B]:TEXT"',
@@ -703,7 +765,16 @@ def build_parser() -> argparse.ArgumentParser:
         prog="photoslop-cli",
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("input", help="input image (PNG/JPG/ORA/camera-raw)")
+    parser.add_argument("input", nargs="?",
+                        help="input image (PNG/JPG/ORA/camera-raw); "
+                             "omit when starting from --new")
+    parser.add_argument("--new", metavar="WxH|PRESET",
+                        help="start from a blank white document instead of an "
+                             "input file: pixel size (800x600) or a paper "
+                             "preset (A5, A4, A3, Letter, Legal) at --dpi")
+    parser.add_argument("--dpi", type=int, default=72, metavar="N",
+                        help="resolution for --new documents and paper "
+                             "presets (default 72)")
     parser.add_argument("--output", "-o", metavar="PATH",
                         help=".ora keeps layers; raster extensions flatten")
     parser.add_argument("--export-artboards", metavar="DIR",
@@ -742,6 +813,29 @@ def _load_document(path: str):
     if img.isNull():
         raise _ValueError(f"could not decode: {path}")
     return Document.from_image(img, os.path.basename(path), 72.0)
+
+
+def _new_document(spec: str, dpi: int):
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QColor
+
+    from photoslop.document import Document
+    from photoslop.units import PAPER_SIZES
+
+    for name, wmm, hmm, _metric, _inches in PAPER_SIZES:
+        if spec.lower() == name.lower():
+            w = max(1, round(wmm / 25.4 * dpi))
+            h = max(1, round(hmm / 25.4 * dpi))
+            break
+    else:
+        try:
+            w, h = _size(spec, "--new")
+        except _ValueError:
+            names = ", ".join(n for n, *_ in PAPER_SIZES)
+            raise _ValueError(
+                f"--new expects WxH or a preset ({names})") from None
+    return Document.new(QSize(w, h), float(dpi), "Untitled",
+                        QColor(255, 255, 255))
 
 
 RASTER_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff")
@@ -805,8 +899,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     pipeline = getattr(args, "pipeline", None) or []
+    if args.input and args.new:
+        parser.error("give an input file or --new, not both")
+    if not args.input and not args.new:
+        parser.error("give an input file, or start blank with --new")
     try:
-        doc = _load_document(args.input)
+        doc = (_load_document(args.input) if args.input
+               else _new_document(args.new, args.dpi))
         ctx = Context(doc=doc)
         for op, value in pipeline:
             OPS[op][2](ctx, value)

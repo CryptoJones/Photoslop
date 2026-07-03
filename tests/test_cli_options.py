@@ -25,6 +25,7 @@ CASES = {
     "hue-sat": ("30,10,0", "30"),
     "color-balance": ("10,0,0,0,0,0,0,0,-10", "1,2,3"),
     "curves": ("0:20,255:235", "0:20:40"),
+    "adjust": ("exposure=1,contrast=10", "sharpness=5"),
     "gaussian-blur": ("2", "soft"),
     "unsharp": ("120", "sharp"),
     "tilt-shift": ("20,10,8,4", "20"),
@@ -36,7 +37,9 @@ CASES = {
     "all-layers": (None, None),
     "select": ("5,5,10,10", "5,5"),
     "select-ellipse": ("5,5,20,16", "5,5"),
+    "select-poly": ("5,5 25,5 25,15", "5,5 25,5"),
     "deselect": (None, None),
+    "clear": (None, None),
     "flip": ("h", "diagonal"),
     "fill": ("10,200,40", "10,200"),
     "text": ("5,5,10:hello", "5,5,10"),
@@ -253,6 +256,76 @@ def test_select_ellipse_excludes_box_corners(qapp, tmp_path):
     assert out.pixelColor(15, 13).red() > 140  # ellipse centre lifted
     assert out.pixelColor(6, 6).red() == 100  # box corner outside the ellipse
     assert out.pixelColor(30, 30).red() == 100  # outside the box entirely
+
+
+def test_select_poly_confines_to_triangle(qapp, tmp_path):
+    src = make_input(tmp_path, QColor(100, 100, 100))
+    # right triangle: legs along the top and right edges of (5,5)-(25,15)
+    assert run([src, "--select-poly", "5,5 25,5 25,15", "--hue-sat", "0,0,50",
+                "--output", tmp_path / "out.png"]) == 0
+    out = out_image(tmp_path)
+    assert out.pixelColor(20, 8).red() > 140  # inside the triangle
+    assert out.pixelColor(7, 13).red() == 100  # inside bbox, outside triangle
+    assert out.pixelColor(40, 30).red() == 100  # far outside
+
+
+def test_adjust_basic_sliders(qapp, tmp_path):
+    src = make_input(tmp_path, QColor(100, 100, 100))
+    assert run([src, "--adjust", "exposure=1", "--output",
+                tmp_path / "out.png"]) == 0
+    assert out_image(tmp_path).pixelColor(5, 5).red() > 150  # +1 stop
+
+    # selection gates it like every other adjustment op
+    assert run([src, "--select", "5,5,10,10", "--adjust", "exposure=1",
+                "--output", tmp_path / "out.png"]) == 0
+    out = out_image(tmp_path)
+    assert out.pixelColor(7, 7).red() > 150
+    assert out.pixelColor(30, 30).red() == 100
+
+    with pytest.raises(SystemExit) as exc:  # unknown slider name
+        run([src, "--adjust", "sharpness=5", "--output", tmp_path / "bad.png"])
+    assert exc.value.code == 2
+
+
+def test_clear_erases_selection(qapp, tmp_path):
+    src = make_input(tmp_path, QColor(100, 100, 100))
+    assert run([src, "--select", "5,5,10,10", "--clear", "--deselect",
+                "--output", tmp_path / "out.png"]) == 0
+    out = out_image(tmp_path)
+    assert out.pixelColor(7, 7).alpha() == 0  # erased to transparency
+    assert out.pixelColor(30, 30) == QColor(100, 100, 100)
+
+    with pytest.raises(SystemExit) as exc:  # needs a selection
+        run([src, "--clear", "--output", tmp_path / "bad.png"])
+    assert exc.value.code == 2
+    assert not (tmp_path / "bad.png").exists()
+
+
+def test_new_document_sizes_and_presets(qapp, tmp_path):
+    out = tmp_path / "out.png"
+    assert cli.main(["--new", "100x80", "--fill", "10,200,40",
+                     "--output", str(out)]) == 0
+    img = QImage(str(out))
+    assert img.size() == QSize(100, 80)
+    assert img.pixelColor(50, 40) == QColor(10, 200, 40)
+
+    assert cli.main(["--new", "letter", "--output", str(out)]) == 0
+    assert QImage(str(out)).size() == QSize(612, 792)  # 8.5×11″ at 72 dpi
+
+    assert cli.main(["--new", "A4", "--dpi", "300", "--output", str(out)]) == 0
+    assert QImage(str(out)).size() == QSize(2480, 3508)
+
+    with pytest.raises(SystemExit) as exc:  # unknown preset
+        cli.main(["--new", "tabloid", "--output", str(out)])
+    assert exc.value.code == 2
+
+    with pytest.raises(SystemExit) as exc:  # input and --new are exclusive
+        cli.main([make_input(tmp_path), "--new", "50x50", "--output", str(out)])
+    assert exc.value.code == 2
+
+    with pytest.raises(SystemExit) as exc:  # neither is an error too
+        cli.main(["--output", str(out)])
+    assert exc.value.code == 2
 
 
 def test_model_ops_require_backend(qapp, tmp_path):

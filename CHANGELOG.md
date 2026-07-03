@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.1.0] — 2026-07-03
+
+Full GUI↔CLI parity restored: every headless gap from the post-1.0 patch run
+is closed.
+
+### Added
+- CLI `--select-poly "X,Y X,Y X,Y..."` — polygon selection (the lasso
+  family's headless mirror).
+- CLI `--adjust "KEY=VAL,..."` — the Adjust panel's Lightroom Basic sliders
+  (temperature, tint, exposure, contrast, highlights, shadows, whites,
+  blacks, vibrance, saturation), selection-gated like every adjustment op.
+- CLI `--clear` — erase the selection to transparency (the headless half of
+  Edit → Cut).
+- CLI `--new WxH|PRESET` with `--dpi N` — start pipelines from a blank
+  document instead of an input file; presets match the GUI's paper sizes
+  (A5/A4/A3/Letter/Legal). `PAPER_SIZES` now lives in `photoslop.units`,
+  shared by the dialog and the CLI.
+
 ## [1.0.7] — 2026-07-03
 
 ### Added
