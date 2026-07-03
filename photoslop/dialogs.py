@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QLineEdit,
+    QRadioButton,
     QSpinBox,
     QVBoxLayout,
 )
@@ -27,9 +28,19 @@ _BACKGROUNDS = (
     ("Black", QColor(0, 0, 0)),
 )
 
+# name, exact mm (portrait), pretty labels — metric first, freedom units for
+# our dumb American friends
+PAPER_SIZES = (
+    ("A5", 148.0, 210.0, "148×210 mm", "5.8×8.3″"),
+    ("A4", 210.0, 297.0, "210×297 mm", "8.3×11.7″"),
+    ("A3", 297.0, 420.0, "297×420 mm", "11.7×16.5″"),
+    ("Letter", 215.9, 279.4, "216×279 mm", "8.5×11″"),
+    ("Legal", 215.9, 355.6, "216×356 mm", "8.5×14″"),
+)
+
 
 class NewDocumentDialog(QDialog):
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, initial_size: QSize | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("New Image")
 
@@ -54,8 +65,25 @@ class NewDocumentDialog(QDialog):
         self.background = QComboBox()
         self.background.addItems([label for label, _c in _BACKGROUNDS])
 
+        presets = QGroupBox("Preset")
+        preset_lay = QVBoxLayout(presets)
+        self.custom_radio = QRadioButton("Custom")
+        self.custom_radio.setChecked(True)
+        preset_lay.addWidget(self.custom_radio)
+        self.preset_radios = {}
+        for name, wmm, hmm, metric, inches in PAPER_SIZES:
+            radio = QRadioButton(f"{name} — {metric} ({inches})")
+            radio.toggled.connect(
+                lambda on, w=wmm, h=hmm: on and self._apply_preset(w, h))
+            preset_lay.addWidget(radio)
+            self.preset_radios[name] = radio
+        self._applying_preset = False
+        for spin in (self.width, self.height):
+            spin.valueChanged.connect(self._size_edited)
+
         form = QFormLayout(self)
         form.addRow("Name", self.name)
+        form.addRow(presets)
         form.addRow("Width", self.width)
         form.addRow("Height", self.height)
         form.addRow("Unit", self.unit)
@@ -69,7 +97,29 @@ class NewDocumentDialog(QDialog):
         buttons.rejected.connect(self.reject)
         form.addRow(buttons)
 
+        if initial_size is not None:  # e.g. the clipboard image's size
+            self.unit.setCurrentText("px")
+            self._applying_preset = True
+            self.width.setValue(initial_size.width())
+            self.height.setValue(initial_size.height())
+            self._applying_preset = False
+
+    def _apply_preset(self, wmm: float, hmm: float) -> None:
+        self._applying_preset = True
+        self.unit.setCurrentText("mm")
+        self.width.setValue(wmm)
+        self.height.setValue(hmm)
+        self._applying_preset = False
+
+    def _size_edited(self) -> None:
+        # hand-editing the size means it is no longer the chosen preset
+        if not self._applying_preset and not self.custom_radio.isChecked():
+            self.custom_radio.setChecked(True)
+
     def _convert_unit(self, unit: str) -> None:
+        # converting units preserves the physical size, so it must not kick
+        # the preset radio back to Custom
+        guard, self._applying_preset = self._applying_preset, True
         dpi = float(self.dpi.value())
         for spin in (self.width, self.height):
             px = units.unit_to_px(spin.value(), self._last_unit, dpi)
@@ -77,6 +127,7 @@ class NewDocumentDialog(QDialog):
         self._last_unit = unit
         for spin in (self.width, self.height):
             spin.setDecimals(0 if unit == "px" else 3)
+        self._applying_preset = guard
 
     def values(self) -> tuple[str, QSize, float, QColor | None]:
         dpi = float(self.dpi.value())

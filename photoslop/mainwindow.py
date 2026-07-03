@@ -559,15 +559,6 @@ class MainWindow(QMainWindow):
         m_edit.addAction(self._act("&Paste as New Layer", "Ctrl+V", self.action_paste))
         m_edit.addAction(self._act("&Delete Selection", "Del", self.action_delete_selection))
         m_edit.addSeparator()
-        m_edit.addAction(self._act("Select &All", "Ctrl+A", self.action_select_all))
-        m_edit.addAction(self._act("Select Su&bject (Model)", None,
-                                   self.action_select_subject))
-        m_edit.addAction(self._act("&Refine Selection…", "Ctrl+Alt+R",
-                                   self.action_refine_selection))
-        m_edit.addAction(self._act("Feat&her Selection…", "Ctrl+Alt+D",
-                                   self.action_feather_selection))
-        m_edit.addAction(self._act("D&eselect", "Ctrl+D", self.action_deselect))
-        m_edit.addSeparator()
         m_edit.addAction(self._act("Generative &Fill… (Model)", None,
                                    self.action_generative_fill))
         m_edit.addAction(self._act("Model Bac&kend…", None,
@@ -592,6 +583,18 @@ class MainWindow(QMainWindow):
         m_edit.addSeparator()
         self._options_menu = m_edit.addMenu("&Options")
         self._rulers_menu = self._options_menu.addMenu("&Rulers")  # unit actions added below
+
+        m_select = menu.addMenu("&Select")
+        m_select.addAction(self._act("&All", "Ctrl+A", self.action_select_all))
+        m_select.addAction(self._act("&Deselect", "Ctrl+D", self.action_deselect))
+        m_select.addSeparator()
+        m_select.addAction(self._act("Su&bject (Model)", None,
+                                     self.action_select_subject))
+        m_select.addSeparator()
+        m_select.addAction(self._act("Feat&her…", "Ctrl+Alt+D",
+                                     self.action_feather_selection))
+        m_select.addAction(self._act("&Refine…", "Ctrl+Alt+R",
+                                     self.action_refine_selection))
 
         m_image = menu.addMenu("&Image")
         m_image.addAction(self._act("&Image Size…", "Ctrl+Alt+I", self.action_image_size))
@@ -900,8 +903,16 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ file actions
 
+    def _clip_size_hint(self) -> QSize | None:
+        """The size of whatever image is on the clipboard, if any — so
+        File→New can default to exactly what a paste will drop in."""
+        if self.pixel_clip is not None:
+            return self.pixel_clip[0].size()
+        img = QGuiApplication.clipboard().image()
+        return img.size() if not img.isNull() else None
+
     def action_new(self) -> None:
-        dialog = NewDocumentDialog(self)
+        dialog = NewDocumentDialog(self, initial_size=self._clip_size_hint())
         if dialog.exec():
             name, size, dpi, background = dialog.values()
             self.add_document(Document.new(size, dpi, name, background))
@@ -2198,10 +2209,18 @@ class MainWindow(QMainWindow):
             "<p>Apache-2.0 · <a href='https://github.com/CryptoJones/Photoslop'>"
             "github.com/CryptoJones/Photoslop</a></p>"
             "<p>Proudly Made in Nebraska. Go Big Red! 🌽</p>")
-        box.addButton(QMessageBox.StandardButton.Ok)
+        ok = box.addButton(QMessageBox.StandardButton.Ok)
         credits = box.addButton("&Credits",
                                 QMessageBox.ButtonRole.ActionRole)
         credits.clicked.connect(self.action_credits)
+        # place Credits immediately left of OK regardless of platform style
+        from PySide6.QtWidgets import QDialogButtonBox
+
+        row = box.findChild(QDialogButtonBox).layout()
+        row.removeWidget(credits)
+        row.removeWidget(ok)
+        row.addWidget(credits)
+        row.addWidget(ok)
         return box
 
     def action_about(self) -> None:

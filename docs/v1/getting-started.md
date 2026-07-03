@@ -19,7 +19,10 @@ From a checkout: `uv sync` then `uv run photoslop`.
 
 ## First document
 
-File → New (`Ctrl+N`), or open PNG/JPG/ORA/camera-raw files via File → Open
+File → New (`Ctrl+N`) — paper-size presets (A5/A4/A3, Letter, Legal;
+metric first, inches for the freedom-unit crowd) populate the size fields,
+and if the clipboard holds an image the dialog opens pre-filled with its
+dimensions, ready to paste into. Or open PNG/JPG/ORA/camera-raw files via File → Open
 (`Ctrl+O`) — the open dialog previews images. Drag-and-drop onto the window
 also opens files. Save as OpenRaster (`.ora`) to keep layers; use File →
 Export As for flattened raster output.

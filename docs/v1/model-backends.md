@@ -32,7 +32,7 @@ the backend picker automatically. Implement `capabilities()` and whichever of
 Broken plugins are skipped, never fatal.
 
 ## The features
-- **Edit → Select Subject (Model)**: your backend's mask becomes the live
+- **Select → Subject (Model)**: your backend's mask becomes the live
   selection (thresholded at 50%).
 - **Edit → Generative Fill… (Model)**: make a selection, type a prompt; the
   result composites through the standard selection plumbing (feather
