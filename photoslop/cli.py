@@ -436,6 +436,38 @@ def _op_adjust(ctx: Context, value: str) -> None:
                        lambda img, m: apply_settings(img, settings))
 
 
+_POINT_COLOR_FIELDS = {
+    "hue": (0.0, 359.9), "range": (1.0, 180.0), "dh": (-180.0, 180.0),
+    "ds": (-100.0, 100.0), "dl": (-100.0, 100.0), "uniform": (0.0, 100.0),
+}
+
+
+def _op_point_color(ctx: Context, value: str) -> None:
+    from photoslop.adjust import apply_point_color
+
+    values = {"range": 30.0, "dh": 0.0, "ds": 0.0, "dl": 0.0, "uniform": 0.0}
+    for chunk in value.split(","):
+        key, sep, num = chunk.partition("=")
+        key = key.strip()
+        if not sep or key not in _POINT_COLOR_FIELDS:
+            raise _ValueError("--point-color expects KEY=VALUE pairs from: "
+                              + ", ".join(_POINT_COLOR_FIELDS))
+        try:
+            v = float(num)
+        except ValueError as exc:
+            raise _ValueError(f"--point-color {key}: {exc}") from exc
+        lo, hi = _POINT_COLOR_FIELDS[key]
+        if not lo <= v <= hi:
+            raise _ValueError(f"--point-color {key} must be in {lo}..{hi}")
+        values[key] = v
+    if "hue" not in values:
+        raise _ValueError("--point-color needs hue=DEGREES (0..359)")
+    for layer in _target_layers(ctx):
+        _filter_region(ctx, layer, lambda img, m: apply_point_color(
+            img, values["hue"], values["range"], values["dh"],
+            values["ds"], values["dl"], values["uniform"]))
+
+
 def _op_select_ellipse(ctx: Context, value: str) -> None:
     from PySide6.QtCore import QRectF
     from PySide6.QtGui import QPainterPath
@@ -718,6 +750,10 @@ OPS: dict = {
                "Lightroom Basic sliders (temperature, tint, exposure, "
                "contrast, highlights, shadows, whites, blacks, vibrance, "
                "saturation)", _op_adjust),
+    "point-color": ('"KEY=VAL,..."',
+                    "targeted hue-band HSL: hue (required), range, dh, ds, "
+                    "dl, uniform — skin tones ≈ hue=20,range=28",
+                    _op_point_color),
     "gaussian-blur": ("RADIUS", "gaussian blur (selection-aware)",
                       _op_gaussian_blur),
     "unsharp": ("AMOUNT", "unsharp mask, percent", _op_unsharp),

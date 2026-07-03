@@ -325,3 +325,93 @@ def apply_settings(img: QImage, s: AdjustSettings) -> None:
             | (g.astype(np.uint32) << np.uint32(8))
             | b.astype(np.uint32)
         )
+
+
+def apply_point_color(img: QImage, hue_deg: float, hue_range: float,
+                      d_hue: float, d_sat: float, d_light: float,
+                      uniformity: float = 0.0) -> None:
+    """Targeted HSL: pixels whose hue lies within `hue_range` degrees of
+    `hue_deg` shift by d_hue/d_sat/d_light under a smooth cosine falloff;
+    `uniformity` (0..100) additionally pulls hues toward the band centre
+    (skin-tone evening). Near-gray pixels are protected — the weight scales
+    down with saturation so neutrals don't pick up a cast. In place, in
+    row bands (one transient float copy per chunk, DD-001)."""
+    if d_hue == 0 and d_sat == 0 and d_light == 0 and uniformity == 0:
+        return
+    hue_range = max(1.0, float(hue_range))
+
+    arr = view_u32(img)
+    height = arr.shape[0]
+    for y0 in range(0, height, CHUNK_ROWS):
+        chunk = arr[y0 : y0 + CHUNK_ROWS]
+        a = (chunk >> np.uint32(24)).astype(np.uint16)
+        r = ((chunk >> np.uint32(16)) & 0xFF).astype(np.uint16)
+        g = ((chunk >> np.uint32(8)) & 0xFF).astype(np.uint16)
+        b = (chunk & 0xFF).astype(np.uint16)
+
+        opaque = bool((a == 255).all())
+        if not opaque:
+            safe_a = np.maximum(a, 1)
+            r = np.minimum(255, r * 255 // safe_a)
+            g = np.minimum(255, g * 255 // safe_a)
+            b = np.minimum(255, b * 255 // safe_a)
+
+        rf = r.astype(np.float32) / 255.0
+        gf = g.astype(np.float32) / 255.0
+        bf = b.astype(np.float32) / 255.0
+
+        # rgb -> hsv (h in degrees, s/v in 0..1)
+        maxc = np.maximum(np.maximum(rf, gf), bf)
+        minc = np.minimum(np.minimum(rf, gf), bf)
+        delta = maxc - minc
+        v = maxc
+        s = np.where(maxc > 0, delta / np.maximum(maxc, 1e-6), 0.0)
+        h = np.zeros_like(maxc)
+        nz = delta > 1e-6
+        rm = nz & (maxc == rf)
+        gm = nz & (maxc == gf) & ~rm
+        bm = nz & ~rm & ~gm
+        safe_d = np.maximum(delta, 1e-6)
+        h = np.where(rm, ((gf - bf) / safe_d) % 6.0, h)
+        h = np.where(gm, (bf - rf) / safe_d + 2.0, h)
+        h = np.where(bm, (rf - gf) / safe_d + 4.0, h)
+        h *= 60.0
+
+        # circular distance to the target hue, cosine falloff, gray guard
+        dist = np.abs((h - hue_deg + 180.0) % 360.0 - 180.0)
+        w = np.where(dist < hue_range,
+                     np.cos((dist / hue_range) * (np.pi / 2.0)) ** 2, 0.0)
+        w = (w * np.clip(s / 0.25, 0.0, 1.0)).astype(np.float32)
+
+        centre_pull = ((hue_deg - h + 180.0) % 360.0 - 180.0)
+        h = (h + w * (d_hue + centre_pull * (uniformity / 100.0))) % 360.0
+        s = np.clip(s * (1.0 + w * (d_sat / 100.0)), 0.0, 1.0)
+        if d_light > 0:
+            v = v + (1.0 - v) * (w * d_light / 100.0)
+        elif d_light < 0:
+            v = v * (1.0 + w * d_light / 100.0)
+
+        # hsv -> rgb
+        hh = h / 60.0
+        i = np.floor(hh).astype(np.int32) % 6
+        f = hh - np.floor(hh)
+        p = v * (1.0 - s)
+        q = v * (1.0 - s * f)
+        t = v * (1.0 - s * (1.0 - f))
+        rf = np.choose(i, [v, q, p, p, t, v])
+        gf = np.choose(i, [t, v, v, q, p, p])
+        bf = np.choose(i, [p, p, t, v, v, q])
+
+        r = (np.clip(rf, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint16)
+        g = (np.clip(gf, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint16)
+        b = (np.clip(bf, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint16)
+
+        if not opaque:
+            r = r * a // 255
+            g = g * a // 255
+            b = b * a // 255
+
+        chunk[...] = ((a.astype(np.uint32) << np.uint32(24))
+                      | (r.astype(np.uint32) << np.uint32(16))
+                      | (g.astype(np.uint32) << np.uint32(8))
+                      | b.astype(np.uint32))
