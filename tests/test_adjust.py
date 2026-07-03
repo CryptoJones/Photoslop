@@ -70,13 +70,54 @@ def test_panel_session_apply_undo(qapp):
     panel.apply()
     assert doc.undo_stack.count() == 1
     assert layer.image.pixelColor(5, 5).red() > 150
-    assert panel._pristine is None  # session closed
+    assert panel._pristines == {}  # session closed
     assert panel._sliders["exposure"].value() == 0
 
     doc.undo_stack.undo()
     assert layer.image.pixelColor(5, 5).red() == 100
     doc.undo_stack.redo()
     assert layer.image.pixelColor(5, 5).red() > 150
+
+
+def test_panel_scope_all_layers(qapp):
+    win = MainWindow()
+    win.add_document(Document.new(QSize(30, 20), 72.0, "s", QColor(100, 100, 100)))
+    doc = win.current_doc()
+    panel = win.adjust_panel
+    from PySide6.QtCore import QPoint
+
+    from photoslop.layer import Layer
+
+    top = Layer.blank("top", QSize(10, 10), QPoint(2, 2))
+    top.image.fill(QColor(60, 60, 60))
+    doc.layers.append(top)
+    doc.active_index = 1
+    background = doc.layers[0]
+
+    # scope = layer (default): only the active layer previews
+    panel._sliders["exposure"].setValue(100)
+    panel._debounce.stop()
+    panel._recompute()
+    assert top.image.pixelColor(5, 5).red() > 90
+    assert background.image.pixelColor(5, 5).red() == 100
+
+    # flip to full image mid-session: both layers preview from pristine
+    panel.scope_all.setChecked(True)
+    assert background.image.pixelColor(5, 5).red() > 150
+    assert top.image.pixelColor(5, 5).red() > 90
+
+    # flip back: the background is restored, only the layer stays adjusted
+    panel.scope_all.setChecked(False)
+    assert background.image.pixelColor(5, 5).red() == 100
+
+    panel.scope_all.setChecked(True)
+    panel.apply()
+    assert doc.undo_stack.count() == 1  # one macro for both layers
+    assert background.image.pixelColor(5, 5).red() > 150
+    doc.undo_stack.undo()
+    assert background.image.pixelColor(5, 5).red() == 100
+    assert top.image.pixelColor(5, 5).red() == 60
+    panel.scope_all.setChecked(False)
 
 
 def test_panel_reset_restores(qapp):

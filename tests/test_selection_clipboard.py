@@ -54,6 +54,26 @@ def test_delete_selection(qapp):
     assert doc.active_layer.image.pixelColor(5, 5) == QColor(255, 0, 0)
 
 
+def test_cut_copies_then_clears(qapp):
+    win = make_window(qapp)
+    win.tabs.setCurrentIndex(0)
+    doc = win.current_doc()
+
+    win.action_cut()  # no selection: a no-op with a hint, no undo entry
+    assert doc.undo_stack.count() == 0
+
+    doc.set_selection(rect_path(10, 10, 20, 10))
+    win.action_cut()
+    img, origin = win.pixel_clip  # landed on the clipboard...
+    assert img.size() == QSize(20, 10)
+    assert img.pixelColor(5, 5) == QColor(255, 0, 0)
+    # ...and the pixels are gone, as one "Cut" undo step
+    assert doc.active_layer.image.pixelColor(15, 12).alpha() == 0
+    assert doc.undo_stack.count() == 1
+    doc.undo_stack.undo()
+    assert doc.active_layer.image.pixelColor(15, 12) == QColor(255, 0, 0)
+
+
 def test_cross_document_pixel_paste(qapp):
     win = make_window(qapp)
     win.tabs.setCurrentIndex(0)
