@@ -36,6 +36,7 @@ message on stderr.
 | `--canvas-size` `WxH` | grow/shrink the canvas (content centred) |
 | `--crop` `X,Y,W,H` | crop the canvas to a rectangle |
 | `--rotate` `DEG` | rotate the whole image by any angle |
+| `--rotate-layer` `DEG` | rotate the target layer(s) about their centre |
 | `--content-aware-scale` `WxH` | seam-carve the target layer(s) |
 | `--levels` `B,W,GAMMA` | levels adjustment |
 | `--auto-levels` | 0.1%-percentile auto levels |

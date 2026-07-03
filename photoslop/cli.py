@@ -163,6 +163,24 @@ def _op_rotate(ctx: Context, value: str) -> None:
     ArbitraryRotateCommand(ctx.doc, angle).redo()
 
 
+def _op_rotate_layer(ctx: Context, value: str) -> None:
+    from PySide6.QtCore import QPoint
+    from PySide6.QtGui import QTransform
+
+    try:
+        deg = float(value)
+    except ValueError as exc:
+        raise _ValueError(f"--rotate-layer: {exc}") from exc
+    # rotate each target layer about its own centre (RotateLayerCommand)
+    for layer in _target_layers(ctx):
+        cx = layer.offset.x() + layer.image.width() / 2.0
+        cy = layer.offset.y() + layer.image.height() / 2.0
+        layer.image = layer.image.transformed(QTransform().rotate(deg))
+        layer.offset = QPoint(round(cx - layer.image.width() / 2.0),
+                              round(cy - layer.image.height() / 2.0))
+        layer.fx_cache = None
+
+
 def _op_cas(ctx: Context, value: str) -> None:
     from PySide6.QtCore import QPoint, QSize
 
@@ -686,6 +704,8 @@ OPS: dict = {
                     _op_canvas_size),
     "crop": ("X,Y,W,H", "crop the canvas to a rectangle", _op_crop_real),
     "rotate": ("DEG", "rotate the whole image by any angle", _op_rotate),
+    "rotate-layer": ("DEG", "rotate the target layer(s) about their centre",
+                     _op_rotate_layer),
     "content-aware-scale": ("WxH", "seam-carve the target layer(s)", _op_cas),
     "levels": ("B,W,GAMMA", "levels adjustment", _op_levels),
     "auto-levels": (None, "0.1%-percentile auto levels", _op_auto_levels),

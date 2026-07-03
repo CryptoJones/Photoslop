@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.1.2] — 2026-07-03
+
+### Added
+- CLI `--rotate-layer DEG` — rotate the target layer(s) about their centre,
+  the headless mirror of Edit/Layer → Rotate 90° CW/CCW (any angle works;
+  scope with `--layer` / `--all-layers`). `--rotate` remains the
+  whole-image rotation.
+
 ## [1.1.1] — 2026-07-03
 
 ### Added

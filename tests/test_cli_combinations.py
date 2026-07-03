@@ -23,6 +23,7 @@ PAIR_ARGS = {
     "canvas-size": ["--canvas-size", "64x44"],
     "crop": ["--crop", "2,2,40,28"],
     "rotate": ["--rotate", "10"],
+    "rotate-layer": ["--rotate-layer", "90"],
     "content-aware-scale": ["--content-aware-scale", "36x26"],
     "levels": ["--levels", "10,240,1.2"],
     "auto-levels": ["--auto-levels"],

@@ -19,6 +19,7 @@ CASES = {
     "canvas-size": ("80x60", "80"),
     "crop": ("5,5,20,15", "5,5"),
     "rotate": ("15", "sideways"),
+    "rotate-layer": ("90", "sideways"),
     "content-aware-scale": ("40x30", "40"),
     "levels": ("10,240,1.2", "10,240"),
     "auto-levels": (None, None),
@@ -116,6 +117,21 @@ def test_rotate_grows_bounding_box(qapp, tmp_path):
     assert run([src, "--rotate", "45", "--output", tmp_path / "out.png"]) == 0
     out = out_image(tmp_path)
     assert out.width() > 60 and out.height() > 40
+
+
+def test_rotate_layer_spins_about_centre(qapp, tmp_path):
+    src = make_input(tmp_path)  # 60×40 layer
+    assert run([src, "--rotate-layer", "90", "--output",
+                tmp_path / "out.ora"]) == 0
+    from photoslop.io_ora import load_ora
+
+    loaded = load_ora(str(tmp_path / "out.ora"))
+    layer = loaded.layers[0]
+    assert layer.image.width() == 40 and layer.image.height() == 60
+    # centre preserved: (30,20) stays the middle, so the offset shifts
+    assert (layer.offset.x(), layer.offset.y()) == (10, -10)
+    # the canvas itself is untouched (unlike --rotate)
+    assert loaded.size.width() == 60 and loaded.size.height() == 40
 
 
 def test_content_aware_scale(qapp, tmp_path):
