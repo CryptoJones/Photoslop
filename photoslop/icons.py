@@ -57,6 +57,16 @@ def rect_select_icon() -> QIcon:
     return _make(draw)
 
 
+def ellipse_select_icon() -> QIcon:
+    def draw(p: QPainter) -> None:
+        pen = QPen(_INK, 1.6, Qt.PenStyle.DashLine)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(QRectF(4, 6, 14, 10))
+
+    return _make(draw)
+
+
 def lasso_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         pen = QPen(_INK, 1.6, Qt.PenStyle.DashLine)
@@ -454,6 +464,7 @@ TOOL_ICONS = {
     "dodge": dodge_icon,
     "burn": burn_icon,
     "rect-select": rect_select_icon,
+    "ellipse-select": ellipse_select_icon,
     "lasso": lasso_icon,
     "poly-lasso": poly_lasso_icon,
     "magnetic-lasso": magnetic_lasso_icon,

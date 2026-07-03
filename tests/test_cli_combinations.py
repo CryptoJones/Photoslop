@@ -39,6 +39,7 @@ PAIR_ARGS = {
     "layer": ["--layer", "0"],
     "all-layers": ["--all-layers"],
     "select": ["--select", "2,2,8,8"],
+    "select-ellipse": ["--select-ellipse", "2,2,10,10"],
     "deselect": ["--deselect"],
     "flip": ["--flip", "h"],
     "fill": ["--fill", "10,200,40"],

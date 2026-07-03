@@ -365,6 +365,18 @@ def _op_select(ctx: Context, value: str) -> None:
     ctx.doc.set_selection(path)
 
 
+def _op_select_ellipse(ctx: Context, value: str) -> None:
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QPainterPath
+
+    x, y, w, h = _ints(value, 4, "--select-ellipse")
+    if w < 1 or h < 1:
+        raise _ValueError("--select-ellipse: width/height must be positive")
+    path = QPainterPath()
+    path.addEllipse(QRectF(x, y, w, h))
+    ctx.doc.set_selection(path)
+
+
 def _op_deselect(ctx: Context, value: str) -> None:
     ctx.doc.set_selection(None)
 
@@ -645,6 +657,8 @@ OPS: dict = {
                    _op_all_layers),
     "select": ("X,Y,W,H", "rectangular selection for region-aware ops",
                _op_select),
+    "select-ellipse": ("X,Y,W,H", "elliptical selection inscribed in the box",
+                       _op_select_ellipse),
     "deselect": (None, "clear the selection", _op_deselect),
     "flip": ("h|v", "mirror the target layer(s)", _op_flip),
     "fill": ("R,G,B", "fill the whole target layer with a colour", _op_fill),

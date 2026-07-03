@@ -1414,6 +1414,45 @@ class RectSelectTool(Tool):
         self._anchor = None
 
 
+class EllipseSelectTool(Tool):
+    """Elliptical marquee: drag an ellipse; hold Shift for a perfect circle."""
+
+    name = "ellipse-select"
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._anchor: QPointF | None = None
+
+    def _rect(self, pos: QPointF, ev) -> QRectF:
+        dx = pos.x() - self._anchor.x()
+        dy = pos.y() - self._anchor.y()
+        if ev is not None and ev.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            side = max(abs(dx), abs(dy))
+            dx = side if dx >= 0 else -side
+            dy = side if dy >= 0 else -side
+        return QRectF(self._anchor,
+                      self._anchor + QPointF(dx, dy)).normalized()
+
+    def press(self, doc, canvas, pos, ev):
+        self._anchor = pos
+        doc.set_selection(None)
+
+    def move(self, doc, canvas, pos, ev):
+        if self._anchor is None:
+            return
+        path = QPainterPath()
+        path.addEllipse(self._rect(pos, ev))
+        doc.set_selection(path)
+
+    def release(self, doc, canvas, pos, ev):
+        if self._anchor is None:
+            return
+        rect = self._rect(pos, ev)
+        if rect.width() < 2 and rect.height() < 2:
+            doc.set_selection(None)
+        self._anchor = None
+
+
 class LassoTool(Tool):
     name = "lasso"
 
@@ -1645,8 +1684,8 @@ class QuickSelectTool(Tool):
 
 
 class PolyLassoTool(Tool):
-    """Click to place vertices; close by clicking the first vertex or
-    double-clicking. Escape cancels."""
+    """Click to place vertices; close with Enter, a double-click, or by
+    clicking the first vertex. Escape cancels."""
 
     name = "poly-lasso"
 
@@ -1677,6 +1716,14 @@ class PolyLassoTool(Tool):
             self._close(doc)
         else:
             self.cancel(doc)
+
+    def commit(self, canvas) -> None:
+        """Enter closes the polygon, same as clicking the first vertex."""
+        if len(self._points) >= 3:
+            self._close(canvas.doc)
+        else:
+            self.cancel(canvas.doc)
+        canvas.update()
 
     def cancel(self, doc=None) -> None:
         self._points = []
