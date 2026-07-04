@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.9.0] — 2026-07-03
+
+### Added
+- **ICC color management** (viewport-only per DD-004; engine is Qt's
+  QColorSpace — zero new dependencies): Assign Profile / Convert to
+  Profile (presets + any .icc), monitor-profile display transform and
+  **Soft Proof** (`Ctrl+Y`) applied to the composited viewport region
+  only, profile persistence in .ora (`photoslop-icc`) and embedding in
+  PNG/JPEG exports. CLI mirrors: `--assign-profile`, `--convert-profile`,
+  `--proof`, and `--cmyk-out FILE.icc` (CMYK JPEG/TIFF via littlecms —
+  DD-005 export-only). Closes #108.
+
 ## [1.8.0] — 2026-07-03
 
 ### Added

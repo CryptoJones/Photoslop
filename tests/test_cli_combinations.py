@@ -46,6 +46,9 @@ PAIR_ARGS = {
     "clear": ["--select", "3,3,6,6", "--clear", "--deselect"],
     "adjust": ["--adjust", "exposure=0.4,contrast=5"],
     "point-color": ["--point-color", "hue=20,range=40,ds=25"],
+    "assign-profile": ["--assign-profile", "display-p3"],
+    "convert-profile": ["--convert-profile", "adobe-rgb"],
+    "proof": ["--proof", "srgb"],
     "filter": ["--filter", "pixelate:size=4"],
     "flip": ["--flip", "h"],
     "fill": ["--fill", "10,200,40"],
@@ -62,7 +65,11 @@ PAIR_ARGS = {
     "restore-smart": ["--convert-smart", "--restore-smart"],
     "add-artboard": ["--add-artboard", "B,0,0,10,10"],
 }
-NETWORK_OPS = ("model-url", "select-subject", "generative-fill")
+# ops excluded from the pair sweep: need a backend or an on-disk
+# ICC profile the harness cannot assume (cmyk-out gets its own
+# skip-if-missing effect test in test_color.py)
+NETWORK_OPS = ("model-url", "select-subject", "generative-fill",
+               "cmyk-out")
 
 
 def test_pair_catalog_covers_all_non_network_ops():

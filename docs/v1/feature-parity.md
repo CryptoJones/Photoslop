@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v1.8.0** against six
+An honest, category-by-category comparison of **Photoslop v1.9.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -15,7 +15,7 @@ than "missing".
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 1.8.0 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
+| **Photoslop** | 1.9.0 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
@@ -89,8 +89,8 @@ than "missing".
 |---|---|---|---|---|---|---|---|
 | Camera-raw import | 🟡 (rawpy, camera WB, 8-bit) [File Formats](file-formats.md) | ✅ (Camera Raw) | 🟡 (via darktable/RawTherapee handoff) | ❌ | ✅ | ✅ | ✅ |
 | Full raw develop pipeline | ❌ | ✅ | — | — | ✅ | ✅ | ✅ |
-| ICC color management | ❌ | ✅ | ✅ | ✅ (5.1+) | ✅ (sRGB/P3/Rec2020 added 15.x) | ✅ | ✅ |
-| CMYK mode | ❌ | ✅ | 🟡 (soft-proof, no native mode) | ❌ | — | — | 🟡 (process recipes) |
+| ICC color management | ✅ (viewport-only, DD-004) [Adjustments](adjustments.md) | ✅ | ✅ | ✅ (5.1+) | ✅ (sRGB/P3/Rec2020 added 15.x) | ✅ | ✅ |
+| CMYK mode | 🟡 (export only, DD-005) | ✅ | 🟡 (soft-proof, no native mode) | ❌ | — | — | 🟡 (process recipes) |
 | 16/32-bit per channel | ❌ (8-bit premultiplied) | ✅ | ✅ | ❌ (8-bit internal) | ✅ | ✅ (32-bit float) | ✅ |
 | Lens corrections | ❌ | ✅ | 🟡 (plugin) | ❌ | ✅ | ✅ | ✅ |
 | AI denoise | ❌ (adapter could) | ✅ | ❌ | ❌ | ✅ | 🟡 (5.6 Lua AI models) | ✅ (Enhanced Denoise 16.8) |
@@ -183,7 +183,9 @@ issue yet — this section is the menu to pick from.
 **Color depth & management** — the deepest structural gap.
 - 8-bit premultiplied only; no 16/32-bit, no HDR pipeline *(large — touches
   every engine path)*.
-- No ICC color management, display profiles, or soft-proofing *(large)*.
+- ~~No ICC color management~~ *(shipped v1.9.0 — assign/convert,
+  monitor-profile display transform, soft-proof, profile embedding,
+  CMYK export; all viewport-only per DD-004)*.
 - No CMYK mode or print pipeline *(large; niche for the current audience)*.
 
 **Raw development.**

@@ -78,6 +78,8 @@ class Context:
     all_layers: bool = False
     model_url: str = ""
     exports: list = field(default_factory=list)  # written artboard paths
+    proof_space: object = None  # QColorSpace for --proof simulation at write
+    cmyk_icc: str = ""  # CMYK .icc path for --cmyk-out export
 
 
 def _target_layers(ctx: Context) -> list:
@@ -460,6 +462,41 @@ _POINT_COLOR_FIELDS = {
 }
 
 
+def _op_assign_profile(ctx: Context, value: str) -> None:
+    from photoslop import color
+
+    try:
+        color.assign_profile(ctx.doc, color.load_space(value))
+    except ValueError as exc:
+        raise _ValueError(f"--assign-profile: {exc}") from exc
+
+
+def _op_convert_profile(ctx: Context, value: str) -> None:
+    from photoslop import color
+
+    try:
+        color.convert_profile(ctx.doc, color.load_space(value))
+    except ValueError as exc:
+        raise _ValueError(f"--convert-profile: {exc}") from exc
+
+
+def _op_proof(ctx: Context, value: str) -> None:
+    from photoslop import color
+
+    try:
+        ctx.proof_space = color.load_space(value)
+    except ValueError as exc:
+        raise _ValueError(f"--proof: {exc}") from exc
+
+
+def _op_cmyk_out(ctx: Context, value: str) -> None:
+    import os
+
+    if not os.path.exists(value):
+        raise _ValueError(f"--cmyk-out: profile not found: {value}")
+    ctx.cmyk_icc = value
+
+
 def _op_point_color(ctx: Context, value: str) -> None:
     from photoslop.adjust import apply_point_color
 
@@ -759,6 +796,15 @@ OPS: dict = {
                "Lightroom Basic sliders (temperature, tint, exposure, "
                "contrast, highlights, shadows, whites, blacks, vibrance, "
                "saturation)", _op_adjust),
+    "assign-profile": ("PROFILE", "assign an ICC profile (preset name or "
+                       ".icc path) — metadata only", _op_assign_profile),
+    "convert-profile": ("PROFILE", "convert pixels to an ICC profile "
+                        "(srgb, adobe-rgb, display-p3, prophoto-rgb, or "
+                        ".icc path)", _op_convert_profile),
+    "proof": ("PROFILE", "soft-proof simulation applied to raster output",
+              _op_proof),
+    "cmyk-out": ("FILE.icc", "write --output as CMYK JPEG/TIFF through "
+                 "this profile (needs photoslop[formats])", _op_cmyk_out),
     "point-color": ('"KEY=VAL,..."',
                     "targeted hue-band HSL: hue (required), range, dh, ds, "
                     "dl, uniform — skin tones ≈ hue=20,range=28",
@@ -918,23 +964,37 @@ def _new_document(spec: str, dpi: int):
 RASTER_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff")
 
 
-def _write_output(doc, path: str) -> None:
-    from photoslop import io_formats
+def _write_output(doc, path: str, proof=None, cmyk_icc: str | None = None,
+                  ) -> None:
+    from photoslop import color, io_formats
     from photoslop.io_ora import save_ora
 
     lower = path.lower()
+    if cmyk_icc:
+        flat = doc.flatten()
+        if proof is not None:
+            flat = color.proof_simulate(flat, doc, proof)
+        try:
+            color.cmyk_export(flat, path, cmyk_icc)
+        except ValueError as exc:
+            raise _ValueError(str(exc)) from exc
+        return
     if lower.endswith(".ora"):
         save_ora(doc, path)
         return
+    flat = doc.flatten()
+    if proof is not None:
+        flat = color.proof_simulate(flat, doc, proof)
+    flat = color.tag_for_export(flat, doc)
     if io_formats.is_extra_path(path):
         if not io_formats.available(path):
             raise _ValueError(io_formats.missing_hint(path))
-        if not io_formats.save_extra(doc.flatten(), path):
+        if not io_formats.save_extra(flat, path):
             raise RuntimeError(f"could not write {path}")
         return
     if not lower.endswith(RASTER_EXTS):
         raise _ValueError(f"unsupported output extension: {path}")
-    if not doc.flatten().save(path):
+    if not flat.save(path):
         raise RuntimeError(f"could not write {path}")
 
 
@@ -1000,7 +1060,8 @@ def main(argv: list[str] | None = None) -> int:
             for path in written:
                 print(path)
         if args.output:
-            _write_output(doc, args.output)
+            _write_output(doc, args.output, ctx.proof_space,
+                          ctx.cmyk_icc or None)
         if not (args.info or args.export_artboards or args.output):
             parser.error("nothing to do: give --output, --info, "
                          "or --export-artboards")

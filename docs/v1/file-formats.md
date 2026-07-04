@@ -17,6 +17,7 @@ Photoslop extensions as non-namespaced attributes other editors ignore:
 | `photoslop-text` | text-layer parameters for re-editing (JSON: text/family/size/color) |
 | `photoslop-artboards` (image element) | named export regions (JSON) |
 | `photoslop-vector` | Shape/Pen geometry for re-editing (JSON) |
+| `photoslop-icc` | document ICC profile (base64) |
 
 ## Raster
 PNG, JPEG, BMP, WebP, GIF, TIFF open directly; Export As / `--output` writes
