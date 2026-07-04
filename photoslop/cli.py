@@ -618,10 +618,7 @@ def _op_text(ctx: Context, value: str) -> None:
 
 
 def _op_shape(ctx: Context, value: str) -> None:
-    from PySide6.QtCore import QPoint, QRectF, QSize
-    from PySide6.QtGui import QColor, QPainter
-
-    from photoslop.layer import Layer
+    from photoslop import vector
 
     parts = value.split(",")
     if len(parts) != 8:
@@ -630,22 +627,16 @@ def _op_shape(ctx: Context, value: str) -> None:
     if kind not in ("rect", "ellipse", "line"):
         raise _ValueError("--shape kind must be rect, ellipse, or line")
     x, y, w, h, r, g, b = _ints(",".join(parts[1:]), 7, "--shape")
-    layer = Layer.blank(f"Shape {len(ctx.doc.layers)}", QSize(max(2, w), max(2, h)),
-                        QPoint(x, y))
-    p = QPainter(layer.image)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    color = QColor(r, g, b)
+    data = {"kind": kind, "x1": x, "y1": y,
+            "x2": x + (w - 1 if kind == "line" else w),
+            "y2": y + (h - 1 if kind == "line" else h),
+            "color": [r, g, b, 255]}
     if kind == "line":
-        from PySide6.QtGui import QPen
-
-        p.setPen(QPen(color, 2))
-        p.drawLine(0, 0, w - 1, h - 1)
-    else:
-        p.setPen(QColor(0, 0, 0, 0))
-        p.setBrush(color)
-        rect = QRectF(0, 0, w, h)
-        p.drawEllipse(rect) if kind == "ellipse" else p.drawRect(rect)
-    p.end()
+        data["width"] = 2
+    layer = vector.render_vector(data, f"Shape {len(ctx.doc.layers)}",
+                                 ctx.doc.canvas_rect())
+    if layer is None:
+        raise _ValueError("--shape: degenerate geometry")
     ctx.doc.layers.append(layer)
     ctx.doc.active_index = len(ctx.doc.layers) - 1
 

@@ -54,7 +54,7 @@ class Layer:
     __slots__ = ("adjustment", "blend_mode", "clipped", "effects",
                  "fill_opacity", "fx_cache", "group", "image", "mask", "name",
                  "offset", "opacity", "smart_filters", "source", "text_data",
-                 "visible")
+                 "vector_data", "visible")
 
     def __init__(
         self,
@@ -81,6 +81,7 @@ class Layer:
         self.fill_opacity = 1.0  # scales the fill only, never the effects
         self.fx_cache = None  # (key, rendered effect images) — derived
         self.text_data: dict | None = None  # text/family/size/color for re-editing
+        self.vector_data: dict | None = None  # shape/pen geometry for re-editing
 
     @classmethod
     def blank(cls, name: str, size: QSize, offset: QPoint | None = None) -> Layer:
@@ -109,6 +110,8 @@ class Layer:
         layer.fill_opacity = self.fill_opacity
         if self.text_data is not None:
             layer.text_data = dict(self.text_data)
+        if self.vector_data is not None:
+            layer.vector_data = dict(self.vector_data)
         return layer
 
     def paint_image(self, local_region: QRect) -> QImage:

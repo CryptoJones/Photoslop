@@ -64,7 +64,7 @@ message on stderr.
 | `--flip` `h|v` | mirror the target layer(s) |
 | `--fill` `R,G,B` | fill the whole target layer with a colour |
 | `--text` `"X,Y,SIZE[,R,G,B]:TEXT"` | rasterise text onto a new layer (default colour black) |
-| `--shape` `KIND,X,Y,W,H,R,G,B` | rect/ellipse/line onto a new layer |
+| `--shape` `KIND,X,Y,W,H,R,G,B` | rect/ellipse/line onto a new **parametric** layer (re-renders crisp on --resize) |
 | `--blend-mode` `NAME` | set the target layer's blend mode |
 | `--layer-opacity` `PCT` | set the target layer's opacity |
 | `--content-aware-fill` | diffusion-fill the selection |
