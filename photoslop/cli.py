@@ -436,6 +436,24 @@ def _op_adjust(ctx: Context, value: str) -> None:
                        lambda img, m: apply_settings(img, settings))
 
 
+def _op_filter(ctx: Context, value: str) -> None:
+    from photoslop.filters import available_filters, parse_params
+
+    name, _sep, params_text = value.partition(":")
+    name = name.strip()
+    registry = available_filters()
+    cls = registry.get(name)
+    if cls is None:
+        raise _ValueError(f"--filter: unknown filter {name!r}; installed: "
+                          + (", ".join(sorted(registry)) or "none"))
+    try:
+        params = parse_params(cls, params_text.strip())
+    except ValueError as exc:
+        raise _ValueError(f"--filter: {exc}") from exc
+    for layer in _target_layers(ctx):
+        _filter_region(ctx, layer, lambda img, m: cls().apply(img, params))
+
+
 _POINT_COLOR_FIELDS = {
     "hue": (0.0, 359.9), "range": (1.0, 180.0), "dh": (-180.0, 180.0),
     "ds": (-100.0, 100.0), "dl": (-100.0, 100.0), "uniform": (0.0, 100.0),
@@ -756,6 +774,9 @@ OPS: dict = {
                     _op_point_color),
     "gaussian-blur": ("RADIUS", "gaussian blur (selection-aware)",
                       _op_gaussian_blur),
+    "filter": ('"NAME:KEY=VAL,..."',
+               "run a filter plugin (built-ins: sepia, pixelate; more via "
+               "the photoslop.filters entry-point group)", _op_filter),
     "unsharp": ("AMOUNT", "unsharp mask, percent", _op_unsharp),
     "tilt-shift": ("C,B,T,R", "tilt-shift blur: centre,band,transition,radius",
                    _op_tilt_shift),

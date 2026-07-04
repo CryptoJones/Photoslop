@@ -28,6 +28,7 @@ CASES = {
     "curves": ("0:20,255:235", "0:20:40"),
     "adjust": ("exposure=1,contrast=10", "sharpness=5"),
     "point-color": ("hue=20,range=28,dh=15,uniform=40", "hue=400"),
+    "filter": ("sepia:amount=100", "nope"),
     "gaussian-blur": ("2", "soft"),
     "unsharp": ("120", "sharp"),
     "tilt-shift": ("20,10,8,4", "20"),

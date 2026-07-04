@@ -770,6 +770,16 @@ class MainWindow(QMainWindow):
         m_filter.addAction(self._act("Gaussian &Blur…", None, self.action_gaussian_blur))
         m_filter.addAction(self._act("&Unsharp Mask…", None, self.action_unsharp_mask))
         m_filter.addAction(self._act("&Tilt-Shift…", None, self.action_tilt_shift))
+        from photoslop.filters import available_filters
+
+        plugins = available_filters()
+        if plugins:
+            m_filter.addSeparator()
+            for fname in sorted(plugins):
+                cls = plugins[fname]
+                m_filter.addAction(self._act(
+                    f"{cls.label}…", None,
+                    lambda checked=False, c=cls: self.action_plugin_filter(c)))
 
         m_help = menu.addMenu("&Help")
         m_help.addAction(self._act("&About Photoslop", None, self.action_about))
@@ -1144,6 +1154,8 @@ class MainWindow(QMainWindow):
                     self.action_unsharp_direct(*params)
                 elif kind == "tilt-shift":
                     self.apply_tilt_shift(doc, layer, *params)
+                elif kind == "filter":
+                    self.apply_plugin_filter(params[0], dict(params[1]))
         finally:
             self._replaying_smart = False
             doc.undo_stack.endMacro()
@@ -1167,6 +1179,31 @@ class MainWindow(QMainWindow):
         self._record_step(f"Unsharp Mask {amount}%",
                           lambda w: w.action_unsharp_direct(amount))
         self._record_smart_filter(("unsharp", amount))
+
+    def action_plugin_filter(self, cls) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        from photoslop.filterdialog import FilterParamsDialog
+
+        dialog = FilterParamsDialog(cls, self)
+        if cls.params and not dialog.exec():
+            return
+        self.apply_plugin_filter(cls.name, dialog.values())
+
+    def apply_plugin_filter(self, name: str, params: dict) -> None:
+        """Run a registered filter plugin through the shared plumbing."""
+        from photoslop.filters import available_filters
+
+        cls = available_filters().get(name)
+        if cls is None:
+            self.statusBar().showMessage(f"Filter not installed: {name}", 5000)
+            return
+        self._run_filter(cls.label,
+                         lambda img, m: cls().apply(img, params))
+        self._record_step(f"{cls.label} {params}",
+                          lambda w: w.apply_plugin_filter(name, params))
+        self._record_smart_filter(("filter", name, tuple(sorted(params.items()))))
 
     def action_record_start(self) -> None:
         self.action_recording = []

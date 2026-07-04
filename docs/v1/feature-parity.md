@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v1.3.0** against six
+An honest, category-by-category comparison of **Photoslop v1.4.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -15,7 +15,7 @@ than "missing".
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 1.3.0 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
+| **Photoslop** | 1.4.0 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
@@ -101,7 +101,7 @@ than "missing".
 |---|---|---|---|---|---|---|---|
 | Gaussian blur / unsharp mask | ✅ [Filters](filters.md) | ✅ | ✅ | ✅ | ✅ (masked) | ✅ | ✅ |
 | Tilt-shift / lens blur | ✅ | ✅ | 🟡 | 🟡 (plugins) | ✅ (Lens Blur AI) | 🟡 | ❌ |
-| Big filter library | ❌ (3 filters) | ✅ (hundreds) | ✅ (GEGL + G'MIC) | ✅ (plugin ecosystem) | — | ✅ (70+ modules) | 🟡 (styles) |
+| Big filter library | 🟡 (5 built-in + plugin API) [Filter Plugins](filter-plugins.md) | ✅ (hundreds) | ✅ (GEGL + G'MIC) | ✅ (plugin ecosystem) | — | ✅ (70+ modules) | 🟡 (styles) |
 | Generative fill (prompt-based) | ✅ **BYO model** [Model Backends](model-backends.md) | ✅ (Firefly + Flux/Gemini partner models, cloud or local) | ❌ | ❌ | 🟡 (Firefly handoff) | ❌ | ❌ |
 | Generative upscale | ❌ (adapter could) | ✅ (Topaz built in) | ❌ | ❌ | 🟡 (Enhance) | 🟡 (Lua AI models) | ❌ |
 | Style/look transfer | ❌ | ✅ (Harmonize) | ❌ | ❌ | 🟡 (presets/AI) | 🟡 (styles) | ✅ (Match Look) |
@@ -152,7 +152,7 @@ Photoslop is an editor, not a DAM — these rows are scope notes, not gaps.
 
 | Feature | Photoslop | Photoshop | GIMP | Paint.NET | LR Classic | darktable | Capture One |
 |---|---|---|---|---|---|---|---|
-| Plugin API | 🟡 (model adapters via entry points only) | ✅ (UXP ecosystem) | ✅ (huge; G'MIC etc.) | ✅ (large legacy + GPU system) | ✅ (Lua) | ✅ (Lua) | 🟡 |
+| Plugin API | ✅ (model adapters + filters via entry points) [Filter Plugins](filter-plugins.md) | ✅ (UXP ecosystem) | ✅ (huge; G'MIC etc.) | ✅ (large legacy + GPU system) | ✅ (Lua) | ✅ (Lua) | 🟡 |
 | Bring-your-own ML backend | ✅ (HTTP contract or Python plugin) [Model Backends](model-backends.md) | ❌ (Adobe-chosen partners) | ❌ | ❌ | ❌ | ✅ (5.6 Lua AI inference) | ❌ |
 | Open source | ✅ Apache-2.0 | ❌ | ✅ GPL-3.0 | 🟡 (freeware, source partially closed since 4.x) | ❌ | ✅ GPL-3.0 | ❌ |
 
@@ -195,8 +195,8 @@ issue yet — this section is the menu to pick from.
   plumbing generalizes)*.
 - Shapes/pen rasterize on commit — no parametric re-editing (text already
   re-edits; GIMP 3.2 now does full vector layers) *(medium)*.
-- Filter library is 3 deep; no plugin API for filters — only model adapters
-  *(medium; an entry-point filter API would mirror the adapter design)*.
+- ~~No plugin API for filters~~ *(shipped v1.4.0 — `photoslop.filters`
+  entry points; the library itself grows via the filter packs, #111)*.
 - No tablet pressure sensitivity *(small-medium; QTabletEvent, needs hardware
   to verify)*.
 

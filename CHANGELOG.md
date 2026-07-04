@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.4.0] — 2026-07-03
+
+### Added
+- **Filter plugin API** (`photoslop.filters` entry-point group): a filter is
+  one class — name, label, ParamSpecs, `apply(image, params)` — and Photoslop
+  generates the rest: Filter-menu entry with an auto-built parameter dialog,
+  `--filter "name:key=val,..."` CLI op, selection/feather awareness through
+  the shared plumbing, action recording, and smart-filter replay. Built-ins
+  **Sepia** and **Pixelate** ship in the box; a complete installable
+  reference plugin lives in `examples/photoslop-invert-filter/`. New guide:
+  docs/v1/filter-plugins.md. Closes #109.
+
 ## [1.3.0] — 2026-07-03
 
 ### Added
