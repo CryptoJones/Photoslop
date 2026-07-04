@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v1.4.0** against six
+An honest, category-by-category comparison of **Photoslop v1.5.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -15,7 +15,7 @@ than "missing".
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 1.4.0 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
+| **Photoslop** | 1.5.0 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
@@ -101,7 +101,7 @@ than "missing".
 |---|---|---|---|---|---|---|---|
 | Gaussian blur / unsharp mask | ✅ [Filters](filters.md) | ✅ | ✅ | ✅ | ✅ (masked) | ✅ | ✅ |
 | Tilt-shift / lens blur | ✅ | ✅ | 🟡 | 🟡 (plugins) | ✅ (Lens Blur AI) | 🟡 | ❌ |
-| Big filter library | 🟡 (5 built-in + plugin API) [Filter Plugins](filter-plugins.md) | ✅ (hundreds) | ✅ (GEGL + G'MIC) | ✅ (plugin ecosystem) | — | ✅ (70+ modules) | 🟡 (styles) |
+| Big filter library | ✅ (G'MIC pack: full library via `photoslop[gmic]`) [Filter Plugins](filter-plugins.md) | ✅ (hundreds) | ✅ (GEGL + G'MIC) | ✅ (plugin ecosystem) | — | ✅ (70+ modules) | 🟡 (styles) |
 | Generative fill (prompt-based) | ✅ **BYO model** [Model Backends](model-backends.md) | ✅ (Firefly + Flux/Gemini partner models, cloud or local) | ❌ | ❌ | 🟡 (Firefly handoff) | ❌ | ❌ |
 | Generative upscale | ❌ (adapter could) | ✅ (Topaz built in) | ❌ | ❌ | 🟡 (Enhance) | 🟡 (Lua AI models) | ❌ |
 | Style/look transfer | ❌ | ✅ (Harmonize) | ❌ | ❌ | 🟡 (presets/AI) | 🟡 (styles) | ✅ (Match Look) |

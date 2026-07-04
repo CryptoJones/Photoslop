@@ -96,9 +96,12 @@ def register_filter(cls: type[Filter]) -> None:
 
 
 def available_filters() -> dict[str, type[Filter]]:
-    """Built-ins + registered + pip-installed entry points, by name."""
+    """Built-ins + packs + registered + pip-installed entry points."""
     for cls in _BUILT_INS:
         _REGISTRY.setdefault(cls.name, cls)
+    from photoslop import gmicpack
+
+    gmicpack.register_all()
     from importlib.metadata import entry_points
 
     for ep in entry_points(group="photoslop.filters"):
@@ -117,6 +120,15 @@ def parse_params(cls: type[Filter], text: str) -> dict:
     specs = {spec.key: spec for spec in cls.params}
     values = {spec.key: spec.default for spec in cls.params}
     if not text:
+        return values
+    if len(cls.params) == 1 and cls.params[0].type == "str":
+        # single free-text param: everything after "key=" verbatim
+        # (commas belong to the value, e.g. gmic:command=blur 3,1)
+        key, sep, val = text.partition("=")
+        if not sep or key.strip() != cls.params[0].key:
+            raise ValueError(
+                f"{cls.name}: expects {cls.params[0].key}=<text>")
+        values[cls.params[0].key] = val
         return values
     for chunk in text.split(","):
         key, sep, num = chunk.partition("=")

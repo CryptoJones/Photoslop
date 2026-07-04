@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QLineEdit,
     QSpinBox,
 )
 
@@ -20,13 +21,19 @@ class FilterParamsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(cls.label)
         self._cls = cls
-        self._boxes: dict[str, QSpinBox | QDoubleSpinBox] = {}
+        self._boxes: dict[str, QSpinBox | QDoubleSpinBox | QLineEdit] = {}
         form = QFormLayout(self)
         for spec in cls.params:
-            box = QSpinBox() if spec.type == "int" else QDoubleSpinBox()
-            box.setRange(int(spec.minimum) if spec.type == "int" else spec.minimum,
-                         int(spec.maximum) if spec.type == "int" else spec.maximum)
-            box.setValue(int(spec.default) if spec.type == "int" else spec.default)
+            if spec.type == "str":
+                box = QLineEdit(str(spec.default))
+            elif spec.type == "int":
+                box = QSpinBox()
+                box.setRange(int(spec.minimum), int(spec.maximum))
+                box.setValue(int(spec.default))
+            else:
+                box = QDoubleSpinBox()
+                box.setRange(spec.minimum, spec.maximum)
+                box.setValue(spec.default)
             form.addRow(spec.label, box)
             self._boxes[spec.key] = box
         buttons = QDialogButtonBox(
@@ -37,4 +44,5 @@ class FilterParamsDialog(QDialog):
         form.addRow(buttons)
 
     def values(self) -> dict:
-        return {key: box.value() for key, box in self._boxes.items()}
+        return {key: (box.text() if isinstance(box, QLineEdit) else box.value())
+                for key, box in self._boxes.items()}

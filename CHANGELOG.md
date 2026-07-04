@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.5.0] — 2026-07-03
+
+### Added
+- **G'MIC filter pack** via the optional `photoslop[gmic]` extra (gmic-py
+  wheel; a `gmic` binary on PATH works as a subprocess fallback): seven
+  curated filters (Cartoon, Old Photo, Drawing, Stencil, Spread, Solarize,
+  anisotropic Smooth) plus **G'MIC Command** — a raw escape hatch to the
+  entire G'MIC library including the community `fx_*` set. Auto-registers
+  on the filter plugin API, so menu, params dialogs, `--filter`, selections,
+  and smart replay all work. Alpha is protected (RGB-only hand-off);
+  DD-008 float transients documented. First of the #111 packs.
+
 ## [1.4.0] — 2026-07-03
 
 ### Added

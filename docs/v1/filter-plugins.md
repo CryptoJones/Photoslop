@@ -10,6 +10,33 @@ respects **selections and feathering**, participates in **actions** and
 Two built-ins ship in the box and double as living documentation:
 **Sepia** (`sepia:amount=0..100`) and **Pixelate** (`pixelate:size=2..128`).
 
+## The G'MIC pack (`photoslop[gmic]`)
+
+```bash
+pip install "photoslop[gmic]"       # gmic-py wheel; or apt install gmic for the CLI fallback
+```
+
+With the wheel (or a `gmic` binary on PATH) installed, the pack
+auto-registers — no entry point needed:
+
+| Filter | CLI name | Params |
+|---|---|---|
+| G'MIC Cartoon | `gmic-cartoon` | `smoothness` 0–10, `colors` 0.5–3 |
+| G'MIC Old Photo | `gmic-old-photo` | — |
+| G'MIC Drawing | `gmic-drawing` | `amplitude` 1–300 |
+| G'MIC Stencil (B&W) | `gmic-stencil` | `radius` 0.5–10, `smoothness` 1–30 |
+| G'MIC Spread | `gmic-spread` | `dx`/`dy` 0–32 |
+| G'MIC Solarize | `gmic-solarize` | `threshold` 0–255 |
+| G'MIC Smooth (anisotropic) | `gmic-smooth` | `amplitude` 1–500 |
+| **G'MIC Command** | `gmic` | `command` — any G'MIC pipeline, verbatim |
+
+**G'MIC Command is the whole library**: `--filter "gmic:command=fx_bokeh
+3,8,0,30,8,4,0.3,0.2,210,210,80,160,0.7,30,20,1,1,170,130,20,110,0.15,0"`
+runs the community bokeh; commas after `command=` belong to the command.
+Only RGB is handed to G'MIC — alpha is kept aside and reattached, so
+transparency can't be corrupted. Per DD-008, each run costs a transient
+float copy of one layer; resident memory is untouched.
+
 ## The contract
 
 ```python
