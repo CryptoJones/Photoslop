@@ -9,7 +9,7 @@ Edit → Options → **Model Backend…**: pick an adapter and (for the HTTP ada
 your server's base URL. CLI: `--model-url URL` before any model op.
 
 ## The generic HTTP contract
-JSON with base64-encoded PNGs. Two endpoints under your base URL:
+JSON with base64-encoded PNGs. Three endpoints under your base URL:
 
 ```
 POST <base>/select-subject
@@ -18,6 +18,9 @@ POST <base>/select-subject
 POST <base>/generative-fill
   {"image": "<b64 png>", "mask": "<b64 png>", "prompt": "…"}
                                                → {"image": "<b64 png>"}  # full canvas size
+
+POST <base>/denoise
+  {"image": "<b64 png>", "strength": 1..100}   → {"image": "<b64 png>"}  # same size
 ```
 
 A few lines of Flask wrap ComfyUI, a rembg/SAM script, or a cloud API

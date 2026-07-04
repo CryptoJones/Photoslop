@@ -42,6 +42,9 @@ message on stderr.
 | `--levels` `B,W,GAMMA` | levels adjustment |
 | `--auto-levels` | 0.1%-percentile auto levels |
 | `--hue-sat` `H,S,L` | hue/saturation/lightness (-180..180,-100..100) |
+| `--raw-develop` `"KEY=VAL,..."` | re-develop a raw input: `exposure` (EV), `temp` (K), `tint`, `highlights`, `shadows` — 16-bit transient, 8-bit out |
+| `--lens-correct` | distortion + vignetting from the input's EXIF (`photoslop[lens]`) |
+| `--denoise-model` `STRENGTH` | AI denoise via the model backend (`--model-url`) |
 | `--assign-profile` `PROFILE` | assign an ICC profile (preset or .icc path) — metadata only |
 | `--convert-profile` `PROFILE` | convert pixels to a profile (srgb, adobe-rgb, display-p3, prophoto-rgb, srgb-linear, or .icc) |
 | `--proof` `PROFILE` | soft-proof simulation applied to raster output |

@@ -42,6 +42,10 @@ formats = [
 gmic = [
     "gmic>=3.6",
 ]
+lens = [
+    "lensfunpy>=1.18",
+    "exifread>=3.0",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",
@@ -50,6 +54,8 @@ dev = [
     "pillow>=11.0",
     "pillow-jxl-plugin>=1.3",
     "gmic>=3.6",
+    "lensfunpy>=1.18",
+    "exifread>=3.0",
 ]
 
 [project.scripts]

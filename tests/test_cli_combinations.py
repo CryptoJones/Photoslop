@@ -69,7 +69,8 @@ PAIR_ARGS = {
 # ICC profile the harness cannot assume (cmyk-out gets its own
 # skip-if-missing effect test in test_color.py)
 NETWORK_OPS = ("model-url", "select-subject", "generative-fill",
-               "cmyk-out")
+               "cmyk-out", "raw-develop", "lens-correct",
+               "denoise-model")
 
 
 def test_pair_catalog_covers_all_non_network_ops():
