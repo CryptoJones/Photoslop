@@ -545,7 +545,8 @@ class MainWindow(QMainWindow):
         m_file.addAction(self._act("&Export…", "Ctrl+E", self.action_export))
         m_file.addSeparator()
         m_file.addAction(self._act("&Close Tab", "Ctrl+W", self.action_close_tab))
-        m_file.addAction(self._act("&Quit", "Ctrl+Q", self.close))
+        m_file.addAction(self._act("&Quit", "Ctrl+Q", self.close,
+                                   role=QAction.MenuRole.QuitRole))
 
         m_edit = menu.addMenu("&Edit")
         undo = self.undo_group.createUndoAction(self, "&Undo ")
@@ -590,10 +591,14 @@ class MainWindow(QMainWindow):
         m_edit.addSeparator()
         self._options_menu = m_edit.addMenu("&Options")
         self._rulers_menu = self._options_menu.addMenu("&Rulers")  # unit actions added below
+        # NoRole keeps these under Edit → Options on macOS too; without it Qt's
+        # "Settings" heuristic yanks Color Settings into the app (Photoslop) menu.
         self._options_menu.addAction(self._act("&Model Backend…", None,
-                                               self.action_model_backend))
+                                               self.action_model_backend,
+                                               role=QAction.MenuRole.NoRole))
         self._options_menu.addAction(self._act("&Color Settings…", None,
-                                               self.action_color_settings))
+                                               self.action_color_settings,
+                                               role=QAction.MenuRole.NoRole))
 
         m_select = menu.addMenu("&Select")
         m_select.addAction(self._act("&All", "Ctrl+A", self.action_select_all))
@@ -798,12 +803,19 @@ class MainWindow(QMainWindow):
                     lambda checked=False, c=cls: self.action_plugin_filter(c)))
 
         m_help = menu.addMenu("&Help")
-        m_help.addAction(self._act("&About Photoslop", None, self.action_about))
+        m_help.addAction(self._act("&About Photoslop", None, self.action_about,
+                                   role=QAction.MenuRole.AboutRole))
 
-    def _act(self, text: str, shortcut: str | None, slot) -> QAction:
+    def _act(self, text: str, shortcut: str | None, slot,
+             role: QAction.MenuRole | None = None) -> QAction:
         act = QAction(text, self)
         if shortcut:
             act.setShortcut(QKeySequence(shortcut))
+        # On macOS Qt otherwise applies TextHeuristicRole, silently relocating
+        # any item whose text looks like About/Quit/Preferences into the
+        # application menu. Pass an explicit role to pin placement per-platform.
+        if role is not None:
+            act.setMenuRole(role)
         act.triggered.connect(slot)
         return act
 
