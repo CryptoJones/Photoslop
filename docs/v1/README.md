@@ -17,6 +17,7 @@ command line — as of **v1.0.0**.
 | [Artboards](artboards.md) | named export regions and batch export |
 | [File Formats](file-formats.md) | ORA (with Photoslop extensions), raster formats, camera raw |
 | [Model Backends](model-backends.md) | the bring-your-own-model adapter framework, HTTP contract, plugins |
+| [Filter Plugins](filter-plugins.md) | write a filter class + one entry point → menu, CLI, selections, smart replay |
 | [Command Line](cli.md) | the full `photoslop-cli` reference — every operation, exit codes, recipes |
 | [Feature Parity](feature-parity.md) | Photoslop vs Photoshop, GIMP, Paint.NET, Lightroom Classic, darktable, Capture One — researched July 2026 |
 | [Architecture](architecture.md) | the memory-frugality design |

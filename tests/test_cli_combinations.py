@@ -46,6 +46,7 @@ PAIR_ARGS = {
     "clear": ["--select", "3,3,6,6", "--clear", "--deselect"],
     "adjust": ["--adjust", "exposure=0.4,contrast=5"],
     "point-color": ["--point-color", "hue=20,range=40,ds=25"],
+    "filter": ["--filter", "pixelate:size=4"],
     "flip": ["--flip", "h"],
     "fill": ["--fill", "10,200,40"],
     "text": ["--text", "2,2,8,0,120,255:Hi"],
