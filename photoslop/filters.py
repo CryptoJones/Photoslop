@@ -99,9 +99,10 @@ def available_filters() -> dict[str, type[Filter]]:
     """Built-ins + packs + registered + pip-installed entry points."""
     for cls in _BUILT_INS:
         _REGISTRY.setdefault(cls.name, cls)
-    from photoslop import gmicpack
+    from photoslop import geglpack, gmicpack
 
     gmicpack.register_all()
+    geglpack.register_all()
     from importlib.metadata import entry_points
 
     for ep in entry_points(group="photoslop.filters"):
