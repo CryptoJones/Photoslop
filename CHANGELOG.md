@@ -4,6 +4,26 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.12.0] — 2026-07-04
+
+### Added
+- **Retro Console (8-Bit) filter** (#130) — `Filter → Retro Console` gives
+  photos an 80s/90s video-game look: chunky pixels (Pixel size), a crushed
+  colour palette (Colour levels per channel), and an optional 4×4 ordered
+  (Bayer) dither so gradients break into the crosshatch of an old console.
+  Dependency-free and alpha-preserving; like every plugin filter it also
+  works as a CLI op (`--filter retro-console`) and a replayable smart filter.
+- **Consolidated Preferences dialog** (#131) — `Edit → Preferences…` opens one
+  tabbed window (Model Backend + Color) instead of two scattered items. The
+  action carries `PreferencesRole`, so on macOS it lands in the native
+  **Photoslop → Preferences…** slot (⌘,).
+
+### Fixed
+- **macOS menu placement** — About/Quit/Preferences now use explicit
+  `QAction.MenuRole`s instead of Qt's text heuristics, so Settings no longer
+  silently vanish from the Edit menu and the Help/app menus behave predictably
+  across platforms.
+
 ## [1.11.0] — 2026-07-03
 
 ### Added

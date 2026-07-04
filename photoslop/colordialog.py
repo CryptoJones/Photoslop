@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
 
 from photoslop import color
@@ -73,30 +75,46 @@ class ProfilePickerDialog(QDialog):
             return None
 
 
-class ColorSettingsDialog(QDialog):
-    """Session display/proof profiles — feeds photoslop.color.settings."""
+class ColorSettingsPanel(QWidget):
+    """Session display/proof profile chooser — feeds photoslop.color.settings.
+    Embeddable (Preferences tab) or wrapped in ColorSettingsDialog. Call
+    apply() to commit the chosen profiles."""
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Color Settings")
         form = QFormLayout(self)
+        form.setContentsMargins(0, 0, 0, 0)  # sit flush inside a tab
         form.addRow(QLabel("Display transform and soft-proof apply to the "
                            "viewport only (DD-004)."))
         self.display_row = _ProfileRow()
         self.proof_row = _ProfileRow()
         form.addRow("Monitor profile", self.display_row)
         form.addRow("Proof profile", self.proof_row)
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(self._apply)
-        buttons.rejected.connect(self.reject)
-        form.addRow(buttons)
 
-    def _apply(self) -> None:
+    def apply(self) -> None:
         try:
             color.settings["display"] = self.display_row.space()
             color.settings["proof"] = self.proof_row.space()
         except ValueError:
             pass
+
+
+class ColorSettingsDialog(QDialog):
+    """Standalone Color Settings window wrapping ColorSettingsPanel."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Color Settings")
+        layout = QVBoxLayout(self)
+        self.panel = ColorSettingsPanel(self)
+        layout.addWidget(self.panel)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self._apply)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _apply(self) -> None:
+        self.panel.apply()
         self.accept()
