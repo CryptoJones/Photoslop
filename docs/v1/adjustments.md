@@ -39,3 +39,19 @@ see [Layers](layers.md).
 ## Selections apply
 With an active selection, destructive adjustments confine to it; feathered
 selections blend at the edge (see [Selections](selections.md)).
+
+## Color management (ICC)
+Accepted by [DD-004](https://github.com/CryptoJones/Photoslop/blob/main/DESIGNDECISIONS.md)
+because it's **viewport-only work** — no layer buffers change:
+
+- **Image → Assign Profile…** re-tags the document (metadata only);
+  **Convert to Profile…** converts pixels (presets: sRGB, sRGB-linear,
+  Adobe RGB, Display P3, ProPhoto RGB — or any `.icc` file). The profile
+  saves into `.ora` (`photoslop-icc`) and embeds in PNG/JPEG exports.
+- **Edit → Options → Color Settings…** sets the monitor profile and proof
+  profile; the display transform applies to the composited viewport region
+  only. **View → Soft Proof** (`Ctrl+Y`) round-trips the viewport through
+  the proof profile to preview its gamut.
+- CLI: `--assign-profile`, `--convert-profile`, `--proof PROFILE`
+  (simulation baked into raster output), `--cmyk-out FILE.icc`
+  (CMYK JPEG/TIFF via littlecms — DD-005: export only, never a mode).

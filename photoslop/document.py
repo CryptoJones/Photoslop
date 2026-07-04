@@ -200,6 +200,7 @@ class Document(QObject):
         self.selection: QPainterPath | None = None
         self.selection_feather = 0.0  # px; consumed by filters/fills
         self.group_props: dict[str, dict] = {}  # group -> {opacity, blend_mode}
+        self.icc_space = None  # QColorSpace | None; None = sRGB assumed
         self.guides_h: list[float] = []  # y positions, canvas px
         self.guides_v: list[float] = []  # x positions, canvas px
         self.artboards: list[tuple[str, QRect]] = []  # named export regions

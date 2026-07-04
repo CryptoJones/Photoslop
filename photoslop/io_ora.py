@@ -39,6 +39,11 @@ def save_ora(doc: Document, path: str) -> None:
         image.set("photoslop-artboards", json.dumps(
             [[n, r.x(), r.y(), r.width(), r.height()]
              for n, r in doc.artboards]))
+    if doc.icc_space is not None and doc.icc_space.isValid():
+        import base64
+
+        image.set("photoslop-icc", base64.b64encode(
+            bytes(doc.icc_space.iccProfile())).decode("ascii"))
     stack = ET.SubElement(image, "stack")
 
     entries: list[tuple[str, bytes]] = []
@@ -186,6 +191,15 @@ def load_ora(path: str) -> Document:
     name = path.replace("\\", "/").rsplit("/", 1)[-1]
     doc = Document(QSize(w, h), dpi, name)
     doc.layers = list(reversed(top_first))  # internal order is bottom-first
+    icc_b64 = root.get("photoslop-icc")
+    if icc_b64:
+        import base64
+
+        from PySide6.QtGui import QColorSpace
+
+        space = QColorSpace.fromIccProfile(base64.b64decode(icc_b64))
+        if space.isValid():
+            doc.icc_space = space
     boards_json = root.get("photoslop-artboards")
     if boards_json:
         import json

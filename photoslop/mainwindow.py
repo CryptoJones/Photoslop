@@ -592,6 +592,8 @@ class MainWindow(QMainWindow):
         self._rulers_menu = self._options_menu.addMenu("&Rulers")  # unit actions added below
         self._options_menu.addAction(self._act("&Model Backend…", None,
                                                self.action_model_backend))
+        self._options_menu.addAction(self._act("&Color Settings…", None,
+                                               self.action_color_settings))
 
         m_select = menu.addMenu("&Select")
         m_select.addAction(self._act("&All", "Ctrl+A", self.action_select_all))
@@ -629,6 +631,11 @@ class MainWindow(QMainWindow):
         m_adjustments.addAction(self._act("Color &Balance…", "Ctrl+B",
                                           self.action_color_balance))
         m_adjustments.addAction(self._act("Cur&ves…", "Ctrl+M", self.action_curves))
+        m_image.addSeparator()
+        m_image.addAction(self._act("Assign &Profile…", None,
+                                    self.action_assign_profile))
+        m_image.addAction(self._act("Convert to Profi&le…", None,
+                                    self.action_convert_profile))
         m_image.addSeparator()
         m_rotate = m_image.addMenu("Image &Rotation")
         m_rotate.addAction(self._act("Rotate 90° &CW", None,
@@ -715,6 +722,11 @@ class MainWindow(QMainWindow):
                                     lambda: self._layer_cmd(FlipLayerCommand, False)))
 
         m_view = menu.addMenu("&View")
+        self.action_soft_proof = self._act("Soft &Proof", "Ctrl+Y",
+                                           self._toggle_soft_proof)
+        self.action_soft_proof.setCheckable(True)
+        m_view.addAction(self.action_soft_proof)
+        m_view.addSeparator()
         zoom_in = self._act("Zoom &In", "Ctrl++", lambda: self._zoom(+1))
         # a US keyboard's plus key is "=" unshifted — bind every physical form
         zoom_in.setShortcuts([QKeySequence("Ctrl++"), QKeySequence("Ctrl+="),
@@ -1021,9 +1033,12 @@ class MainWindow(QMainWindow):
             return
         if not path.lower().endswith(suffix):
             path += suffix
+        from photoslop import color
+
         img = dialog.export_image()
         img.setDotsPerMeterX(round(doc.dpi / 0.0254))
         img.setDotsPerMeterY(round(doc.dpi / 0.0254))
+        color.tag_for_export(img, doc)
         if dialog.write_to(path, img):
             self.statusBar().showMessage(f"Exported {path}", 4000)
         else:
@@ -2098,6 +2113,53 @@ class MainWindow(QMainWindow):
         from photoslop.pointcolordialog import PointColorDialog
 
         PointColorDialog(doc, self).exec()
+
+    def action_color_settings(self) -> None:
+        from photoslop.colordialog import ColorSettingsDialog
+
+        ColorSettingsDialog(self).exec()
+        editor = self.current_editor()
+        if editor is not None:
+            editor.canvas.update()
+
+    def _toggle_soft_proof(self) -> None:
+        from photoslop import color
+
+        color.settings["proof_on"] = self.action_soft_proof.isChecked()
+        if color.settings["proof_on"] and color.settings["proof"] is None:
+            self.statusBar().showMessage(
+                "Set a proof profile first: Edit → Options → Color Settings",
+                5000)
+        editor = self.current_editor()
+        if editor is not None:
+            editor.canvas.update()
+
+    def action_assign_profile(self) -> None:
+        self._profile_action(assign=True)
+
+    def action_convert_profile(self) -> None:
+        self._profile_action(assign=False)
+
+    def _profile_action(self, assign: bool) -> None:
+        doc = self.current_doc()
+        if doc is None:
+            return
+        from photoslop import color
+        from photoslop.colordialog import ProfilePickerDialog
+
+        dialog = ProfilePickerDialog(
+            "Assign Profile" if assign else "Convert to Profile", self)
+        if not dialog.exec():
+            return
+        space = dialog.space()
+        if space is None:
+            return
+        if assign:
+            color.assign_profile(doc, space)
+        else:
+            color.convert_profile(doc, space)
+        self.statusBar().showMessage(
+            f"Document profile: {color.describe(doc.icc_space)}", 4000)
 
     def action_curves(self) -> None:
         doc = self.current_doc()

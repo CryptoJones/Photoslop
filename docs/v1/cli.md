@@ -42,6 +42,10 @@ message on stderr.
 | `--levels` `B,W,GAMMA` | levels adjustment |
 | `--auto-levels` | 0.1%-percentile auto levels |
 | `--hue-sat` `H,S,L` | hue/saturation/lightness (-180..180,-100..100) |
+| `--assign-profile` `PROFILE` | assign an ICC profile (preset or .icc path) — metadata only |
+| `--convert-profile` `PROFILE` | convert pixels to a profile (srgb, adobe-rgb, display-p3, prophoto-rgb, srgb-linear, or .icc) |
+| `--proof` `PROFILE` | soft-proof simulation applied to raster output |
+| `--cmyk-out` `FILE.icc` | write --output as CMYK JPEG/TIFF through this profile |
 | `--point-color` `"KEY=VAL,..."` | targeted hue-band HSL: `hue` (required), `range`, `dh`, `ds`, `dl`, `uniform` — skin tones ≈ `hue=20,range=28` |
 | `--color-balance` `9 INTS` | shadows,midtones,highlights r,g,b each |
 | `--curves` `X:Y,...` | master curve points in 0..255 |

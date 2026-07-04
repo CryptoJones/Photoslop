@@ -162,14 +162,19 @@ class CanvasView(QWidget):
         clip_canvas = QRect(
             int(clip.x() / z), int(clip.y() / z),
             int(clip.width() / z) + 2, int(clip.height() / z) + 2)
+        from photoslop import color
+
         transform_session = self._transform_session()
-        if self.doc.needs_offscreen():
+        cms = color.viewport_active()
+        if self.doc.needs_offscreen() or cms:
             region = clip_canvas.intersected(self.doc.canvas_rect())
             if not region.isEmpty():
                 exclude = (transform_session.layer
                            if transform_session is not None else None)
-                p.drawImage(region.topLeft(),
-                            render_region(self.doc, region, exclude))
+                rendered = render_region(self.doc, region, exclude)
+                if cms:  # DD-004: one viewport-region transform, only here
+                    rendered = color.apply_viewport(rendered, self.doc)
+                p.drawImage(region.topLeft(), rendered)
                 if transform_session is not None:
                     transform_session.draw_preview(p)
             layers_to_paint = ()
