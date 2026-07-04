@@ -71,6 +71,26 @@ wheels = [
 ]
 
 [[package]]
+name = "gmic"
+version = "3.6.3.post1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/dd/27/52f880c349b609725ed8f7b46926b63c0f3195b1cb339ea6f0d659d5eb67/gmic-3.6.3.post1.tar.gz", hash = "sha256:06b5b9d54291c90b6ae0fb5602abf024a3be9f22208f5d8704be5d89b319b2a1", size = 1569408, upload-time = "2025-11-13T16:52:55.389Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/47/d9/37b71331d1cca5eadd9673afce2049e52a1d2ce6962987933ee886bb208f/gmic-3.6.3.post1-cp310-cp310-manylinux_2_34_aarch64.whl", hash = "sha256:47fbf03e51d0d4bd25e0cd5e6e8fd7abc794397ef4ea48f7ec67dffbb1682a63", size = 6732070, upload-time = "2025-11-13T16:52:06.502Z" },
+    { url = "https://files.pythonhosted.org/packages/57/fb/98399f1339d50e92e9aa0e566c2e12d32b449cd196349d84a420839b4384/gmic-3.6.3.post1-cp310-cp310-manylinux_2_34_x86_64.whl", hash = "sha256:59116a4d718cbcb12dc7d39f6cf9f6d8855c6e2e5a49c855e332898d38195617", size = 7593051, upload-time = "2025-11-13T16:52:09.094Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/63/9376974170c20d8146afb988d031a012ceea145cf392a58a037fa90e8133/gmic-3.6.3.post1-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:1356af5ec31c6e3b335499c45fbb62a95c699a1845933d11078f6ae31bd1cb31", size = 8226732, upload-time = "2025-11-13T16:52:11.054Z" },
+    { url = "https://files.pythonhosted.org/packages/37/3f/676e5fe71560ff2e41f959d47428eb4d1c8fb52ebfa0e5f6ffb5c34911fc/gmic-3.6.3.post1-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:766332be1b66f18989f922c1fadca431eff9977a39ed90683f5c1bc95e529329", size = 9073514, upload-time = "2025-11-13T16:52:13.634Z" },
+    { url = "https://files.pythonhosted.org/packages/06/0d/5873ccef000a489a79fa1855c659ceb207f60bb5c910ad874bcb36bb9cfa/gmic-3.6.3.post1-cp311-cp311-manylinux_2_34_aarch64.whl", hash = "sha256:5a1cd69e037d7f7937b9d033d010269060533a98161ac51213bfd6b14d63fe64", size = 6732363, upload-time = "2025-11-13T16:52:16.405Z" },
+    { url = "https://files.pythonhosted.org/packages/84/ad/04cebdec3a1e2363ff244b9920ae42e819e126d6e9cb98906859157b9712/gmic-3.6.3.post1-cp311-cp311-manylinux_2_34_x86_64.whl", hash = "sha256:bd11d22319893ddd81b5ac6c2e7de4a53f39b03ef9eb347304131d0bc9e30f16", size = 7593039, upload-time = "2025-11-13T16:52:19.131Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/81/88cf7d0cb558a666779e8e80846384118e0016f6790e727a64fe21ddd3b9/gmic-3.6.3.post1-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:7afe6856e3a8ca8c3412d228eda7beba38edb019b66b3b9cbf31c7da68eb32cd", size = 8228050, upload-time = "2025-11-13T16:52:22.031Z" },
+    { url = "https://files.pythonhosted.org/packages/29/02/58e719532c61535faa42de5a9c78e69b4a1ed21495fc4c6c0d611b8665c5/gmic-3.6.3.post1-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:1d27f29cc4f4b56d2d03580860bec12a4a205839c903f3feeccfa83ccc2fdbbd", size = 9073791, upload-time = "2025-11-13T16:52:24.372Z" },
+    { url = "https://files.pythonhosted.org/packages/b4/f4/fe52d522a6fa4bee7c5c86d4fb47cc50ab908efd4b1f29d8990c4384abd5/gmic-3.6.3.post1-cp312-abi3-manylinux_2_34_aarch64.whl", hash = "sha256:1bc44e814ff6b9b643872d3dee2e6cb432557b32f1a99ca711b5973448d9fbf1", size = 6726752, upload-time = "2025-11-13T16:52:27.01Z" },
+    { url = "https://files.pythonhosted.org/packages/07/73/516aadb3c9f77424c04f1c695275cc5e65308c31d325b3eea7b0bf53622c/gmic-3.6.3.post1-cp312-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:18143a873a70b731057b385f0c210eceedb463d3c5acfab4a06f5708b6decef9", size = 7588933, upload-time = "2025-11-13T16:52:28.901Z" },
+    { url = "https://files.pythonhosted.org/packages/03/4f/17f11363d0c9fa5643dae9be4aa140a24a17d0068a36156d67ac328502ad/gmic-3.6.3.post1-cp312-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:85e6243bb7208ac9db6ad8224b30dfaeae2fa3705fa5a59153b7cb6d46ade75c", size = 8220824, upload-time = "2025-11-13T16:52:30.804Z" },
+    { url = "https://files.pythonhosted.org/packages/ad/a4/b74e8b5a488b5eac4b261bdc3fa0b172d3ec84c5ad7680e3bf0811ae4225/gmic-3.6.3.post1-cp312-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:248fe3bcd1553ef8cb20328c462166dcf031e83223615f6158effbfea8e50395", size = 9070341, upload-time = "2025-11-13T16:52:32.983Z" },
+]
+
+[[package]]
 name = "iniconfig"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -456,7 +476,7 @@ wheels = [
 
 [[package]]
 name = "photoslop"
-version = "1.4.0"
+version = "1.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -467,6 +487,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "gmic" },
     { name = "mypy" },
     { name = "pillow" },
     { name = "pillow-jxl-plugin" },
@@ -478,12 +499,17 @@ formats = [
     { name = "pillow" },
     { name = "pillow-jxl-plugin" },
 ]
+gmic = [
+    { name = "gmic" },
+]
 raw = [
     { name = "rawpy" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "gmic", marker = "extra == 'dev'", specifier = ">=3.6" },
+    { name = "gmic", marker = "extra == 'gmic'", specifier = ">=3.6" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.9" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pillow", marker = "extra == 'dev'", specifier = ">=11.0" },
@@ -496,7 +522,7 @@ requires-dist = [
     { name = "rawpy", marker = "extra == 'raw'", specifier = ">=0.21" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
 ]
-provides-extras = ["raw", "formats", "dev"]
+provides-extras = ["raw", "formats", "gmic", "dev"]
 
 [[package]]
 name = "pillow"
