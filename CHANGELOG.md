@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.11.0] — 2026-07-03
+
+### Added
+- **`run.sh` / `run.cmd` launchers** — one-command entry points for
+  non-technical users. Each changes to the repo directory, bootstraps `uv`
+  from https://astral.sh/uv if it is missing, then runs `uv run photoslop`,
+  passing any arguments through to the app (e.g. `./run.sh image.png`).
+  Developer tooling with no app-surface change, so no CLI mirror applies;
+  documented in the README Quick start.
+
 ## [1.10.0] — 2026-07-03
 
 ### Added
