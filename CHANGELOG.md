@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.7.0] — 2026-07-03
+
+### Added
+- **GIMP bridge** (spawn-per-call ONLY, per DD-006): with a `gimp` 3.x
+  binary on PATH, **GIMP Oilify / Softglow / Cubism** register (GIMP's
+  own GEGL ops that plain gegl doesn't ship) plus **GIMP Script-Fu** —
+  a raw hatch binding `image`/`drawable` that reaches any plug-in or PDB
+  procedure GIMP has. Each run launches a fresh `gimp -i`, applies, and
+  exits; errors surface the batch text and runaway scripts are killed at
+  a timeout. Completes the #111 filter-ecosystem trilogy.
+
 ## [1.6.0] — 2026-07-03
 
 ### Added

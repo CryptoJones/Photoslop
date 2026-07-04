@@ -65,6 +65,27 @@ Raw form: `--filter "gegl:operation=gegl:vignette radius=1.2,softness=0.5"`
 floats, and strings coerce; unknown operations and properties fail with
 the worker's error text).
 
+## The GIMP bridge (escape hatch — spawn-per-call, DD-006)
+
+With a `gimp` 3.x binary on PATH, four more filters register: **GIMP
+Oilify / Softglow / Cubism** (GIMP's own GEGL operations, which plain
+gegl packages don't ship) and **GIMP Script-Fu** — a raw hatch that binds
+`image` and `drawable` and runs whatever you write, reaching any plug-in
+or PDB procedure GIMP has installed:
+
+```bash
+photoslop-cli in.png \
+  --filter "gimp-script:script=(gimp-drawable-invert drawable FALSE)" \
+  --output out.png
+```
+
+**Every run spawns a fresh GIMP that exits when done** (per
+[DD-006](https://github.com/CryptoJones/Photoslop/blob/main/DESIGNDECISIONS.md)
+— a resident headless GIMP idles at 200–500 MB and is rejected by
+design). Expect seconds per run; the bridge is the long-tail escape
+hatch, not the fast path. Errors surface the batch error text; runaway
+scripts are killed at a timeout.
+
 ## The contract
 
 ```python
