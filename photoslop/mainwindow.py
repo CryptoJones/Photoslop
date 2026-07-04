@@ -782,6 +782,10 @@ class MainWindow(QMainWindow):
         m_filter.addAction(self._act("Gaussian &Blur…", None, self.action_gaussian_blur))
         m_filter.addAction(self._act("&Unsharp Mask…", None, self.action_unsharp_mask))
         m_filter.addAction(self._act("&Tilt-Shift…", None, self.action_tilt_shift))
+        m_filter.addAction(self._act("&Lens Correction (EXIF)…", None,
+                                     self.action_lens_correct))
+        m_filter.addAction(self._act("Denoise (&Model)…", None,
+                                     self.action_denoise_model))
         from photoslop.filters import available_filters
 
         plugins = available_filters()
@@ -959,7 +963,14 @@ class MainWindow(QMainWindow):
             if path.lower().endswith(".ora"):
                 doc = load_ora(path)
             elif is_raw_path(path):
-                img = load_raw(path)
+                from photoslop.io_raw import probe_raw
+                from photoslop.rawdialog import RawDevelopDialog
+
+                probe_raw(path)  # junk raises -> graceful failure below
+                dialog = RawDevelopDialog(path, self)
+                # cancelled = camera defaults
+                img = (dialog.developed() if dialog.exec()
+                       else load_raw(path))
                 doc = Document.from_image(img, os.path.basename(path), 72.0)
             elif io_formats.is_extra_path(path):
                 if not io_formats.available(path):
@@ -1279,6 +1290,49 @@ class MainWindow(QMainWindow):
             doc, layer, rect, before.copy(rect), layer.image.copy(rect),
             title, applied=True))
         doc.notify_pixels(layer.bounds())
+
+    def action_lens_correct(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        if not doc.path:
+            self.statusBar().showMessage(
+                "Lens correction reads EXIF from the opened file — "
+                "save/open a camera file first", 6000)
+            return
+        from photoslop import lens
+
+        try:
+            corrected = lens.correct_lens(doc.active_layer.image, doc.path)
+        except ValueError as exc:
+            self.statusBar().showMessage(f"Lens correction: {exc}", 8000)
+            return
+        self._run_filter("Lens Correction", lambda img, m: (
+            None, img.swap(corrected))[0])
+
+    def action_denoise_model(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        adapter = self._model_adapter()
+        if adapter is None:
+            self.statusBar().showMessage(
+                "Set a backend first: Edit → Options → Model Backend", 6000)
+            return
+        strength, ok = QInputDialog.getInt(self, "Denoise (Model)",
+                                           "Strength (1–100):", 40, 1, 100)
+        if not ok:
+            return
+        try:
+            result = adapter.denoise(doc.active_layer.image, strength)
+        except Exception as exc:
+            self.statusBar().showMessage(f"Denoise backend: {exc}", 8000)
+            return
+        result = result.convertToFormat(doc.active_layer.image.format())
+        self._run_filter("Denoise (Model)", lambda img, m: (
+            None, img.swap(result))[0])
 
     def action_gaussian_blur(self) -> None:
         from PySide6.QtWidgets import QInputDialog

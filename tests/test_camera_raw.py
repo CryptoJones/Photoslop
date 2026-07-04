@@ -54,6 +54,10 @@ def test_missing_rawpy_gives_actionable_error(monkeypatch):
 def test_open_path_routes_raw_to_document(qapp, monkeypatch):
     win = MainWindow()
     monkeypatch.setitem(sys.modules, "rawpy", FakeRawpy())
+    # dismiss the (new in v1.10) develop dialog: cancel = camera defaults
+    from photoslop.rawdialog import RawDevelopDialog
+
+    monkeypatch.setattr(RawDevelopDialog, "exec", lambda self: 0)
     assert win.open_path("holiday.cr2")
     doc = win.current_doc()
     assert doc.name == "holiday.cr2"

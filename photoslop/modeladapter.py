@@ -18,6 +18,7 @@ from PySide6.QtGui import QImage
 
 SELECT_SUBJECT = "select-subject"
 GENERATIVE_FILL = "generative-fill"
+DENOISE = "denoise"
 
 
 class ModelAdapter:
@@ -36,6 +37,10 @@ class ModelAdapter:
     def generative_fill(self, image: QImage, mask: QImage,
                         prompt: str) -> QImage:
         """Return a full replacement image; white mask marks the fill area."""
+        raise NotImplementedError
+
+    def denoise(self, image: QImage, strength: int) -> QImage:
+        """Return a denoised replacement image (strength 1..100)."""
         raise NotImplementedError
 
 
@@ -58,6 +63,7 @@ class HttpModelAdapter(ModelAdapter):
 
     POST {base}/select-subject   {"image": <b64 png>}                -> {"mask": <b64 png>}
     POST {base}/generative-fill  {"image":…, "mask":…, "prompt": ""} -> {"image": <b64 png>}
+    POST {base}/denoise          {"image":…, "strength": 1..100}    -> {"image": <b64 png>}
     """
 
     name = "http"
@@ -68,7 +74,7 @@ class HttpModelAdapter(ModelAdapter):
         self.timeout = timeout
 
     def capabilities(self) -> frozenset[str]:
-        return frozenset({SELECT_SUBJECT, GENERATIVE_FILL})
+        return frozenset({SELECT_SUBJECT, GENERATIVE_FILL, DENOISE})
 
     def _post(self, op: str, payload: dict) -> dict:
         req = urllib.request.Request(
@@ -90,6 +96,11 @@ class HttpModelAdapter(ModelAdapter):
             "mask": image_to_png_b64(mask),
             "prompt": prompt,
         })
+        return png_b64_to_image(out["image"])
+
+    def denoise(self, image: QImage, strength: int) -> QImage:
+        out = self._post(DENOISE, {"image": image_to_png_b64(image),
+                                   "strength": int(strength)})
         return png_b64_to_image(out["image"])
 
 

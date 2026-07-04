@@ -80,6 +80,7 @@ class Context:
     exports: list = field(default_factory=list)  # written artboard paths
     proof_space: object = None  # QColorSpace for --proof simulation at write
     cmyk_icc: str = ""  # CMYK .icc path for --cmyk-out export
+    input_path: str = ""  # the source file, for EXIF/raw re-develop ops
 
 
 def _target_layers(ctx: Context) -> list:
@@ -462,6 +463,64 @@ _POINT_COLOR_FIELDS = {
 }
 
 
+def _op_raw_develop(ctx: Context, value: str) -> None:
+    from photoslop.io_raw import DEVELOP_FIELDS, develop_raw, is_raw_path
+
+    if not ctx.input_path or not is_raw_path(ctx.input_path):
+        raise _ValueError("--raw-develop needs a camera-raw input file")
+    values = {}
+    for chunk in value.split(","):
+        key, sep, num = chunk.partition("=")
+        key = key.strip()
+        if not sep or key not in DEVELOP_FIELDS:
+            raise _ValueError("--raw-develop expects KEY=VALUE pairs from: "
+                              + ", ".join(DEVELOP_FIELDS))
+        lo, hi, _default = DEVELOP_FIELDS[key]
+        try:
+            v = float(num)
+        except ValueError as exc:
+            raise _ValueError(f"--raw-develop {key}: {exc}") from exc
+        if not lo <= v <= hi:
+            raise _ValueError(f"--raw-develop {key} must be in {lo}..{hi}")
+        values[key] = v
+    img = develop_raw(ctx.input_path, **values)
+    layer = ctx.doc.layers[0]
+    layer.image = img
+    layer.fx_cache = None
+    from PySide6.QtCore import QSize
+
+    ctx.doc.size = QSize(img.width(), img.height())
+    ctx.doc.notify_pixels(ctx.doc.canvas_rect())
+
+
+def _op_lens_correct(ctx: Context, value: str) -> None:
+    from photoslop import lens
+
+    if not ctx.input_path:
+        raise _ValueError("--lens-correct needs an input file with EXIF")
+    try:
+        for layer in _target_layers(ctx):
+            layer.image = lens.correct_lens(layer.image, ctx.input_path)
+            layer.fx_cache = None
+    except ValueError as exc:
+        raise _ValueError(f"--lens-correct: {exc}") from exc
+    ctx.doc.notify_pixels(ctx.doc.canvas_rect())
+
+
+def _op_denoise_model(ctx: Context, value: str) -> None:
+    try:
+        strength = int(value)
+    except ValueError as exc:
+        raise _ValueError(f"--denoise-model: {exc}") from exc
+    if not 1 <= strength <= 100:
+        raise _ValueError("--denoise-model expects strength 1..100")
+    for layer in _target_layers(ctx):
+        result = _adapter(ctx).denoise(layer.image, strength)
+        layer.image = result.convertToFormat(layer.image.format())
+        layer.fx_cache = None
+    ctx.doc.notify_pixels(ctx.doc.canvas_rect())
+
+
 def _op_assign_profile(ctx: Context, value: str) -> None:
     from photoslop import color
 
@@ -796,6 +855,14 @@ OPS: dict = {
                "Lightroom Basic sliders (temperature, tint, exposure, "
                "contrast, highlights, shadows, whites, blacks, vibrance, "
                "saturation)", _op_adjust),
+    "raw-develop": ('"KEY=VAL,..."',
+                    "re-develop a raw input: exposure (EV), temp (K), tint, "
+                    "highlights, shadows — 16-bit transient, 8-bit out",
+                    _op_raw_develop),
+    "lens-correct": (None, "distortion + vignetting from the input's EXIF "
+                     "(needs photoslop[lens])", _op_lens_correct),
+    "denoise-model": ("STRENGTH", "AI denoise via the model backend "
+                      "(--model-url)", _op_denoise_model),
     "assign-profile": ("PROFILE", "assign an ICC profile (preset name or "
                        ".icc path) — metadata only", _op_assign_profile),
     "convert-profile": ("PROFILE", "convert pixels to an ICC profile "
@@ -1050,7 +1117,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         doc = (_load_document(args.input) if args.input
                else _new_document(args.new, args.dpi))
-        ctx = Context(doc=doc)
+        ctx = Context(doc=doc, input_path=args.input or "")
         for op, value in pipeline:
             OPS[op][2](ctx, value)
         if args.info:

@@ -150,3 +150,57 @@ def parse_params(cls: type[Filter], text: str) -> dict:
                              f"{spec.minimum}..{spec.maximum}")
         values[key] = v
     return values
+
+
+class DenoiseFilter(Filter):
+    """Baseline chroma denoise (#112): luma is preserved exactly; the
+    chroma planes get a strength-scaled separable blur — the classic
+    fast fix for color speckle noise. Local, dependency-free. For
+    heavyweight AI denoising use the model adapter route instead."""
+
+    name = "denoise"
+    label = "Denoise (Chroma)"
+    params = (ParamSpec("strength", "Strength", "int", 1, 100, 40),)
+
+    def apply(self, image: QImage, params: dict) -> None:
+        radius = max(1, int(params.get("strength", 40)) // 10)
+        arr = view_u32(image)
+        a = (arr >> np.uint32(24)).astype(np.float32)
+        r = ((arr >> np.uint32(16)) & 0xFF).astype(np.float32)
+        g = ((arr >> np.uint32(8)) & 0xFF).astype(np.float32)
+        b = (arr & 0xFF).astype(np.float32)
+        y = 0.299 * r + 0.587 * g + 0.114 * b
+        cb = b - y
+        cr = r - y
+
+        def box(chan: np.ndarray) -> np.ndarray:
+            for axis in (0, 1):
+                for _ in range(3):  # 3x box ~ gaussian
+                    k = 2 * radius + 1
+                    pad = np.pad(chan, [(radius, radius) if ax == axis
+                                        else (0, 0) for ax in (0, 1)],
+                                 mode="edge")
+                    csum = np.cumsum(pad, axis=axis, dtype=np.float32)
+                    take = np.take(csum, range(k - 1, pad.shape[axis]),
+                                   axis=axis)
+                    lead = np.take(csum, range(0, pad.shape[axis] - k + 1),
+                                   axis=axis)
+                    first = np.take(csum, [k - 1], axis=axis)
+                    chan = np.concatenate(
+                        [first, take[1:] - lead[:-1]] if axis == 0 else
+                        [np.take(take, [0], axis=1),
+                         take[:, 1:] - lead[:, :-1]], axis=axis) / k
+            return chan
+
+        cb = box(cb)
+        cr = box(cr)
+        r = np.clip(y + cr, 0, 255)
+        b = np.clip(y + cb, 0, 255)
+        g = np.clip((y - 0.299 * r - 0.114 * b) / 0.587, 0, 255)
+        arr[...] = ((a.astype(np.uint32) << np.uint32(24))
+                    | (r.astype(np.uint32) << np.uint32(16))
+                    | (g.astype(np.uint32) << np.uint32(8))
+                    | b.astype(np.uint32))
+
+
+_BUILT_INS = (*_BUILT_INS, DenoiseFilter)
