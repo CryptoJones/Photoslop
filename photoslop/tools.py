@@ -26,7 +26,7 @@ from PySide6.QtGui import (
 
 from photoslop import npimage
 from photoslop.commands import LayerRegionCommand, SetLayerOffsetCommand, TileRecorder
-from photoslop.layer import Layer, blank_image
+from photoslop.layer import blank_image
 
 
 class ToolOptions:
@@ -787,10 +787,47 @@ class PenTool(Tool):
         super().__init__(options)
         self._points: list[QPointF] = []
         self._hover: QPointF | None = None
+        self._edit_layer = None       # existing path layer being re-edited
+        self._edit_style: dict = {}
+        self._drag_idx: int | None = None
 
     def press(self, doc, canvas, pos, ev):
+        from photoslop import vector
+
+        layer = doc.active_layer
+        if (not self._points and self._edit_layer is None
+                and layer is not None and layer.vector_data is not None
+                and layer.vector_data.get("kind") == "path"):
+            grabbed = vector.grab(layer.vector_data, pos.x(), pos.y())
+            if grabbed is not None:
+                data = layer.vector_data
+                self._edit_layer = layer
+                self._edit_style = {k: data[k] for k in
+                                    ("close", "fill", "width", "color")
+                                    if k in data}
+                self._points = [QPointF(float(x), float(y))
+                                for x, y in data["points"]]
+                self._drag_idx = (int(grabbed) if grabbed != "move"
+                                  else None)
+                canvas.update()
+                return
+        if self._edit_layer is not None:
+            # already editing: grab an anchor to drag, or click to append
+            for i, pt in enumerate(self._points):
+                if (abs(pt.x() - pos.x()) <= vector.HANDLE_RADIUS
+                        and abs(pt.y() - pos.y()) <= vector.HANDLE_RADIUS):
+                    self._drag_idx = i
+                    return
         self._points.append(pos)
         canvas.update()
+
+    def move(self, doc, canvas, pos, ev):
+        if self._drag_idx is not None:
+            self._points[self._drag_idx] = pos
+            canvas.update()
+
+    def release(self, doc, canvas, pos, ev):
+        self._drag_idx = None
 
     def hover(self, doc, canvas, pos):
         if self._points:
@@ -803,25 +840,14 @@ class PenTool(Tool):
     def cancel(self, doc=None) -> None:
         self._points = []
         self._hover = None
+        self._edit_layer = None
+        self._edit_style = {}
+        self._drag_idx = None
 
     def _smooth_path(self, pts: list[QPointF], close: bool) -> QPainterPath:
-        path = QPainterPath(pts[0])
-        if len(pts) == 2:
-            path.lineTo(pts[1])
-            return path
-        # Catmull-Rom through the anchors, converted to cubic Beziers
-        ring = ([pts[-1], *pts, pts[0], pts[1]] if close
-                else [pts[0], *pts, pts[-1]])
-        for i in range(1, len(ring) - 2):
-            p0, p1, p2, p3 = ring[i - 1], ring[i], ring[i + 1], ring[i + 2]
-            c1 = QPointF(p1.x() + (p2.x() - p0.x()) / 6.0,
-                         p1.y() + (p2.y() - p0.y()) / 6.0)
-            c2 = QPointF(p2.x() - (p3.x() - p1.x()) / 6.0,
-                         p2.y() - (p3.y() - p1.y()) / 6.0)
-            path.cubicTo(c1, c2, p2)
-        if close:
-            path.closeSubpath()
-        return path
+        from photoslop import vector
+
+        return vector.smooth_path(pts, close)
 
     def overlay(self, doc, painter, canvas):
         if not self._points:
@@ -841,39 +867,41 @@ class PenTool(Tool):
     def commit(self, canvas) -> None:
         from PySide6.QtWidgets import QApplication
 
-        from photoslop.commands import InsertLayerCommand
+        from photoslop import vector
+        from photoslop.commands import EditVectorLayerCommand, InsertLayerCommand
 
         doc = canvas.doc
         pts, self._points, self._hover = self._points, [], None
+        edit_layer, self._edit_layer = self._edit_layer, None
+        style, self._edit_style = self._edit_style, {}
+        self._drag_idx = None
         canvas.update()
+        if edit_layer is not None:
+            data = dict(edit_layer.vector_data or {})
+            data.update(style)
+            data["kind"] = "path"
+            data["points"] = [[p.x(), p.y()] for p in pts]
+            if data == edit_layer.vector_data:
+                return
+            rendered = vector.render_vector(data, edit_layer.name,
+                                            doc.canvas_rect())
+            if rendered is not None:
+                doc.undo_stack.push(EditVectorLayerCommand(
+                    doc, edit_layer, rendered, "Edit Pen Path"))
+            return
         fill = bool(QApplication.keyboardModifiers()
                     & Qt.KeyboardModifier.ControlModifier)
         if len(pts) < (3 if fill else 2):
             return
-        path = self._smooth_path(pts, close=fill)
-        margin = 2 if fill else max(2, self.opts.size)
-        bounds = (path.boundingRect().toAlignedRect()
-                  .adjusted(-margin, -margin, margin, margin)
-                  .intersected(doc.canvas_rect().adjusted(-margin, -margin,
-                                                          margin, margin)))
-        if bounds.width() < 2 or bounds.height() < 2:
+        fg = self.opts.foreground
+        data = {"kind": "path", "points": [[p.x(), p.y()] for p in pts],
+                "close": fill, "fill": fill,
+                "width": max(1, self.opts.size),
+                "color": [fg.red(), fg.green(), fg.blue(), fg.alpha()]}
+        layer = vector.render_vector(data, f"Pen {len(doc.layers)}",
+                                     doc.canvas_rect())
+        if layer is None:
             return
-        layer = Layer.blank(f"Pen {len(doc.layers)}", bounds.size(),
-                            bounds.topLeft())
-        p = QPainter(layer.image)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.translate(-bounds.topLeft())
-        if fill:
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(self.opts.foreground)
-            p.drawPath(path)
-        else:
-            pen = QPen(self.opts.foreground, max(1, self.opts.size))
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-            p.setPen(pen)
-            p.drawPath(path)
-        p.end()
         doc.undo_stack.push(InsertLayerCommand(
             doc, len(doc.layers), layer, "Add Pen Fill" if fill
             else "Add Pen Stroke"))
@@ -891,23 +919,62 @@ class ShapeTool(Tool):
         super().__init__(options)
         self._start: QPointF | None = None
         self._end: QPointF | None = None
+        self._edit: dict | None = None  # {layer, data, grabbed, last}
 
     def press(self, doc, canvas, pos, ev):
+        from photoslop import vector
+
+        layer = doc.active_layer
+        if (layer is not None and layer.vector_data is not None
+                and layer.vector_data.get("kind") in ("rect", "ellipse",
+                                                      "line")):
+            grabbed = vector.grab(layer.vector_data, pos.x(), pos.y())
+            if grabbed is not None:
+                self._edit = {"layer": layer,
+                              "data": dict(layer.vector_data),
+                              "grabbed": grabbed, "last": pos}
+                return
         self._start = pos
         self._end = pos
 
     def move(self, doc, canvas, pos, ev):
+        from photoslop import vector
+
+        if self._edit is not None:
+            edit = self._edit
+            edit["data"] = vector.drag(
+                edit["data"], edit["grabbed"], pos.x(), pos.y(),
+                pos.x() - edit["last"].x(), pos.y() - edit["last"].y())
+            edit["last"] = pos
+            canvas.update()
+            return
         if self._start is None:
             return
         self._end = pos
         canvas.update()
 
     def overlay(self, doc, painter, canvas):
-        if self._start is None or self._end is None:
-            return
+        from photoslop import vector
+
         z = canvas.zoom
         painter.setPen(QPen(QColor(30, 144, 255), 1, Qt.PenStyle.DashLine))
         painter.setBrush(Qt.BrushStyle.NoBrush)
+        if self._edit is not None:
+            data = self._edit["data"]
+            a = QPointF(float(data["x1"]) * z, float(data["y1"]) * z)
+            b = QPointF(float(data["x2"]) * z, float(data["y2"]) * z)
+            if data["kind"] == "line":
+                painter.drawLine(a, b)
+            elif data["kind"] == "ellipse":
+                painter.drawEllipse(QRectF(a, b).normalized())
+            else:
+                painter.drawRect(QRectF(a, b).normalized())
+            painter.setBrush(QColor(30, 144, 255))
+            for _name, hx, hy in vector.handles(data):
+                painter.drawRect(QRectF(hx * z - 3, hy * z - 3, 6, 6))
+            return
+        if self._start is None or self._end is None:
+            return
         a = QPointF(self._start.x() * z, self._start.y() * z)
         b = QPointF(self._end.x() * z, self._end.y() * z)
         if self.opts.shape == "line":
@@ -917,9 +984,20 @@ class ShapeTool(Tool):
         else:
             painter.drawRect(QRectF(a, b).normalized())
 
+    def cancel(self, doc=None) -> None:
+        self._start = self._end = None
+        self._edit = None
+
     def release(self, doc, canvas, pos, ev):
+        from photoslop import vector
         from photoslop.commands import InsertLayerCommand
 
+        if self._edit is not None:
+            edit, self._edit = self._edit, None
+            if canvas is not None:
+                canvas.update()
+            self._commit_edit(doc, edit)
+            return
         start, end = self._start, self._end
         self._start = self._end = None
         if canvas is not None:
@@ -929,33 +1007,33 @@ class ShapeTool(Tool):
         raw = QRectF(start, end).normalized()
         if raw.width() < 2 and raw.height() < 2:
             return  # a click, not a drag
-        margin = max(2, self.opts.size) if self.opts.shape == "line" else 2
-        bounds = (raw.toAlignedRect()
-                  .adjusted(-margin, -margin, margin, margin)
-                  .intersected(doc.canvas_rect().adjusted(-margin, -margin,
-                                                          margin, margin)))
-        layer = Layer.blank(f"Shape {len(doc.layers)}", bounds.size(),
-                            bounds.topLeft())
-        p = QPainter(layer.image)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.translate(-bounds.topLeft())
         color = self.opts.foreground
-        if self.opts.shape == "line":
-            pen = QPen(color, max(1, self.opts.size))
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            p.setPen(pen)
-            p.drawLine(start, end)
-        else:
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(color)
-            rect = QRectF(start, end).normalized()
-            if self.opts.shape == "ellipse":
-                p.drawEllipse(rect)
-            else:
-                p.drawRect(rect)
-        p.end()
+        data = {"kind": self.opts.shape if self.opts.shape in
+                ("ellipse", "line") else "rect",
+                "x1": start.x(), "y1": start.y(),
+                "x2": end.x(), "y2": end.y(),
+                "color": [color.red(), color.green(), color.blue(),
+                          color.alpha()]}
+        if data["kind"] == "line":
+            data["width"] = max(1, self.opts.size)
+        layer = vector.render_vector(data, f"Shape {len(doc.layers)}",
+                                     doc.canvas_rect())
+        if layer is None:
+            return
         doc.undo_stack.push(InsertLayerCommand(
             doc, len(doc.layers), layer, "Add Shape"))
+
+    def _commit_edit(self, doc, edit) -> None:
+        from photoslop import vector
+        from photoslop.commands import EditVectorLayerCommand
+
+        layer, data = edit["layer"], edit["data"]
+        if data == layer.vector_data:
+            return  # a click that moved nothing
+        rendered = vector.render_vector(data, layer.name, doc.canvas_rect())
+        if rendered is None:
+            return
+        doc.undo_stack.push(EditVectorLayerCommand(doc, layer, rendered))
 
 
 class TextTool(Tool):

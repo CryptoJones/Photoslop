@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.8.0] — 2026-07-03
+
+### Added
+- **Parametric vector layers**: Shape and Pen layers remember their
+  geometry (`vector_data`, persisted in .ora as `photoslop-vector`).
+  Click the active layer with the same tool to re-edit — drag
+  corner/endpoint handles (or the body to move), pick pen anchors back
+  up, append new ones — one undo step per edit (EditVectorLayerCommand).
+  Document resize/rotate/flip **re-render from the parameters** instead
+  of resampling pixels, so edges stay crisp at any scale (works headless:
+  `--shape … --resize …`). Layer flips stay parametric; arbitrary-angle
+  layer rotation drops to raster by design. Closes #110.
+
 ## [1.7.0] — 2026-07-03
 
 ### Added

@@ -4,6 +4,14 @@ Every layer is one premultiplied ARGB32 buffer (copy-on-write shared) with a
 name, offset, visibility, opacity, and blend mode. The Layers panel manages
 the stack; the History panel shows every undoable step.
 
+## Vector layers (parametric Shape and Pen)
+Shape and Pen layers remember their geometry (`vector_data`, saved in .ora
+as `photoslop-vector`): click with the same tool to re-edit with drag
+handles, and document scale/rotate/flip **re-render from the parameters**
+instead of resampling pixels — edges stay crisp at any size. Painting on a
+vector layer keeps the pixels but geometry edits will re-render over them;
+arbitrary-angle layer rotation drops the layer to plain raster.
+
 ## Blend modes
 13 modes with OpenRaster interop: normal, multiply, screen, overlay, darken,
 lighten, color-dodge, color-burn, hard-light, soft-light, difference,

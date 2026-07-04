@@ -253,6 +253,35 @@ class SetLayerStyleCommand(QUndoCommand):
         self._apply(self._old)
 
 
+class EditVectorLayerCommand(QUndoCommand):
+    """Replace a vector layer's rendered content and geometry — one step."""
+
+    def __init__(self, doc: Document, layer: Layer, rendered: Layer,
+                 text: str = "Edit Shape") -> None:
+        super().__init__(text)
+        self._doc = doc
+        self._layer = layer
+        self._old = (QImage(layer.image), QPoint(layer.offset),
+                     dict(layer.vector_data or {}))
+        self._new = (QImage(rendered.image), QPoint(rendered.offset),
+                     dict(rendered.vector_data or {}))
+
+    def _apply(self, state) -> None:
+        image, offset, data = state
+        dirty = self._layer.bounds()
+        self._layer.image = QImage(image)
+        self._layer.offset = QPoint(offset)
+        self._layer.vector_data = dict(data) if data else None
+        self._layer.fx_cache = None
+        self._doc.notify_pixels(dirty.united(self._layer.bounds()))
+
+    def redo(self) -> None:
+        self._apply(self._new)
+
+    def undo(self) -> None:
+        self._apply(self._old)
+
+
 class EditTextLayerCommand(QUndoCommand):
     """Replace a text layer's rendered content and remembered text data."""
 
@@ -551,14 +580,22 @@ class ResizeImageCommand(QUndoCommand):
         self.old_size = QSize(doc.size)
         self.new_size = QSize(new_size)
         self.old_layers = [
-            (layer, QImage(layer.image), QPoint(layer.offset)) for layer in doc.layers
+            (layer, QImage(layer.image), QPoint(layer.offset),
+             dict(layer.vector_data) if layer.vector_data else None)
+            for layer in doc.layers
         ]
 
     def redo(self) -> None:
+        from photoslop import vector
+
         doc = self.doc
         sx = self.new_size.width() / self.old_size.width()
         sy = self.new_size.height() / self.old_size.height()
-        for layer, old_img, old_off in self.old_layers:
+        canvas = QRect(QPoint(0, 0), QSize(self.new_size))
+        for layer, old_img, old_off, old_vec in self.old_layers:
+            if old_vec is not None and vector.rerender_into(
+                    layer, vector.scale_vector(old_vec, sx, sy), canvas):
+                continue  # crisp re-render from parameters, not resampling
             w = max(1, round(old_img.width() * sx))
             h = max(1, round(old_img.height() * sy))
             layer.image = old_img.scaled(
@@ -573,9 +610,10 @@ class ResizeImageCommand(QUndoCommand):
 
     def undo(self) -> None:
         doc = self.doc
-        for layer, old_img, old_off in self.old_layers:
+        for layer, old_img, old_off, old_vec in self.old_layers:
             layer.image = QImage(old_img)
             layer.offset = QPoint(old_off)
+            layer.vector_data = dict(old_vec) if old_vec else None
         doc.size = QSize(self.old_size)
         doc.notify_structure()
         doc.notify_pixels(QRect(QPoint(0, 0), doc.size))
@@ -588,9 +626,14 @@ def _rotate_doc(doc: Document, deg: int) -> None:
     deg %= 360
     if deg == 0:
         return
+    from photoslop import vector
+
     old_w, old_h = doc.size.width(), doc.size.height()
     transform = QTransform().rotate(deg)
     for layer in doc.layers:
+        if layer.vector_data is not None:
+            layer.vector_data = vector.rotate_vector(
+                layer.vector_data, deg, old_w, old_h)
         lw, lh = layer.image.width(), layer.image.height()
         x0, y0 = layer.offset.x(), layer.offset.y()
         layer.image = layer.image.transformed(transform)
@@ -619,9 +662,14 @@ def _rotate_doc(doc: Document, deg: int) -> None:
 
 
 def _flip_doc(doc: Document, horizontal: bool) -> None:
+    from photoslop import vector
+
     w, h = doc.size.width(), doc.size.height()
     axis = Qt.Orientation.Horizontal if horizontal else Qt.Orientation.Vertical
     for layer in doc.layers:
+        if layer.vector_data is not None:
+            layer.vector_data = vector.flip_vector(
+                layer.vector_data, horizontal, w, h)
         layer.image = layer.image.flipped(axis)
         if horizontal:
             layer.offset = QPoint(w - (layer.offset.x() + layer.image.width()),
@@ -672,9 +720,14 @@ class RotateLayerCommand(QUndoCommand):
         self.doc, self.layer = doc, layer
         self.degrees = degrees % 360
         self.old_offset = QPoint(layer.offset)
+        self.old_vector = (dict(layer.vector_data)
+                           if layer.vector_data else None)
 
     def _apply(self, deg: int) -> None:
         layer = self.layer
+        # layer-local rotation invalidates doc-space geometry: drop to raster
+        layer.vector_data = None if deg == self.degrees else \
+            (dict(self.old_vector) if self.old_vector else None)
         dirty = layer.bounds()
         cx = layer.offset.x() + layer.image.width() / 2.0
         cy = layer.offset.y() + layer.image.height() / 2.0
@@ -699,10 +752,15 @@ class FlipLayerCommand(QUndoCommand):
         self.horizontal = horizontal
 
     def redo(self) -> None:
+        from photoslop import vector
+
         layer = self.layer
         axis = (Qt.Orientation.Horizontal if self.horizontal
                 else Qt.Orientation.Vertical)
         layer.image = layer.image.flipped(axis)
+        if layer.vector_data is not None:  # self-inverse, like the flip
+            layer.vector_data = vector.flip_vector_local(
+                layer.vector_data, self.horizontal)
         self.doc.notify_pixels(layer.bounds())
 
     undo = redo

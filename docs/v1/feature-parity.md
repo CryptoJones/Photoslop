@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v1.7.0** against six
+An honest, category-by-category comparison of **Photoslop v1.8.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -15,7 +15,7 @@ than "missing".
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 1.7.0 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
+| **Photoslop** | 1.8.0 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
@@ -55,7 +55,7 @@ than "missing".
 | Fill opacity (fill fades, effects stay) | ✅ | ✅ | ❌ | ❌ | — | — | — |
 | Smart objects (pristine source + restore) | ✅ | ✅ | 🟡 (link layers, GIMP 3.2) | ❌ | — | — | — |
 | Smart filters (re-applyable stacks) | ✅ | ✅ | ✅ (non-destructive filters) | ❌ | — | — | — |
-| Non-destructive text/vector layers | ✅ text re-edit / 🟡 shapes | ✅ | ✅ (text/vector/link layers) | ❌ | — | — | — |
+| Non-destructive text/vector layers | ✅ text + vectors | ✅ | ✅ (text/vector/link layers) | ❌ | — | — | — |
 
 ## Selections
 
@@ -113,9 +113,9 @@ than "missing".
 |---|---|---|---|---|---|---|---|
 | Text tool with font/size/colour | ✅ [Tools](tools.md) | ✅ | ✅ | ✅ | — | 🟡 (watermark) | 🟡 (watermark) |
 | Re-editable text layers | ✅ (persists in .ora) | ✅ | ✅ | ❌ | — | — | — |
-| Shape tool (rect/ellipse/line) | ✅ (raster, bounded layers) | ✅ (vector) | ✅ (vector layers, 3.2) | ✅ (raster) | — | — | — |
-| Pen / path tool | ✅ (Catmull-Rom, rasterizing) | ✅ (full vector) | ✅ | ❌ | — | — | — |
-| Parametric (re-editable) vectors | ❌ | ✅ | ✅ (3.2 vector layers) | ❌ | — | — | — |
+| Shape tool (rect/ellipse/line) | ✅ (parametric, re-editable) | ✅ (vector) | ✅ (vector layers, 3.2) | ✅ (raster) | — | — | — |
+| Pen / path tool | ✅ (Catmull-Rom, re-editable anchors) | ✅ (full vector) | ✅ | ❌ | — | — | — |
+| Parametric (re-editable) vectors | ✅ [Tools](tools.md) | ✅ | ✅ (3.2 vector layers) | ❌ | — | — | — |
 
 ## Automation, scripting & headless
 
@@ -193,8 +193,8 @@ issue yet — this section is the menu to pick from.
 **Editing depth.**
 - One adjustment-layer type (LUT) vs Photoshop's ~20 *(medium; the LUT
   plumbing generalizes)*.
-- Shapes/pen rasterize on commit — no parametric re-editing (text already
-  re-edits; GIMP 3.2 now does full vector layers) *(medium)*.
+- ~~Shapes/pen rasterize on commit~~ *(shipped v1.8.0 — parametric
+  vector layers with handle editing and crisp transform re-render)*.
 - ~~No plugin API for filters~~ *(shipped v1.4.0 — `photoslop.filters`
   entry points; the library itself grows via the filter packs, #111)*.
 - No tablet pressure sensitivity *(small-medium; QTabletEvent, needs hardware
