@@ -37,6 +37,34 @@ Only RGB is handed to G'MIC — alpha is kept aside and reattached, so
 transparency can't be corrupted. Per DD-008, each run costs a transient
 float copy of one layer; resident memory is untouched.
 
+## The GEGL pack (Linux, system-library gated)
+
+```bash
+sudo apt install python3-gi gir1.2-gegl-0.4    # that's the whole setup
+```
+
+No bundling, ever (DD-001): the pack finds a python interpreter that can
+import Gegl — the venv's own if pygobject is installed, else the system
+python3 — and every run is **spawn-per-call**: a short-lived worker
+applies one operation between temp PNGs and dies, so GEGL never enters
+Photoslop's resident memory.
+
+| Filter | CLI name | Params |
+|---|---|---|
+| GEGL Vignette | `gegl-vignette` | `radius`, `softness` |
+| GEGL Bloom | `gegl-bloom` | `strength`, `radius` |
+| GEGL Pixelize | `gegl-pixelize` | `size-x`, `size-y` |
+| GEGL Newsprint | `gegl-newsprint` | `period` |
+| GEGL Posterize | `gegl-posterize` | `levels` |
+| GEGL Motion Blur | `gegl-motion-blur` | `length`, `angle` |
+| GEGL Edge Detect (Sobel) | `gegl-edge-sobel` | — |
+| **GEGL Operation** | `gegl` | `operation` — any of ~200 ops + props |
+
+Raw form: `--filter "gegl:operation=gegl:vignette radius=1.2,softness=0.5"`
+— the first token is the operation, the rest `key=val` properties (ints,
+floats, and strings coerce; unknown operations and properties fail with
+the worker's error text).
+
 ## The contract
 
 ```python

@@ -47,7 +47,7 @@ message on stderr.
 | `--curves` `X:Y,...` | master curve points in 0..255 |
 | `--adjust` `"KEY=VAL,..."` | Lightroom Basic sliders (temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation) |
 | `--gaussian-blur` `RADIUS` | gaussian blur (selection-aware) |
-| `--filter` `"NAME:KEY=VAL,..."` | run a filter plugin — built-ins `sepia`, `pixelate`; the G'MIC pack (`gmic-cartoon`, raw `gmic:command=...`, …) with `photoslop[gmic]`; more via [Filter Plugins](filter-plugins.md) |
+| `--filter` `"NAME:KEY=VAL,..."` | run a filter plugin — built-ins `sepia`, `pixelate`; the G'MIC pack (`gmic-cartoon`, raw `gmic:command=...`, …) with `photoslop[gmic]`; the GEGL pack (`gegl-vignette`, raw `gegl:operation=...`, …) with system python3-gi + gir1.2-gegl; more via [Filter Plugins](filter-plugins.md) |
 | `--unsharp` `AMOUNT` | unsharp mask, percent |
 | `--tilt-shift` `C,B,T,R` | tilt-shift blur: centre,band,transition,radius |
 | `--drop-shadow` `DX,DY,BLUR,ALPHA` | live drop-shadow effect |

@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.6.0] — 2026-07-03
+
+### Added
+- **GEGL filter pack** (Linux, system-library gated — install python3-gi
+  and gir1.2-gegl-0.4 from your distro, nothing bundled per DD-001):
+  Vignette, Bloom, Pixelize, Newsprint, Posterize, Motion Blur, Edge
+  Detect, plus **GEGL Operation** — a raw escape hatch to all ~200
+  operations with `key=val` properties. Runs **spawn-per-call** in a
+  short-lived worker (the venv's python if it has gi, else the system
+  python3), so GEGL never enters Photoslop's resident memory. Second of
+  the #111 packs.
+
 ## [1.5.0] — 2026-07-03
 
 ### Added
