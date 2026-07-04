@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.10.0] — 2026-07-03
+
+### Added
+- **Raw develop** (DD-007; 16-bit transient in, 8-bit layer out): `rawpy`
+  decodes at `output_bps=16` with exposure (`2^EV`), a Kelvin white-balance
+  approximation (Tanner Helland fit — higher temp = warmer, Lightroom
+  convention), and luma-weighted highlights/shadows tone mapping, all held
+  in a transient buffer. Raw Develop dialog with a live half-size preview
+  (`probe_raw` validates the file before the dialog; Cancel = camera
+  defaults). CLI mirror:
+  `--raw-develop "exposure=…,temp=…,tint=…,highlights=…,shadows=…"`.
+- **Lens corrections** (`photoslop[lens]` extra — lensfunpy + exifread,
+  feature-detected per DD-001): distortion remap + vignetting driven by the
+  source file's EXIF, with clear errors when the camera/lens is not in the
+  database. Filter menu entry + `--lens-correct`.
+- **Denoise**, two flavors: a built-in baseline `DenoiseFilter` (luma
+  preserved exactly, chroma box-blurred) and an adapter route (DD-009) —
+  `ModelAdapter.denoise` + `POST {base}/denoise` in the HTTP contract,
+  surfaced as Filter > Denoise (Model) and `--denoise-model N`.
+- Final parity-loop cycle (9/9). Closes #112. Suite: 2280 → 2290 tests.
+
 ## [1.9.0] — 2026-07-03
 
 ### Added
