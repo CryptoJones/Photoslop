@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.13.0] — 2026-07-04
+
+### Added
+- **Rich text tool** — the Text tool (`T`) now opens a modern WYSIWYG rich-text
+  editor instead of a plain box. Type and the text previews in the font, size,
+  and colour you chose; a formatting toolbar gives a font picker, size,
+  **bold**/*italic* toggles, and a colour swatch. Colour the **whole block or
+  individual letters** — select a run of characters and pick a colour to tint
+  just those. Re-editing an existing text layer re-opens it with all its
+  styling intact (the styled HTML persists in `.ora`).
+- **`--text-rich "X,Y:<html>"`** — the headless CLI mirror of the styled
+  editor: renders an HTML fragment onto a new layer, so per-letter colour,
+  font-family, and bold/italic are all reachable from the command line. The
+  existing `--text` op is unchanged and backward-compatible.
+
 ## [1.12.0] — 2026-07-04
 
 ### Added

@@ -53,6 +53,8 @@ PAIR_ARGS = {
     "flip": ["--flip", "h"],
     "fill": ["--fill", "10,200,40"],
     "text": ["--text", "2,2,8,0,120,255:Hi"],
+    "text-rich": ["--text-rich",
+                  '2,2:<span style="color:#0078ff;font-size:8pt">Hi</span>'],
     "shape": ["--shape", "rect,2,2,10,8,255,0,0"],
     "blend-mode": ["--blend-mode", "multiply"],
     "layer-opacity": ["--layer-opacity", "70"],

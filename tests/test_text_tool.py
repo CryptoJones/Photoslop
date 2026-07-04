@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 from PySide6.QtCore import QPoint, QPointF, QSize
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QTextDocument
 
 from photoslop import textdialog, tools
 from photoslop.commands import InsertLayerCommand
 from photoslop.document import Document
 from photoslop.mainwindow import MainWindow
-from photoslop.textdialog import render_text_layer
+from photoslop.textdialog import render_text_document, render_text_layer
 
 
 def test_render_text_layer(qapp):
@@ -29,6 +29,45 @@ def test_render_text_layer(qapp):
     assert multi.image.height() > layer.image.height()  # three lines taller
 
     assert render_text_layer("   \n", font, QColor(0, 0, 0), QPoint(0, 0)) is None
+
+
+def test_render_text_document_per_letter_colour(qapp):
+    doc = QTextDocument()
+    doc.setHtml('<span style="color:#ff0000;font-size:40pt">A</span>'
+                '<span style="color:#00ff00;font-size:40pt">B</span>')
+    layer = render_text_document(doc, QPoint(7, 9))
+    assert layer is not None
+    assert layer.offset == QPoint(7, 9)
+    img = layer.image
+    has_red = any(
+        img.pixelColor(x, y).red() > 180 and img.pixelColor(x, y).green() < 80
+        and img.pixelColor(x, y).alpha() > 150
+        for x in range(img.width()) for y in range(img.height()))
+    has_green = any(
+        img.pixelColor(x, y).green() > 180 and img.pixelColor(x, y).red() < 80
+        and img.pixelColor(x, y).alpha() > 150
+        for x in range(img.width()) for y in range(img.height()))
+    assert has_red and has_green  # each letter keeps its own colour
+    # the HTML is stamped for re-editing
+    assert layer.text_data["text"] == "AB"
+    assert "html" in layer.text_data
+
+    assert render_text_document(QTextDocument(), QPoint(0, 0)) is None
+
+
+def test_text_dialog_rich_round_trip(qapp):
+    # a styled block re-opens with its HTML intact and rebuilds a layer
+    dlg = textdialog.TextDialog(QColor(0, 0, 0))
+    dlg.edit.setHtml('<span style="color:#ff0000;font-size:40pt">Hi</span>')
+    layer = dlg.build_layer(QPoint(0, 0))
+    assert layer is not None
+    html = layer.text_data["html"]
+
+    reopened = textdialog.TextDialog(QColor(0, 0, 0), text="Hi", html=html)
+    assert reopened.text() == "Hi"
+    assert reopened.windowTitle() == "Edit Text"
+    rebuilt = reopened.build_layer(QPoint(0, 0))
+    assert rebuilt.text_data["text"] == "Hi"
 
 
 def test_text_layer_insert_undo(qapp):
@@ -88,9 +127,9 @@ class _FakeDialog:
 
     captured: dict = {}
 
-    def __init__(self, color, parent=None, text="", font=None):
+    def __init__(self, color, parent=None, text="", font=None, html=None):
         _FakeDialog.captured = {"color": QColor(color), "text": text,
-                                "font": font}
+                                "font": font, "html": html}
         self.color = QColor(255, 0, 0)
 
     def exec(self):
@@ -103,6 +142,11 @@ class _FakeDialog:
         font = QFont()
         font.setPointSize(18)
         return font
+
+    def build_layer(self, anchor):
+        font = QFont()
+        font.setPointSize(18)
+        return render_text_layer("After", font, self.color, anchor)
 
 
 class _FakeCanvas:

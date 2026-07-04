@@ -713,6 +713,25 @@ def _op_text(ctx: Context, value: str) -> None:
     ctx.doc.active_index = len(ctx.doc.layers) - 1
 
 
+def _op_text_rich(ctx: Context, value: str) -> None:
+    from PySide6.QtCore import QPoint
+    from PySide6.QtGui import QTextDocument
+
+    from photoslop.textdialog import render_text_document
+
+    head, sep, body = value.partition(":")
+    if not sep or not body.strip():
+        raise _ValueError('--text-rich expects "x,y:<html>"')
+    x, y = _ints(head, 2, "--text-rich position")
+    document = QTextDocument()
+    document.setHtml(body)
+    layer = render_text_document(document, QPoint(x, y))
+    if layer is None:
+        raise _ValueError("--text-rich: nothing to render")
+    ctx.doc.layers.append(layer)
+    ctx.doc.active_index = len(ctx.doc.layers) - 1
+
+
 def _op_shape(ctx: Context, value: str) -> None:
     from photoslop import vector
 
@@ -907,6 +926,10 @@ OPS: dict = {
     "fill": ("R,G,B", "fill the whole target layer with a colour", _op_fill),
     "text": ('"X,Y,SIZE[,R,G,B]:TEXT"',
              "rasterise text onto a new layer (default colour black)", _op_text),
+    "text-rich": ('"X,Y:<html>"',
+                  "rasterise rich HTML text onto a new layer — per-letter "
+                  "colour, font-family, bold/italic (mirror of the GUI Text "
+                  "tool's styled editor)", _op_text_rich),
     "shape": ("KIND,X,Y,W,H,R,G,B", "rect/ellipse/line onto a new layer",
               _op_shape),
     "blend-mode": ("NAME", "set the target layer's blend mode",

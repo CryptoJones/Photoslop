@@ -1047,20 +1047,21 @@ class TextTool(Tool):
 
     def press(self, doc, canvas, pos, ev):
         from photoslop.commands import EditTextLayerCommand, InsertLayerCommand
-        from photoslop.textdialog import TextDialog, render_text_layer
+        from photoslop.textdialog import TextDialog
 
         target = doc.active_layer
         if (target is not None and target.text_data
                 and target.bounds().contains(pos.toPoint())):
             data = target.text_data
-            font = QFont(data["family"])
-            font.setPointSize(max(1, int(data["size"])))
-            dialog = TextDialog(QColor(*data["color"]), canvas.window(),
-                                text=data["text"], font=font)
+            font = QFont(data.get("family", ""))
+            if data.get("size"):
+                font.setPointSize(max(1, int(data["size"])))
+            color = QColor(*data["color"]) if data.get("color") else QColor(0, 0, 0)
+            dialog = TextDialog(color, canvas.window(), text=data.get("text", ""),
+                                font=font, html=data.get("html"))
             if not dialog.exec():
                 return
-            rendered = render_text_layer(dialog.text(), dialog.chosen_font(),
-                                         dialog.color, QPoint(target.offset))
+            rendered = dialog.build_layer(QPoint(target.offset))
             if rendered is None:
                 return  # emptied out — treat as cancel, keep the layer
             doc.undo_stack.push(EditTextLayerCommand(doc, target, rendered))
@@ -1069,8 +1070,7 @@ class TextTool(Tool):
         dialog = TextDialog(self.opts.foreground, canvas.window())
         if not dialog.exec():
             return
-        layer = render_text_layer(dialog.text(), dialog.chosen_font(),
-                                  dialog.color, pos.toPoint())
+        layer = dialog.build_layer(pos.toPoint())
         if layer is None:
             return
         doc.undo_stack.push(InsertLayerCommand(

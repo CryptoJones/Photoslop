@@ -71,6 +71,7 @@ message on stderr.
 | `--flip` `h|v` | mirror the target layer(s) |
 | `--fill` `R,G,B` | fill the whole target layer with a colour |
 | `--text` `"X,Y,SIZE[,R,G,B]:TEXT"` | rasterise text onto a new layer (default colour black) |
+| `--text-rich` `"X,Y:<html>"` | rasterise **rich HTML** text onto a new layer — per-letter colour, font-family, bold/italic (the headless mirror of the GUI Text tool's styled editor) |
 | `--shape` `KIND,X,Y,W,H,R,G,B` | rect/ellipse/line onto a new **parametric** layer (re-renders crisp on --resize) |
 | `--blend-mode` `NAME` | set the target layer's blend mode |
 | `--layer-opacity` `PCT` | set the target layer's opacity |
@@ -103,6 +104,9 @@ for f in *.CR3; do photoslop-cli "$f" --auto-levels --unsharp 110 --output "${f%
 
 # thumbnail with a watermark-ish stamp
 photoslop-cli in.png --resize 400x300 --text "8,280,12,255,255,255:© CryptoJones" --output thumb.png
+
+# multi-colour headline — each letter styled via HTML (mirror of the GUI editor)
+photoslop-cli in.png --text-rich '40,40:<span style="font-family:Georgia;font-size:48pt;color:#e00">Big</span> <span style="font-size:48pt;color:#05a">Red</span>' --output headline.png
 
 # subject cut-out driven by your own model server
 photoslop-cli photo.png --model-url http://localhost:8188/ps --select-subject \

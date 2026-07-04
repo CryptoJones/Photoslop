@@ -1,21 +1,36 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Text tool dialog: type text, pick font/size, and it renders onto a new
+"""Text tool dialog: a small rich-text editor. Type text, pick a font/size,
+toggle bold/italic, and colour the whole block *or individual letters* (select
+a run, then pick a colour). The editor is WYSIWYG — what you type shows in the
+font and colour you chose. On accept it rasterises the styled text onto a new
 layer at the clicked position (raster, like flattening PS type)."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter
+import math
+
+from PySide6.QtCore import QPoint, QRectF, QSize, Qt
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontMetricsF,
+    QPainter,
+    QTextCharFormat,
+    QTextDocument,
+)
 from PySide6.QtWidgets import (
     QColorDialog,
     QDialog,
     QDialogButtonBox,
     QFontComboBox,
-    QFormLayout,
+    QFrame,
     QHBoxLayout,
-    QPlainTextEdit,
+    QLabel,
     QPushButton,
     QSpinBox,
+    QTextEdit,
+    QToolButton,
+    QVBoxLayout,
 )
 
 from photoslop.layer import Layer
@@ -23,7 +38,12 @@ from photoslop.layer import Layer
 
 def render_text_layer(text: str, font: QFont, color: QColor,
                       anchor: QPoint) -> Layer | None:
-    """Rasterise text into a tight layer whose top-left sits at `anchor`."""
+    """Rasterise plain text into a tight layer whose top-left sits at `anchor`.
+
+    The single-font/single-colour path used by the CLI `--text` op and by
+    callers that don't need per-letter styling. For rich text (per-letter
+    colour, mixed fonts) build a QTextDocument and use `render_text_document`.
+    """
     text = text.rstrip("\n")
     if not text.strip():
         return None
@@ -55,53 +75,204 @@ def render_text_layer(text: str, font: QFont, color: QColor,
     return layer
 
 
-def _size(w: int, h: int):
-    from PySide6.QtCore import QSize
+def render_text_document(document: QTextDocument, anchor: QPoint,
+                         pad: int = 2) -> Layer | None:
+    """Rasterise a rich QTextDocument (per-letter colour, mixed fonts, bold/
+    italic) into a tight layer whose top-left sits at `anchor`.
 
+    The document is cloned first, so the caller's live editor document is left
+    untouched. The layer stores the document's HTML in `text_data` so the text
+    tool can re-open it with all its styling intact.
+    """
+    document = document.clone()
+    if not document.toPlainText().strip():
+        return None
+    document.setDocumentMargin(pad)
+    document.setTextWidth(-1)  # -1 → lay out at the natural width, no wrapping
+    size = document.size()
+    width = int(math.ceil(size.width())) + 1
+    height = int(math.ceil(size.height())) + 1
+    plain = document.toPlainText()
+    layer = Layer.blank(plain.split("\n")[0][:24] or "Text",
+                        _size(width, height), QPoint(anchor))
+    p = QPainter(layer.image)
+    p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+    document.drawContents(p)
+    p.end()
+    base = document.defaultFont()
+    layer.text_data = {
+        "text": plain,
+        "html": document.toHtml(),
+        "family": base.family(),
+        "size": base.pointSize(),
+        "color": [0, 0, 0, 255],  # legacy fallback; real colours live in html
+    }
+    return layer
+
+
+def _size(w: int, h: int) -> QSize:
     return QSize(max(1, w), max(1, h))
 
 
 class TextDialog(QDialog):
+    """Rich-text entry for the Text tool.
+
+    Backwards-compatible constructor: `TextDialog(color, parent, text, font)`
+    still seeds a single-colour/single-font block. Pass `html` instead to
+    restore a previously styled block for editing.
+    """
+
     def __init__(self, color: QColor, parent=None, text: str = "",
-                 font: QFont | None = None) -> None:
+                 font: QFont | None = None, html: str | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Edit Text" if text else "Add Text")
+        self.setWindowTitle("Edit Text" if (text or html) else "Add Text")
         self.color = QColor(color)
+        self._syncing = False
 
-        form = QFormLayout(self)
-        self.edit = QPlainTextEdit()
-        self.edit.setPlaceholderText("Type your text…")
-        self.edit.setMinimumSize(320, 100)
-        self.edit.setPlainText(text)
-        form.addRow(self.edit)
+        layout = QVBoxLayout(self)
 
-        row = QHBoxLayout()
+        # --- formatting toolbar -------------------------------------------
+        bar = QFrame()
+        bar.setObjectName("textToolbar")
+        bar.setStyleSheet(
+            "#textToolbar { border: 1px solid palette(mid); border-radius: 6px; }"
+            "#textToolbar QToolButton { border: none; padding: 4px 8px; }"
+            "#textToolbar QToolButton:checked {"
+            " background: palette(highlight); border-radius: 4px; }")
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(6, 4, 6, 4)
+        row.setSpacing(6)
+
         self.font_box = QFontComboBox()
         self.size = QSpinBox()
         self.size.setRange(6, 400)
         self.size.setValue(32)
         self.size.setSuffix(" pt")
+
+        self.bold_btn = QToolButton()
+        self.bold_btn.setText("B")
+        self.bold_btn.setCheckable(True)
+        self.bold_btn.setToolTip("Bold")
+        bfont = self.bold_btn.font()
+        bfont.setBold(True)
+        self.bold_btn.setFont(bfont)
+
+        self.italic_btn = QToolButton()
+        self.italic_btn.setText("I")
+        self.italic_btn.setCheckable(True)
+        self.italic_btn.setToolTip("Italic")
+        ifont = self.italic_btn.font()
+        ifont.setItalic(True)
+        self.italic_btn.setFont(ifont)
+
+        self.color_button = QPushButton()
+        self.color_button.setToolTip("Text colour — colours the selection, or "
+                                     "new typing if nothing is selected")
+        self.color_button.setFixedSize(40, self.size.sizeHint().height())
+        self.color_button.clicked.connect(self.pick_color)
+
+        row.addWidget(self.font_box, 1)
+        row.addWidget(self.size)
+        row.addWidget(self.bold_btn)
+        row.addWidget(self.italic_btn)
+        row.addWidget(self.color_button)
+        layout.addWidget(bar)
+
+        # --- editor -------------------------------------------------------
+        self.edit = QTextEdit()
+        self.edit.setAcceptRichText(True)
+        self.edit.setPlaceholderText("Type your text…")
+        self.edit.setMinimumSize(360, 140)
+        layout.addWidget(self.edit, 1)
+
+        hint = QLabel("Tip: select individual letters, then pick a colour to "
+                      "tint just those.")
+        hint.setStyleSheet("color: palette(mid); font-size: 11px;")
+        layout.addWidget(hint)
+
+        # seed the starting font/size so the very first keystroke previews it
         if font is not None:
             self.font_box.setCurrentFont(font)
             if font.pointSize() > 0:
                 self.size.setValue(font.pointSize())
-        self.color_button = QPushButton()
-        self.color_button.setToolTip("Text colour")
-        self.color_button.setFixedSize(40, self.size.sizeHint().height())
-        self.color_button.clicked.connect(self.pick_color)
+        seed_font = self.chosen_font()
+        self.edit.document().setDefaultFont(seed_font)
+        seed = QTextCharFormat()
+        seed.setFont(seed_font)
+        seed.setForeground(self.color)
+        self.edit.setCurrentCharFormat(seed)
+
+        # restore prior content
+        if html is not None:
+            self.edit.setHtml(html)
+        elif text:
+            cursor = self.edit.textCursor()
+            cursor.insertText(text, seed)
+
         self._update_swatch()
-        row.addWidget(self.font_box, 1)
-        row.addWidget(self.size)
-        row.addWidget(self.color_button)
-        form.addRow(row)
+
+        # live formatting wiring
+        self.font_box.currentFontChanged.connect(self._on_font)
+        self.size.valueChanged.connect(self._on_size)
+        self.bold_btn.toggled.connect(self._on_bold)
+        self.italic_btn.toggled.connect(self._on_italic)
+        self.edit.currentCharFormatChanged.connect(self._sync_controls)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        form.addRow(buttons)
+        layout.addWidget(buttons)
         self.edit.setFocus()
+
+    # -- formatting helpers ------------------------------------------------
+    def _merge(self, fmt: QTextCharFormat) -> None:
+        """Apply `fmt` to the selection, or to subsequent typing if there is
+        no selection (mergeCurrentCharFormat handles both cases)."""
+        if self._syncing:
+            return
+        self.edit.mergeCurrentCharFormat(fmt)
+        self.edit.setFocus()
+
+    def _on_font(self, font: QFont) -> None:
+        fmt = QTextCharFormat()
+        fmt.setFontFamilies([font.family()])
+        self._merge(fmt)
+
+    def _on_size(self, value: int) -> None:
+        fmt = QTextCharFormat()
+        fmt.setFontPointSize(float(value))
+        self._merge(fmt)
+
+    def _on_bold(self, on: bool) -> None:
+        fmt = QTextCharFormat()
+        fmt.setFontWeight(QFont.Weight.Bold if on else QFont.Weight.Normal)
+        self._merge(fmt)
+
+    def _on_italic(self, on: bool) -> None:
+        fmt = QTextCharFormat()
+        fmt.setFontItalic(on)
+        self._merge(fmt)
+
+    def _sync_controls(self, fmt: QTextCharFormat) -> None:
+        """Reflect the format under the cursor back into the toolbar so the
+        controls always show what the caret (or selection) is styled as."""
+        self._syncing = True
+        try:
+            font = fmt.font()
+            self.font_box.setCurrentFont(font)
+            point = fmt.fontPointSize() or font.pointSizeF()
+            if point > 0:
+                self.size.setValue(int(round(point)))
+            self.bold_btn.setChecked(font.bold())
+            self.italic_btn.setChecked(font.italic())
+            brush = fmt.foreground()
+            if brush.style() != Qt.BrushStyle.NoBrush:
+                self.color = brush.color()
+                self._update_swatch()
+        finally:
+            self._syncing = False
 
     def pick_color(self) -> None:
         picked = QColorDialog.getColor(
@@ -110,11 +281,15 @@ class TextDialog(QDialog):
         if picked.isValid():
             self.color = picked
             self._update_swatch()
+            fmt = QTextCharFormat()
+            fmt.setForeground(picked)
+            self._merge(fmt)
 
     def _update_swatch(self) -> None:
         self.color_button.setStyleSheet(
             f"background-color: {self.color.name()}; border: 1px solid gray;")
 
+    # -- results -----------------------------------------------------------
     def chosen_font(self) -> QFont:
         font = self.font_box.currentFont()
         font.setPointSize(self.size.value())
@@ -122,3 +297,10 @@ class TextDialog(QDialog):
 
     def text(self) -> str:
         return self.edit.toPlainText()
+
+    def document(self) -> QTextDocument:
+        return self.edit.document()
+
+    def build_layer(self, anchor: QPoint) -> Layer | None:
+        """Rasterise the styled text into a layer anchored at `anchor`."""
+        return render_text_document(self.edit.document(), anchor)
