@@ -32,7 +32,30 @@ def main(argv: list[str] | None = None) -> int:
             Document.new(QSize(800, 600), 72.0, None, QColor(255, 255, 255))
         )
     window.show()
+    window.raise_()
+    window.activateWindow()
+    if sys.platform == "darwin":
+        # A non-bundled Python app launched from a terminal doesn't steal
+        # focus, so the global menu bar stays with the terminal and Photoslop
+        # looks menu-less. Ask System Events to bring us to the front once the
+        # event loop is running.
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, _macos_bring_to_front)
     return app.exec()
+
+
+def _macos_bring_to_front() -> None:
+    import contextlib
+    import os
+    import subprocess
+    # best-effort only — never block startup if osascript is unavailable
+    with contextlib.suppress(Exception):
+        subprocess.run(
+            ["osascript", "-e",
+             "tell application \"System Events\" to set frontmost of "
+             f"(first process whose unix id is {os.getpid()}) to true"],
+            check=False, timeout=5,
+        )
 
 
 if __name__ == "__main__":

@@ -545,7 +545,8 @@ class MainWindow(QMainWindow):
         m_file.addAction(self._act("&Export…", "Ctrl+E", self.action_export))
         m_file.addSeparator()
         m_file.addAction(self._act("&Close Tab", "Ctrl+W", self.action_close_tab))
-        m_file.addAction(self._act("&Quit", "Ctrl+Q", self.close))
+        m_file.addAction(self._act("&Quit", "Ctrl+Q", self.close,
+                                   role=QAction.MenuRole.QuitRole))
 
         m_edit = menu.addMenu("&Edit")
         undo = self.undo_group.createUndoAction(self, "&Undo ")
@@ -590,10 +591,11 @@ class MainWindow(QMainWindow):
         m_edit.addSeparator()
         self._options_menu = m_edit.addMenu("&Options")
         self._rulers_menu = self._options_menu.addMenu("&Rulers")  # unit actions added below
-        self._options_menu.addAction(self._act("&Model Backend…", None,
-                                               self.action_model_backend))
-        self._options_menu.addAction(self._act("&Color Settings…", None,
-                                               self.action_color_settings))
+        # PreferencesRole → native Photoslop → Preferences… (Cmd+,) on macOS;
+        # Edit → Preferences… on Windows/Linux (the role only relocates on Mac).
+        m_edit.addAction(self._act("&Preferences…", "Ctrl+,",
+                                   self.action_preferences,
+                                   role=QAction.MenuRole.PreferencesRole))
 
         m_select = menu.addMenu("&Select")
         m_select.addAction(self._act("&All", "Ctrl+A", self.action_select_all))
@@ -798,12 +800,19 @@ class MainWindow(QMainWindow):
                     lambda checked=False, c=cls: self.action_plugin_filter(c)))
 
         m_help = menu.addMenu("&Help")
-        m_help.addAction(self._act("&About Photoslop", None, self.action_about))
+        m_help.addAction(self._act("&About Photoslop", None, self.action_about,
+                                   role=QAction.MenuRole.AboutRole))
 
-    def _act(self, text: str, shortcut: str | None, slot) -> QAction:
+    def _act(self, text: str, shortcut: str | None, slot,
+             role: QAction.MenuRole | None = None) -> QAction:
         act = QAction(text, self)
         if shortcut:
             act.setShortcut(QKeySequence(shortcut))
+        # On macOS Qt otherwise applies TextHeuristicRole, silently relocating
+        # any item whose text looks like About/Quit/Preferences into the
+        # application menu. Pass an explicit role to pin placement per-platform.
+        if role is not None:
+            act.setMenuRole(role)
         act.triggered.connect(slot)
         return act
 
@@ -1849,34 +1858,13 @@ class MainWindow(QMainWindow):
             return None
         return create_adapter(name, {"url": s.value("model/http_url", "")})
 
-    def action_model_backend(self) -> None:
-        from PySide6.QtCore import QSettings
-        from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLineEdit
+    def action_preferences(self) -> None:
+        from photoslop.preferences import PreferencesDialog
 
-        from photoslop.modeladapter import available_adapters
-
-        s = QSettings("CryptoJones", "Photoslop")
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Model Backend")
-        form = QFormLayout(dialog)
-        combo = QComboBox()
-        combo.addItem("(none)", "")
-        for name, cls in sorted(available_adapters().items()):
-            combo.addItem(cls.label, name)
-        combo.setCurrentIndex(max(0, combo.findData(
-            s.value("model/adapter", ""))))
-        url = QLineEdit(s.value("model/http_url", ""))
-        url.setPlaceholderText("http://localhost:8188/photoslop")
-        form.addRow("&Adapter:", combo)
-        form.addRow("HTTP &URL:", url)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
-                                   | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        form.addRow(buttons)
-        if dialog.exec():
-            s.setValue("model/adapter", combo.currentData())
-            s.setValue("model/http_url", url.text().strip())
+        PreferencesDialog(self).exec()
+        editor = self.current_editor()
+        if editor is not None:  # colour settings may change the viewport
+            editor.canvas.update()
 
     def action_generative_fill(self, prompt: str | None = None) -> None:
         from photoslop.modeladapter import GENERATIVE_FILL
@@ -2168,21 +2156,13 @@ class MainWindow(QMainWindow):
 
         PointColorDialog(doc, self).exec()
 
-    def action_color_settings(self) -> None:
-        from photoslop.colordialog import ColorSettingsDialog
-
-        ColorSettingsDialog(self).exec()
-        editor = self.current_editor()
-        if editor is not None:
-            editor.canvas.update()
-
     def _toggle_soft_proof(self) -> None:
         from photoslop import color
 
         color.settings["proof_on"] = self.action_soft_proof.isChecked()
         if color.settings["proof_on"] and color.settings["proof"] is None:
             self.statusBar().showMessage(
-                "Set a proof profile first: Edit → Options → Color Settings",
+                "Set a proof profile first: Preferences → Color",
                 5000)
         editor = self.current_editor()
         if editor is not None:

@@ -203,4 +203,71 @@ class DenoiseFilter(Filter):
                     | b.astype(np.uint32))
 
 
-_BUILT_INS = (*_BUILT_INS, DenoiseFilter)
+class RetroConsoleFilter(Filter):
+    """80s/90s console look (#130): shrink the image into chunky pixels, crush
+    the colour depth to a few levels per channel, and (optionally) apply a 4x4
+    ordered (Bayer) dither so smooth gradients break into the crosshatch
+    patterns of an old game. Dependency-free and alpha-preserving. The
+    quantise runs on the downsampled copy so the dither lands on the block
+    grid; a nearest-neighbour upscale then restores the crisp blocks."""
+
+    name = "retro-console"
+    label = "Retro Console (8-Bit)"
+    params = (
+        ParamSpec("size", "Pixel size", "int", 1, 64, 6),
+        ParamSpec("levels", "Colour levels", "int", 2, 8, 4),
+        ParamSpec("dither", "Dither (0=off, 1=on)", "int", 0, 1, 1),
+    )
+
+    # 4x4 Bayer threshold matrix, centred to [-0.5, 0.5)
+    _BAYER = (np.array([[0, 8, 2, 10],
+                        [12, 4, 14, 6],
+                        [3, 11, 1, 9],
+                        [15, 7, 13, 5]], dtype=np.float32) + 0.5) / 16.0 - 0.5
+
+    def apply(self, image: QImage, params: dict) -> None:
+        size = max(1, int(params.get("size", 6)))
+        levels = max(2, int(params.get("levels", 4)))
+        dither = int(params.get("dither", 1))
+        w, h = image.width(), image.height()
+
+        small = image.scaled(max(1, w // size), max(1, h // size))
+        arr = view_u32(small)
+        a = (arr >> np.uint32(24)).astype(np.float32)
+        r = ((arr >> np.uint32(16)) & 0xFF).astype(np.float32)
+        g = ((arr >> np.uint32(8)) & 0xFF).astype(np.float32)
+        b = (arr & 0xFF).astype(np.float32)
+
+        # buffers are premultiplied (DD-001); recover straight colour to crush
+        unpm = np.where(a > 0, 255.0 / a, 0.0)
+        r *= unpm
+        g *= unpm
+        b *= unpm
+
+        step = 255.0 / (levels - 1)
+        if dither:
+            sh = arr.shape
+            bias = np.tile(self._BAYER,
+                           (sh[0] // 4 + 1, sh[1] // 4 + 1))[:sh[0], :sh[1]]
+            bias = bias * step
+            r = r + bias
+            g = g + bias
+            b = b + bias
+
+        def crush(c: np.ndarray) -> np.ndarray:
+            return np.clip(np.round(np.clip(c, 0, 255) / step) * step, 0, 255)
+
+        r, g, b = crush(r), crush(g), crush(b)
+
+        # re-premultiply by the untouched alpha and pack back to ARGB32
+        af = a / 255.0
+        arr[...] = ((a.astype(np.uint32) << np.uint32(24))
+                    | ((r * af).astype(np.uint32) << np.uint32(16))
+                    | ((g * af).astype(np.uint32) << np.uint32(8))
+                    | (b * af).astype(np.uint32))
+
+        big = small.scaled(w, h)  # nearest-neighbour up = crisp blocks
+        view_u32(image)[...] = view_u32(big)
+
+
+_BUILT_INS = (*_BUILT_INS, DenoiseFilter, RetroConsoleFilter)
