@@ -10,6 +10,9 @@ _(none)_
 
 ## Done
 
+- [x] macOS installer script (`scripts/install-macos.sh`) that builds a clickable
+  `Photoslop.app` launcher and installs it into `/Applications`
+  ([#142](https://github.com/CryptoJones/Photoslop/issues/142))
 - [x] Create MCP server for Photoslop — `photoslop-mcp` exposes the engine as MCP
   tools (`list_operations`, `edit_image`, `document_info`) mirroring `photoslop-cli`
   ([#134](https://github.com/CryptoJones/Photoslop/issues/134)) — shipped v1.13.0
