@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v1.12.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v1.14.0-orange)]()
 
 ---
 
@@ -166,6 +166,22 @@ photoslop-cli shot.cr2 --resize 1600x1067 --auto-levels --gaussian-blur 2 \
 Model ops use the same bring-your-own-backend contract as the GUI via
 `--model-url`. See `photoslop-cli --help` for the full operation set —
 every GUI engine feature is exposed (interactive brushes excepted).
+
+## MCP server (drive it from an agent)
+
+The same headless engine is available to LLMs/agents over the
+[Model Context Protocol](https://modelcontextprotocol.io). Install the extra and
+run the server (stdio transport):
+
+```bash
+pip install "photoslop[mcp]"     # or: uv sync --extra mcp
+photoslop-mcp
+```
+
+Three tools — `list_operations`, `edit_image` (load/create → ordered pipeline →
+write), and `document_info`. Operations are the CLI's table verbatim, so parity
+is automatic. See [docs/v1/mcp.md](docs/v1/mcp.md) for client-registration and
+examples.
 
 ## Model backends (bring your own model)
 

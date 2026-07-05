@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor, QImage
+from PySide6.QtWidgets import QHeaderView, QTreeView
 
 from photoslop.document import Document
 from photoslop.io_ora import save_ora
@@ -53,3 +54,15 @@ def test_dialog_updates_preview(qapp, tmp_path):
 
     dialog._update_preview(str(tmp_path / "nope.png"))
     assert "No preview" in dialog._info_label.text()
+
+
+def test_dialog_shows_all_columns_untruncated(qapp):
+    dialog = OpenImageDialog()
+    tree = dialog.findChild(QTreeView, "treeView")
+    assert tree is not None  # Detail view is active, not the icon/list view
+    header = tree.header()
+    assert not header.stretchLastSection()
+    # every column sizes to its contents -> nothing gets clipped on first open
+    for col in range(header.count()):
+        assert (header.sectionResizeMode(col)
+                == QHeaderView.ResizeMode.ResizeToContents)

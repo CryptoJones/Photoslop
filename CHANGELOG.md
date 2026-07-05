@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [1.13.0] — 2026-07-04
+## [1.14.0] — 2026-07-05
 
 ### Added
 - **Rich text tool** — the Text tool (`T`) now opens a modern WYSIWYG rich-text
@@ -18,6 +18,31 @@ follows [SemVer](https://semver.org).
   editor: renders an HTML fragment onto a new layer, so per-letter colour,
   font-family, and bold/italic are all reachable from the command line. The
   existing `--text` op is unchanged and backward-compatible.
+
+## [1.13.0] — 2026-07-05
+
+### Added
+- **MCP server** (#134) — `photoslop-mcp` (optional `photoslop[mcp]` extra)
+  exposes the headless engine over the [Model Context Protocol](https://modelcontextprotocol.io),
+  so an LLM/agent can drive the editor. Three tools: `list_operations` (the op
+  catalog), `edit_image` (load/create → ordered pipeline → write), and
+  `document_info` (read-only inspect). It is a thin surface over the new
+  `cli.apply_pipeline`, which reuses the CLI's `OPS` table verbatim — so the
+  MCP operation set is automatically in lock-step with `photoslop-cli`, the
+  same headless-parity promise. Serves over stdio; new guide `docs/v1/mcp.md`.
+
+## [1.12.1] — 2026-07-05
+
+### Changed
+- **Zoom In / Zoom Out moved to the top options bar** (#136) — the two zoom
+  buttons are now pinned at the front of the top bar (always visible), instead
+  of tucked at the end of the left tool bar. GUI chrome only; the `Ctrl++` /
+  `Ctrl+-` shortcuts and the View menu entries are unchanged.
+- **Open dialog shows all columns** (#135) — the File → Open dialog opens in
+  Detail view with every column (Name / Size / Kind / Date Modified) sized to
+  its contents, so nothing is truncated on first open.
+- **Credits renamed "Programming" → "Contributors"** (#137) — the About →
+  Credits line now reads `Contributors: …`.
 
 ## [1.12.0] — 2026-07-04
 
