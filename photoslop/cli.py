@@ -1100,12 +1100,73 @@ def _doc_info(doc) -> dict:
     }
 
 
-def main(argv: list[str] | None = None) -> int:
+_QT_APP = None
+
+
+def _ensure_qt() -> None:
+    """Bring up a headless QGuiApplication once, kept alive for the process so
+    QImage/QPainter work without a window (CLI and MCP server share this)."""
+    global _QT_APP
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtGui import QGuiApplication
 
     if QGuiApplication.instance() is None:
-        _app = QGuiApplication([])  # noqa: F841 — keeps QImage/QPainter alive
+        _QT_APP = QGuiApplication([])
+
+
+def apply_pipeline(
+    *,
+    input_path: str | None = None,
+    new: str | None = None,
+    dpi: int = 72,
+    operations: list[tuple[str, str]] | None = None,
+    output: str | None = None,
+    info: bool = False,
+    export_artboards: str | None = None,
+) -> dict:
+    """Run the same load → op-pipeline → write flow as ``main``, but driven by
+    Python values and returning a structured result instead of printing.
+
+    This is the shared engine the MCP server exposes; it reuses ``OPS`` verbatim
+    so the headless surface stays in lock-step with ``photoslop-cli``.
+
+    ``operations`` is an ordered list of ``(op_name, value)`` pairs (value ``""``
+    for flag ops). Returns a dict that may carry ``info`` (document JSON),
+    ``artboards`` (written paths), and ``output`` (the written file).
+
+    Raises ``ValueError`` for bad inputs/op values (the CLI's exit-code-2 class).
+    """
+    _ensure_qt()
+    if input_path and new:
+        raise _ValueError("give an input file or new, not both")
+    if not input_path and not new:
+        raise _ValueError("give an input file, or start blank with new")
+
+    doc = (_load_document(input_path) if input_path
+           else _new_document(new, dpi))
+    ctx = Context(doc=doc, input_path=input_path or "")
+    for op, value in (operations or []):
+        if op not in OPS:
+            raise _ValueError(f"unknown operation: {op!r} "
+                              f"(see list_operations)")
+        OPS[op][2](ctx, value or "")
+
+    result: dict = {}
+    if info:
+        result["info"] = _doc_info(doc)
+    if export_artboards:
+        result["artboards"] = _export_artboards(doc, export_artboards)
+    if output:
+        _write_output(doc, output, ctx.proof_space, ctx.cmyk_icc or None)
+        result["output"] = output
+    if not (info or export_artboards or output):
+        raise _ValueError("nothing to do: request output, info, or "
+                          "export_artboards")
+    return result
+
+
+def main(argv: list[str] | None = None) -> int:
+    _ensure_qt()
 
     parser = build_parser()
     args = parser.parse_args(argv)
