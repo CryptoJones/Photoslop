@@ -6,7 +6,9 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-_(none)_
+- [ ] Open dialog: extend the "Open images" window to fill the internal workable
+  image area (central canvas region) instead of floating as a smaller inset box
+  ([#144](https://github.com/CryptoJones/Photoslop/issues/144))
 
 ## Done
 
