@@ -167,6 +167,22 @@ Model ops use the same bring-your-own-backend contract as the GUI via
 `--model-url`. See `photoslop-cli --help` for the full operation set —
 every GUI engine feature is exposed (interactive brushes excepted).
 
+## MCP server (drive it from an agent)
+
+The same headless engine is available to LLMs/agents over the
+[Model Context Protocol](https://modelcontextprotocol.io). Install the extra and
+run the server (stdio transport):
+
+```bash
+pip install "photoslop[mcp]"     # or: uv sync --extra mcp
+photoslop-mcp
+```
+
+Three tools — `list_operations`, `edit_image` (load/create → ordered pipeline →
+write), and `document_info`. Operations are the CLI's table verbatim, so parity
+is automatic. See [docs/v1/mcp.md](docs/v1/mcp.md) for client-registration and
+examples.
+
 ## Model backends (bring your own model)
 
 Model-assisted features (Edit → **Select Subject (Model)**) never hardwire a

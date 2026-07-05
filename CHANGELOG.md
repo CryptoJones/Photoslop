@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.13.0] — 2026-07-05
+
+### Added
+- **MCP server** (#134) — `photoslop-mcp` (optional `photoslop[mcp]` extra)
+  exposes the headless engine over the [Model Context Protocol](https://modelcontextprotocol.io),
+  so an LLM/agent can drive the editor. Three tools: `list_operations` (the op
+  catalog), `edit_image` (load/create → ordered pipeline → write), and
+  `document_info` (read-only inspect). It is a thin surface over the new
+  `cli.apply_pipeline`, which reuses the CLI's `OPS` table verbatim — so the
+  MCP operation set is automatically in lock-step with `photoslop-cli`, the
+  same headless-parity promise. Serves over stdio; new guide `docs/v1/mcp.md`.
+
 ## [1.12.1] — 2026-07-05
 
 ### Changed

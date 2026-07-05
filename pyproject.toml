@@ -1,6 +1,6 @@
 [project]
 name = "photoslop"
-version = "1.12.1"
+version = "1.13.0"
 description = "A memory-frugal, multiplatform, layered raster image editor built with Qt (PySide6)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -46,6 +46,9 @@ lens = [
     "lensfunpy>=1.18",
     "exifread>=3.0",
 ]
+mcp = [
+    "mcp>=1.2",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",
@@ -56,10 +59,12 @@ dev = [
     "gmic>=3.6",
     "lensfunpy>=1.18",
     "exifread>=3.0",
+    "mcp>=1.2",
 ]
 
 [project.scripts]
 photoslop-cli = "photoslop.cli:main"
+photoslop-mcp = "photoslop.server:main"
 
 [project.gui-scripts]
 photoslop = "photoslop.app:main"
