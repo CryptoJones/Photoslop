@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor, QImage
-from PySide6.QtWidgets import QHeaderView, QTreeView
+from PySide6.QtWidgets import QHeaderView, QMainWindow, QTreeView, QWidget
 
 from photoslop.document import Document
 from photoslop.io_ora import save_ora
@@ -54,6 +54,31 @@ def test_dialog_updates_preview(qapp, tmp_path):
 
     dialog._update_preview(str(tmp_path / "nope.png"))
     assert "No preview" in dialog._info_label.text()
+
+
+def test_dialog_fits_to_parent_canvas(qapp):
+    # With a shown main window, the dialog targets its central widget's
+    # on-screen rect so it fills the workable image area (issue #144).
+    win = QMainWindow()
+    central = QWidget()
+    win.setCentralWidget(central)
+    win.resize(1000, 700)
+    win.show()
+    qapp.processEvents()
+    try:
+        dialog = OpenImageDialog(win)
+        rect = dialog._canvas_target_rect(win)
+        assert rect is not None
+        assert rect.size() == central.size()
+    finally:
+        win.close()
+
+
+def test_dialog_fit_rect_none_without_parent(qapp):
+    # No parent main window -> nothing to fit to, so no forced geometry.
+    dialog = OpenImageDialog()
+    assert dialog._fit_rect is None
+    assert dialog._canvas_target_rect(None) is None
 
 
 def test_dialog_shows_all_columns_untruncated(qapp):

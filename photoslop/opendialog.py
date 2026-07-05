@@ -10,7 +10,7 @@ import os
 import xml.etree.ElementTree as ET
 import zipfile
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QImage, QImageReader, QPixmap
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -114,6 +114,27 @@ class OpenImageDialog(QFileDialog):
         if isinstance(grid, QGridLayout):
             grid.addWidget(panel, 1, grid.columnCount(), grid.rowCount() - 1, 1)
         self.currentChanged.connect(self._update_preview)
+
+        # Open filling the parent's central "workable image area" rather than
+        # floating as a smaller inset box (issue #144). Applied on first show so
+        # the parent has a settled, on-screen geometry to map from.
+        self._fit_rect = self._canvas_target_rect(parent)
+
+    def _canvas_target_rect(self, parent) -> QRect | None:
+        """Global-screen rect of the parent window's central canvas widget, or
+        None when there's no shown main window to fit to."""
+        get_central = getattr(parent, "centralWidget", None)
+        central = get_central() if callable(get_central) else None
+        if central is None or not central.isVisible() or central.width() <= 0:
+            return None
+        rect = central.rect()
+        return QRect(central.mapToGlobal(rect.topLeft()), rect.size())
+
+    def showEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        super().showEvent(event)
+        if self._fit_rect is not None:
+            self.setGeometry(self._fit_rect)
+            self._fit_rect = None  # fit once; let the user resize freely after
 
     def _show_all_columns(self) -> None:
         """Detail view with every column sized to its contents, so Name / Size /

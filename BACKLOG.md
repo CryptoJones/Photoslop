@@ -6,12 +6,13 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] Open dialog: extend the "Open images" window to fill the internal workable
-  image area (central canvas region) instead of floating as a smaller inset box
-  ([#144](https://github.com/CryptoJones/Photoslop/issues/144))
+_(none)_
 
 ## Done
 
+- [x] Open dialog: extend the "Open images" window to fill the internal workable
+  image area (central canvas region) instead of floating as a smaller inset box
+  ([#144](https://github.com/CryptoJones/Photoslop/issues/144)) — shipped v1.15.0
 - [x] macOS installer script (`scripts/install-macos.sh`) that builds a clickable
   `Photoslop.app` launcher and installs it into `/Applications`
   ([#142](https://github.com/CryptoJones/Photoslop/issues/142))
