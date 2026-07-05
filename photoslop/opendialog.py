@@ -12,7 +12,15 @@ import zipfile
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QImageReader, QPixmap
-from PySide6.QtWidgets import QFileDialog, QGridLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QGridLayout,
+    QHeaderView,
+    QLabel,
+    QTreeView,
+    QVBoxLayout,
+    QWidget,
+)
 
 OPEN_FILTER = (
     "Images (*.ora *.png *.jpg *.jpeg *.bmp *.webp *.gif *.tif *.tiff "
@@ -87,6 +95,7 @@ class OpenImageDialog(QFileDialog):
         self.setOption(QFileDialog.Option.DontUseNativeDialog, True)
         self.setFileMode(QFileDialog.FileMode.ExistingFiles)
         self.setNameFilter(OPEN_FILTER)
+        self._show_all_columns()
 
         self._image_label = QLabel("Select an image")
         self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -105,6 +114,17 @@ class OpenImageDialog(QFileDialog):
         if isinstance(grid, QGridLayout):
             grid.addWidget(panel, 1, grid.columnCount(), grid.rowCount() - 1, 1)
         self.currentChanged.connect(self._update_preview)
+
+    def _show_all_columns(self) -> None:
+        """Detail view with every column sized to its contents, so Name / Size /
+        Kind / Date Modified are never truncated on first open."""
+        self.setViewMode(QFileDialog.ViewMode.Detail)
+        tree = self.findChild(QTreeView, "treeView")
+        if tree is None:
+            return
+        header = tree.header()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
 
     def _update_preview(self, path: str) -> None:
         img, info = preview_info(path)
