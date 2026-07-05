@@ -112,6 +112,7 @@ than "missing".
 | Feature | Photoslop | Photoshop | GIMP | Paint.NET | LR Classic | darktable | Capture One |
 |---|---|---|---|---|---|---|---|
 | Text tool with font/size/colour | ✅ [Tools](tools.md) | ✅ | ✅ | ✅ | — | 🟡 (watermark) | 🟡 (watermark) |
+| Rich text — per-letter colour, bold/italic, WYSIWYG preview | ✅ (GUI editor + `--text-rich` HTML) | ✅ | ✅ | 🟡 (single style) | — | — | — |
 | Re-editable text layers | ✅ (persists in .ora) | ✅ | ✅ | ❌ | — | — | — |
 | Shape tool (rect/ellipse/line) | ✅ (parametric, re-editable) | ✅ (vector) | ✅ (vector layers, 3.2) | ✅ (raster) | — | — | — |
 | Pen / path tool | ✅ (Catmull-Rom, re-editable anchors) | ✅ (full vector) | ✅ | ❌ | — | — | — |

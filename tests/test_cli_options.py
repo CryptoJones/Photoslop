@@ -53,6 +53,7 @@ CASES = {
     "flip": ("h", "diagonal"),
     "fill": ("10,200,40", "10,200"),
     "text": ("5,5,10:hello", "5,5,10"),
+    "text-rich": ('5,5:<span style="color:#ff0000">Hi</span>', "5:oops"),
     "shape": ("rect,5,5,20,15,255,0,0", "blob,1,1,5,5,0,0,0"),
     "blend-mode": ("multiply", "extra-spicy"),
     "layer-opacity": ("50", "150"),
@@ -423,6 +424,30 @@ def test_text_color(qapp, tmp_path):
     with pytest.raises(SystemExit) as exc:
         run([src, "--text", "5,5,14,255:Hi", "--output", tmp_path / "bad.png"])
     assert exc.value.code == 2
+
+
+def test_text_rich_per_letter_colour(qapp, tmp_path):
+    src = make_input(tmp_path, QColor(255, 255, 255))
+    html = ('<span style="color:#ff0000;font-size:40pt">A</span>'
+            '<span style="color:#0000ff;font-size:40pt">B</span>')
+    assert run([src, "--text-rich", f"5,5:{html}",
+                "--output", tmp_path / "out.ora"]) == 0
+    from photoslop.io_ora import load_ora
+
+    loaded = load_ora(str(tmp_path / "out.ora"))
+    img = loaded.layers[1].image
+    has_red = any(
+        img.pixelColor(x, y).red() > 180 and img.pixelColor(x, y).blue() < 80
+        and img.pixelColor(x, y).alpha() > 150
+        for x in range(img.width()) for y in range(img.height()))
+    has_blue = any(
+        img.pixelColor(x, y).blue() > 180 and img.pixelColor(x, y).red() < 80
+        and img.pixelColor(x, y).alpha() > 150
+        for x in range(img.width()) for y in range(img.height()))
+    assert has_red and has_blue  # both letter colours survive to the layer
+    # the styled HTML round-trips through ORA for later re-editing
+    assert loaded.layers[1].text_data["text"] == "AB"
+    assert "html" in loaded.layers[1].text_data
     assert not (tmp_path / "bad.png").exists()
 
 

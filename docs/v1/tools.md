@@ -37,7 +37,7 @@ See [Selections](selections.md) for refine, feather, and content-aware fill.
 |---|---|---|
 | Shape | `U` | Drag a rect/ellipse/line onto a **new bounded layer**; `Shift+U` cycles the kind. **Parametric**: click the active shape layer to re-edit — drag corner/endpoint handles or the body to move; transforms re-render from geometry. |
 | Pen | `P` | Click anchors; the path smooths through them (Catmull-Rom). `Enter` strokes at brush size, `Ctrl+Enter` fills the closed path, double-click commits, `Esc` cancels. **Parametric**: click the active pen layer to pick its anchors back up — drag to move, click to append, commit re-renders. |
-| Text | `T` | Click to place; dialog takes content/font/colour (swatch button opens a picker); rasterises to a new layer. Clicking inside the **active** text layer re-opens the dialog pre-filled and edits it in place. |
+| Text | `T` | Click to place; a **rich-text editor** takes the content — a WYSIWYG box that previews the text in the font and colour you choose as you type. Pick a font/size, toggle **bold**/*italic*, and colour the whole block *or individual letters* (select a run, then pick a colour). Rasterises to a new layer. Clicking inside the **active** text layer re-opens the editor with all its styling intact and edits it in place. |
 
 ## Transform & navigation
 | Tool | Key | Behaviour |
