@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.15.0] — 2026-07-05
+
+### Changed
+- **Open dialog fills the workable image area** (#144) — the non-native "Open
+  images" dialog now opens sized and positioned to the main window's central
+  canvas region (between the tool bar and the Layers panel), instead of
+  floating as a smaller inset box. It fits on first show and stays freely
+  resizable after. GUI chrome only; no change to what can be opened.
+
 ## [1.14.0] — 2026-07-05
 
 ### Added
