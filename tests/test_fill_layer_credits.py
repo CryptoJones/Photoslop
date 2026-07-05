@@ -34,7 +34,7 @@ def test_about_has_credits_button_with_the_names(qapp):
     assert "Credits" in labels
     assert any(b == QMessageBox.StandardButton.Ok
                for b in (box.standardButtons(),)) or "OK" in labels
-    assert CREDITS_TEXT == "Programming: CryptoJones, GPT5.5, and Fable5"
+    assert CREDITS_TEXT == "Contributors: CryptoJones, GPT5.5, and Fable5"
 
 
 def test_about_shows_le_basilisk(qapp):

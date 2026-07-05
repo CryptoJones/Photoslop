@@ -16,6 +16,19 @@ follows [SemVer](https://semver.org).
   MCP operation set is automatically in lock-step with `photoslop-cli`, the
   same headless-parity promise. Serves over stdio; new guide `docs/v1/mcp.md`.
 
+## [1.12.1] — 2026-07-05
+
+### Changed
+- **Zoom In / Zoom Out moved to the top options bar** (#136) — the two zoom
+  buttons are now pinned at the front of the top bar (always visible), instead
+  of tucked at the end of the left tool bar. GUI chrome only; the `Ctrl++` /
+  `Ctrl+-` shortcuts and the View menu entries are unchanged.
+- **Open dialog shows all columns** (#135) — the File → Open dialog opens in
+  Detail view with every column (Name / Size / Kind / Date Modified) sized to
+  its contents, so nothing is truncated on first open.
+- **Credits renamed "Programming" → "Contributors"** (#137) — the About →
+  Credits line now reads `Contributors: …`.
+
 ## [1.12.0] — 2026-07-04
 
 ### Added

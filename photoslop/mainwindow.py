@@ -91,7 +91,7 @@ from photoslop.tools import (
 )
 from photoslop.transform import TransformTool
 
-CREDITS_TEXT = "Programming: CryptoJones, GPT5.5, and Fable5"
+CREDITS_TEXT = "Contributors: CryptoJones, GPT5.5, and Fable5"
 
 
 class MainWindow(QMainWindow):
@@ -281,18 +281,6 @@ class MainWindow(QMainWindow):
             self._tool_actions[name] = act
         self._tool_actions["brush"].setChecked(True)
 
-        from photoslop.icons import zoom_in_icon, zoom_out_icon
-
-        bar.addSeparator()
-        zoom_in_btn = QAction(zoom_in_icon(), "Zoom In (Ctrl +)", self)
-        zoom_in_btn.triggered.connect(lambda: self._zoom(+1))
-        bar.addAction(zoom_in_btn)
-        zoom_out_btn = QAction(zoom_out_icon(), "Zoom Out (Ctrl -)", self)
-        zoom_out_btn.triggered.connect(lambda: self._zoom(-1))
-        bar.addAction(zoom_out_btn)
-        self.zoom_in_button = zoom_in_btn
-        self.zoom_out_button = zoom_out_btn
-
         from PySide6.QtGui import QShortcut
 
         cycle = QShortcut(QKeySequence("G"), self)
@@ -329,6 +317,20 @@ class MainWindow(QMainWindow):
         bar.setMovable(False)
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
         self._option_actions: dict[str, list] = {}
+
+        # Zoom In / Zoom Out pinned to the front of the top bar: always visible,
+        # never hidden by _sync_option_visibility (not in _all_option_actions).
+        from photoslop.icons import zoom_in_icon, zoom_out_icon
+
+        zoom_in_btn = QAction(zoom_in_icon(), "Zoom In (Ctrl +)", self)
+        zoom_in_btn.triggered.connect(lambda: self._zoom(+1))
+        bar.addAction(zoom_in_btn)
+        zoom_out_btn = QAction(zoom_out_icon(), "Zoom Out (Ctrl -)", self)
+        zoom_out_btn.triggered.connect(lambda: self._zoom(-1))
+        bar.addAction(zoom_out_btn)
+        self.zoom_in_button = zoom_in_btn
+        self.zoom_out_button = zoom_out_btn
+        bar.addSeparator()
 
         self.color_btn = QToolButton()
         self.color_btn.setToolTip("Foreground colour (X swaps, D resets)")
