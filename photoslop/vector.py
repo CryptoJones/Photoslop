@@ -13,12 +13,165 @@ Kinds:
 
 from __future__ import annotations
 
+import copy
+import uuid
+
 from PySide6.QtCore import QPointF, QRect, QRectF, Qt
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QTransform
 
 from photoslop.layer import Layer
 
 HANDLE_RADIUS = 10.0  # doc-space pixels for grabbing a handle
+SCHEMA_VERSION = 1
+
+_LEGACY_KEYS = {
+    "kind", "x1", "y1", "x2", "y2", "points", "close", "fill", "width", "color"
+}
+
+
+def _path_commands(pts: list[QPointF], close: bool) -> list[dict]:
+    commands = [{"op": "M", "p": [pts[0].x(), pts[0].y()], "node": "smooth"}]
+    if len(pts) < 2:
+        return commands
+    if len(pts) == 2:
+        commands.append({"op": "L", "p": [pts[1].x(), pts[1].y()], "node": "corner"})
+    else:
+        ring = ([pts[-1], *pts, pts[0], pts[1]] if close
+                else [pts[0], *pts, pts[-1]])
+        for i in range(1, len(ring) - 2):
+            p0, p1, p2, p3 = ring[i - 1], ring[i], ring[i + 1], ring[i + 2]
+            c1 = [p1.x() + (p2.x() - p0.x()) / 6,
+                  p1.y() + (p2.y() - p0.y()) / 6]
+            c2 = [p2.x() - (p3.x() - p1.x()) / 6,
+                  p2.y() - (p3.y() - p1.y()) / 6]
+            commands.append({"op": "C", "c1": c1, "c2": c2,
+                             "p": [p2.x(), p2.y()], "node": "smooth"})
+    if close:
+        commands.append({"op": "Z"})
+    return commands
+
+
+def migrate_vector(data: dict) -> dict:
+    """Return schema-v1 data; legacy fields stay as a compatibility projection."""
+    source = copy.deepcopy(data)
+    if "kind" not in source and source.get("schema_version") == SCHEMA_VERSION:
+        return source
+    kind = source.get("kind", "path")
+    rgba = [int(value) for value in source.get("color", [0, 0, 0, 255])]
+    width = max(1.0, float(source.get("width", 3)))
+    fill_enabled = kind in {"rect", "ellipse"} or bool(source.get("fill", False))
+    stroke_enabled = kind == "line" or (kind == "path" and not fill_enabled)
+    if kind == "path":
+        pts = [QPointF(float(x), float(y)) for x, y in source.get("points", [])]
+        geometry = {"kind": "path", "commands": _path_commands(
+            pts, bool(source.get("close", fill_enabled)))} if pts else {
+                "kind": "path", "commands": []}
+    elif kind in {"rect", "ellipse"}:
+        geometry = {"kind": kind, "rect": [float(source["x1"]), float(source["y1"]),
+                                               float(source["x2"]), float(source["y2"])]}
+    else:
+        geometry = {"kind": "path", "commands": [
+            {"op": "M", "p": [float(source["x1"]), float(source["y1"])],
+             "node": "corner"},
+            {"op": "L", "p": [float(source["x2"]), float(source["y2"])],
+             "node": "corner"},
+        ]}
+    known_schema = {"schema_version", "id", "name", "type", "parent_id", "geometry",
+                    "transform", "appearance", "opacity", "blend_mode", "text",
+                    "extensions"}
+    unknown = {key: copy.deepcopy(value) for key, value in source.items()
+               if key not in _LEGACY_KEYS and key not in known_schema}
+    extensions = copy.deepcopy(source.get("extensions", {}))
+    extensions.update(unknown)
+    migrated = {
+        **{key: copy.deepcopy(value) for key, value in source.items() if key in _LEGACY_KEYS},
+        "schema_version": SCHEMA_VERSION,
+        "id": source.get("id", uuid.uuid4().hex),
+        "name": source.get("name", kind.title()),
+        "type": source.get("type", "path" if kind in {"line", "path"} else "shape"),
+        "parent_id": source.get("parent_id"),
+        "geometry": geometry,
+        "transform": copy.deepcopy(source.get("transform", [1, 0, 0, 1, 0, 0])),
+        "appearance": {
+            "fill": copy.deepcopy(source.get("appearance", {}).get(
+                "fill", {"type": "solid", "color": rgba} if fill_enabled else None)),
+            "fill_rule": source.get("appearance", {}).get("fill_rule", "winding"),
+            "stroke": copy.deepcopy(source.get("appearance", {}).get(
+                "stroke", {"type": "solid", "color": rgba} if stroke_enabled else None)),
+            "stroke_width": source.get("appearance", {}).get("stroke_width", width),
+            "cap": source.get("appearance", {}).get("cap", "round"),
+            "join": source.get("appearance", {}).get("join", "round"),
+            "miter_limit": source.get("appearance", {}).get("miter_limit", 4.0),
+            "dash": copy.deepcopy(source.get("appearance", {}).get("dash", [])),
+            "dash_offset": source.get("appearance", {}).get("dash_offset", 0.0),
+            "scale_stroke": source.get("appearance", {}).get("scale_stroke", True),
+        },
+        "opacity": float(source.get("opacity", 1.0)),
+        "blend_mode": source.get("blend_mode", "normal"),
+        "text": copy.deepcopy(source.get("text")),
+        "extensions": extensions,
+    }
+    return migrated
+
+
+def path_from_commands(commands: list[dict]) -> QPainterPath:
+    path = QPainterPath()
+    for command in commands:
+        op = command.get("op")
+        if op == "M":
+            path.moveTo(*command["p"])
+        elif op == "L":
+            path.lineTo(*command["p"])
+        elif op == "C":
+            path.cubicTo(*command["c1"], *command["c2"], *command["p"])
+        elif op == "Z":
+            path.closeSubpath()
+    return path
+
+
+def native_path(data: dict) -> QPainterPath:
+    data = migrate_vector(data)
+    geometry = data["geometry"]
+    if geometry["kind"] == "path":
+        path = path_from_commands(geometry.get("commands", []))
+    else:
+        x1, y1, x2, y2 = geometry["rect"]
+        rect = QRectF(QPointF(x1, y1), QPointF(x2, y2)).normalized()
+        path = QPainterPath()
+        (path.addEllipse if geometry["kind"] == "ellipse" else path.addRect)(rect)
+    a, b, c, d, tx, ty = data.get("transform", [1, 0, 0, 1, 0, 0])
+    return QTransform(a, b, c, d, tx, ty).map(path)
+
+
+def draw_native(painter: QPainter, data: dict) -> None:
+    data = migrate_vector(data)
+    appearance = data["appearance"]
+    path = native_path(data)
+    painter.save()
+    painter.setOpacity(painter.opacity() * data.get("opacity", 1.0))
+    fill = appearance.get("fill")
+    painter.setBrush(QColor(*fill["color"]) if fill and fill.get("type") == "solid"
+                     else Qt.BrushStyle.NoBrush)
+    stroke = appearance.get("stroke")
+    if stroke and stroke.get("type") == "solid":
+        pen = QPen(QColor(*stroke["color"]), float(appearance.get("stroke_width", 1)))
+        pen.setCapStyle({"flat": Qt.PenCapStyle.FlatCap,
+                         "square": Qt.PenCapStyle.SquareCap}.get(
+                             appearance.get("cap"), Qt.PenCapStyle.RoundCap))
+        pen.setJoinStyle({"miter": Qt.PenJoinStyle.MiterJoin,
+                          "bevel": Qt.PenJoinStyle.BevelJoin}.get(
+                              appearance.get("join"), Qt.PenJoinStyle.RoundJoin))
+        pen.setMiterLimit(float(appearance.get("miter_limit", 4)))
+        if appearance.get("dash"):
+            pen.setDashPattern([float(value) for value in appearance["dash"]])
+            pen.setDashOffset(float(appearance.get("dash_offset", 0)))
+        painter.setPen(pen)
+    else:
+        painter.setPen(Qt.PenStyle.NoPen)
+    path.setFillRule(Qt.FillRule.OddEvenFill if appearance.get("fill_rule") == "evenodd"
+                     else Qt.FillRule.WindingFill)
+    painter.drawPath(path)
+    painter.restore()
 
 
 def smooth_path(pts: list[QPointF], close: bool) -> QPainterPath:
@@ -49,25 +202,14 @@ def _color(data: dict) -> QColor:
 
 def render_vector(data: dict, name: str, canvas_rect: QRect) -> Layer | None:
     """Rasterize vector_data into a bounded Layer (None if degenerate)."""
-    kind = data.get("kind")
-    color = _color(data)
-    if kind == "path":
-        pts = [QPointF(float(x), float(y)) for x, y in data.get("points", [])]
-        fill = bool(data.get("fill", False))
-        if len(pts) < (3 if fill else 2):
-            return None
-        path = smooth_path(pts, close=bool(data.get("close", fill)))
-        width = max(1, int(data.get("width", 3)))
-        margin = 2 if fill else max(2, width)
-        raw = path.boundingRect()
-    else:
-        x1, y1 = float(data["x1"]), float(data["y1"])
-        x2, y2 = float(data["x2"]), float(data["y2"])
-        raw = QRectF(QPointF(x1, y1), QPointF(x2, y2)).normalized()
-        if kind != "line" and raw.width() < 2 and raw.height() < 2:
-            return None
-        width = max(1, int(data.get("width", 3)))
-        margin = max(2, width) if kind == "line" else 2
+    data = migrate_vector(data)
+    path = native_path(data)
+    if path.isEmpty():
+        return None
+    raw = path.boundingRect()
+    appearance = data["appearance"]
+    width = max(1, int(float(appearance.get("stroke_width", 1))))
+    margin = max(2, width) if appearance.get("stroke") else 2
     bounds = (raw.toAlignedRect()
               .adjusted(-margin, -margin, margin, margin)
               .intersected(canvas_rect.adjusted(-margin, -margin,
@@ -78,30 +220,9 @@ def render_vector(data: dict, name: str, canvas_rect: QRect) -> Layer | None:
     p = QPainter(layer.image)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     p.translate(-bounds.topLeft())
-    if kind == "line":
-        pen = QPen(color, width)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        p.setPen(pen)
-        p.drawLine(QPointF(float(data["x1"]), float(data["y1"])),
-                   QPointF(float(data["x2"]), float(data["y2"])))
-    elif kind == "path":
-        if bool(data.get("fill", False)):
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(color)
-        else:
-            pen = QPen(color, width)
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-            p.setPen(pen)
-        p.drawPath(path)
-    else:
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(color)
-        rect = QRectF(QPointF(float(data["x1"]), float(data["y1"])),
-                      QPointF(float(data["x2"]), float(data["y2"]))).normalized()
-        (p.drawEllipse if kind == "ellipse" else p.drawRect)(rect)
+    draw_native(p, data)
     p.end()
-    layer.vector_data = dict(data)
+    layer.vector_data = copy.deepcopy(data)
     return layer
 
 
@@ -112,7 +233,7 @@ def rerender_into(layer, data: dict, canvas_rect: QRect) -> bool:
         return False
     layer.image = fresh.image
     layer.offset = fresh.offset
-    layer.vector_data = dict(data)
+    layer.vector_data = copy.deepcopy(migrate_vector(data))
     layer.fx_cache = None
     return True
 

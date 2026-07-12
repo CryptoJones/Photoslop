@@ -72,7 +72,7 @@ message on stderr.
 | `--fill` `R,G,B` | fill the whole target layer with a colour |
 | `--text` `"X,Y,SIZE[,R,G,B]:TEXT"` | rasterise text onto a new layer (default colour black) |
 | `--text-rich` `"X,Y:<html>"` | rasterise **rich HTML** text onto a new layer — per-letter colour, font-family, bold/italic (the headless mirror of the GUI Text tool's styled editor) |
-| `--shape` `KIND,X,Y,W,H,R,G,B` | rect/ellipse/line onto a new **parametric** layer (re-renders crisp on --resize) |
+| `--shape` `KIND,X,Y,W,H,R,G,B` | rect/ellipse/line onto a schema-v1 native vector layer (direct crisp rendering, ORA fallback, re-renders on --resize) |
 | `--blend-mode` `NAME` | set the target layer's blend mode |
 | `--layer-opacity` `PCT` | set the target layer's opacity |
 | `--content-aware-fill` | diffusion-fill the selection |

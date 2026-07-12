@@ -111,7 +111,9 @@ class Layer:
         if self.text_data is not None:
             layer.text_data = dict(self.text_data)
         if self.vector_data is not None:
-            layer.vector_data = dict(self.vector_data)
+            from copy import deepcopy
+
+            layer.vector_data = deepcopy(self.vector_data)
         return layer
 
     def paint_image(self, local_region: QRect) -> QImage:

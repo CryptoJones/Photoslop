@@ -159,9 +159,13 @@ def test_ora_round_trip_preserves_vector_data(qapp, tmp_path):
     save_ora(doc, path)
     loaded = load_ora(path)
     restored = loaded.layers[-1]
-    assert restored.vector_data == _rect_data()
+    for key, value in _rect_data().items():
+        assert restored.vector_data[key] == value
+    assert restored.vector_data["schema_version"] == 1
+    assert restored.vector_data["geometry"]["kind"] == "rect"
+    assert restored.vector_data["appearance"]["fill"]["type"] == "solid"
     # cloning keeps it too
-    assert restored.clone().vector_data == _rect_data()
+    assert restored.clone().vector_data == restored.vector_data
 
 
 def test_cli_shape_stamps_and_resize_rerenders(qapp, tmp_path):

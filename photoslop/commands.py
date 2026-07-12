@@ -5,6 +5,8 @@ it actually changed (tiles or a region), never whole-canvas snapshots.
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QImage, QPainter, QTransform, QUndoCommand
 
@@ -262,9 +264,9 @@ class EditVectorLayerCommand(QUndoCommand):
         self._doc = doc
         self._layer = layer
         self._old = (QImage(layer.image), QPoint(layer.offset),
-                     dict(layer.vector_data or {}))
+                     deepcopy(layer.vector_data or {}))
         self._new = (QImage(rendered.image), QPoint(rendered.offset),
-                     dict(rendered.vector_data or {}))
+                     deepcopy(rendered.vector_data or {}))
 
     def _apply(self, state) -> None:
         image, offset, data = state
@@ -581,7 +583,7 @@ class ResizeImageCommand(QUndoCommand):
         self.new_size = QSize(new_size)
         self.old_layers = [
             (layer, QImage(layer.image), QPoint(layer.offset),
-             dict(layer.vector_data) if layer.vector_data else None)
+             deepcopy(layer.vector_data) if layer.vector_data else None)
             for layer in doc.layers
         ]
 
@@ -720,7 +722,7 @@ class RotateLayerCommand(QUndoCommand):
         self.doc, self.layer = doc, layer
         self.degrees = degrees % 360
         self.old_offset = QPoint(layer.offset)
-        self.old_vector = (dict(layer.vector_data)
+        self.old_vector = (deepcopy(layer.vector_data)
                            if layer.vector_data else None)
 
     def _apply(self, deg: int) -> None:

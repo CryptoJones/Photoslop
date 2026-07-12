@@ -88,7 +88,9 @@ def save_ora(doc: Document, path: str) -> None:
         if layer.vector_data is not None:
             import json
 
-            attrib["photoslop-vector"] = json.dumps(layer.vector_data)
+            from photoslop.vector import migrate_vector
+
+            attrib["photoslop-vector"] = json.dumps(migrate_vector(layer.vector_data))
         ET.SubElement(
             stack,
             "layer",
@@ -168,7 +170,9 @@ def _walk_layers(zf: zipfile.ZipFile, node: ET.Element, base: QPoint, out: list[
             if vector_json:
                 import json
 
-                layer.vector_data = json.loads(vector_json)
+                from photoslop.vector import migrate_vector
+
+                layer.vector_data = migrate_vector(json.loads(vector_json))
             adj_src = child.get("photoslop-adjustment")
             if adj_src and adj_src in zf.namelist():
                 import numpy as np

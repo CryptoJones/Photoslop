@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.23.0] — 2026-07-12
+
+### Added
+- **Versioned native vector schema** ([#155](https://github.com/CryptoJones/Photoslop/issues/155))
+  — stable IDs, hierarchy, affine transforms, explicit move/line/cubic/close
+  geometry and node handles, independent fill/stroke appearance, fill rules,
+  caps/joins/dashes, object opacity/blend, text metadata, and extension fields.
+- Legacy Shape/Pen dictionaries migrate in memory and preserve unknown data.
+  Vector-backed layers render directly at viewport/output scale for crisp zoom;
+  ORA still stores a visible raster fallback for other applications and for
+  masks/effects that require rasterization.
+
 ## [1.22.0] — 2026-07-12
 
 ### Changed
