@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.20.0] — 2026-07-12
+
+### Added
+- **Cancellable memory-bounded background tasks** ([#152](https://github.com/CryptoJones/Photoslop/issues/152))
+  — a small worker pool schedules by declared peak bytes as well as worker
+  count, with queued/running/success/failure/cancel states, progress messages,
+  cooperative cancellation, traceback isolation, and late-result disposal.
+- Large filters, ORA save/open, raster decode, RAW development, final exports,
+  subprocess-backed filters, and model denoise/fill/selection now operate on
+  immutable or Qt copy-on-write snapshots. Only the GUI thread installs pixels,
+  documents, selections, undo commands, paths, and clean state; generation
+  tokens reject results after newer edits.
+
 ## [1.19.0] — 2026-07-12
 
 ### Added

@@ -67,6 +67,8 @@ class ActionRegistry:
             "selection": doc is not None and doc.selection is not None,
             "clipboard": bool(self.host.pixel_clip or self.host.layer_clip),
             "idle": not bool(getattr(editor, "task_active", False)),
+            "task": bool(getattr(self.host, "task_service", None)
+                         and self.host.task_service.active),
         }
         for spec, action in self.entries.values():
             action.setEnabled(context.get(spec.prerequisite, True))

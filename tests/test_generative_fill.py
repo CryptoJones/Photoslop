@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from PySide6.QtCore import QRectF, QSettings, QSize
 from PySide6.QtGui import QColor, QImage, QPainterPath
+from PySide6.QtTest import QTest
 
 from photoslop.document import Document
 from photoslop.mainwindow import MainWindow
@@ -62,6 +63,9 @@ def test_generative_fill_respects_selection_and_undo(qapp):
 
     doc.set_selection(rect_path(10, 10, 12, 12))
     win.action_generative_fill(prompt="a corn field")
+    while win.task_service.active:
+        qapp.processEvents()
+        QTest.qWait(5)
     assert FillAdapter.last_prompt == "a corn field"
     layer = doc.active_layer
     assert layer.image.pixelColor(15, 15) == QColor(20, 200, 40)  # inside
@@ -77,6 +81,9 @@ def test_generative_fill_guards(qapp):
     doc = win.current_doc()
     doc.set_selection(rect_path(5, 5, 10, 10))
     win.action_generative_fill(prompt="x")  # wrong-size result refused
+    while win.task_service.active:
+        qapp.processEvents()
+        QTest.qWait(5)
     assert doc.undo_stack.count() == 0
     assert doc.active_layer.image.pixelColor(7, 7) == QColor(200, 100, 50)
 
