@@ -21,6 +21,25 @@ failure, cancellation, or stale completion therefore leaves pixels, dirty
 state, and undo history unchanged. CLI and MCP remain synchronous because they
 do not own a GUI event loop while sharing the same engine operations.
 
+## Registry and service boundaries
+
+- `ActionRegistry` owns command IDs, labels, shortcuts, help, prerequisites,
+  enabled state, menus, and command search metadata.
+- `toolregistry` owns tool IDs, groups, SVG icons, shortcuts, labels, and flyout
+  ordering; interactive tool classes retain gesture implementation only.
+- `WorkspaceController` owns saved dock state, geometry, defaults, and
+  current-screen validation.
+- `TaskService` owns worker count/memory scheduling and task lifecycle.
+- `FileService`, `ExportService`, `FilterService`, and `ModelService` accept
+  documents/images/data rather than widgets. GUI, CLI, MCP, plugins, and tests
+  therefore share engine paths without importing MainWindow.
+
+MainWindow remains the composition root: it creates widgets and dialogs,
+captures immutable/COW inputs, invokes services synchronously or through
+TaskService, and installs validated results on the GUI thread. Complete
+workflows are migrated behind these interfaces without forking headless
+behavior or changing existing document/command APIs.
+
 ## Pixel model
 - One **premultiplied ARGB32** buffer per layer — no per-layer scratch
   copies at rest. numpy views (`view_u32`) operate in place.

@@ -6,9 +6,6 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] **P1:** Split UI responsibilities into action, tool, workspace, and
-  service registries while preserving GUI/CLI/MCP engine parity
-  ([#154](https://github.com/CryptoJones/Photoslop/issues/154))
 - [ ] **P2:** Introduce a versioned native vector object model with Bézier
   geometry, appearance, transforms, hierarchy, migration, and crisp rendering
   ([#155](https://github.com/CryptoJones/Photoslop/issues/155))
@@ -24,6 +21,9 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] Split UI responsibilities into action, tool, workspace, and service
+  registries while preserving GUI/CLI/MCP engine parity
+  ([#154](https://github.com/CryptoJones/Photoslop/issues/154)) — shipped v1.22.0
 - [x] Reduce canvas repaint and preview overhead with dirty overlays,
   generation-aware thumbnails, proxy previews, and bounded caches
   ([#153](https://github.com/CryptoJones/Photoslop/issues/153)) — shipped v1.21.0
