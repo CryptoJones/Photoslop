@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.16.0] — 2026-07-12
+
+### Added
+- **Contextual, high-contrast tool cursors** ([#148](https://github.com/CryptoJones/Photoslop/issues/148))
+  — one cursor controller now resolves live tool state instead of relying on
+  static crosshairs. Paint tools show their effective zoomed brush radius;
+  tool glyphs distinguish selection, fill, sampling, vector, crop, navigation,
+  and warp operations; modifiers expose selection/zoom/source modes; transform
+  handles show directional resize, move, rotate, node, or invalid-target state.
+  Custom cursors render at 1×/2× with contrasting outlines and tested hotspots.
+  Holding Space temporarily switches to Open/Closed Hand and restores the exact
+  contextual cursor on release.
+
 ## [1.15.1] — 2026-07-12
 
 ### Fixed

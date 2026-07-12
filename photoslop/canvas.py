@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QGridLayout, QScrollArea, QToolButton, QWidget
 
 from photoslop import units
 from photoslop.commands import SetLayerOffsetCommand
+from photoslop.cursors import CursorController, CursorIntent
 from photoslop.document import Document, draw_layer, render_region
 from photoslop.layer import BLEND_MODES
 from photoslop.rulers import Ruler
@@ -27,6 +28,11 @@ ZOOM_LEVELS = (0.03125, 0.0625, 0.125, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0,
 
 _GUIDE_COLOR = QColor(0, 200, 255)
 _TEMP_GUIDE_COLOR = QColor(255, 0, 200)
+
+
+def _event_modifiers(ev) -> Qt.KeyboardModifier:
+    getter = getattr(ev, "modifiers", None)
+    return getter() if getter is not None else Qt.KeyboardModifier.NoModifier
 
 
 def _checker_pixmap() -> QPixmap:
@@ -53,6 +59,8 @@ class CanvasView(QWidget):
         self.guide_label: tuple[str, float, QPointF] | None = None
         self._space_pan = False  # Space held: temporary hand tool
         self._pan_last: QPointF | None = None
+        self._cursor_modifiers = Qt.KeyboardModifier.NoModifier
+        self.cursor_controller = CursorController(self)
         self._ants_offset = 0.0
         self._ants = QTimer(self)
         self._ants.setInterval(120)
@@ -68,6 +76,7 @@ class CanvasView(QWidget):
         doc.guidesChanged.connect(self.update)
         self.view_rotation = 0  # view-only, 90-degree steps
         self._resize_to_zoom()
+        self.refresh_cursor()
 
     # -- geometry --
 
@@ -100,6 +109,21 @@ class CanvasView(QWidget):
         self._resize_to_zoom()
         self.update()
         self.editor.sync_rulers()
+        self.refresh_cursor()
+
+    def refresh_cursor(self, dragging: bool = False) -> None:
+        """Resolve the active tool's live cursor through the single controller."""
+        if self._space_pan:
+            self.cursor_controller.apply(CursorIntent(
+                "hand-closed" if self._pan_last is not None else "hand-open"))
+            return
+        tool = self.editor.active_tool()
+        if tool is None:
+            self.cursor_controller.apply(CursorIntent("cross"))
+            return
+        intent = tool.cursor_intent(
+            self.doc, self, self.hover_pos, self._cursor_modifiers, dragging)
+        self.cursor_controller.apply(intent)
 
     def _transform_session(self):
         tool = self.editor.active_tool()
@@ -306,20 +330,24 @@ class CanvasView(QWidget):
 
     def mousePressEvent(self, ev) -> None:
         if ev.button() == Qt.MouseButton.LeftButton:
+            self._cursor_modifiers = _event_modifiers(ev)
             if self._space_pan:
                 self._pan_last = ev.globalPosition()
-                self.setCursor(Qt.CursorShape.ClosedHandCursor)
+                self.refresh_cursor(dragging=True)
                 return
             tool = self.editor.active_tool()
             if tool is not None:
                 tool.press(self.doc, self, self._canvas_pos(ev), ev)
+                self.refresh_cursor(dragging=True)
 
     def mouseMoveEvent(self, ev) -> None:
+        self._cursor_modifiers = _event_modifiers(ev)
         if self._pan_last is not None:
             current = ev.globalPosition()
             self.editor.pan_by(current.x() - self._pan_last.x(),
                                current.y() - self._pan_last.y())
             self._pan_last = current
+            self.refresh_cursor(dragging=True)
             return
         pos = self._canvas_pos(ev)
         self.hover_pos = pos
@@ -328,22 +356,25 @@ class CanvasView(QWidget):
             tool = self.editor.active_tool()
             if tool is not None:
                 tool.move(self.doc, self, pos, ev)
+            self.refresh_cursor(dragging=True)
         else:
             tool = self.editor.active_tool()
             if tool is not None:
                 tool.hover(self.doc, self, pos)
+            self.refresh_cursor()
             self.update()  # brush outline / previews follow the cursor
 
     def mouseReleaseEvent(self, ev) -> None:
         if ev.button() == Qt.MouseButton.LeftButton:
             if self._pan_last is not None:
                 self._pan_last = None
-                self.setCursor(Qt.CursorShape.OpenHandCursor if self._space_pan
-                               else self.editor.active_tool().cursor)
+                self.refresh_cursor()
                 return
             tool = self.editor.active_tool()
             if tool is not None:
                 tool.release(self.doc, self, self._canvas_pos(ev), ev)
+            self._cursor_modifiers = _event_modifiers(ev)
+            self.refresh_cursor()
 
     def mouseDoubleClickEvent(self, ev) -> None:
         if ev.button() == Qt.MouseButton.LeftButton:
@@ -354,6 +385,7 @@ class CanvasView(QWidget):
     def leaveEvent(self, ev) -> None:
         self.hover_pos = None
         self.mousePos.emit(None)
+        self.refresh_cursor()
         self.update()
 
     def wheelEvent(self, ev) -> None:
@@ -365,9 +397,10 @@ class CanvasView(QWidget):
 
     def keyPressEvent(self, ev) -> None:
         key = ev.key()
+        self._cursor_modifiers = _event_modifiers(ev)
         if key == Qt.Key.Key_Space and not ev.isAutoRepeat():
             self._space_pan = True
-            self.setCursor(Qt.CursorShape.OpenHandCursor)
+            self.refresh_cursor()
             return
         tool = self.editor.active_tool()
         if (key in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
@@ -399,15 +432,19 @@ class CanvasView(QWidget):
                 self.doc.undo_stack.push(
                     SetLayerOffsetCommand(self.doc, layer, old, layer.offset))
             return
+        if key in (Qt.Key.Key_Shift, Qt.Key.Key_Alt, Qt.Key.Key_Control, Qt.Key.Key_Meta):
+            self.refresh_cursor()
         super().keyPressEvent(ev)
 
     def keyReleaseEvent(self, ev) -> None:
+        self._cursor_modifiers = _event_modifiers(ev)
         if ev.key() == Qt.Key.Key_Space and not ev.isAutoRepeat():
             self._space_pan = False
             self._pan_last = None
-            tool = self.editor.active_tool()
-            self.setCursor(tool.cursor if tool is not None else Qt.CursorShape.ArrowCursor)
+            self.refresh_cursor()
             return
+        if ev.key() in (Qt.Key.Key_Shift, Qt.Key.Key_Alt, Qt.Key.Key_Control, Qt.Key.Key_Meta):
+            self.refresh_cursor()
         super().keyReleaseEvent(ev)
 
 
