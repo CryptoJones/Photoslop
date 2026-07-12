@@ -22,6 +22,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from photoslop import io_formats
+from photoslop.tasks import TaskService
+
 OPEN_FILTER = (
     "Images (*.ora *.png *.jpg *.jpeg *.bmp *.webp *.gif *.tif *.tiff "
     "*.avif *.jxl "
@@ -58,8 +61,6 @@ def preview_info(path: str, max_dim: int = _PREVIEW_DIM) -> tuple[QImage | None,
             return img, f"{w}×{h} · {layers} layers · OpenRaster · {human}"
         except Exception:
             return None, f"Unreadable .ora · {human}"
-
-    from photoslop import io_formats
 
     if io_formats.is_extra_path(path):
         img = io_formats.load_extra(path)
@@ -114,6 +115,9 @@ class OpenImageDialog(QFileDialog):
         if isinstance(grid, QGridLayout):
             grid.addWidget(panel, 1, grid.columnCount(), grid.rowCount() - 1, 1)
         self.currentChanged.connect(self._update_preview)
+        self._preview_tasks = TaskService(max_workers=1, memory_budget=128 * 1024 * 1024,
+                                          parent=self)
+        self._preview_generation = 0
 
         # Open filling the parent's central "workable image area" rather than
         # floating as a smaller inset box (issue #144). Applied on first show so
@@ -148,7 +152,29 @@ class OpenImageDialog(QFileDialog):
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
 
     def _update_preview(self, path: str) -> None:
-        img, info = preview_info(path)
+        self._preview_generation += 1
+        generation = self._preview_generation
+        self._preview_tasks.cancel_all()
+        self._image_label.setText("Loading preview…")
+        self._image_label.setPixmap(QPixmap())
+        self._info_label.setText("")
+        handle = self._preview_tasks.submit(
+            "preview.decode", "Decode preview",
+            lambda context: self._decode_preview(context, path),
+            32 * 1024 * 1024)
+        handle.succeeded.connect(
+            lambda result, g=generation: self._install_preview(g, *result))
+
+    @staticmethod
+    def _decode_preview(context, path: str):
+        context.check_cancelled()
+        result = preview_info(path)
+        context.check_cancelled()
+        return result
+
+    def _install_preview(self, generation: int, img, info: str) -> None:
+        if generation != self._preview_generation:
+            return
         if img is None:
             self._image_label.setText("No preview")
             self._image_label.setPixmap(QPixmap())

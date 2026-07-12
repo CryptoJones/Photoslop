@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor, QImage
+from PySide6.QtTest import QTest
 
 from photoslop.document import Document
 from photoslop.exportdialog import ExportDialog
@@ -45,6 +46,9 @@ def test_opaque_formats_flatten_white(qapp):
 def test_encoded_size_readout(qapp):
     dialog = ExportDialog(make_doc(qapp))
     dialog._update_size()  # bypass debounce
+    while dialog._size_tasks.active:
+        qapp.processEvents()
+        QTest.qWait(5)
     text = dialog.size_label.text()
     assert text.endswith("KB") or text.endswith("MB")
 

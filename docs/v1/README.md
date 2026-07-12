@@ -15,6 +15,7 @@ command line — as of **v1.0.0**.
 | [Filters](filters.md) | Gaussian Blur, Unsharp Mask, Tilt-Shift |
 | [Actions](actions.md) | macro recording and replay |
 | [Accessibility](accessibility.md) | keyboard workflows, low-vision settings, screen-reader smoke scripts |
+| [Performance](performance.md) | standardized 4K/12K benchmarks, latency/RSS budgets, bounded caches |
 | [Artboards](artboards.md) | named export regions and batch export |
 | [File Formats](file-formats.md) | ORA (with Photoslop extensions), raster formats, camera raw |
 | [Model Backends](model-backends.md) | the bring-your-own-model adapter framework, HTTP contract, plugins |

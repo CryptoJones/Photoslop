@@ -6,9 +6,6 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] **P1:** Reduce canvas repaint and preview overhead with dirty overlays,
-  generation-aware thumbnails, proxy previews, and bounded caches
-  ([#153](https://github.com/CryptoJones/Photoslop/issues/153))
 - [ ] **P1:** Split UI responsibilities into action, tool, workspace, and
   service registries while preserving GUI/CLI/MCP engine parity
   ([#154](https://github.com/CryptoJones/Photoslop/issues/154))
@@ -27,6 +24,9 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] Reduce canvas repaint and preview overhead with dirty overlays,
+  generation-aware thumbnails, proxy previews, and bounded caches
+  ([#153](https://github.com/CryptoJones/Photoslop/issues/153)) — shipped v1.21.0
 - [x] Add a cancellable, memory-bounded background task service for filters,
   I/O, RAW, exports, subprocesses, and model requests
   ([#152](https://github.com/CryptoJones/Photoslop/issues/152)) — shipped v1.20.0
