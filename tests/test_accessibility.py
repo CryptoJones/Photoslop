@@ -3,7 +3,7 @@
 
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QAccessible, QColor
-from PySide6.QtWidgets import QAbstractButton
+from PySide6.QtWidgets import QAbstractButton, QLineEdit
 
 from photoslop.document import Document
 from photoslop.mainwindow import MainWindow
@@ -64,3 +64,32 @@ def test_keyboard_actions_add_and_clear_guides(qapp):
 def test_status_messages_support_accessible_announcements(qapp):
     win = _window(qapp)
     win.accessibility.announce("Selection changed")
+
+
+def test_keyboard_focus_tree_exposes_roles_names_and_editable_values(qapp):
+    win = _window(qapp)
+    win.show()
+    qapp.processEvents()
+    controls = [control for control in win.findChildren(QLineEdit)
+                if control.isEnabled()]
+    assert controls
+    for control in controls:
+        interface = QAccessible.queryAccessibleInterface(control)
+        assert interface is not None and interface.isValid()
+        if control.objectName() == "qt_spinbox_lineedit":
+            parent = QAccessible.queryAccessibleInterface(control.parentWidget())
+            assert parent is not None and parent.role() == QAccessible.Role.SpinBox
+        else:
+            assert interface.role() == QAccessible.Role.EditableText
+            assert (control.accessibleName() or control.placeholderText()
+                    or control.toolTip())
+
+
+def test_vector_workflow_has_keyboard_tool_alternatives(qapp):
+    win = _window(qapp)
+    assert win._tool_actions["vector-select"].shortcut().toString() == "A"
+    assert win._tool_actions["vector-node"].shortcut().toString() == "Shift+A"
+    win._tool_actions["vector-select"].trigger()
+    assert win.active_tool.name == "vector-select"
+    win._tool_actions["vector-node"].trigger()
+    assert win.active_tool.name == "vector-node"

@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.26.0] — 2026-07-12
+
+### Added
+- **Release verification matrix** ([#158](https://github.com/CryptoJones/Photoslop/issues/158))
+  — keyboard/accessibility-tree assertions, 1x/2x light/dark/high-contrast icon
+  and cursor renders, expanded vector/SVG evidence, and versioned
+  VoiceOver/NVDA/Orca plus cross-application SVG smoke procedures.
+- CI publishes JUnit and scaled 4K/12K benchmark artifacts with P50/P95,
+  document bytes, peak RSS, cancellation latency, and explicit cache budgets.
+
+### Fixed
+- Palette SVG icons now encode alpha in standards-compatible SVG attributes;
+  the verification render matrix caught previously invisible icon pixels.
+
+### Changed
+- Feature-parity claims now require end-to-end and interchange evidence, mark
+  professional vector/text/interchange breadth as partial, and identify manual
+  platform checks that offscreen CI cannot prove.
+
 ## [1.25.0] — 2026-07-12
 
 ### Added

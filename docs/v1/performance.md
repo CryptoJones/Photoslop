@@ -14,8 +14,9 @@ QT_QPA_PLATFORM=offscreen uv run python -m photoslop.benchmarks 12k-20
 ```
 
 The JSON report includes sample count, viewport render P50/P95 milliseconds,
-document pixel bytes, process peak RSS, and the 33 ms P95 frame / 100 ms GUI
-heartbeat targets. `--samples N` controls repetitions; `--scale 0.01` provides a
+document pixel bytes, process peak RSS, cooperative cancellation latency,
+thumbnail/open/export cache budgets, and the 33 ms P95 frame / 100 ms GUI
+heartbeat / 100 ms cancellation targets. `--samples N` controls repetitions; `--scale 0.01` provides a
 deterministic CI smoke version without allocating the reference fixture.
 
 ## Interaction budgets

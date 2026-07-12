@@ -6,11 +6,12 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] **P1/P2:** Add accessibility, performance, cursor, UI, and vector workflow
-  verification plus honest feature-parity documentation
-  ([#158](https://github.com/CryptoJones/Photoslop/issues/158))
 
 ## Done
+
+- [x] Add accessibility, performance, cursor, UI, and vector workflow
+  verification plus honest feature-parity documentation
+  ([#158](https://github.com/CryptoJones/Photoslop/issues/158)) — shipped v1.26.0
 
 - [x] Add SVG import/export and editable artboard interchange while retaining
   OpenRaster raster fallbacks

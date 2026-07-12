@@ -22,4 +22,16 @@ jobs:
       - name: Lint
         run: uv run ruff check .
       - name: Tests
-        run: QT_QPA_PLATFORM=offscreen uv run pytest -q
+        run: |
+          mkdir -p reports
+          QT_QPA_PLATFORM=offscreen uv run pytest -q --junitxml=reports/tests.xml
+      - name: Deterministic benchmark reports
+        run: |
+          QT_QPA_PLATFORM=offscreen uv run python -m photoslop.benchmarks 4k-50 --scale 0.01 --samples 5 > reports/benchmark-4k-50.json
+          QT_QPA_PLATFORM=offscreen uv run python -m photoslop.benchmarks 12k-20 --scale 0.01 --samples 5 > reports/benchmark-12k-20.json
+      - name: Publish verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-${{ github.sha }}
+          path: reports/
