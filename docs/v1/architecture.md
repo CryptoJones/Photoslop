@@ -5,6 +5,22 @@ The features this constraint deliberately rules out — and the reasoning —
 are recorded in [DESIGNDECISIONS.md](../../DESIGNDECISIONS.md).
 Every subsystem answers to it.
 
+## Background task service
+
+Heavy GUI operations use a bounded `TaskService` rather than the Qt event
+thread. Every task declares an estimated peak-memory cost; the scheduler starts
+work only when both a worker slot and the memory budget are available. A handle
+reports lifecycle state and progress and supports cooperative cancellation.
+Edit → Cancel Background Task cancels queued work immediately and signals
+running network, subprocess, or filter work to stop or discard its late result.
+
+Workers receive QImage copy-on-write or metadata-deep document snapshots and
+never mutate the live document. GUI-thread completion checks layer/document
+generation tokens before installing results and creating undo commands. A
+failure, cancellation, or stale completion therefore leaves pixels, dirty
+state, and undo history unchanged. CLI and MCP remain synchronous because they
+do not own a GUI event loop while sharing the same engine operations.
+
 ## Pixel model
 - One **premultiplied ARGB32** buffer per layer — no per-layer scratch
   copies at rest. numpy views (`view_u32`) operate in place.

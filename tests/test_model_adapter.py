@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from PySide6.QtCore import QSettings, QSize
 from PySide6.QtGui import QColor, QImage
+from PySide6.QtTest import QTest
 
 from photoslop import modeladapter
 from photoslop.document import Document
@@ -64,6 +65,9 @@ def test_registry_and_select_subject_flow(qapp):
 
     QSettings("CryptoJones", "Photoslop").setValue("model/adapter", "fake")
     win.action_select_subject()
+    while win.task_service.active:
+        qapp.processEvents()
+        QTest.qWait(5)
     bounds = doc.selection_bounds()
     assert bounds is not None
     assert (bounds.x(), bounds.y()) == (5, 10)

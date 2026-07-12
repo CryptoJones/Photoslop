@@ -6,9 +6,6 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] **P1:** Add a cancellable, memory-bounded background task service for
-  filters, I/O, RAW, exports, subprocesses, and model requests
-  ([#152](https://github.com/CryptoJones/Photoslop/issues/152))
 - [ ] **P1:** Reduce canvas repaint and preview overhead with dirty overlays,
   generation-aware thumbnails, proxy previews, and bounded caches
   ([#153](https://github.com/CryptoJones/Photoslop/issues/153))
@@ -30,6 +27,9 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] Add a cancellable, memory-bounded background task service for filters,
+  I/O, RAW, exports, subprocesses, and model requests
+  ([#152](https://github.com/CryptoJones/Photoslop/issues/152)) — shipped v1.20.0
 - [x] Implement cross-platform accessibility semantics and keyboard workflows
   for standard and custom Qt widgets
   ([#151](https://github.com/CryptoJones/Photoslop/issues/151)) — shipped v1.19.0

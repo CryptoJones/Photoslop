@@ -60,6 +60,7 @@ from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
 from photoslop.opendialog import OpenImageDialog
 from photoslop.propertiespanel import PropertiesPanel
 from photoslop.svgicons import svg_icon
+from photoslop.tasks import TaskService, snapshot_document
 from photoslop.toolregistry import TOOL_GROUPS, TOOL_SPEC_BY_ID, TOOL_SPECS
 from photoslop.tools import (
     BrushTool,
@@ -105,6 +106,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"Photoslop {__version__}")
         self.settings = QSettings("CryptoJones", "Photoslop")
         self.action_registry = ActionRegistry(self)
+        self.task_service = TaskService(parent=self)
         unit = str(self.settings.value("units", "px"))
         self.unit = unit if unit in units.UNITS else "px"
         self.show_grid = self.settings.value("grid", "false") == "true"
@@ -210,6 +212,8 @@ class MainWindow(QMainWindow):
         self._build_status_bar()
         self.accessibility = AccessibilityController(self)
         self.statusBar().messageChanged.connect(self.accessibility.announce)
+        self.task_service.taskAdded.connect(self._on_task_added)
+        self.task_service.taskFinished.connect(self._on_task_finished)
         self._sync_option_visibility()
         self.accessibility.apply()
 
@@ -633,6 +637,8 @@ class MainWindow(QMainWindow):
         m_edit.addAction(self._act("Command &Palette…", "Ctrl+Shift+P",
                                    self.action_command_palette,
                                    prerequisite="always"))
+        m_edit.addAction(self._act("Cancel Background Task", "Esc",
+                                   self.action_cancel_tasks, prerequisite="task"))
         undo = self.undo_group.createUndoAction(self, "&Undo ")
         undo.setShortcut(QKeySequence.StandardKey.Undo)
         redo = self.undo_group.createRedoAction(self, "&Redo ")
@@ -909,6 +915,26 @@ class MainWindow(QMainWindow):
     def action_command_palette(self) -> None:
         self.action_registry.palette(self).exec()
 
+    def action_cancel_tasks(self) -> None:
+        self.task_service.cancel_all()
+
+    def _on_task_added(self, handle) -> None:
+        self.statusBar().showMessage(f"{handle.label}…")
+        handle.progressChanged.connect(
+            lambda percent, message, h=handle: self.statusBar().showMessage(
+                f"{h.label}: {percent}%{(' — ' + message) if message else ''}"))
+        handle.failed.connect(
+            lambda error, h=handle: self.statusBar().showMessage(
+                f"{h.label} failed: {error.splitlines()[-1]}", 8000))
+        handle.cancelled.connect(
+            lambda h=handle: self.statusBar().showMessage(f"{h.label} cancelled", 4000))
+        self.action_registry.update()
+
+    def _on_task_finished(self, handle) -> None:
+        if not self.task_service.active and handle.state.value == "succeeded":
+            self.statusBar().showMessage(f"{handle.label} complete", 3000)
+        self.action_registry.update()
+
     # ------------------------------------------------------------------ status
 
     def _build_status_bar(self) -> None:
@@ -1065,8 +1091,53 @@ class MainWindow(QMainWindow):
             self.add_document(Document.new(size, dpi, name, background))
 
     def action_open(self) -> None:
+        gui_thread = self.thread()
         for path in OpenImageDialog.get_paths(self):
-            self.open_path(path)
+            if is_raw_path(path):
+                from photoslop.rawdialog import RawDevelopDialog
+
+                dialog = RawDevelopDialog(path, self)
+                values = dialog.values() if dialog.exec() else None
+
+                def develop(context, source=path, params=values):
+                    from photoslop.io_raw import develop_raw
+
+                    context.progress(5, "Decoding RAW")
+                    image = (develop_raw(source, **params) if params is not None
+                             else load_raw(source))
+                    doc = Document.from_image(image, os.path.basename(source), 72.0)
+                    doc.moveToThread(gui_thread)
+                    context.progress(100, "Developed")
+                    return doc
+
+                handle = self.task_service.submit(
+                    "file.raw-develop", f"Develop {os.path.basename(path)}", develop,
+                    512 * 1024 * 1024)
+                handle.succeeded.connect(self.add_document)
+                continue
+
+            def operation(context, source=path):
+                context.progress(5, "Reading")
+                if source.lower().endswith(".ora"):
+                    doc = load_ora(source)
+                elif io_formats.is_extra_path(source):
+                    image = io_formats.load_extra(source)
+                    doc = Document.from_image(image, os.path.basename(source), 72.0)
+                else:
+                    image = QImage(source)
+                    if image.isNull():
+                        raise ValueError(f"Could not open {source}")
+                    dpm = image.dotsPerMeterX()
+                    dpi = round(dpm * 0.0254) if dpm > 0 else 72
+                    doc = Document.from_image(image, os.path.basename(source), float(dpi))
+                doc.moveToThread(gui_thread)
+                context.progress(100, "Decoded")
+                return doc
+
+            handle = self.task_service.submit(
+                "file.open", f"Open {os.path.basename(path)}", operation,
+                256 * 1024 * 1024)
+            handle.succeeded.connect(self.add_document)
 
     def open_path(self, path: str) -> bool:
         try:
@@ -1105,7 +1176,7 @@ class MainWindow(QMainWindow):
         self.add_document(doc)
         return True
 
-    def _save_doc(self, doc: Document) -> bool:
+    def _save_doc(self, doc: Document, background: bool = False) -> bool:
         path = doc.path
         if path is None or not path.lower().endswith(".ora"):
             suggested = os.path.splitext(doc.name)[0] + ".ora"
@@ -1116,6 +1187,29 @@ class MainWindow(QMainWindow):
                 return False
             if not path.lower().endswith(".ora"):
                 path += ".ora"
+        if background:
+            snapshot = snapshot_document(doc)
+            undo_index = doc.undo_stack.index()
+            estimated = max(doc.memory_bytes() * 2, 1)
+
+            def operation(context):
+                context.progress(5, "Encoding layers")
+                save_ora(snapshot, path)
+                context.progress(100, "Written")
+                return path
+
+            handle = self.task_service.submit("file.save", f"Save {os.path.basename(path)}",
+                                              operation, estimated)
+
+            def installed(saved_path):
+                doc.path = saved_path
+                doc.name = os.path.basename(saved_path)
+                if doc.undo_stack.index() == undo_index:
+                    doc.undo_stack.setClean()
+                self._refresh_tab(doc)
+
+            handle.succeeded.connect(installed)
+            return True
         save_ora(doc, path)
         doc.path = path
         doc.name = os.path.basename(path)
@@ -1127,7 +1221,7 @@ class MainWindow(QMainWindow):
     def action_save(self) -> None:
         doc = self.current_doc()
         if doc is not None:
-            self._save_doc(doc)
+            self._save_doc(doc, background=True)
 
     def action_save_as(self) -> None:
         doc = self.current_doc()
@@ -1135,7 +1229,7 @@ class MainWindow(QMainWindow):
             return
         old_path = doc.path
         doc.path = None
-        if not self._save_doc(doc):
+        if not self._save_doc(doc, background=True):
             doc.path = old_path
 
     def action_export(self) -> None:
@@ -1156,14 +1250,34 @@ class MainWindow(QMainWindow):
             path += suffix
         from photoslop import color
 
-        img = dialog.export_image()
-        img.setDotsPerMeterX(round(doc.dpi / 0.0254))
-        img.setDotsPerMeterY(round(doc.dpi / 0.0254))
-        color.tag_for_export(img, doc)
-        if dialog.write_to(path, img):
-            self.statusBar().showMessage(f"Exported {path}", 4000)
-        else:
-            self.statusBar().showMessage(f"Export failed: {path}", 6000)
+        base = QImage(dialog._flat)
+        if fmt in {"JPEG", "BMP"}:
+            base = doc.flatten(QColor(255, 255, 255))
+        size = dialog.export_size()
+        quality = dialog.chosen_quality()
+        snapshot = snapshot_document(doc)
+
+        def operation(context):
+            context.progress(10, "Scaling")
+            img = (base if size == base.size() else base.scaled(
+                size, Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation))
+            img.setDotsPerMeterX(round(snapshot.dpi / 0.0254))
+            img.setDotsPerMeterY(round(snapshot.dpi / 0.0254))
+            color.tag_for_export(img, snapshot)
+            context.progress(60, "Encoding")
+            if fmt in {"AVIF", "JPEG XL"}:
+                ok = io_formats.save_extra(img, path, max(1, quality))
+            else:
+                ok = img.save(path, fmt, quality)
+            if not ok:
+                raise ValueError(f"Export failed: {path}")
+            context.progress(100, "Written")
+            return path
+
+        self.task_service.submit(
+            "file.export", f"Export {os.path.basename(path)}", operation,
+            max(1, base.sizeInBytes() * 3))
 
     def action_close_tab(self) -> None:
         if self.tabs.count():
@@ -1370,7 +1484,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             f"Action played ({len(self.recorded_action)} steps)", 4000)
 
-    def _run_filter(self, title: str, apply) -> None:
+    def _run_filter(self, title: str, apply, force_sync: bool = False) -> None:
         """Shared filter plumbing: selection-aware, full undo step."""
         doc = self.current_doc()
         if doc is None or doc.active_layer is None:
@@ -1391,6 +1505,39 @@ class MainWindow(QMainWindow):
                 if not mask.any():
                     mask = None
         before = QImage(layer.image)
+        # Small operations remain immediate; large layers take the bounded COW
+        # worker path so dialogs/tests stay deterministic without freezing real
+        # camera-sized documents.
+        estimated = max(1, before.sizeInBytes() * 3)
+        if not force_sync and before.width() * before.height() >= 1_000_000:
+            source_key = layer.image.cacheKey()
+
+            def operation(context):
+                context.progress(5, "Preparing snapshot")
+                image = QImage(before)
+                apply(image, mask)
+                if weights is not None:
+                    npimage.blend_by_weights(image, before, weights)
+                context.progress(100, "Ready")
+                return image
+
+            handle = self.task_service.submit(
+                f"filter.{title.lower().replace(' ', '-')}", title, operation, estimated)
+
+            def install(image):
+                if layer.image.cacheKey() != source_key:
+                    self.statusBar().showMessage(
+                        f"{title} result discarded because the layer changed", 6000)
+                    return
+                rect = image.rect()
+                layer.image = image
+                doc.undo_stack.push(LayerRegionCommand(
+                    doc, layer, rect, before.copy(rect), image.copy(rect),
+                    title, applied=True))
+                doc.notify_pixels(layer.bounds())
+
+            handle.succeeded.connect(install)
+            return
         layer.image = QImage(before)  # fresh COW handle; filter write detaches
         apply(layer.image, mask)
         if weights is not None:
@@ -1435,14 +1582,27 @@ class MainWindow(QMainWindow):
                                            "Strength (1–100):", 40, 1, 100)
         if not ok:
             return
-        try:
-            result = adapter.denoise(doc.active_layer.image, strength)
-        except Exception as exc:
-            self.statusBar().showMessage(f"Denoise backend: {exc}", 8000)
-            return
-        result = result.convertToFormat(doc.active_layer.image.format())
-        self._run_filter("Denoise (Model)", lambda img, m: (
-            None, img.swap(result))[0])
+        layer = doc.active_layer
+        snapshot = QImage(layer.image)
+        source_key = layer.image.cacheKey()
+
+        def operation(context):
+            context.progress(10, "Sending to backend")
+            result = adapter.denoise(snapshot, strength)
+            context.progress(100, "Received")
+            return result.convertToFormat(snapshot.format())
+
+        handle = self.task_service.submit(
+            "model.denoise", "Denoise (Model)", operation, snapshot.sizeInBytes() * 3)
+
+        def install(result):
+            if layer.image.cacheKey() != source_key:
+                self.statusBar().showMessage("Denoise result discarded after layer edit", 6000)
+                return
+            self._run_filter("Denoise (Model)",
+                             lambda img, _mask: (None, img.swap(result))[0], True)
+
+        handle.succeeded.connect(install)
 
     def action_gaussian_blur(self) -> None:
         from PySide6.QtWidgets import QInputDialog
@@ -2006,33 +2166,44 @@ class MainWindow(QMainWindow):
                             count=doc.size.height() * mask_img.bytesPerLine())
         view = buf.reshape(doc.size.height(), mask_img.bytesPerLine())
         view[:, : doc.size.width()][sel] = 255
-        try:
-            result = adapter.generative_fill(flat, mask_img, prompt)
-        except Exception as exc:
-            self.statusBar().showMessage(f"Generative Fill failed: {exc}", 8000)
-            return
-        if result.size() != doc.size:
-            self.statusBar().showMessage(
-                "Backend returned an image of the wrong size", 8000)
-            return
-        result = result.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
         layer = doc.active_layer
         offset = QPoint(layer.offset)
+        source_key = layer.image.cacheKey()
 
-        def paste(img: QImage, mask) -> None:
-            aligned = QImage(img.size(), QImage.Format.Format_ARGB32_Premultiplied)
-            aligned.fill(0)
-            p = QPainter(aligned)
-            p.drawImage(-offset, result)
-            p.end()
-            src = npimage.view_u32(aligned)
-            dst = npimage.view_u32(img)
-            if mask is None:
-                dst[:] = src
-            else:
-                dst[mask] = src[mask]
+        def operation(context):
+            context.progress(10, "Sending image and mask")
+            result = adapter.generative_fill(flat, mask_img, prompt)
+            if result.size() != doc.size:
+                raise ValueError("Backend returned an image of the wrong size")
+            context.progress(100, "Received")
+            return result.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
 
-        self._run_filter("Generative Fill", paste)
+        handle = self.task_service.submit(
+            "model.generative-fill", "Generative Fill", operation,
+            max(1, flat.sizeInBytes() * 4))
+
+        def install(result):
+            if layer.image.cacheKey() != source_key:
+                self.statusBar().showMessage(
+                    "Generative Fill result discarded after layer edit", 6000)
+                return
+
+            def paste(img: QImage, mask) -> None:
+                aligned = QImage(img.size(), QImage.Format.Format_ARGB32_Premultiplied)
+                aligned.fill(0)
+                p = QPainter(aligned)
+                p.drawImage(-offset, result)
+                p.end()
+                src = npimage.view_u32(aligned)
+                dst = npimage.view_u32(img)
+                if mask is None:
+                    dst[:] = src
+                else:
+                    dst[mask] = src[mask]
+
+            self._run_filter("Generative Fill", paste, True)
+
+        handle.succeeded.connect(install)
 
     def action_select_subject(self) -> None:
         from photoslop.modeladapter import SELECT_SUBJECT
@@ -2049,11 +2220,29 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(
                 f"“{adapter.label}” does not support Select Subject", 5000)
             return
-        try:
-            mask_img = adapter.select_subject(doc.flatten())
-        except Exception as exc:
-            self.statusBar().showMessage(f"Select Subject failed: {exc}", 8000)
-            return
+        snapshot = doc.flatten()
+        generation = tuple(layer.image.cacheKey() for layer in doc.layers)
+
+        def operation(context):
+            context.progress(10, "Sending composite")
+            result = adapter.select_subject(snapshot)
+            context.progress(100, "Received")
+            return result
+
+        handle = self.task_service.submit(
+            "model.select-subject", "Select Subject", operation,
+            max(1, snapshot.sizeInBytes() * 3))
+
+        def install(mask_img):
+            if generation != tuple(layer.image.cacheKey() for layer in doc.layers):
+                self.statusBar().showMessage(
+                    "Select Subject result discarded after document edit", 6000)
+                return
+            self._install_subject_mask(doc, mask_img)
+
+        handle.succeeded.connect(install)
+
+    def _install_subject_mask(self, doc, mask_img) -> None:
         import numpy as np
 
         from photoslop import npimage
