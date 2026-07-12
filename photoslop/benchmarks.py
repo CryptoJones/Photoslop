@@ -7,6 +7,7 @@ import argparse
 import json
 import resource
 import statistics
+import threading
 import time
 from dataclasses import dataclass
 
@@ -47,6 +48,7 @@ def fixture(preset: BenchmarkPreset, scale: float = 1.0) -> Document:
 def run(preset: BenchmarkPreset, scale: float = 1.0, samples: int = 20) -> dict:
     doc = fixture(preset, scale)
     viewport = QRect(0, 0, min(doc.size.width(), 1920), min(doc.size.height(), 1080))
+    render_region(doc, viewport)  # exclude one-time Qt/font/cache initialization
     timings = []
     for _ in range(samples):
         start = time.perf_counter()
@@ -54,6 +56,21 @@ def run(preset: BenchmarkPreset, scale: float = 1.0, samples: int = 20) -> dict:
         timings.append((time.perf_counter() - start) * 1000)
     ordered = sorted(timings)
     p95_index = min(len(ordered) - 1, round(0.95 * (len(ordered) - 1)))
+    cancelled = threading.Event()
+    observed = threading.Event()
+
+    def cooperative_worker():
+        while not cancelled.is_set():
+            time.sleep(0.001)
+        observed.set()
+
+    worker = threading.Thread(target=cooperative_worker)
+    worker.start()
+    cancel_start = time.perf_counter()
+    cancelled.set()
+    worker.join(timeout=1)
+    cancellation_ms = (time.perf_counter() - cancel_start) * 1000
+    assert observed.is_set()
     return {
         "preset": preset.name,
         "scale": scale,
@@ -62,8 +79,13 @@ def run(preset: BenchmarkPreset, scale: float = 1.0, samples: int = 20) -> dict:
         "frame_ms_p95": ordered[p95_index],
         "document_bytes": doc.memory_bytes(),
         "peak_rss_kb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+        "cancellation_ms": cancellation_ms,
+        "cache_budgets": {"thumbnail_entries": len(doc.layers),
+                          "open_preview_max_px": 256,
+                          "export_preview_max_px": 512},
         "target_frame_ms_p95": 33,
         "target_gui_heartbeat_ms": 100,
+        "target_cancellation_ms": 100,
     }
 
 

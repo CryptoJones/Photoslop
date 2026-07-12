@@ -18,7 +18,7 @@ Preferences → Accessibility offers high contrast, reduced motion, and 100–20
 control scaling. High contrast adds a visible yellow focus indicator and
 non-color checked state; reduced motion slows marching ants.
 
-## Versioned screen-reader smoke procedure (v1)
+## Versioned screen-reader smoke procedure (v2)
 
 Run this script with VoiceOver (macOS), NVDA (Windows), and Orca/AT-SPI (Linux):
 
@@ -35,6 +35,12 @@ Run this script with VoiceOver (macOS), NVDA (Windows), and Orca/AT-SPI (Linux):
    persistence, focus visibility, no clipped actions, and no color-only state.
 7. Save, close, and reopen. Confirm named dialog fields, predictable focus, and
    that Cancel returns without changing pixels.
+8. Create two vector shapes, choose Vector Selection with `A`, add the second
+   object with Shift-click, switch to Direct Selection with `Shift+A`, and
+   confirm tool names, selection changes, and undo/redo are announced.
+9. Open an SVG containing supported shapes plus an unsupported polygon. Confirm
+   the editable layers and fallback layer have distinct names and that keyboard
+   navigation never enters an unlabelled control.
 
 Record OS, Qt/Photoslop version, screen reader version, pass/fail for each step,
 and announcement defects. Automated accessible-tree coverage runs in CI; the

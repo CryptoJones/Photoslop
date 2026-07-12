@@ -34,9 +34,13 @@ PATHS = {
 
 
 def _svg(name: str, color: QColor) -> QByteArray:
-    ink = color.name(QColor.NameFormat.HexArgb)
+    # SVG/CSS eight-digit colors are #RRGGBBAA, while QColor.HexArgb emits
+    # #AARRGGBB. Keep the color and opacity separate so every Qt SVG backend
+    # renders palette icons visibly and consistently.
+    ink = color.name(QColor.NameFormat.HexRgb)
     source = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
-              f'fill="none" stroke="{ink}" stroke-width="2" '
+              f'fill="none" stroke="{ink}" stroke-opacity="{color.alphaF():.3f}" '
+              f'stroke-width="2" '
               f'stroke-linecap="round" stroke-linejoin="round">{PATHS[name]}</svg>')
     return QByteArray(source.encode())
 

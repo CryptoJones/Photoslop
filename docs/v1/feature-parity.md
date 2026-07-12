@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v1.9.0** against six
+An honest, category-by-category comparison of **Photoslop v1.26.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -15,7 +15,7 @@ than "missing".
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 1.9.0 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
+| **Photoslop** | 1.26.0 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
@@ -23,7 +23,11 @@ than "missing".
 | darktable | 5.6.0 | GPL-3.0, free | Linux / Windows / macOS |
 | Capture One Pro | 16.8.1 | perpetual $299 or subscription | Windows / macOS (+iPad) |
 
-**Legend:** ✅ full · 🟡 partial · ❌ absent · — out of the product's scope.
+**Legend:** ✅ complete for the stated row with an end-to-end automated task
+and interchange test where applicable · 🟡 useful but incomplete, narrower, or
+not manually verified on every platform · ❌ absent · — out of scope. See the
+[release verification matrix](verification.md); offscreen CI never substitutes
+for the versioned platform screen-reader and visual smoke procedures.
 
 ## Tools & painting
 
@@ -113,11 +117,12 @@ than "missing".
 |---|---|---|---|---|---|---|---|
 | Text tool with font/size/colour | ✅ [Tools](tools.md) | ✅ | ✅ | ✅ | — | 🟡 (watermark) | 🟡 (watermark) |
 | Rich text — per-letter colour, bold/italic, WYSIWYG preview | ✅ (GUI editor + `--text-rich` HTML) | ✅ | ✅ | 🟡 (single style) | — | — | — |
-| Re-editable text layers | ✅ (persists in .ora) | ✅ | ✅ | ❌ | — | — | — |
+| Re-editable text layers | 🟡 (ORA parameters; SVG safe text subset) | ✅ | ✅ | ❌ | — | — | — |
 | Shape tool (rect/ellipse/line) | ✅ (parametric, re-editable) | ✅ (vector) | ✅ (vector layers, 3.2) | ✅ (raster) | — | — | — |
-| Pen / path tool | ✅ (Catmull-Rom, re-editable anchors) | ✅ (full vector) | ✅ | ❌ | — | — | — |
-| Parametric (re-editable) vectors | ✅ [Tools](tools.md) | ✅ | ✅ (3.2 vector layers) | ❌ | — | — | — |
-| Multi-object selection, Boolean, align/distribute, gradients | ✅ (GUI + CLI/MCP engine) | ✅ | ✅ | ❌ | — | — | — |
+| Pen / path tool | 🟡 (native cubic model; narrower direct editing) | ✅ (full vector) | ✅ | ❌ | — | — | — |
+| Parametric (re-editable) vectors | 🟡 [Vector Model](vector-model.md) | ✅ | ✅ (3.2 vector layers) | ❌ | — | — | — |
+| Multi-object selection, Boolean, align/distribute, gradients | 🟡 (core engine + selection tools; not Illustrator-level) | ✅ | ✅ | ❌ | — | — | — |
+| SVG editable interchange | 🟡 (documented safe subset + fallback) | ✅ | ✅ | ❌ | — | — | — |
 
 ## Automation, scripting & headless
 
@@ -125,7 +130,7 @@ than "missing".
 |---|---|---|---|---|---|---|---|
 | Action/macro recording | ✅ [Actions](actions.md) | ✅ | 🟡 (script instead) | ❌ | 🟡 (presets/batch) | ✅ (styles) | ✅ (styles) |
 | Scripting language | ❌ (CLI instead) | ✅ (JS/AppleScript/VBS) | ✅ (Script-Fu, Python 3) | ❌ | ✅ (Lua SDK) | ✅ (Lua + AI API) | 🟡 (AppleScript, Mac) |
-| Headless CLI | ✅ **42 ops, full engine parity** [CLI](cli.md) | ❌ | ✅ (`gimp -i -b`, script-driven) | ❌ | ❌ | ✅ (`darktable-cli`, export-focused) | ❌ |
+| Headless CLI | ✅ **54 shared engine ops** [CLI](cli.md) | ❌ | ✅ (`gimp -i -b`, script-driven) | ❌ | ❌ | ✅ (`darktable-cli`, export-focused) | ❌ |
 | Start pipelines from blank docs | ✅ (`--new A4 --dpi 300`) | — | ✅ (script) | ❌ | — | — | — |
 | Batch export | ✅ (shell loops + CLI) | ✅ (Actions batch) | ✅ | ❌ | ✅ | ✅ | ✅ (process recipes) |
 
@@ -144,7 +149,7 @@ Photoslop is an editor, not a DAM — these rows are scope notes, not gaps.
 | Feature | Photoslop | Photoshop | GIMP | Paint.NET | LR Classic | darktable | Capture One |
 |---|---|---|---|---|---|---|---|
 | Native layered format | ✅ .ora (open standard) [File Formats](file-formats.md) | ✅ .psd/.psb (proprietary) | ✅ .xcf + .ora | ✅ .pdn | — | — | — |
-| Layered interchange with other apps | ✅ (ORA ↔ GIMP/Krita) | 🟡 (PSD is the de-facto standard) | ✅ (ORA + improved PSD) | ❌ | — | — | — |
+| Layered/vector interchange with other apps | 🟡 (ORA raster fallback + SVG safe subset) | 🟡 (PSD is the de-facto standard) | ✅ (ORA + improved PSD/SVG) | ❌ | — | — | — |
 | PNG/JPEG/BMP/WebP | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | AVIF / JPEG XL | ✅ (`[formats]` extra) [File Formats](file-formats.md) | ✅ | ✅ | ❌ | ✅ | 🟡 | ✅ |
 | Named export regions (artboards) | ✅ [Artboards](artboards.md) | ✅ | ❌ | ❌ | — | — | — |
@@ -160,8 +165,9 @@ Photoslop is an editor, not a DAM — these rows are scope notes, not gaps.
 
 ## Where Photoslop stands out
 
-- **Headless CLI with true engine parity.** All 42 operations mirror the GUI
-  engine 1:1 and compose as ordered pipelines (`--new A4 --dpi 300 --adjust
+- **Headless automation through a shared engine.** All 54 operations are shared
+  by CLI and MCP; GUI presentation-only interactions have explicit parity
+  rulings. Pipelines compose as ordered operations (`--new A4 --dpi 300 --adjust
   "exposure=1" --select-poly … --clear --output out.png`). None of the six has
   this: Photoshop has no headless mode at all, `darktable-cli` is
   export-focused, and GIMP's batch mode requires writing Script-Fu.
@@ -191,8 +197,9 @@ issue yet — this section is the menu to pick from.
 - No CMYK mode or print pipeline *(large; niche for the current audience)*.
 
 **Raw development.**
-- Raw import is camera-WB + 8-bit via rawpy; no exposure-first raw develop,
-  no lens corrections, no denoise *(medium-large; partially adapter-able)*.
+- Raw import has transient 16-bit exposure/white-balance/highlight/shadow
+  development plus optional lens correction and model denoise, but the resident
+  document remains 8-bit and is not a scene-referred pipeline *(large)*.
 
 **Editing depth.**
 - One adjustment-layer type (LUT) vs Photoshop's ~20 *(medium; the LUT
