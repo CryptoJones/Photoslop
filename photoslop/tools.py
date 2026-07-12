@@ -1963,3 +1963,57 @@ class MoveTool(Tool):
                     doc.undo_stack.push(
                         SetLayerOffsetCommand(doc, layer, orig, layer.offset))
         self._mode = None
+
+
+class VectorSelectTool(Tool):
+    """Object selection and drag transform for native vector layers."""
+
+    name = "vector-select"
+
+    def __init__(self, options: ToolOptions) -> None:
+        super().__init__(options)
+        self._start = None
+
+    def press(self, doc, canvas, pos, ev):
+        from photoslop import vector, vectorops
+
+        hit = next((layer for layer in reversed(doc.layers)
+                    if layer.vector_data is not None
+                    and vector.native_path(layer.vector_data).contains(pos)), None)
+        ids = [] if hit is None else [vector.migrate_vector(hit.vector_data)["id"]]
+        mode = ("add" if ev is not None and
+                ev.modifiers() & Qt.KeyboardModifier.ShiftModifier else "replace")
+        vectorops.select(doc, ids, mode)
+        self._start = QPointF(pos) if hit is not None else None
+
+    def release(self, doc, canvas, pos, ev):
+        if self._start is not None:
+            from photoslop import vectorops
+
+            delta = pos - self._start
+            if not delta.isNull():
+                vectorops.transform(doc, doc.vector_selection,
+                                    dx=delta.x(), dy=delta.y())
+        self._start = None
+
+
+class VectorNodeTool(Tool):
+    """Direct-selection tool for path anchors and node keyboard workflows."""
+
+    name = "vector-node"
+
+    def press(self, doc, canvas, pos, ev):
+        from photoslop import vector, vectorops
+
+        best = None
+        for layer in vectorops.selected(doc):
+            data = vector.migrate_vector(layer.vector_data)
+            for index, command in enumerate(data["geometry"].get("commands", [])):
+                if "p" not in command:
+                    continue
+                distance = math.hypot(command["p"][0] - pos.x(), command["p"][1] - pos.y())
+                if best is None or distance < best[0]:
+                    best = distance, data["id"], index
+        if best is not None and best[0] <= 10 / max(canvas.zoom, 0.01):
+            doc.vector_node_selection = {best[1]: [best[2]]}
+            doc.notify_structure()

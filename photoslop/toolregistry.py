@@ -17,6 +17,8 @@ class ToolSpec:
 
 TOOL_SPECS = (
     ToolSpec("move", "Move", "V", "move", "arrows-move"),
+    ToolSpec("vector-select", "Vector Selection", "A", "move", "transform"),
+    ToolSpec("vector-node", "Direct Selection", "Shift+A", "move", "vector-bezier"),
     ToolSpec("rect-select", "Rectangle Select", "M", "marquee", "transform"),
     ToolSpec("ellipse-select", "Ellipse Select", "Shift+M", "marquee", "transform"),
     ToolSpec("lasso", "Lasso Select", "L", "lasso", "lasso"),

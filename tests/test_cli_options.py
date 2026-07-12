@@ -55,6 +55,7 @@ CASES = {
     "text": ("5,5,10:hello", "5,5,10"),
     "text-rich": ('5,5:<span style="color:#ff0000">Hi</span>', "5:oops"),
     "shape": ("rect,5,5,20,15,255,0,0", "blob,1,1,5,5,0,0,0"),
+    "vector-op": ('{"op":"select","ids":[]}', "not-json"),
     "blend-mode": ("multiply", "extra-spicy"),
     "layer-opacity": ("50", "150"),
     "content-aware-fill": (None, None),

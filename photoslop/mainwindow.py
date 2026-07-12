@@ -101,6 +101,8 @@ from photoslop.tools import (
     SpotHealTool,
     TextTool,
     ToolOptions,
+    VectorNodeTool,
+    VectorSelectTool,
     ZoomTool,
 )
 from photoslop.transform import TransformTool
@@ -153,6 +155,8 @@ class MainWindow(QMainWindow):
                 CropTool(self.options),
                 BurnTool(self.options),
                 MoveTool(self.options),
+                VectorSelectTool(self.options),
+                VectorNodeTool(self.options),
                 HandTool(self.options),
                 ZoomTool(self.options),
                 TransformTool(self.options),

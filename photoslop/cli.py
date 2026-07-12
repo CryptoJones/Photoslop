@@ -756,6 +756,37 @@ def _op_shape(ctx: Context, value: str) -> None:
     ctx.doc.active_index = len(ctx.doc.layers) - 1
 
 
+def _op_vector_op(ctx: Context, value: str) -> None:
+    import json
+
+    from photoslop import vectorops
+
+    try:
+        spec = json.loads(value)
+        operation = spec.pop("op")
+        ids = spec.pop("ids", list(ctx.doc.vector_selection))
+        if operation == "select":
+            vectorops.select(ctx.doc, ids, spec.pop("mode", "replace"))
+        elif operation == "transform":
+            vectorops.transform(ctx.doc, ids, **spec)
+        elif operation == "appearance":
+            vectorops.set_appearance(ctx.doc, ids, **spec)
+        elif operation == "group":
+            vectorops.group(ctx.doc, ids, spec.pop("parent_id", None))
+        elif operation == "align":
+            vectorops.align(ctx.doc, ids, **spec)
+        elif operation == "distribute":
+            vectorops.distribute(ctx.doc, ids, **spec)
+        elif operation == "node":
+            vectorops.edit_node(ctx.doc, spec.pop("id", ids[0]), **spec)
+        elif operation == "boolean":
+            vectorops.boolean_path(ctx.doc, ids, spec.pop("operation"))
+        else:
+            raise ValueError(f"unknown operation {operation!r}")
+    except (IndexError, KeyError, TypeError, ValueError) as exc:
+        raise _ValueError(f"--vector-op: {exc}") from exc
+
+
 def _op_blend_mode(ctx: Context, value: str) -> None:
     from photoslop.layer import BLEND_MODES
 
@@ -932,6 +963,8 @@ OPS: dict = {
                   "tool's styled editor)", _op_text_rich),
     "shape": ("KIND,X,Y,W,H,R,G,B", "rect/ellipse/line onto a new layer",
               _op_shape),
+    "vector-op": ("JSON", "structured native-vector selection/edit operation",
+                  _op_vector_op),
     "blend-mode": ("NAME", "set the target layer's blend mode",
                    _op_blend_mode),
     "layer-opacity": ("PCT", "set the target layer's opacity", _op_layer_opacity),
@@ -1115,7 +1148,9 @@ def _doc_info(doc) -> dict:
              "offset": [layer.offset.x(), layer.offset.y()],
              "size": [layer.image.width(), layer.image.height()],
              "effects": [list(f) for f in layer.effects],
-             "smart_object": layer.source is not None}
+             "smart_object": layer.source is not None,
+             "vector_id": (layer.vector_data or {}).get("id"),
+             "vector_type": (layer.vector_data or {}).get("type")}
             for layer in doc.layers
         ],
         "artboards": [[n, r.x(), r.y(), r.width(), r.height()]

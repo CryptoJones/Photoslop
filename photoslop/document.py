@@ -209,6 +209,8 @@ class Document(QObject):
         self.guides_h: list[float] = []  # y positions, canvas px
         self.guides_v: list[float] = []  # x positions, canvas px
         self.artboards: list[tuple[str, QRect]] = []  # named export regions
+        self.vector_selection: list[str] = []  # stable schema-v1 object IDs
+        self.vector_node_selection: dict[str, list[int]] = {}
         self.path: str | None = None
         self.undo_stack = QUndoStack()
         self.undo_stack.setUndoLimit(UNDO_LIMIT)
