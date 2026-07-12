@@ -194,6 +194,8 @@ def snapshot_document(doc):
     snapshot.guides_h = list(doc.guides_h)
     snapshot.guides_v = list(doc.guides_v)
     snapshot.artboards = [(name, QRect(rect)) for name, rect in doc.artboards]
+    snapshot.vector_selection = list(doc.vector_selection)
+    snapshot.vector_node_selection = deepcopy(doc.vector_node_selection)
     snapshot.path = doc.path
     # Force detached list/point wrappers; pixel buffers remain shared until a write.
     for source, target in zip(doc.layers, snapshot.layers, strict=True):

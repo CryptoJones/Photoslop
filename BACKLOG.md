@@ -6,9 +6,6 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] **P2:** Build vector selection, node editing, appearance, Boolean,
-  alignment, snapping, text, and construction workflows
-  ([#156](https://github.com/CryptoJones/Photoslop/issues/156))
 - [ ] **P2:** Add SVG import/export and editable artboard interchange while
   retaining OpenRaster raster fallbacks
   ([#157](https://github.com/CryptoJones/Photoslop/issues/157))
@@ -17,6 +14,10 @@ sync — check an item here when its issue closes.
   ([#158](https://github.com/CryptoJones/Photoslop/issues/158))
 
 ## Done
+
+- [x] Build vector selection, node editing, appearance, Boolean, alignment,
+  snapping, text, and construction workflows
+  ([#156](https://github.com/CryptoJones/Photoslop/issues/156)) — shipped v1.24.0
 
 - [x] Introduce a versioned native vector object model with Bézier geometry,
   appearance, transforms, hierarchy, migration, and crisp rendering

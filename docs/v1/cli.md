@@ -24,7 +24,8 @@ photoslop-cli shot.cr2 --resize 1600x1067 --auto-levels \
   flatten (effects baked). `.avif` / `.jxl` need the `photoslop[formats]`
   extra and also work as inputs ([File Formats](file-formats.md)).
 - `--export-artboards DIR` — each artboard as `<name>.png`.
-- `--info` — document JSON (size, dpi, layers, effects, artboards) to stdout.
+- `--info` — document JSON (size, dpi, layers, effects, vector IDs/types,
+  artboards) to stdout.
 - `--version`.
 
 ## Exit codes
@@ -73,6 +74,7 @@ message on stderr.
 | `--text` `"X,Y,SIZE[,R,G,B]:TEXT"` | rasterise text onto a new layer (default colour black) |
 | `--text-rich` `"X,Y:<html>"` | rasterise **rich HTML** text onto a new layer — per-letter colour, font-family, bold/italic (the headless mirror of the GUI Text tool's styled editor) |
 | `--shape` `KIND,X,Y,W,H,R,G,B` | rect/ellipse/line onto a schema-v1 native vector layer (direct crisp rendering, ORA fallback, re-renders on --resize) |
+| `--vector-op` `JSON` | native-vector `select`, `transform`, `appearance`, `group`, `align`, `distribute`, `node`, or `boolean` operation; object IDs come from `--info` |
 | `--blend-mode` `NAME` | set the target layer's blend mode |
 | `--layer-opacity` `PCT` | set the target layer's opacity |
 | `--content-aware-fill` | diffusion-fill the selection |

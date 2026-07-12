@@ -71,6 +71,8 @@ See [Selections](selections.md) for refine, feather, and content-aware fill.
 | Tool | Key | Behaviour |
 |---|---|---|
 | Move | `V` | Move layers (or whole groups); snaps to guides/grid. |
+| Vector Selection | `A` | Select native vector objects; Shift-click builds a multi-selection and drag applies one undoable transform. |
+| Direct Selection | `Shift+A` | Select an anchor in the current native vector selection for node editing. |
 | Crop | `C` | Drag, `Enter` commits (offset-shift crop — instant, no pixel copies). |
 | Free Transform | `Ctrl+T` | Scale/rotate/translate; `Ctrl`-drag corners for distort/perspective. See [Transforms](transforms.md). |
 | Liquify | `Y` | Push pixels under the brush (bilinear warp). |

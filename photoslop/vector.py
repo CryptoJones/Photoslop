@@ -17,7 +17,16 @@ import copy
 import uuid
 
 from PySide6.QtCore import QPointF, QRect, QRectF, Qt
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QTransform
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QRadialGradient,
+    QTransform,
+)
 
 from photoslop.layer import Layer
 
@@ -150,11 +159,11 @@ def draw_native(painter: QPainter, data: dict) -> None:
     painter.save()
     painter.setOpacity(painter.opacity() * data.get("opacity", 1.0))
     fill = appearance.get("fill")
-    painter.setBrush(QColor(*fill["color"]) if fill and fill.get("type") == "solid"
-                     else Qt.BrushStyle.NoBrush)
+    painter.setBrush(_paint_brush(fill, path.boundingRect()))
     stroke = appearance.get("stroke")
-    if stroke and stroke.get("type") == "solid":
-        pen = QPen(QColor(*stroke["color"]), float(appearance.get("stroke_width", 1)))
+    if stroke:
+        pen = QPen(_paint_brush(stroke, path.boundingRect()),
+                   float(appearance.get("stroke_width", 1)))
         pen.setCapStyle({"flat": Qt.PenCapStyle.FlatCap,
                          "square": Qt.PenCapStyle.SquareCap}.get(
                              appearance.get("cap"), Qt.PenCapStyle.RoundCap))
@@ -170,8 +179,31 @@ def draw_native(painter: QPainter, data: dict) -> None:
         painter.setPen(Qt.PenStyle.NoPen)
     path.setFillRule(Qt.FillRule.OddEvenFill if appearance.get("fill_rule") == "evenodd"
                      else Qt.FillRule.WindingFill)
-    painter.drawPath(path)
+    if data.get("type") == "text" and data.get("text"):
+        painter.drawText(path.boundingRect(), int(Qt.AlignmentFlag.AlignLeft |
+                         Qt.AlignmentFlag.AlignTop), str(data["text"].get("content", "")))
+    else:
+        painter.drawPath(path)
     painter.restore()
+
+
+def _paint_brush(paint: dict | None, bounds: QRectF) -> QBrush:
+    if not paint:
+        return QBrush(Qt.BrushStyle.NoBrush)
+    if paint.get("type") == "solid":
+        return QBrush(QColor(*paint["color"]))
+    if paint.get("type") == "linear-gradient":
+        start = paint.get("start", [bounds.left(), bounds.top()])
+        end = paint.get("end", [bounds.right(), bounds.top()])
+        gradient = QLinearGradient(*start, *end)
+    elif paint.get("type") == "radial-gradient":
+        center = paint.get("center", [bounds.center().x(), bounds.center().y()])
+        gradient = QRadialGradient(*center, float(paint.get("radius", bounds.width() / 2)))
+    else:
+        return QBrush(Qt.BrushStyle.NoBrush)
+    for offset, color in paint.get("stops", []):
+        gradient.setColorAt(float(offset), QColor(*color))
+    return QBrush(gradient)
 
 
 def smooth_path(pts: list[QPointF], close: bool) -> QPainterPath:

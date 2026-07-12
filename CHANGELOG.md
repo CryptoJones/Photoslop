@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.24.0] — 2026-07-12
+
+### Added
+- **Native vector construction workflows** ([#156](https://github.com/CryptoJones/Photoslop/issues/156))
+  — Selection (`A`) and Direct Selection (`Shift+A`) tools, persistent
+  multi-object/node selection, undoable affine transforms, grouping,
+  fill/stroke editing, gradient paints, dashes/caps/joins, node conversion,
+  Boolean paths, alignment/distribution, and guide/object snapping.
+- Structured `--vector-op JSON` automation mirrored by MCP, with vector IDs and
+  types exposed by `--info`; native payloads retain editable Unicode text
+  metadata and render text objects without flattening their model.
+
 ## [1.23.0] — 2026-07-12
 
 ### Added

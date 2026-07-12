@@ -19,9 +19,19 @@ stream:
 
 Appearance independently records fill/stroke paint, winding/even-odd fill rule,
 stroke width, cap, join, miter limit, dash pattern/offset, and whether stroke
-width scales with the object. Solid paint is implemented in v1.23; gradient
-records are forward-compatible and become editable in the construction-tools
-release.
+width scales with the object. Solid, linear-gradient, and radial-gradient
+paints render natively; gradients carry editable geometry and color stops.
+
+## Editing workflows
+
+Use Vector Selection (`A`) to select and drag whole objects; Shift-click adds
+to the persistent object selection. Direct Selection (`Shift+A`) targets path
+nodes. Object and node edits retain native payloads and enter the document undo
+stack. The engine also supports add/delete/convert node operations, affine
+multi-object transforms, grouping, fill/stroke changes, Boolean union,
+difference/intersection/exclusion, align/distribute, and guide/object snapping.
+Text objects keep Unicode content and editable typography/run metadata in the
+same schema; their geometry supplies the editable text frame.
 
 ## Compatibility and migration
 

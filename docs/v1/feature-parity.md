@@ -117,6 +117,7 @@ than "missing".
 | Shape tool (rect/ellipse/line) | ✅ (parametric, re-editable) | ✅ (vector) | ✅ (vector layers, 3.2) | ✅ (raster) | — | — | — |
 | Pen / path tool | ✅ (Catmull-Rom, re-editable anchors) | ✅ (full vector) | ✅ | ❌ | — | — | — |
 | Parametric (re-editable) vectors | ✅ [Tools](tools.md) | ✅ | ✅ (3.2 vector layers) | ❌ | — | — | — |
+| Multi-object selection, Boolean, align/distribute, gradients | ✅ (GUI + CLI/MCP engine) | ✅ | ✅ | ❌ | — | — | — |
 
 ## Automation, scripting & headless
 

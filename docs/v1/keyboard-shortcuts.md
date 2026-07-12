@@ -1,7 +1,7 @@
 # Keyboard Shortcuts
 
 ## Tools
-`V` Move · `M` Marquee · `Shift+M` Ellipse Marquee · `L` Lasso ·
+`V` Move · `A` Vector Selection · `Shift+A` Direct Selection · `M` Marquee · `Shift+M` Ellipse Marquee · `L` Lasso ·
 `Shift+L` Poly Lasso (Enter/double-click closes) · `Alt+L` Magnetic ·
 `W` Wand · `Shift+W` Quick Select · `B` Brush · `Shift+B` Pencil · `E` Eraser ·
 `G` Bucket⇄Gradient (cycles) · `S` Clone · `Shift+S` Healing Brush ·
