@@ -9,7 +9,7 @@ from photoslop.preferences import PreferencesDialog
 def test_preferences_has_both_tabs(qapp):
     dlg = PreferencesDialog()
     titles = [dlg.tabs.tabText(i) for i in range(dlg.tabs.count())]
-    assert titles == ["Model Backend", "Color"]
+    assert titles == ["Model Backend", "Color", "Accessibility"]
 
 
 def test_preferences_apply_persists_model_backend(qapp):

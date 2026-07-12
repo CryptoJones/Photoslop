@@ -69,6 +69,9 @@ class CanvasView(QWidget):
 
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName("Image canvas")
+        self.setAccessibleDescription(
+            "Editable document canvas. Arrow keys operate the active keyboard-capable tool.")
 
         doc.pixelsChanged.connect(self._on_pixels)
         doc.structureChanged.connect(self._on_structure)
@@ -464,8 +467,11 @@ class EditorView(QWidget):
 
         self.hruler = Ruler(Qt.Orientation.Horizontal)
         self.vruler = Ruler(Qt.Orientation.Vertical)
+        self.hruler.setAccessibleName("Horizontal ruler")
+        self.vruler.setAccessibleName("Vertical ruler")
         self.corner = QToolButton()
         self.corner.setToolTip("Cycle ruler units")
+        self.corner.setAccessibleName("Cycle ruler units")
         self.corner.setAutoRaise(True)
         self.corner.clicked.connect(self._cycle_unit)
 

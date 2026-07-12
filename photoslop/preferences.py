@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -48,6 +49,34 @@ class ModelBackendPanel(QWidget):
         self._settings.setValue("model/http_url", self.url.text().strip())
 
 
+class AccessibilityPanel(QWidget):
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._settings = QSettings("CryptoJones", "Photoslop")
+        form = QFormLayout(self)
+        self.high_contrast = QCheckBox("Use high-contrast application palette")
+        self.high_contrast.setChecked(
+            str(self._settings.value(
+                "accessibility/high_contrast", "false")).lower() == "true")
+        self.reduced_motion = QCheckBox("Reduce selection and status animation")
+        self.reduced_motion.setChecked(
+            str(self._settings.value(
+                "accessibility/reduced_motion", "false")).lower() == "true")
+        self.scale = QComboBox()
+        for value in (100, 125, 150, 200):
+            self.scale.addItem(f"{value}%", value)
+        self.scale.setCurrentIndex(max(0, self.scale.findData(
+            int(self._settings.value("accessibility/control_scale", 100)))))
+        form.addRow(self.high_contrast)
+        form.addRow(self.reduced_motion)
+        form.addRow("Control scale", self.scale)
+
+    def apply(self) -> None:
+        self._settings.setValue("accessibility/high_contrast", self.high_contrast.isChecked())
+        self._settings.setValue("accessibility/reduced_motion", self.reduced_motion.isChecked())
+        self._settings.setValue("accessibility/control_scale", self.scale.currentData())
+
+
 class PreferencesDialog(QDialog):
     """Tabbed application preferences: Model Backend + Color. OK commits every
     panel; Cancel discards."""
@@ -59,8 +88,10 @@ class PreferencesDialog(QDialog):
         self.tabs = QTabWidget()
         self.model_panel = ModelBackendPanel(self)
         self.color_panel = ColorSettingsPanel(self)
+        self.accessibility_panel = AccessibilityPanel(self)
         self.tabs.addTab(self.model_panel, "Model Backend")
         self.tabs.addTab(self.color_panel, "Color")
+        self.tabs.addTab(self.accessibility_panel, "Accessibility")
         layout.addWidget(self.tabs)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
@@ -73,4 +104,5 @@ class PreferencesDialog(QDialog):
     def _apply(self) -> None:
         self.model_panel.apply()
         self.color_panel.apply()
+        self.accessibility_panel.apply()
         self.accept()

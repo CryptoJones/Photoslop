@@ -6,9 +6,6 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] **P1:** Implement cross-platform accessibility semantics and keyboard
-  workflows for standard and custom Qt widgets
-  ([#151](https://github.com/CryptoJones/Photoslop/issues/151))
 - [ ] **P1:** Add a cancellable, memory-bounded background task service for
   filters, I/O, RAW, exports, subprocesses, and model requests
   ([#152](https://github.com/CryptoJones/Photoslop/issues/152))
@@ -33,6 +30,9 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] Implement cross-platform accessibility semantics and keyboard workflows
+  for standard and custom Qt widgets
+  ([#151](https://github.com/CryptoJones/Photoslop/issues/151)) — shipped v1.19.0
 - [x] Streamline workspace actions and contextual tool options through an
   action registry, command palette, Properties panel, and responsive controls
   ([#150](https://github.com/CryptoJones/Photoslop/issues/150)) — shipped v1.18.0
