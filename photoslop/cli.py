@@ -884,6 +884,19 @@ def _op_add_artboard(ctx: Context, value: str) -> None:
     ctx.doc.artboards.append((name, QRect(x, y, w, h)))
 
 
+def _op_artboard_op(ctx: Context, value: str) -> None:
+    import json
+
+    from photoslop import artboards
+
+    try:
+        spec = json.loads(value)
+        operation = spec.pop("op")
+        artboards.edit(ctx.doc, operation, **spec)
+    except (IndexError, KeyError, TypeError, ValueError) as exc:
+        raise _ValueError(f"--artboard-op: {exc}") from exc
+
+
 # name -> (metavar, help, apply_fn). Drives argparse AND the test catalog.
 OPS: dict = {
     "resize": ("WxH", "rescale the whole image", _op_resize),
@@ -980,6 +993,8 @@ OPS: dict = {
                       _op_restore_smart),
     "add-artboard": ("NAME,X,Y,W,H", "register a named export region",
                      _op_add_artboard),
+    "artboard-op": ("JSON", "add/update/delete/reorder named artboards",
+                    _op_artboard_op),
     "model-url": ("URL", "backend for model ops (generic HTTP adapter)",
                   _op_model_url),
     "select-subject": (None, "ask the model backend for a subject selection",
@@ -1041,6 +1056,10 @@ def _load_document(path: str):
         raise _ValueError(f"input not found: {path}")
     if path.lower().endswith(".ora"):
         return load_ora(path)
+    if path.lower().endswith(".svg"):
+        from photoslop.io_svg import load_svg
+
+        return load_svg(path)
     if is_raw_path(path):
         return Document.from_image(load_raw(path),
                                    os.path.basename(path), 72.0)
@@ -1104,6 +1123,11 @@ def _write_output(doc, path: str, proof=None, cmyk_icc: str | None = None,
         return
     if lower.endswith(".ora"):
         save_ora(doc, path)
+        return
+    if lower.endswith(".svg"):
+        from photoslop.io_svg import save_svg
+
+        save_svg(doc, path)
         return
     flat = doc.flatten()
     if proof is not None:

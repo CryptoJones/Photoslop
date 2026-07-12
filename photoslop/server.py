@@ -94,7 +94,8 @@ def edit_image(
 
 def document_info(input: str) -> dict:
     """Inspect an image without editing it: size, dpi, and per-layer metadata
-    (name, visibility, opacity, blend mode, offset, effects, smart-object) plus
+    (name, visibility, opacity, blend mode, offset, effects, smart-object,
+    native vector ID/type) plus
     any artboards. Read-only — nothing is written."""
     return cli.apply_pipeline(input_path=input, info=True)["info"]
 

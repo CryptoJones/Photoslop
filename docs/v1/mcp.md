@@ -42,7 +42,7 @@ photoslop-mcp`, if it is not on the client's `PATH`.)
 |---|---|
 | `list_operations` | The full operation catalog — `{count, operations:[{name, args, help}]}`. Same table as `photoslop-cli --help`; call it first to discover ops. |
 | `edit_image` | Load an image (or start blank), apply an ordered pipeline, write output and/or return document info. |
-| `document_info` | Read-only inspect: size, dpi, per-layer metadata, artboards. Nothing is written. |
+| `document_info` | Read-only inspect: size, dpi, per-layer/vector metadata, ordered artboards. Nothing is written. |
 
 ### `edit_image`
 

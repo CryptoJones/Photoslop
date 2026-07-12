@@ -14,13 +14,15 @@ photoslop-cli shot.cr2 --resize 1600x1067 --auto-levels \
 ```
 
 ## Input & output
-- **input** (positional): PNG/JPG/BMP/WebP/GIF/TIFF, `.ora`, or camera raw
+- **input** (positional): PNG/JPG/BMP/WebP/GIF/TIFF, `.ora`, editable-subset
+  `.svg`, or camera raw
   (with the `photoslop[raw]` extra).
 - `--new WxH|PRESET` — start from a blank white document instead of an input
   file: a pixel size (`800x600`) or a paper preset (`A5`, `A4`, `A3`,
   `Letter`, `Legal`) rendered at `--dpi N` (default 72). `--new A4 --dpi 300`
   gives 2480×3508.
-- `--output PATH` — `.ora` keeps layers (effects and all); raster extensions
+- `--output PATH` — `.ora` keeps layers (effects and all); `.svg` writes native
+  vector objects and artboards; raster extensions
   flatten (effects baked). `.avif` / `.jxl` need the `photoslop[formats]`
   extra and also work as inputs ([File Formats](file-formats.md)).
 - `--export-artboards DIR` — each artboard as `<name>.png`.
@@ -84,6 +86,7 @@ message on stderr.
 | `--convert-smart` | snapshot target layer(s) as smart objects |
 | `--restore-smart` | restore smart-object pristine pixels |
 | `--add-artboard` `NAME,X,Y,W,H` | register a named export region |
+| `--artboard-op` `JSON` | add/update/delete/reorder/clear named artboards through the shared undoable engine |
 | `--model-url` `URL` | backend for model ops (generic HTTP adapter) |
 | `--select-subject` | ask the model backend for a subject selection |
 | `--generative-fill` `PROMPT` | model-paint the selection from a prompt |

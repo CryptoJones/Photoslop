@@ -13,6 +13,7 @@ from photoslop import color, io_formats, npimage
 from photoslop.document import Document
 from photoslop.io_ora import load_ora, save_ora
 from photoslop.io_raw import develop_raw, is_raw_path, load_raw
+from photoslop.io_svg import load_svg, save_svg
 
 
 class FileService:
@@ -20,6 +21,8 @@ class FileService:
     def load(path: str, raw_params: dict | None = None) -> Document:
         if path.lower().endswith(".ora"):
             return load_ora(path)
+        if path.lower().endswith(".svg"):
+            return load_svg(path)
         if is_raw_path(path):
             image = (develop_raw(path, **raw_params) if raw_params is not None
                      else load_raw(path))
@@ -38,7 +41,7 @@ class FileService:
 
     @staticmethod
     def save(document: Document, path: str) -> str:
-        save_ora(document, path)
+        (save_svg if path.lower().endswith(".svg") else save_ora)(document, path)
         return path
 
 

@@ -65,6 +65,7 @@ CASES = {
     "convert-smart": (None, None),
     "restore-smart": (None, None),
     "add-artboard": ("Cover,0,0,30,20", "Cover,0,0"),
+    "artboard-op": ('{"op":"add","name":"Page","rect":[0,0,20,10]}', "bad"),
     "model-url": ("http://localhost:1/x", " "),
     # network ops get their effect coverage in test_cli_combinations via the
     # fake HTTP server; here we cover their no-backend error paths
