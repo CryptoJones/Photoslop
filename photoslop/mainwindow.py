@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
 )
 
 from photoslop import __version__, io_formats, units
+from photoslop.actionregistry import ActionRegistry
 from photoslop.canvas import EditorView
 from photoslop.commands import (
     FlipImageCommand,
@@ -56,6 +57,7 @@ from photoslop.io_ora import load_ora, save_ora
 from photoslop.io_raw import is_raw_path, load_raw
 from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
 from photoslop.opendialog import OpenImageDialog
+from photoslop.propertiespanel import PropertiesPanel
 from photoslop.svgicons import svg_icon
 from photoslop.toolregistry import TOOL_GROUPS, TOOL_SPEC_BY_ID, TOOL_SPECS
 from photoslop.tools import (
@@ -101,6 +103,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"Photoslop {__version__}")
         self.settings = QSettings("CryptoJones", "Photoslop")
+        self.action_registry = ActionRegistry(self)
         unit = str(self.settings.value("units", "px"))
         self.unit = unit if unit in units.UNITS else "px"
         self.show_grid = self.settings.value("grid", "false") == "true"
@@ -173,6 +176,13 @@ class MainWindow(QMainWindow):
         self._layers_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._layers_dock)
 
+        self.properties_panel = PropertiesPanel()
+        self._properties_dock = QDockWidget("Properties")
+        self._properties_dock.setObjectName("properties-dock")
+        self._properties_dock.setWidget(self.properties_panel)
+        self._properties_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._properties_dock)
+
         self.adjust_panel = AdjustPanel()
         self._adjust_dock = QDockWidget("Adjust")
         self._adjust_dock.setObjectName("adjust-dock")
@@ -180,6 +190,7 @@ class MainWindow(QMainWindow):
         self._adjust_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._adjust_dock)
         self.tabifyDockWidget(self._layers_dock, self._adjust_dock)
+        self.tabifyDockWidget(self._layers_dock, self._properties_dock)
 
         self.history_view = QUndoView(self.undo_group)
         self.history_view.setEmptyLabel("Document opened")
@@ -209,6 +220,20 @@ class MainWindow(QMainWindow):
         geometry = self.settings.value("workspace/geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
+        QTimer.singleShot(0, self._validate_workspace_geometry)
+
+    def _validate_workspace_geometry(self) -> None:
+        """Recover saved workspaces that no longer intersect a current screen."""
+        frame = self.frameGeometry()
+        if any(screen.availableGeometry().intersects(frame)
+               for screen in QGuiApplication.screens()):
+            return
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+        available = screen.availableGeometry()
+        self.resize(min(1280, available.width()), min(800, available.height()))
+        self.move(available.center() - self.rect().center())
 
     # ------------------------------------------------------------------ tools
 
@@ -329,6 +354,16 @@ class MainWindow(QMainWindow):
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
         self._option_actions: dict[str, list] = {}
 
+        self._tool_name_label = QLabel("Brush")
+        self._tool_name_label.setObjectName("active-tool-name")
+        self._tool_name_label.setAccessibleName("Active tool")
+        bar.addWidget(self._tool_name_label)
+        reset_options = QAction("Reset Tool Options", self)
+        reset_options.setToolTip("Reset the active tool's options to defaults")
+        reset_options.triggered.connect(self._reset_tool_options)
+        bar.addAction(reset_options)
+        bar.addSeparator()
+
         # Zoom In / Zoom Out pinned to the front of the top bar: always visible,
         # never hidden by _sync_option_visibility (not in _all_option_actions).
         from photoslop.icons import zoom_in_icon, zoom_out_icon
@@ -359,6 +394,7 @@ class MainWindow(QMainWindow):
         size.setValue(self.options.size)
         size.setSuffix(" px")
         size.setToolTip("Brush size")
+        size.setAccessibleName("Size in pixels")
         size.valueChanged.connect(lambda v: setattr(self.options, "size", v))
         size_act = bar.addWidget(size)
         self._size_spin = size
@@ -368,6 +404,7 @@ class MainWindow(QMainWindow):
         hardness.setValue(self.options.hardness)
         hardness.setSuffix("% hard")
         hardness.setToolTip("Brush hardness")
+        hardness.setAccessibleName("Hardness percent")
         hardness.valueChanged.connect(lambda v: setattr(self.options, "hardness", v))
         hard_act = bar.addWidget(hardness)
         self._hardness_spin = hardness
@@ -377,6 +414,7 @@ class MainWindow(QMainWindow):
         opacity.setValue(self.options.opacity)
         opacity.setSuffix("% opacity")
         opacity.setToolTip("Paint opacity")
+        opacity.setAccessibleName("Opacity percent")
         opacity.valueChanged.connect(lambda v: setattr(self.options, "opacity", v))
         opacity_act = bar.addWidget(opacity)
 
@@ -389,12 +427,14 @@ class MainWindow(QMainWindow):
         tolerance.setValue(self.options.tolerance)
         tolerance.setPrefix("tol ")
         tolerance.setToolTip("Fill tolerance")
+        tolerance.setAccessibleName("Tolerance")
         tolerance.valueChanged.connect(lambda v: setattr(self.options, "tolerance", v))
         tol_act = bar.addWidget(tolerance)
 
         shape = QComboBox()
         shape.addItems(["linear", "radial"])
         shape.setToolTip("Gradient shape")
+        shape.setAccessibleName("Gradient shape")
         shape.currentTextChanged.connect(
             lambda v: setattr(self.options, "gradient_shape", v))
         shape_act = bar.addWidget(shape)
@@ -404,6 +444,7 @@ class MainWindow(QMainWindow):
         flow.setValue(self.options.flow)
         flow.setSuffix("% flow")
         flow.setToolTip("Paint per stamp; opacity caps the whole stroke")
+        flow.setAccessibleName("Flow percent")
         flow.valueChanged.connect(lambda v: setattr(self.options, "flow", v))
         flow_act = bar.addWidget(flow)
 
@@ -412,6 +453,7 @@ class MainWindow(QMainWindow):
         scatter.setValue(self.options.scatter)
         scatter.setSuffix("% scatter")
         scatter.setToolTip("Random stamp offset as % of brush size")
+        scatter.setAccessibleName("Scatter percent")
         scatter.valueChanged.connect(lambda v: setattr(self.options, "scatter", v))
         scatter_act = bar.addWidget(scatter)
 
@@ -420,6 +462,7 @@ class MainWindow(QMainWindow):
         spacing.setValue(self.options.spacing)
         spacing.setSuffix("% gap")
         spacing.setToolTip("Stamp spacing as % of brush size (soft strokes)")
+        spacing.setAccessibleName("Spacing percent")
         spacing.valueChanged.connect(lambda v: setattr(self.options, "spacing", v))
         spacing_act = bar.addWidget(spacing)
 
@@ -478,6 +521,12 @@ class MainWindow(QMainWindow):
             tol_act, shape_act, contig_act, fill_source_act, flow_act,
             spacing_act, scatter_act,
         ]
+        self._option_widgets = {
+            "size": size, "hardness": hardness, "opacity": opacity,
+            "tolerance": tolerance, "gradient_shape": shape, "flow": flow,
+            "scatter": scatter, "spacing": spacing, "fill_source": fill_source,
+            "contiguous": contiguous, "eraser": eraser,
+        }
 
         # PS-style bracket shortcuts; window-level, invisible in menus
         for key, slot in (
@@ -505,10 +554,25 @@ class MainWindow(QMainWindow):
         hardness = self.options.hardness + direction * 25
         self._hardness_spin.setValue(max(0, min(100, hardness)))
 
+    def _reset_tool_options(self) -> None:
+        defaults = ToolOptions()
+        for name, widget in self._option_widgets.items():
+            value = getattr(defaults, name)
+            if isinstance(widget, QSpinBox):
+                widget.setValue(value)
+            elif isinstance(widget, QComboBox):
+                widget.setCurrentText(value)
+            else:
+                widget.setChecked(value)
+        self.statusBar().showMessage(f"{self._tool_name_label.text()} options reset", 3000)
+
     def _sync_option_visibility(self) -> None:
+        spec = TOOL_SPEC_BY_ID.get(self._active_tool_name)
+        self._tool_name_label.setText(spec.label if spec else self._active_tool_name.title())
         visible = set(self._option_actions[self._active_tool_name])
         for act in self._all_option_actions:
             act.setVisible(act in visible)
+        self.action_registry.update()
 
     def _pick_foreground(self) -> None:
         color = QColorDialog.getColor(self.options.foreground, self, "Foreground colour")
@@ -562,6 +626,9 @@ class MainWindow(QMainWindow):
                                    role=QAction.MenuRole.QuitRole))
 
         m_edit = menu.addMenu("&Edit")
+        m_edit.addAction(self._act("Command &Palette…", "Ctrl+Shift+P",
+                                   self.action_command_palette,
+                                   prerequisite="always"))
         undo = self.undo_group.createUndoAction(self, "&Undo ")
         undo.setShortcut(QKeySequence.StandardKey.Undo)
         redo = self.undo_group.createRedoAction(self, "&Redo ")
@@ -817,7 +884,8 @@ class MainWindow(QMainWindow):
                                    role=QAction.MenuRole.AboutRole))
 
     def _act(self, text: str, shortcut: str | None, slot,
-             role: QAction.MenuRole | None = None) -> QAction:
+             role: QAction.MenuRole | None = None,
+             prerequisite: str | None = None) -> QAction:
         act = QAction(text, self)
         if shortcut:
             act.setShortcut(QKeySequence(shortcut))
@@ -827,7 +895,11 @@ class MainWindow(QMainWindow):
         if role is not None:
             act.setMenuRole(role)
         act.triggered.connect(slot)
+        self.action_registry.register(act, text, shortcut, slot, prerequisite)
         return act
+
+    def action_command_palette(self) -> None:
+        self.action_registry.palette(self).exec()
 
     # ------------------------------------------------------------------ status
 
@@ -882,6 +954,9 @@ class MainWindow(QMainWindow):
         self.undo_group.addStack(doc.undo_stack)
         doc.undo_stack.cleanChanged.connect(lambda _clean, d=doc: self._refresh_tab(d))
         self.tabs.setCurrentIndex(index)
+        doc.selectionChanged.connect(self.action_registry.update)
+        doc.structureChanged.connect(self.action_registry.update)
+        self.action_registry.update()
 
     def _editor_for(self, doc: Document) -> EditorView | None:
         for i in range(self.tabs.count()):
@@ -905,15 +980,19 @@ class MainWindow(QMainWindow):
         if editor is None:
             self.layer_panel.set_document(None)
             self.adjust_panel.set_document(None)
+            self.properties_panel.set_document(None)
             self.setWindowTitle(f"Photoslop {__version__}")
+            self.action_registry.update()
             return
         doc = editor.doc
         self.undo_group.setActiveStack(doc.undo_stack)
         self.layer_panel.set_document(doc)
         self.adjust_panel.set_document(doc)
+        self.properties_panel.set_document(doc)
         self._refresh_tab(doc)
         self.show_zoom(editor.canvas.zoom)
         editor.sync_rulers()
+        self.action_registry.update()
 
     def _on_tab_close(self, index: int) -> None:
         editor = self.tabs.widget(index)

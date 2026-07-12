@@ -6,9 +6,6 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] **P1:** Streamline workspace actions and contextual tool options through an
-  action registry, command palette, Properties panel, and responsive controls
-  ([#150](https://github.com/CryptoJones/Photoslop/issues/150))
 - [ ] **P1:** Implement cross-platform accessibility semantics and keyboard
   workflows for standard and custom Qt widgets
   ([#151](https://github.com/CryptoJones/Photoslop/issues/151))
@@ -36,6 +33,9 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] Streamline workspace actions and contextual tool options through an
+  action registry, command palette, Properties panel, and responsive controls
+  ([#150](https://github.com/CryptoJones/Photoslop/issues/150)) — shipped v1.18.0
 - [x] Replace toolbox iconography and group tools into keyboard-accessible
   flyouts with theme/HiDPI states and licensed SVG assets
   ([#149](https://github.com/CryptoJones/Photoslop/issues/149)) — shipped v1.17.0

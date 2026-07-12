@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.18.0] — 2026-07-12
+
+### Added
+- **Command registry and palette** ([#150](https://github.com/CryptoJones/Photoslop/issues/150))
+  — menu commands now carry stable IDs, labels, shortcuts, help, and document,
+  selection, clipboard, or idle prerequisites. `Ctrl+Shift+P` searches the same
+  metadata and explains unavailable commands instead of letting them silently
+  fail.
+- **Contextual Properties dock** — exposes the active raster/vector layer's
+  name, visibility, opacity, and blend mode with explicit accessible labels.
+- **Responsive tool options** — the active tool is named, numeric controls have
+  explicit units/accessibility names, Reset Tool Options restores defaults,
+  native toolbar overflow handles narrow widths, and off-screen saved workspace
+  geometry is recovered onto a current display.
+
 ## [1.17.0] — 2026-07-12
 
 ### Added
