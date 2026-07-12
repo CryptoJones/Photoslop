@@ -6,12 +6,6 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] **P0:** Fix text-size keyboard entry up to 999 pt — retain numeric-field
-  focus during multi-digit edits, validate 6–999, and add regression coverage
-  ([#147](https://github.com/CryptoJones/Photoslop/issues/147))
-- [ ] **P0/P1:** Add contextual tool cursors and pointer states — brush-radius,
-  tool glyph, modifier, handle, target-validity, and temporary-pan cursors
-  ([#148](https://github.com/CryptoJones/Photoslop/issues/148))
 - [ ] **P1:** Replace toolbox iconography and group tools into keyboard-accessible
   flyouts with theme/HiDPI states and licensed SVG assets
   ([#149](https://github.com/CryptoJones/Photoslop/issues/149))
@@ -45,6 +39,12 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] Add contextual tool cursors and pointer states — brush-radius, tool glyph,
+  modifier, handle, target-validity, and temporary-pan cursors
+  ([#148](https://github.com/CryptoJones/Photoslop/issues/148)) — shipped v1.16.0
+- [x] Fix text-size keyboard entry up to 999 pt — retain numeric-field focus
+  during multi-digit edits, validate 6–999, and add regression coverage
+  ([#147](https://github.com/CryptoJones/Photoslop/issues/147)) — shipped v1.15.1
 - [x] Open dialog: extend the "Open images" window to fill the internal workable
   image area (central canvas region) instead of floating as a smaller inset box
   ([#144](https://github.com/CryptoJones/Photoslop/issues/144)) — shipped v1.15.0

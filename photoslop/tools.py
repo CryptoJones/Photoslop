@@ -26,6 +26,7 @@ from PySide6.QtGui import (
 
 from photoslop import npimage
 from photoslop.commands import LayerRegionCommand, SetLayerOffsetCommand, TileRecorder
+from photoslop.cursors import CursorContext, CursorIntent, default_intent
 from photoslop.layer import blank_image
 
 
@@ -59,7 +60,6 @@ class ToolOptions:
 
 class Tool:
     name = "tool"
-    cursor = Qt.CursorShape.CrossCursor
 
     def __init__(self, options: ToolOptions) -> None:
         self.opts = options
@@ -77,6 +77,17 @@ class Tool:
 
     def cancel(self, doc=None) -> None:
         """Escape pressed — abandon any in-progress gesture."""
+
+    def cursor_intent(
+        self,
+        doc,
+        canvas,
+        pos: QPointF | None,
+        modifiers: Qt.KeyboardModifier = Qt.KeyboardModifier.NoModifier,
+        dragging: bool = False,
+    ) -> CursorIntent:
+        context = CursorContext(pos, modifiers, dragging, canvas.zoom)
+        return default_intent(self.name, context, self.opts.size)
 
     def overlay(self, doc, painter: QPainter, canvas) -> None:
         """Draw tool feedback. Painter is in widget coords (unscaled)."""
@@ -307,7 +318,6 @@ class CropTool(Tool):
     area and shows a rule-of-thirds grid."""
 
     name = "crop"
-    cursor = Qt.CursorShape.CrossCursor
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
@@ -404,7 +414,6 @@ class PatchTool(Tool):
     tone-matched to its surroundings."""
 
     name = "patch"
-    cursor = Qt.CursorShape.OpenHandCursor
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
@@ -472,7 +481,6 @@ class LiquifyTool(Tool):
     falloff — the classic forward-warp brush."""
 
     name = "liquify"
-    cursor = Qt.CursorShape.SizeAllCursor
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
@@ -533,7 +541,6 @@ class PerspectiveTool(Tool):
     warps by that homography. Enter commits, Escape cancels."""
 
     name = "perspective"
-    cursor = Qt.CursorShape.CrossCursor
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
@@ -685,7 +692,6 @@ class PuppetTool(Tool):
     bends around the others. Enter commits, Escape cancels."""
 
     name = "puppet"
-    cursor = Qt.CursorShape.PointingHandCursor
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
@@ -781,7 +787,6 @@ class PenTool(Tool):
     Escape cancels."""
 
     name = "pen"
-    cursor = Qt.CursorShape.CrossCursor
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
@@ -913,7 +918,6 @@ class ShapeTool(Tool):
     cycles the shape. The layer is bounded to the shape, not the canvas."""
 
     name = "shape"
-    cursor = Qt.CursorShape.CrossCursor
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
@@ -1043,7 +1047,6 @@ class TextTool(Tool):
     and replaces that layer's content instead of adding another."""
 
     name = "text"
-    cursor = Qt.CursorShape.IBeamCursor
 
     def press(self, doc, canvas, pos, ev):
         from photoslop.commands import EditTextLayerCommand, InsertLayerCommand
@@ -1082,7 +1085,6 @@ class SpotHealTool(Tool):
     fills by diffusion from its boundary and blends in."""
 
     name = "spot-heal"
-    cursor = Qt.CursorShape.CrossCursor
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
@@ -1271,6 +1273,15 @@ class CloneStampTool(BrushTool):
             self._clone_offset = pos - self._source
         super().press(doc, canvas, pos, ev)
 
+    def cursor_intent(self, doc, canvas, pos, modifiers=Qt.KeyboardModifier.NoModifier,
+                      dragging=False):
+        intent = super().cursor_intent(doc, canvas, pos, modifiers, dragging)
+        if modifiers & Qt.KeyboardModifier.AltModifier:
+            return CursorIntent(intent.kind, "S", intent.diameter)
+        if self._source is None:
+            return CursorIntent(intent.kind, "!", intent.diameter, False)
+        return intent
+
     def _stroke_name(self) -> str:
         return "Clone Stamp"
 
@@ -1433,7 +1444,6 @@ class EyedropperTool(Tool):
 
 class HandTool(Tool):
     name = "hand"
-    cursor = Qt.CursorShape.OpenHandCursor
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
@@ -1442,7 +1452,6 @@ class HandTool(Tool):
     def press(self, doc, canvas, pos, ev):
         if ev is not None:
             self._last = ev.globalPosition()
-            canvas.setCursor(Qt.CursorShape.ClosedHandCursor)
 
     def move(self, doc, canvas, pos, ev):
         if self._last is None or ev is None:
@@ -1453,7 +1462,6 @@ class HandTool(Tool):
 
     def release(self, doc, canvas, pos, ev):
         self._last = None
-        canvas.setCursor(self.cursor)
 
 
 class ZoomTool(Tool):
@@ -1878,7 +1886,6 @@ class MagneticLassoTool(PolyLassoTool):
 
 class MoveTool(Tool):
     name = "move"
-    cursor = Qt.CursorShape.SizeAllCursor
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)

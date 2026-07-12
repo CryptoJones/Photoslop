@@ -308,7 +308,7 @@ class MainWindow(QMainWindow):
         self._sync_option_visibility()
         for i in range(self.tabs.count()):
             editor = self.tabs.widget(i)
-            editor.canvas.setCursor(self.active_tool.cursor)
+            editor.canvas.refresh_cursor()
             editor.canvas.update()
 
     def _build_options_bar(self) -> None:
@@ -866,7 +866,7 @@ class MainWindow(QMainWindow):
 
     def add_document(self, doc: Document) -> None:
         editor = EditorView(doc, self)
-        editor.canvas.setCursor(self.active_tool.cursor)
+        editor.canvas.refresh_cursor()
         index = self.tabs.addTab(editor, doc.name)
         self.undo_group.addStack(doc.undo_stack)
         doc.undo_stack.cleanChanged.connect(lambda _clean, d=doc: self._refresh_tab(d))

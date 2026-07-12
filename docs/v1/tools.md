@@ -3,6 +3,20 @@
 All 31 tools, their keys, and what they do. Cycling variants share a key with
 `Shift` (Photoshop convention).
 
+## Cursor feedback
+
+The canvas pointer follows the active tool and its current context. Paint tools
+show the effective brush diameter at the current zoom (with the full-size canvas
+outline retained for very large brushes); selection modifiers display add,
+subtract, or intersect badges; `Alt` switches Zoom to zoom-out and marks
+Clone/Healing source sampling. Transform edges and corners use directional
+resize pointers, while move, rotate, warp-node, and invalid targets are distinct.
+Custom cursors use a black-and-white high-contrast outline and HiDPI pixmaps.
+
+Holding `Space` always overrides the current pointer with Open Hand, changes to
+Closed Hand while dragging, and restores the exact prior tool/modifier state on
+release.
+
 ## Paint
 | Tool | Key | Behaviour |
 |---|---|---|

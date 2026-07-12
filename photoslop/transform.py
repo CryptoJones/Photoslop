@@ -10,6 +10,7 @@ import math
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPolygonF, QTransform, QUndoCommand
 
+from photoslop.cursors import CursorIntent
 from photoslop.tools import Tool, ToolOptions
 
 
@@ -237,7 +238,6 @@ class TransformTool(Tool):
     scale (Shift = uniform), outside = rotate (Shift snaps to 15°)."""
 
     name = "transform"
-    cursor = Qt.CursorShape.SizeAllCursor
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
@@ -290,6 +290,29 @@ class TransformTool(Tool):
         if abs(local.x()) <= w / 2.0 and abs(local.y()) <= h / 2.0:
             return "move"
         return "rotate"
+
+    def cursor_intent(self, doc, canvas, pos, modifiers=Qt.KeyboardModifier.NoModifier,
+                      dragging=False):
+        if self.session is None or pos is None:
+            return CursorIntent("forbidden", valid=False)
+        if self.session.warp_grid is not None:
+            tol = 10.0 / max(canvas.zoom, 0.01)
+            if any((pt.x() - pos.x()) ** 2 + (pt.y() - pos.y()) ** 2 <= tol * tol
+                   for pt in self.session.warp_grid):
+                return CursorIntent("node")
+            return CursorIntent("forbidden", valid=False)
+        hit = self._hit(canvas, pos)
+        if hit == "move":
+            return CursorIntent("move")
+        if hit == "rotate":
+            return CursorIntent("rotate")
+        if hit in {"l", "r"}:
+            return CursorIntent("resize-h")
+        if hit in {"t", "b"}:
+            return CursorIntent("resize-v")
+        if hit in {"tl", "br"}:
+            return CursorIntent("resize-fdiag")
+        return CursorIntent("resize-bdiag")
 
     def press(self, doc, canvas, pos, ev):
         if self.session is None:
