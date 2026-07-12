@@ -6,7 +6,42 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-_(none)_
+- [ ] **P0:** Fix text-size keyboard entry up to 999 pt — retain numeric-field
+  focus during multi-digit edits, validate 6–999, and add regression coverage
+  ([#147](https://github.com/CryptoJones/Photoslop/issues/147))
+- [ ] **P0/P1:** Add contextual tool cursors and pointer states — brush-radius,
+  tool glyph, modifier, handle, target-validity, and temporary-pan cursors
+  ([#148](https://github.com/CryptoJones/Photoslop/issues/148))
+- [ ] **P1:** Replace toolbox iconography and group tools into keyboard-accessible
+  flyouts with theme/HiDPI states and licensed SVG assets
+  ([#149](https://github.com/CryptoJones/Photoslop/issues/149))
+- [ ] **P1:** Streamline workspace actions and contextual tool options through an
+  action registry, command palette, Properties panel, and responsive controls
+  ([#150](https://github.com/CryptoJones/Photoslop/issues/150))
+- [ ] **P1:** Implement cross-platform accessibility semantics and keyboard
+  workflows for standard and custom Qt widgets
+  ([#151](https://github.com/CryptoJones/Photoslop/issues/151))
+- [ ] **P1:** Add a cancellable, memory-bounded background task service for
+  filters, I/O, RAW, exports, subprocesses, and model requests
+  ([#152](https://github.com/CryptoJones/Photoslop/issues/152))
+- [ ] **P1:** Reduce canvas repaint and preview overhead with dirty overlays,
+  generation-aware thumbnails, proxy previews, and bounded caches
+  ([#153](https://github.com/CryptoJones/Photoslop/issues/153))
+- [ ] **P1:** Split UI responsibilities into action, tool, workspace, and
+  service registries while preserving GUI/CLI/MCP engine parity
+  ([#154](https://github.com/CryptoJones/Photoslop/issues/154))
+- [ ] **P2:** Introduce a versioned native vector object model with Bézier
+  geometry, appearance, transforms, hierarchy, migration, and crisp rendering
+  ([#155](https://github.com/CryptoJones/Photoslop/issues/155))
+- [ ] **P2:** Build vector selection, node editing, appearance, Boolean,
+  alignment, snapping, text, and construction workflows
+  ([#156](https://github.com/CryptoJones/Photoslop/issues/156))
+- [ ] **P2:** Add SVG import/export and editable artboard interchange while
+  retaining OpenRaster raster fallbacks
+  ([#157](https://github.com/CryptoJones/Photoslop/issues/157))
+- [ ] **P1/P2:** Add accessibility, performance, cursor, UI, and vector workflow
+  verification plus honest feature-parity documentation
+  ([#158](https://github.com/CryptoJones/Photoslop/issues/158))
 
 ## Done
 

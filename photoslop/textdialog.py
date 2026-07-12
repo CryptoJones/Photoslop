@@ -145,7 +145,7 @@ class TextDialog(QDialog):
 
         self.font_box = QFontComboBox()
         self.size = QSpinBox()
-        self.size.setRange(6, 400)
+        self.size.setRange(6, 999)
         self.size.setValue(32)
         self.size.setSuffix(" pt")
 
@@ -227,13 +227,19 @@ class TextDialog(QDialog):
         self.edit.setFocus()
 
     # -- formatting helpers ------------------------------------------------
-    def _merge(self, fmt: QTextCharFormat) -> None:
+    def _merge(self, fmt: QTextCharFormat, return_focus: bool = False) -> None:
         """Apply `fmt` to the selection, or to subsequent typing if there is
-        no selection (mergeCurrentCharFormat handles both cases)."""
+        no selection (mergeCurrentCharFormat handles both cases).
+
+        Numeric/font controls must keep focus while the user types a value.
+        Toolbar buttons and the colour picker can explicitly return it to the
+        editor once their one-shot action is complete.
+        """
         if self._syncing:
             return
         self.edit.mergeCurrentCharFormat(fmt)
-        self.edit.setFocus()
+        if return_focus:
+            self.edit.setFocus()
 
     def _on_font(self, font: QFont) -> None:
         fmt = QTextCharFormat()
@@ -248,12 +254,12 @@ class TextDialog(QDialog):
     def _on_bold(self, on: bool) -> None:
         fmt = QTextCharFormat()
         fmt.setFontWeight(QFont.Weight.Bold if on else QFont.Weight.Normal)
-        self._merge(fmt)
+        self._merge(fmt, return_focus=True)
 
     def _on_italic(self, on: bool) -> None:
         fmt = QTextCharFormat()
         fmt.setFontItalic(on)
-        self._merge(fmt)
+        self._merge(fmt, return_focus=True)
 
     def _sync_controls(self, fmt: QTextCharFormat) -> None:
         """Reflect the format under the cursor back into the toolbar so the
@@ -274,6 +280,16 @@ class TextDialog(QDialog):
         finally:
             self._syncing = False
 
+    def keyPressEvent(self, event) -> None:
+        """Commit a typed point size without letting the dialog accept itself."""
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            focused = self.focusWidget()
+            if focused in (self.size, self.size.lineEdit()):
+                self.size.interpretText()
+                event.accept()
+                return
+        super().keyPressEvent(event)
+
     def pick_color(self) -> None:
         picked = QColorDialog.getColor(
             self.color, self, "Text Colour",
@@ -283,7 +299,7 @@ class TextDialog(QDialog):
             self._update_swatch()
             fmt = QTextCharFormat()
             fmt.setForeground(picked)
-            self._merge(fmt)
+            self._merge(fmt, return_focus=True)
 
     def _update_swatch(self) -> None:
         self.color_button.setStyleSheet(
