@@ -159,6 +159,11 @@ def _draw_fill(p: QPainter, doc: Document, layer: Layer, region: QRect) -> None:
     base = clip_base_for(doc, layer) if layer.clipped else None
     if base is None:
         if layer.mask is None:
+            if layer.vector_data is not None:
+                from photoslop.vector import draw_native
+
+                draw_native(p, layer.vector_data)
+                return
             p.drawImage(area.topLeft(), layer.image, local)
         else:
             p.drawImage(area.topLeft(), layer.paint_image(local))

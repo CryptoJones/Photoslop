@@ -6,9 +6,6 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] **P2:** Introduce a versioned native vector object model with Bézier
-  geometry, appearance, transforms, hierarchy, migration, and crisp rendering
-  ([#155](https://github.com/CryptoJones/Photoslop/issues/155))
 - [ ] **P2:** Build vector selection, node editing, appearance, Boolean,
   alignment, snapping, text, and construction workflows
   ([#156](https://github.com/CryptoJones/Photoslop/issues/156))
@@ -21,6 +18,9 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] Introduce a versioned native vector object model with Bézier geometry,
+  appearance, transforms, hierarchy, migration, and crisp rendering
+  ([#155](https://github.com/CryptoJones/Photoslop/issues/155)) — shipped v1.23.0
 - [x] Split UI responsibilities into action, tool, workspace, and service
   registries while preserving GUI/CLI/MCP engine parity
   ([#154](https://github.com/CryptoJones/Photoslop/issues/154)) — shipped v1.22.0

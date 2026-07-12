@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 import random
+from copy import deepcopy
 
 import numpy as np
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt
@@ -935,7 +936,7 @@ class ShapeTool(Tool):
             grabbed = vector.grab(layer.vector_data, pos.x(), pos.y())
             if grabbed is not None:
                 self._edit = {"layer": layer,
-                              "data": dict(layer.vector_data),
+                              "data": deepcopy(layer.vector_data),
                               "grabbed": grabbed, "last": pos}
                 return
         self._start = pos

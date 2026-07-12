@@ -7,6 +7,7 @@ command line — as of **v1.0.0**.
 |---|---|
 | [Getting Started](getting-started.md) | install, extras, launching the app and the CLI |
 | [Tools](tools.md) | all 31 canvas tools with keys and behaviour |
+| [Vector Model](vector-model.md) | schema v1, cubic geometry, appearance, migration, ORA fallbacks |
 | [Keyboard Shortcuts](keyboard-shortcuts.md) | the complete keymap |
 | [Layers](layers.md) | layers, masks, clipping, groups, blend modes, smart objects, smart filters, live effects, fill opacity |
 | [Adjustments](adjustments.md) | Levels, Curves, Hue/Saturation, Color Balance, the Adjust panel, adjustment layers, scope |
