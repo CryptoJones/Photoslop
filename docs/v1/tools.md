@@ -17,6 +17,20 @@ Holding `Space` always overrides the current pointer with Open Hand, changes to
 Closed Hand while dragging, and restores the exact prior tool/modifier state on
 release.
 
+## Toolbox groups and density
+
+Related tools share a flyout button instead of occupying one long column. Click
+the main button to reactivate the last-used member; click its menu side to choose
+another tool. The groups cover Move, marquees, lassos, automatic selection,
+crop/warp, paint, healing, retouching, fill, Pen, Shape, Text, Eyedropper, and
+navigation. Every member retains its documented keyboard shortcut and is
+available as a named menu action for keyboard and assistive-technology users.
+
+The final toolbox button selects Compact icons, Comfortable icons, or Icons and
+labels. The choice persists across launches. Icons are palette-aware SVGs with
+normal, active, selected, and disabled states at 1× and 2× rendering sizes; see
+`THIRD_PARTY_NOTICES.md` for the pinned Tabler source and MIT license.
+
 ## Paint
 | Tool | Key | Behaviour |
 |---|---|---|

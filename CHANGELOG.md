@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.17.0] — 2026-07-12
+
+### Added
+- **Grouped, keyboard-accessible toolbox flyouts** ([#149](https://github.com/CryptoJones/Photoslop/issues/149))
+  — the former 30-button column is now 14 related tool groups that retain the
+  last-used tool on the button. A declarative tool registry owns IDs, names,
+  shortcuts, groups, and icons. Compact, comfortable, and icon-plus-label
+  density modes persist between launches.
+- **Palette-aware SVG iconography** — a pinned MIT-licensed Tabler Icons v3.44.0
+  subset replaces fixed 22 px dark pixmaps. Normal, active, selected, disabled,
+  light/dark, and HiDPI renderings come from the same bundled geometry; source
+  and license details are recorded in `THIRD_PARTY_NOTICES.md`.
+
 ## [1.16.0] — 2026-07-12
 
 ### Added
