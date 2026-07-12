@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.25.0] — 2026-07-12
+
+### Added
+- **SVG and editable artboard interchange** ([#157](https://github.com/CryptoJones/Photoslop/issues/157))
+  — import/export of the safe native subset (rectangles, ellipses, cubic/line
+  paths, affine matrices, solid/gradient fill and stroke, IDs/names, and safe
+  Unicode text), with canvas bounds and ordered artboards retained.
+- Unsupported SVG elements are reported in `Document.import_warnings` and the
+  source render is retained as a hidden raster fallback rather than discarded.
+- Named artboards can be added, renamed/resized, deleted, reordered, cleared,
+  and undone through a shared GUI/CLI/MCP-capable engine.
+
 ## [1.24.0] — 2026-07-12
 
 ### Added

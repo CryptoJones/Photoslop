@@ -19,6 +19,21 @@ Photoslop extensions as non-namespaced attributes other editors ignore:
 | `photoslop-vector` | Shape/Pen geometry for re-editing (JSON) |
 | `photoslop-icc` | document ICC profile (base64) |
 
+## Scalable Vector Graphics (`.svg`)
+
+SVG opens and saves through the native vector model. The editable subset is
+rectangles, ellipses/circles, `M`/`L`/`C`/`Z` paths, `matrix(...)` transforms,
+IDs/names, solid and linear/radial-gradient fill/stroke, basic stroke width,
+caps/joins/dashes, safe Unicode text, root viewBox/canvas bounds, and Photoslop
+ordered-artboard metadata. Files in this subset round-trip as editable objects
+and render in browsers and Inkscape.
+
+Advanced path commands, clipping/masks, filters, patterns, symbols/use, meshes,
+CSS layout, flowed/text-on-path typography, and animation are deferred. When
+encountered they are listed in `Document.import_warnings`; a hidden rasterized
+source fallback is retained so unsupported content is not silently discarded.
+ORA continues to include a visible raster fallback for every native vector.
+
 ## Raster
 PNG, JPEG, BMP, WebP, GIF, TIFF open directly; Export As / `--output` writes
 flattened raster (live effects baked in).

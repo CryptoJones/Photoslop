@@ -26,10 +26,10 @@ from photoslop import io_formats
 from photoslop.tasks import TaskService
 
 OPEN_FILTER = (
-    "Images (*.ora *.png *.jpg *.jpeg *.bmp *.webp *.gif *.tif *.tiff "
+    "Images (*.ora *.svg *.png *.jpg *.jpeg *.bmp *.webp *.gif *.tif *.tiff "
     "*.avif *.jxl "
     "*.arw *.cr2 *.cr3 *.dng *.nef *.nrw *.orf *.pef *.raf *.rw2 *.srw);;"
-    "OpenRaster (*.ora);;All files (*)"
+    "OpenRaster (*.ora);;Scalable Vector Graphics (*.svg);;All files (*)"
 )
 
 _PREVIEW_DIM = 256

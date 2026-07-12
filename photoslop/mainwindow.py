@@ -54,7 +54,6 @@ from photoslop.commands import (
 from photoslop.dialogs import CanvasSizeDialog, NewDocumentDialog, ResizeImageDialog
 from photoslop.document import Document
 from photoslop.exportdialog import ExportDialog
-from photoslop.io_ora import load_ora, save_ora
 from photoslop.io_raw import is_raw_path, load_raw
 from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
 from photoslop.opendialog import OpenImageDialog
@@ -1124,8 +1123,8 @@ class MainWindow(QMainWindow):
 
     def open_path(self, path: str) -> bool:
         try:
-            if path.lower().endswith(".ora"):
-                doc = load_ora(path)
+            if path.lower().endswith((".ora", ".svg")):
+                doc = FileService.load(path)
             elif is_raw_path(path):
                 from photoslop.io_raw import probe_raw
                 from photoslop.rawdialog import RawDevelopDialog
@@ -1161,15 +1160,16 @@ class MainWindow(QMainWindow):
 
     def _save_doc(self, doc: Document, background: bool = False) -> bool:
         path = doc.path
-        if path is None or not path.lower().endswith(".ora"):
+        if path is None or not path.lower().endswith((".ora", ".svg")):
             suggested = os.path.splitext(doc.name)[0] + ".ora"
-            path, _ = QFileDialog.getSaveFileName(
-                self, "Save as OpenRaster", suggested, "OpenRaster (*.ora)"
+            path, selected_filter = QFileDialog.getSaveFileName(
+                self, "Save layered document", suggested,
+                "OpenRaster (*.ora);;Scalable Vector Graphics (*.svg)"
             )
             if not path:
                 return False
-            if not path.lower().endswith(".ora"):
-                path += ".ora"
+            if not path.lower().endswith((".ora", ".svg")):
+                path += ".svg" if "SVG" in selected_filter else ".ora"
         if background:
             snapshot = snapshot_document(doc)
             undo_index = doc.undo_stack.index()
@@ -1193,7 +1193,7 @@ class MainWindow(QMainWindow):
 
             handle.succeeded.connect(installed)
             return True
-        save_ora(doc, path)
+        FileService.save(doc, path)
         doc.path = path
         doc.name = os.path.basename(path)
         doc.undo_stack.setClean()

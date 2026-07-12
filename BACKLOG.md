@@ -6,14 +6,15 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] **P2:** Add SVG import/export and editable artboard interchange while
-  retaining OpenRaster raster fallbacks
-  ([#157](https://github.com/CryptoJones/Photoslop/issues/157))
 - [ ] **P1/P2:** Add accessibility, performance, cursor, UI, and vector workflow
   verification plus honest feature-parity documentation
   ([#158](https://github.com/CryptoJones/Photoslop/issues/158))
 
 ## Done
+
+- [x] Add SVG import/export and editable artboard interchange while retaining
+  OpenRaster raster fallbacks
+  ([#157](https://github.com/CryptoJones/Photoslop/issues/157)) — shipped v1.25.0
 
 - [x] Build vector selection, node editing, appearance, Boolean, alignment,
   snapping, text, and construction workflows

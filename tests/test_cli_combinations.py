@@ -67,6 +67,7 @@ PAIR_ARGS = {
     "convert-smart": ["--convert-smart"],
     "restore-smart": ["--convert-smart", "--restore-smart"],
     "add-artboard": ["--add-artboard", "B,0,0,10,10"],
+    "artboard-op": ["--artboard-op", '{"op":"add","name":"C","rect":[1,1,5,5]}'],
 }
 # ops excluded from the pair sweep: need a backend or an on-disk
 # ICC profile the harness cannot assume (cmyk-out gets its own
