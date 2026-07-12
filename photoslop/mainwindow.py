@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
 )
 
 from photoslop import __version__, io_formats, units
+from photoslop.accessibility import AccessibilityController
 from photoslop.actionregistry import ActionRegistry
 from photoslop.canvas import EditorView
 from photoslop.commands import (
@@ -207,7 +208,10 @@ class MainWindow(QMainWindow):
         self._build_options_bar()
         self._build_menus()
         self._build_status_bar()
+        self.accessibility = AccessibilityController(self)
+        self.statusBar().messageChanged.connect(self.accessibility.announce)
         self._sync_option_visibility()
+        self.accessibility.apply()
 
         self.setAcceptDrops(True)
         self.resize(1280, 800)
@@ -846,6 +850,10 @@ class MainWindow(QMainWindow):
         self._snap_action.setShortcut(QKeySequence("Ctrl+Shift+;"))
         self._snap_action.toggled.connect(self._toggle_snap)
         m_view.addAction(self._snap_action)
+        m_view.addAction(self._act("Add Horizontal Guide at Center", "Alt+Shift+H",
+                                   lambda: self.action_add_center_guide("h")))
+        m_view.addAction(self._act("Add Vertical Guide at Center", "Alt+Shift+V",
+                                   lambda: self.action_add_center_guide("v")))
         m_view.addAction(self._act("Clear &Guides", None, self.action_clear_guides))
         m_view.addSeparator()
         m_view.addAction(self._act("Rotate Vie&w 90\u00b0 CW", "R",
@@ -957,6 +965,7 @@ class MainWindow(QMainWindow):
         doc.selectionChanged.connect(self.action_registry.update)
         doc.structureChanged.connect(self.action_registry.update)
         self.action_registry.update()
+        self.accessibility.apply()
 
     def _editor_for(self, doc: Document) -> EditorView | None:
         for i in range(self.tabs.count()):
@@ -1954,6 +1963,7 @@ class MainWindow(QMainWindow):
         from photoslop.preferences import PreferencesDialog
 
         PreferencesDialog(self).exec()
+        self.accessibility.apply()
         editor = self.current_editor()
         if editor is not None:  # colour settings may change the viewport
             editor.canvas.update()
@@ -2442,6 +2452,15 @@ class MainWindow(QMainWindow):
         doc = self.current_doc()
         if doc is not None:
             doc.clear_guides()
+
+    def action_add_center_guide(self, orientation: str) -> None:
+        doc = self.current_doc()
+        if doc is None:
+            return
+        pos = doc.size.height() / 2 if orientation == "h" else doc.size.width() / 2
+        doc.add_guide(orientation, pos)
+        axis = "horizontal" if orientation == "h" else "vertical"
+        self.statusBar().showMessage(f"Added {axis} guide at center", 3000)
 
     def action_fill_layer(self) -> None:
         """Fill the whole active layer with the foreground colour."""

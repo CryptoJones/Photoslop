@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.19.0] — 2026-07-12
+
+### Added
+- **Cross-platform accessibility layer** ([#151](https://github.com/CryptoJones/Photoslop/issues/151))
+  — custom canvas/ruler widgets, icon controls, flyouts, Properties, and options
+  expose explicit names, descriptions, values, and native Qt interfaces. Status
+  changes produce polite accessibility announcements.
+- **Keyboard and low-vision alternatives** — centered guides can be created
+  without dragging; Preferences adds high contrast, reduced motion, and
+  persistent 100–200% control scaling with visible focus treatment.
+- **Repeatable screen-reader verification** — `docs/v1/accessibility.md` versions
+  a shared VoiceOver, NVDA, and Orca workflow alongside automated tree tests.
+
 ## [1.18.0] — 2026-07-12
 
 ### Added
