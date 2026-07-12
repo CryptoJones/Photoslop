@@ -60,6 +60,7 @@ class CanvasView(QWidget):
         self._space_pan = False  # Space held: temporary hand tool
         self._pan_last: QPointF | None = None
         self._cursor_modifiers = Qt.KeyboardModifier.NoModifier
+        self._hover_dirty = QRect()
         self.cursor_controller = CursorController(self)
         self._ants_offset = 0.0
         self._ants = QTimer(self)
@@ -145,6 +146,30 @@ class CanvasView(QWidget):
             math.ceil(rect.height() * z) + 4,
         )
 
+    def _overlay_dirty_rect(self, tool, pos: QPointF | None) -> QRect:
+        if pos is None or self.view_rotation:
+            return self.rect()
+        points = [pos]
+        for attr in ("_anchor", "_hover"):
+            value = getattr(tool, attr, None)
+            if isinstance(value, QPointF):
+                points.append(value)
+        for attr in ("_points", "pins"):
+            values = getattr(tool, attr, None) or []
+            for value in values:
+                point = value[1] if isinstance(value, list) and len(value) > 1 else value
+                if isinstance(point, QPointF):
+                    points.append(point)
+        session = getattr(tool, "session", None)
+        if session is not None:
+            points.extend(session.corners())
+        xs = [point.x() for point in points]
+        ys = [point.y() for point in points]
+        pad = max(12, round(getattr(tool.opts, "size", 16) / 2 + 8))
+        canvas_rect = QRectF(min(xs), min(ys), max(xs) - min(xs),
+                             max(ys) - min(ys)).adjusted(-pad, -pad, pad, pad)
+        return self._canvas_to_widget(canvas_rect.toAlignedRect()).intersected(self.rect())
+
     # -- document signals --
 
     def _on_pixels(self, rect: QRect) -> None:
@@ -166,7 +191,8 @@ class CanvasView(QWidget):
         self._ants_offset = (self._ants_offset + 1.0) % 8.0
         sel = self.doc.selection
         if sel is not None:
-            self.update(self._canvas_to_widget(sel.boundingRect().toAlignedRect()))
+            dirty = self._canvas_to_widget(sel.boundingRect().toAlignedRect())
+            self.update(dirty.intersected(self.visibleRegion().boundingRect()))
 
     # -- painting --
 
@@ -365,7 +391,9 @@ class CanvasView(QWidget):
             if tool is not None:
                 tool.hover(self.doc, self, pos)
             self.refresh_cursor()
-            self.update()  # brush outline / previews follow the cursor
+            dirty = self._overlay_dirty_rect(tool, pos) if tool is not None else QRect()
+            self.update(self._hover_dirty.united(dirty))
+            self._hover_dirty = dirty
 
     def mouseReleaseEvent(self, ev) -> None:
         if ev.button() == Qt.MouseButton.LeftButton:
@@ -386,10 +414,12 @@ class CanvasView(QWidget):
                 tool.double_click(self.doc, self, self._canvas_pos(ev), ev)
 
     def leaveEvent(self, ev) -> None:
+        old_dirty = QRect(self._hover_dirty)
+        self._hover_dirty = QRect()
         self.hover_pos = None
         self.mousePos.emit(None)
         self.refresh_cursor()
-        self.update()
+        self.update(old_dirty)
 
     def wheelEvent(self, ev) -> None:
         if ev.modifiers() & Qt.KeyboardModifier.ControlModifier:

@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.21.0] — 2026-07-12
+
+### Changed
+- **Bounded canvas repainting and previews** ([#153](https://github.com/CryptoJones/Photoslop/issues/153))
+  — hover/tool overlays repaint only old/new visible bounds; marching ants are
+  clipped to the visible region. Layer thumbnails are keyed by QImage generation
+  and cached only for live layers.
+- Open-dialog decoding is asynchronous and stale-safe. Export previews use a
+  512 px proxy while exact scaling/size encoding runs in a cancellable worker;
+  prior preview generations cannot replace newer choices.
+
+### Added
+- Standardized `4k-50` and `12k-20` benchmark fixtures report P50/P95 viewport
+  latency, document bytes, peak RSS, and the documented 33 ms frame / 100 ms
+  heartbeat targets, with a scaled deterministic CI smoke mode.
+
 ## [1.20.0] — 2026-07-12
 
 ### Added

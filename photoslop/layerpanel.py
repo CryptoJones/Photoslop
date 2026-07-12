@@ -36,6 +36,7 @@ class LayerPanel(QWidget):
         super().__init__()
         self.doc: Document | None = None
         self._updating = False
+        self._thumb_cache: dict[int, tuple[int, QIcon]] = {}
 
         self.list = QListWidget()
         self.list.setIconSize(QSize(_THUMB, _THUMB))
@@ -111,16 +112,25 @@ class LayerPanel(QWidget):
         return len(self.doc.layers) - 1 - row
 
     def _thumb(self, layer: Layer) -> QIcon:
+        key = layer.image.cacheKey()
+        cached = self._thumb_cache.get(id(layer))
+        if cached is not None and cached[0] == key:
+            return cached[1]
         img = layer.image.scaled(
             _THUMB, _THUMB, Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.FastTransformation,
         )
-        return QIcon(QPixmap.fromImage(img))
+        icon = QIcon(QPixmap.fromImage(img))
+        self._thumb_cache[id(layer)] = (key, icon)
+        return icon
 
     def rebuild(self) -> None:
         self._updating = True
         self.list.clear()
         if self.doc is not None:
+            live = {id(layer) for layer in self.doc.layers}
+            self._thumb_cache = {
+                key: value for key, value in self._thumb_cache.items() if key in live}
             for layer in reversed(self.doc.layers):
                 item = QListWidgetItem(self._thumb(layer), layer.name)
                 item.setFlags(
@@ -153,7 +163,9 @@ class LayerPanel(QWidget):
         self._updating = True
         for row in range(self.list.count()):
             layer = self.doc.layers[self._row_to_index(row)]
-            self.list.item(row).setIcon(self._thumb(layer))
+            cached = self._thumb_cache.get(id(layer))
+            if cached is None or cached[0] != layer.image.cacheKey():
+                self.list.item(row).setIcon(self._thumb(layer))
         self._updating = False
 
     # -- user edits --

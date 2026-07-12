@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from photoslop import io_formats
 from photoslop.document import Document
+from photoslop.tasks import TaskService
 
 _FORMATS = ("PNG", "JPEG", "WebP", "BMP")
 _OPAQUE = {"JPEG", "BMP"}  # no alpha channel: flatten over white
@@ -34,6 +35,9 @@ class ExportDialog(QDialog):
         self.setWindowTitle("Export As")
         self._doc = doc
         self._flat = doc.flatten()  # transparent-backed master, flattened once
+        self._proxy = self._flat.scaled(
+            512, 512, Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation)
         self._flat_white = None  # lazily built for opaque formats
 
         self.format_box = QComboBox()
@@ -80,6 +84,9 @@ class ExportDialog(QDialog):
         self._debounce.setSingleShot(True)
         self._debounce.setInterval(250)
         self._debounce.timeout.connect(self._update_size)
+        self._size_tasks = TaskService(max_workers=1, memory_budget=256 * 1024 * 1024,
+                                       parent=self)
+        self._size_generation = 0
         self._changed()
 
     # ----- values -----------------------------------------------------------
@@ -131,7 +138,7 @@ class ExportDialog(QDialog):
         size = self.export_size()
         self.dims_label.setText(f"{size.width()} × {size.height()} px")
 
-        pm = QPixmap.fromImage(self.export_image().scaled(
+        pm = QPixmap.fromImage(self._proxy.scaled(
             _PREVIEW, _PREVIEW, Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation))
         self.preview.setPixmap(pm)
@@ -141,15 +148,40 @@ class ExportDialog(QDialog):
 
     def _update_size(self) -> None:
         fmt = self.chosen_format()
-        if fmt in _EXTRA:
-            data = io_formats.encode_extra(
-                self.export_image(), _EXTRA[fmt], max(1, self.chosen_quality()))
-            n = len(data) if data else 0
-        else:
+        quality = self.chosen_quality()
+        size = self.export_size()
+        base = QImage(self._flat)
+        if fmt in _OPAQUE:
+            if self._flat_white is None:
+                self._flat_white = self._doc.flatten(QColor(255, 255, 255))
+            base = QImage(self._flat_white)
+        self._size_generation += 1
+        generation = self._size_generation
+        self._size_tasks.cancel_all()
+
+        def encode(context):
+            context.check_cancelled()
+            image = (base if size == base.size() else base.scaled(
+                size, Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation))
+            if fmt in _EXTRA:
+                data = io_formats.encode_extra(image, _EXTRA[fmt], max(1, quality))
+                return len(data) if data else 0
             buf = QBuffer()
             buf.open(QIODevice.OpenModeFlag.WriteOnly)
-            self.export_image().save(buf, fmt, self.chosen_quality())
-            n = buf.size()
+            image.save(buf, fmt, quality)
+            count = buf.size()
             buf.close()
+            return count
+
+        handle = self._size_tasks.submit(
+            "preview.export-size", "Estimate export size", encode,
+            max(1, base.sizeInBytes() * 2))
+        handle.succeeded.connect(
+            lambda count, g=generation: self._install_size(g, count))
+
+    def _install_size(self, generation: int, n: int) -> None:
+        if generation != self._size_generation:
+            return
         self.size_label.setText(
             f"{n / 1024:.0f} KB" if n < 1024 * 1024 else f"{n / 1048576:.2f} MB")

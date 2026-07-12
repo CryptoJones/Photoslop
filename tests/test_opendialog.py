@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor, QImage
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QHeaderView, QMainWindow, QTreeView, QWidget
 
 from photoslop.document import Document
@@ -48,11 +49,17 @@ def test_dialog_updates_preview(qapp, tmp_path):
     path = make_png(tmp_path, size=(300, 200))
     dialog = OpenImageDialog()
     dialog._update_preview(path)
+    while dialog._preview_tasks.active:
+        qapp.processEvents()
+        QTest.qWait(5)
     assert dialog._image_label.pixmap() is not None
     assert not dialog._image_label.pixmap().isNull()
     assert "300×200" in dialog._info_label.text()
 
     dialog._update_preview(str(tmp_path / "nope.png"))
+    while dialog._preview_tasks.active:
+        qapp.processEvents()
+        QTest.qWait(5)
     assert "No preview" in dialog._info_label.text()
 
 
