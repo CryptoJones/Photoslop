@@ -59,6 +59,14 @@ from photoslop.io_raw import is_raw_path, load_raw
 from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
 from photoslop.opendialog import OpenImageDialog
 from photoslop.propertiespanel import PropertiesPanel
+from photoslop.services import (
+    ExportRequest,
+    ExportService,
+    FileService,
+    FilterService,
+    ModelService,
+    opaque_export_base,
+)
 from photoslop.svgicons import svg_icon
 from photoslop.tasks import TaskService, snapshot_document
 from photoslop.toolregistry import TOOL_GROUPS, TOOL_SPEC_BY_ID, TOOL_SPECS
@@ -96,6 +104,7 @@ from photoslop.tools import (
     ZoomTool,
 )
 from photoslop.transform import TransformTool
+from photoslop.workspace import WorkspaceController
 
 CREDITS_TEXT = "Contributors: CryptoJones, GPT5.5, and Fable5"
 
@@ -221,27 +230,12 @@ class MainWindow(QMainWindow):
         self.resize(1280, 800)
 
         # workspace: remember the built-in default, then apply a saved layout
-        self._default_workspace = self.saveState()
-        saved = self.settings.value("workspace/state")
-        if saved is not None:
-            self.restoreState(saved)
-        geometry = self.settings.value("workspace/geometry")
-        if geometry is not None:
-            self.restoreGeometry(geometry)
-        QTimer.singleShot(0, self._validate_workspace_geometry)
+        self.workspace = WorkspaceController(self, self.settings)
+        self._default_workspace = self.workspace.default_state
+        self.workspace.restore_startup()
 
     def _validate_workspace_geometry(self) -> None:
-        """Recover saved workspaces that no longer intersect a current screen."""
-        frame = self.frameGeometry()
-        if any(screen.availableGeometry().intersects(frame)
-               for screen in QGuiApplication.screens()):
-            return
-        screen = QGuiApplication.primaryScreen()
-        if screen is None:
-            return
-        available = screen.availableGeometry()
-        self.resize(min(1280, available.width()), min(800, available.height()))
-        self.move(available.center() - self.rect().center())
+        self.workspace.validate_geometry()
 
     # ------------------------------------------------------------------ tools
 
@@ -1100,12 +1094,8 @@ class MainWindow(QMainWindow):
                 values = dialog.values() if dialog.exec() else None
 
                 def develop(context, source=path, params=values):
-                    from photoslop.io_raw import develop_raw
-
                     context.progress(5, "Decoding RAW")
-                    image = (develop_raw(source, **params) if params is not None
-                             else load_raw(source))
-                    doc = Document.from_image(image, os.path.basename(source), 72.0)
+                    doc = FileService.load(source, params)
                     doc.moveToThread(gui_thread)
                     context.progress(100, "Developed")
                     return doc
@@ -1118,18 +1108,7 @@ class MainWindow(QMainWindow):
 
             def operation(context, source=path):
                 context.progress(5, "Reading")
-                if source.lower().endswith(".ora"):
-                    doc = load_ora(source)
-                elif io_formats.is_extra_path(source):
-                    image = io_formats.load_extra(source)
-                    doc = Document.from_image(image, os.path.basename(source), 72.0)
-                else:
-                    image = QImage(source)
-                    if image.isNull():
-                        raise ValueError(f"Could not open {source}")
-                    dpm = image.dotsPerMeterX()
-                    dpi = round(dpm * 0.0254) if dpm > 0 else 72
-                    doc = Document.from_image(image, os.path.basename(source), float(dpi))
+                doc = FileService.load(source)
                 doc.moveToThread(gui_thread)
                 context.progress(100, "Decoded")
                 return doc
@@ -1194,7 +1173,7 @@ class MainWindow(QMainWindow):
 
             def operation(context):
                 context.progress(5, "Encoding layers")
-                save_ora(snapshot, path)
+                FileService.save(snapshot, path)
                 context.progress(100, "Written")
                 return path
 
@@ -1248,30 +1227,16 @@ class MainWindow(QMainWindow):
             return
         if not path.lower().endswith(suffix):
             path += suffix
-        from photoslop import color
-
-        base = QImage(dialog._flat)
-        if fmt in {"JPEG", "BMP"}:
-            base = doc.flatten(QColor(255, 255, 255))
+        base = opaque_export_base(doc, fmt, dialog._flat)
         size = dialog.export_size()
         quality = dialog.chosen_quality()
         snapshot = snapshot_document(doc)
+        request = ExportRequest(path, fmt, quality, size, doc.dpi)
 
         def operation(context):
             context.progress(10, "Scaling")
-            img = (base if size == base.size() else base.scaled(
-                size, Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation))
-            img.setDotsPerMeterX(round(snapshot.dpi / 0.0254))
-            img.setDotsPerMeterY(round(snapshot.dpi / 0.0254))
-            color.tag_for_export(img, snapshot)
             context.progress(60, "Encoding")
-            if fmt in {"AVIF", "JPEG XL"}:
-                ok = io_formats.save_extra(img, path, max(1, quality))
-            else:
-                ok = img.save(path, fmt, quality)
-            if not ok:
-                raise ValueError(f"Export failed: {path}")
+            ExportService.write(base, snapshot, request)
             context.progress(100, "Written")
             return path
 
@@ -1514,10 +1479,7 @@ class MainWindow(QMainWindow):
 
             def operation(context):
                 context.progress(5, "Preparing snapshot")
-                image = QImage(before)
-                apply(image, mask)
-                if weights is not None:
-                    npimage.blend_by_weights(image, before, weights)
+                image = FilterService.apply(before, apply, mask, weights)
                 context.progress(100, "Ready")
                 return image
 
@@ -1588,9 +1550,9 @@ class MainWindow(QMainWindow):
 
         def operation(context):
             context.progress(10, "Sending to backend")
-            result = adapter.denoise(snapshot, strength)
+            result = ModelService.denoise(adapter, snapshot, strength)
             context.progress(100, "Received")
-            return result.convertToFormat(snapshot.format())
+            return result
 
         handle = self.task_service.submit(
             "model.denoise", "Denoise (Model)", operation, snapshot.sizeInBytes() * 3)
@@ -2172,11 +2134,10 @@ class MainWindow(QMainWindow):
 
         def operation(context):
             context.progress(10, "Sending image and mask")
-            result = adapter.generative_fill(flat, mask_img, prompt)
-            if result.size() != doc.size:
-                raise ValueError("Backend returned an image of the wrong size")
+            result = ModelService.generative_fill(
+                adapter, flat, mask_img, prompt, doc.size)
             context.progress(100, "Received")
-            return result.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
+            return result
 
         handle = self.task_service.submit(
             "model.generative-fill", "Generative Fill", operation,
@@ -2225,7 +2186,7 @@ class MainWindow(QMainWindow):
 
         def operation(context):
             context.progress(10, "Sending composite")
-            result = adapter.select_subject(snapshot)
+            result = ModelService.select_subject(adapter, snapshot)
             context.progress(100, "Received")
             return result
 
@@ -2621,20 +2582,17 @@ class MainWindow(QMainWindow):
             editor.canvas.rotate_view(-editor.canvas.view_rotation)
 
     def save_workspace(self) -> None:
-        self.settings.setValue("workspace/state", self.saveState())
-        self.settings.setValue("workspace/geometry", self.saveGeometry())
+        self.workspace.save()
         self.statusBar().showMessage("Workspace saved", 3000)
 
     def restore_workspace(self) -> None:
-        saved = self.settings.value("workspace/state")
-        if saved is not None:
-            self.restoreState(saved)
+        if self.workspace.restore():
             self.statusBar().showMessage("Workspace restored", 3000)
         else:
             self.statusBar().showMessage("No saved workspace yet", 3000)
 
     def reset_workspace(self) -> None:
-        self.restoreState(self._default_workspace)
+        self.workspace.reset()
         self.statusBar().showMessage("Workspace reset to default", 3000)
 
     def action_clear_guides(self) -> None:

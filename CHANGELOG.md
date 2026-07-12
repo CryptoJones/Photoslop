@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.22.0] — 2026-07-12
+
+### Changed
+- **UI/service responsibility split** ([#154](https://github.com/CryptoJones/Photoslop/issues/154))
+  — action and tool registries are joined by a Workspace controller and
+  widget-independent File, Export, Filter, and Model services. MainWindow now
+  orchestrates dialogs and GUI-thread commits instead of owning engine work.
+- GUI background tasks, synchronous CLI pipelines, MCP tools, tests, and plugin
+  calls reuse the same service/engine functions. Existing command IDs,
+  shortcuts, document APIs, ORA behavior, and headless operations remain
+  compatible during the migration.
+
 ## [1.21.0] — 2026-07-12
 
 ### Changed
