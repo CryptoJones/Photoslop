@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QSpinBox,
     QTabWidget,
@@ -51,11 +52,12 @@ from photoslop.commands import (
 from photoslop.dialogs import CanvasSizeDialog, NewDocumentDialog, ResizeImageDialog
 from photoslop.document import Document
 from photoslop.exportdialog import ExportDialog
-from photoslop.icons import TOOL_ICONS
 from photoslop.io_ora import load_ora, save_ora
 from photoslop.io_raw import is_raw_path, load_raw
 from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
 from photoslop.opendialog import OpenImageDialog
+from photoslop.svgicons import svg_icon
+from photoslop.toolregistry import TOOL_GROUPS, TOOL_SPEC_BY_ID, TOOL_SPECS
 from photoslop.tools import (
     BrushTool,
     BucketTool,
@@ -220,65 +222,56 @@ class MainWindow(QMainWindow):
         bar.setMovable(False)
         self.addToolBar(Qt.ToolBarArea.LeftToolBarArea, bar)
         group = QActionGroup(self)
-        shortcuts = {
-            "brush": "B", "pencil": "Shift+B", "eraser": "E",
-            "bucket": "G (cycles)", "gradient": "Shift+G",
-            "eyedropper": "I", "rect-select": "M",
-            "ellipse-select": "Shift+M", "lasso": "L",
-            "poly-lasso": "Shift+L", "magnetic-lasso": "Alt+L",
-            "wand": "W", "quick-select": "Shift+W",
-            "clone-stamp": "S", "smudge": "Shift+S", "spot-heal": "J",
-            "heal": "Shift+J", "patch": "Alt+Shift+J", "liquify": "Y",
-            "puppet": "Shift+Y", "perspective": "Shift+P",
-            "text": "T",
-            "shape": "U",
-            "pen": "P",
-            "dodge": "O", "burn": "Shift+O", "crop": "C",
-            "move": "V", "hand": "H", "zoom": "Z",
-        }
-        labels = {
-            "brush": "Brush", "pencil": "Pencil", "eraser": "Eraser",
-            "bucket": "Paint Bucket",
-            "gradient": "Gradient", "eyedropper": "Eyedropper",
-            "rect-select": "Rectangle Select",
-            "ellipse-select": "Ellipse Select (Shift drags a circle)",
-            "lasso": "Lasso Select",
-            "poly-lasso": "Polygonal Lasso (Enter/double-click closes)",
-            "magnetic-lasso": "Magnetic Lasso (edges attract the path)",
-            "wand": "Magic Wand", "quick-select": "Quick Selection",
-            "clone-stamp": "Clone Stamp (Alt+click sets source)",
-            "smudge": "Smudge / Mixer (drags colour)",
-            "spot-heal": "Spot Healing (paint a blemish)",
-            "heal": "Healing Brush (Alt+click source, tone-matched)",
-            "patch": "Patch (drag a selection to its source)",
-            "liquify": "Liquify (push pixels)",
-            "puppet": "Puppet Warp (click pins, drag; Enter commits)",
-            "perspective": "Perspective Warp (click 4 plane corners, drag)",
-            "text": "Text (click to place)",
-            "shape": "Shape (drag; Shift+U cycles rect/ellipse/line)",
-            "pen": "Pen (click anchors; Enter strokes, Ctrl+Enter fills)",
-            "dodge": "Dodge (lighten)", "burn": "Burn (darken)",
-            "crop": "Crop (drag, Enter commits)",
-            "move": "Move", "hand": "Hand (pan)", "zoom": "Zoom",
-        }
         self._tool_actions = {}
-        for name in ("brush", "pencil", "eraser", "bucket", "gradient", "eyedropper",
-                     "rect-select", "ellipse-select", "lasso", "poly-lasso",
-                     "magnetic-lasso", "wand",
-                     "quick-select", "clone-stamp", "smudge", "spot-heal", "heal",
-                     "patch", "liquify", "puppet", "perspective", "text",
-                     "shape", "pen",
-                     "dodge", "burn", "crop",
-                     "move", "hand", "zoom"):
-            act = QAction(TOOL_ICONS[name](), labels[name], self)
+        for spec in TOOL_SPECS:
+            act = QAction(svg_icon(spec.icon), spec.label, self)
             act.setCheckable(True)
-            if " " not in shortcuts[name]:
-                act.setShortcut(shortcuts[name])
-            act.setToolTip(f"{labels[name]} ({shortcuts[name]})")
-            act.triggered.connect(lambda _=False, n=name: self._set_tool(n))
+            act.setShortcut(spec.shortcut)
+            act.setToolTip(f"{spec.label} ({spec.shortcut})")
+            act.triggered.connect(lambda _=False, n=spec.tool_id: self._set_tool(n))
             group.addAction(act)
-            bar.addAction(act)
-            self._tool_actions[name] = act
+            self._tool_actions[spec.tool_id] = act
+
+        self._tool_group_buttons = {}
+        for group_id in TOOL_GROUPS:
+            specs = [spec for spec in TOOL_SPECS if spec.group == group_id]
+            button = QToolButton()
+            button.setObjectName(f"tool-group-{group_id}")
+            button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+            button.setAccessibleName(f"{group_id.title()} tools")
+            menu = QMenu(button)
+            menu.setAccessibleName(f"{group_id.title()} tools")
+            for spec in specs:
+                menu.addAction(self._tool_actions[spec.tool_id])
+            button.setMenu(menu)
+            button.setDefaultAction(self._tool_actions[specs[0].tool_id])
+            button.setToolTip(f"{specs[0].label} — open menu for related tools")
+            bar.addWidget(button)
+            self._tool_group_buttons[group_id] = button
+
+        density = QToolButton()
+        density.setText("⋯")
+        density.setToolTip("Toolbox density")
+        density.setAccessibleName("Toolbox density")
+        density.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        density_menu = QMenu(density)
+        density_group = QActionGroup(density_menu)
+        for density_id, label in (("compact", "Compact icons"),
+                                  ("comfortable", "Comfortable icons"),
+                                  ("labels", "Icons and labels")):
+            action = density_menu.addAction(label)
+            action.setCheckable(True)
+            action.setData(density_id)
+            action.triggered.connect(
+                lambda _=False, d=density_id: self._set_toolbox_density(d))
+            density_group.addAction(action)
+            if density_id == self.settings.value("toolbox/density", "comfortable"):
+                action.setChecked(True)
+        density.setMenu(density_menu)
+        bar.addWidget(density)
+        self._tools_bar = bar
+        self._set_toolbox_density(str(self.settings.value(
+            "toolbox/density", "comfortable")))
         self._tool_actions["brush"].setChecked(True)
 
         from PySide6.QtGui import QShortcut
@@ -287,6 +280,17 @@ class MainWindow(QMainWindow):
         cycle.activated.connect(self._cycle_fill_tool)
         shape_cycle = QShortcut(QKeySequence("Shift+U"), self)
         shape_cycle.activated.connect(self._cycle_shape)
+
+    def _set_toolbox_density(self, density: str) -> None:
+        if density not in {"compact", "comfortable", "labels"}:
+            density = "comfortable"
+        self.settings.setValue("toolbox/density", density)
+        sizes = {"compact": 20, "comfortable": 28, "labels": 24}
+        self._tools_bar.setIconSize(QSize(sizes[density], sizes[density]))
+        style = (Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+                 if density == "labels" else Qt.ToolButtonStyle.ToolButtonIconOnly)
+        for button in self._tool_group_buttons.values():
+            button.setToolButtonStyle(style)
 
     def _cycle_shape(self) -> None:
         """Shift+U: rect -> ellipse -> line, PS-style same-key variants."""
@@ -305,6 +309,13 @@ class MainWindow(QMainWindow):
 
     def _set_tool(self, name: str) -> None:
         self._active_tool_name = name
+        if name in self._tool_actions:
+            self._tool_actions[name].setChecked(True)
+        spec = TOOL_SPEC_BY_ID.get(name)
+        if spec is not None and hasattr(self, "_tool_group_buttons"):
+            button = self._tool_group_buttons[spec.group]
+            button.setDefaultAction(self._tool_actions[name])
+            button.setToolTip(f"{spec.label} — open menu for related tools")
         self._sync_option_visibility()
         for i in range(self.tabs.count()):
             editor = self.tabs.widget(i)

@@ -6,9 +6,6 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] **P1:** Replace toolbox iconography and group tools into keyboard-accessible
-  flyouts with theme/HiDPI states and licensed SVG assets
-  ([#149](https://github.com/CryptoJones/Photoslop/issues/149))
 - [ ] **P1:** Streamline workspace actions and contextual tool options through an
   action registry, command palette, Properties panel, and responsive controls
   ([#150](https://github.com/CryptoJones/Photoslop/issues/150))
@@ -39,6 +36,9 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] Replace toolbox iconography and group tools into keyboard-accessible
+  flyouts with theme/HiDPI states and licensed SVG assets
+  ([#149](https://github.com/CryptoJones/Photoslop/issues/149)) — shipped v1.17.0
 - [x] Add contextual tool cursors and pointer states — brush-radius, tool glyph,
   modifier, handle, target-validity, and temporary-pan cursors
   ([#148](https://github.com/CryptoJones/Photoslop/issues/148)) — shipped v1.16.0

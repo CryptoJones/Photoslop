@@ -26,6 +26,7 @@ from photoslop.commands import (
 )
 from photoslop.document import Document
 from photoslop.layer import BLEND_MODES, Layer
+from photoslop.svgicons import svg_icon
 
 _THUMB = 36
 
@@ -53,16 +54,18 @@ class LayerPanel(QWidget):
 
         buttons = QHBoxLayout()
         self._buttons: dict[str, QPushButton] = {}
-        for key, text, tip in (
-            ("add", "+", "New layer"),
-            ("dup", "⧉", "Duplicate layer"),
-            ("del", "−", "Delete layer"),
-            ("up", "↑", "Raise layer"),
-            ("down", "↓", "Lower layer"),
-            ("merge", "⤵", "Merge down"),
+        for key, icon_name, tip in (
+            ("add", "plus", "New layer"),
+            ("dup", "copy", "Duplicate layer"),
+            ("del", "trash", "Delete layer"),
+            ("up", "arrow-up", "Raise layer"),
+            ("down", "arrow-down", "Lower layer"),
+            ("merge", "arrow-down", "Merge down"),
         ):
-            btn = QPushButton(text)
+            btn = QPushButton()
+            btn.setIcon(svg_icon(icon_name))
             btn.setToolTip(tip)
+            btn.setAccessibleName(tip)
             btn.setFixedWidth(30)
             self._buttons[key] = btn
             buttons.addWidget(btn)
