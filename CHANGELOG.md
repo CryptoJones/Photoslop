@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.15.1] — 2026-07-12
+
+### Fixed
+- **Text point-size keyboard entry** ([#147](https://github.com/CryptoJones/Photoslop/issues/147))
+  — the rich-text size field now accepts values from 6 through **999 pt**.
+  Typing multi-digit values no longer steals focus into the editor, and Enter
+  commits the value without adding a newline or accepting the dialog.
+
 ## [1.15.0] — 2026-07-05
 
 ### Changed

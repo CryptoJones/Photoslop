@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-from PySide6.QtCore import QPoint, QPointF, QSize
+from PySide6.QtCore import QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QTextDocument
+from PySide6.QtTest import QTest
 
 from photoslop import textdialog, tools
 from photoslop.commands import InsertLayerCommand
@@ -119,6 +120,29 @@ def test_text_dialog_prefill_and_color_swatch(qapp, monkeypatch):
     fresh = textdialog.TextDialog(QColor(0, 0, 0))
     assert fresh.windowTitle() == "Add Text"
     assert fresh.text() == ""
+
+
+def test_text_dialog_size_accepts_three_keyboard_digits_without_focus_theft(qapp):
+    dlg = textdialog.TextDialog(QColor(0, 0, 0), text="Size me")
+    dlg.show()
+    qapp.processEvents()
+
+    field = dlg.size.lineEdit()
+    field.setFocus()
+    field.selectAll()
+    QTest.keyClicks(field, "999")
+    qapp.processEvents()
+
+    assert dlg.size.value() == 999
+    assert field.hasFocus()
+    assert not dlg.edit.hasFocus()
+
+    QTest.keyClick(field, Qt.Key.Key_Return)
+    qapp.processEvents()
+    assert dlg.size.value() == 999
+    assert dlg.result() == 0  # Enter commits the spin box, not the dialog.
+    assert dlg.chosen_font().pointSize() == 999
+    dlg.close()
 
 
 class _FakeDialog:
