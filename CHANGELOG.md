@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.27.0] — 2026-07-15
+
+### Added
+- **Non-destructive Appearance effects** for raster, vector, and editable text
+  layers: ordered multi-instance Drop/Inner Shadow, Outer/Inner Glow, Outline,
+  Color/Gradient Overlay, Bevel/Emboss, Gaussian Blur, and Feather effects.
+- A dockable Appearance panel supports live editing, enable/disable, duplicate,
+  reorder, delete, Fill Opacity, six built-in text styles, and user presets.
+- Structured `--effect`, `--set-effects`, `--clear-effects`, and
+  `--appearance-preset` CLI/MCP operations; legacy style flags remain compatible.
+- SVG export now carries appearance filters, styled text runs, embedded raster
+  layers, and Photoslop metadata for editable round trips.
+
+### Changed
+- OpenRaster appearance data uses a validated, versioned object schema. Existing
+  Drop Shadow, Glow, and Stroke tuples migrate automatically when opened.
+
 ## [1.26.0] — 2026-07-12
 
 ### Added

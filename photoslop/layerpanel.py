@@ -4,8 +4,8 @@ opacity slider, and the stack operations."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QColor, QIcon, QPixmap
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -32,6 +32,8 @@ _THUMB = 36
 
 
 class LayerPanel(QWidget):
+    appearanceRequested = Signal()
+
     def __init__(self) -> None:
         super().__init__()
         self.doc: Document | None = None
@@ -42,6 +44,7 @@ class LayerPanel(QWidget):
         self.list.setIconSize(QSize(_THUMB, _THUMB))
         self.list.currentRowChanged.connect(self._on_row)
         self.list.itemChanged.connect(self._on_item_changed)
+        self.list.itemDoubleClicked.connect(self._on_double_click)
 
         self.blend = QComboBox()
         self.blend.addItems(list(BLEND_MODES))
@@ -112,7 +115,7 @@ class LayerPanel(QWidget):
         return len(self.doc.layers) - 1 - row
 
     def _thumb(self, layer: Layer) -> QIcon:
-        key = layer.image.cacheKey()
+        key = self._thumb_key(layer)
         cached = self._thumb_cache.get(id(layer))
         if cached is not None and cached[0] == key:
             return cached[1]
@@ -120,9 +123,24 @@ class LayerPanel(QWidget):
             _THUMB, _THUMB, Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.FastTransformation,
         )
-        icon = QIcon(QPixmap.fromImage(img))
+        pixmap = QPixmap.fromImage(img)
+        if layer.effects:
+            painter = QPainter(pixmap)
+            painter.setPen(QColor(255, 255, 255))
+            painter.setBrush(QColor(25, 35, 50, 220))
+            badge = pixmap.rect().adjusted(pixmap.width() // 2, pixmap.height() // 2, 0, 0)
+            painter.drawRoundedRect(badge, 3, 3)
+            painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, "fx")
+            painter.end()
+        icon = QIcon(pixmap)
         self._thumb_cache[id(layer)] = (key, icon)
         return icon
+
+    @staticmethod
+    def _thumb_key(layer: Layer):
+        from photoslop.appearance import stack_key
+
+        return layer.image.cacheKey(), stack_key(layer.effects)
 
     def rebuild(self) -> None:
         self._updating = True
@@ -164,7 +182,7 @@ class LayerPanel(QWidget):
         for row in range(self.list.count()):
             layer = self.doc.layers[self._row_to_index(row)]
             cached = self._thumb_cache.get(id(layer))
-            if cached is None or cached[0] != layer.image.cacheKey():
+            if cached is None or cached[0] != self._thumb_key(layer):
                 self.list.item(row).setIcon(self._thumb(layer))
         self._updating = False
 
@@ -200,6 +218,13 @@ class LayerPanel(QWidget):
             self.doc.notify_pixels(layer.bounds())
         if name != layer.name:
             layer.name = name
+
+    def _on_double_click(self, item: QListWidgetItem) -> None:
+        if self.doc is None:
+            return
+        layer = self.doc.layers[self._row_to_index(self.list.row(item))]
+        if layer.effects:
+            self.appearanceRequested.emit()
 
     def _on_blend(self) -> None:
         if self.doc is None or self._updating:

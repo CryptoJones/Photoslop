@@ -7,9 +7,11 @@ layer at the clicked position (raster, like flattening PS type)."""
 
 from __future__ import annotations
 
+import copy
+import json
 import math
 
-from PySide6.QtCore import QPoint, QRectF, QSize, Qt
+from PySide6.QtCore import QPoint, QRectF, QSettings, QSize, Qt
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -20,6 +22,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QColorDialog,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFontComboBox,
@@ -123,11 +126,16 @@ class TextDialog(QDialog):
     """
 
     def __init__(self, color: QColor, parent=None, text: str = "",
-                 font: QFont | None = None, html: str | None = None) -> None:
+                 font: QFont | None = None, html: str | None = None,
+                 effects=None, fill_opacity: float = 1.0) -> None:
         super().__init__(parent)
         self.setWindowTitle("Edit Text" if (text or html) else "Add Text")
         self.color = QColor(color)
         self._syncing = False
+        from photoslop.appearance import normalize_effects
+
+        self.appearance_effects = normalize_effects(effects)
+        self.appearance_fill_opacity = max(0.0, min(1.0, float(fill_opacity)))
 
         layout = QVBoxLayout(self)
 
@@ -177,6 +185,31 @@ class TextDialog(QDialog):
         row.addWidget(self.italic_btn)
         row.addWidget(self.color_button)
         layout.addWidget(bar)
+
+        appearance_row = QHBoxLayout()
+        appearance_row.addWidget(QLabel("Appearance"))
+        self.appearance_preset = QComboBox()
+        self.appearance_preset.addItem("None", None)
+        from photoslop.appearance import BUILTIN_PRESETS
+
+        for name in BUILTIN_PRESETS:
+            self.appearance_preset.addItem(name, ("builtin", name))
+        try:
+            custom = json.loads(str(QSettings("CryptoJones", "Photoslop").value(
+                "appearance/presets/v1", "{}")))
+        except (TypeError, json.JSONDecodeError):
+            custom = {}
+        if not isinstance(custom, dict):
+            custom = {}
+        for name in sorted(custom):
+            self.appearance_preset.addItem(name, ("custom", name))
+        self._appearance_custom = custom
+        if self.appearance_effects:
+            self.appearance_preset.addItem("Custom (Appearance panel)", "keep")
+            self.appearance_preset.setCurrentIndex(self.appearance_preset.count() - 1)
+        self.appearance_preset.currentIndexChanged.connect(self._appearance_changed)
+        appearance_row.addWidget(self.appearance_preset, 1)
+        layout.addLayout(appearance_row)
 
         # --- editor -------------------------------------------------------
         self.edit = QTextEdit()
@@ -319,4 +352,23 @@ class TextDialog(QDialog):
 
     def build_layer(self, anchor: QPoint) -> Layer | None:
         """Rasterise the styled text into a layer anchored at `anchor`."""
-        return render_text_document(self.edit.document(), anchor)
+        layer = render_text_document(self.edit.document(), anchor)
+        if layer is not None:
+            layer.effects = copy.deepcopy(self.appearance_effects)
+            layer.fill_opacity = self.appearance_fill_opacity
+        return layer
+
+    def _appearance_changed(self) -> None:
+        data = self.appearance_preset.currentData()
+        if data == "keep":
+            return
+        if data is None:
+            self.appearance_effects = []
+            return
+        from photoslop.appearance import BUILTIN_PRESETS, new_effect, normalize_effects
+
+        source, name = data
+        stack = BUILTIN_PRESETS[name] if source == "builtin" else self._appearance_custom[name]
+        normalized = normalize_effects(stack)
+        self.appearance_effects = [new_effect(
+            effect["type"], **effect["parameters"]) for effect in normalized]

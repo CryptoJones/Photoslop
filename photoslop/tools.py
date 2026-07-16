@@ -1062,7 +1062,8 @@ class TextTool(Tool):
                 font.setPointSize(max(1, int(data["size"])))
             color = QColor(*data["color"]) if data.get("color") else QColor(0, 0, 0)
             dialog = TextDialog(color, canvas.window(), text=data.get("text", ""),
-                                font=font, html=data.get("html"))
+                                font=font, html=data.get("html"), effects=target.effects,
+                                fill_opacity=target.fill_opacity)
             if not dialog.exec():
                 return
             rendered = dialog.build_layer(QPoint(target.offset))

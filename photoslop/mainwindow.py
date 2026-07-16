@@ -40,6 +40,7 @@ from PySide6.QtWidgets import (
 from photoslop import __version__, io_formats, units
 from photoslop.accessibility import AccessibilityController
 from photoslop.actionregistry import ActionRegistry
+from photoslop.appearancepanel import AppearancePanel
 from photoslop.canvas import EditorView
 from photoslop.commands import (
     FlipImageCommand,
@@ -198,6 +199,13 @@ class MainWindow(QMainWindow):
         self._properties_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._properties_dock)
 
+        self.appearance_panel = AppearancePanel()
+        self._appearance_dock = QDockWidget("Appearance")
+        self._appearance_dock.setObjectName("appearance-dock")
+        self._appearance_dock.setWidget(self.appearance_panel)
+        self._appearance_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._appearance_dock)
+
         self.adjust_panel = AdjustPanel()
         self._adjust_dock = QDockWidget("Adjust")
         self._adjust_dock.setObjectName("adjust-dock")
@@ -206,6 +214,8 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._adjust_dock)
         self.tabifyDockWidget(self._layers_dock, self._adjust_dock)
         self.tabifyDockWidget(self._layers_dock, self._properties_dock)
+        self.tabifyDockWidget(self._layers_dock, self._appearance_dock)
+        self.layer_panel.appearanceRequested.connect(self._appearance_dock.raise_)
 
         self.history_view = QUndoView(self.undo_group)
         self.history_view.setEmptyLabel("Document opened")
@@ -815,6 +825,7 @@ class MainWindow(QMainWindow):
                                            self._toggle_soft_proof)
         self.action_soft_proof.setCheckable(True)
         m_view.addAction(self.action_soft_proof)
+        m_view.addAction(self._appearance_dock.toggleViewAction())
         m_view.addSeparator()
         zoom_in = self._act("Zoom &In", "Ctrl++", lambda: self._zoom(+1))
         # a US keyboard's plus key is "=" unshifted — bind every physical form
@@ -1013,6 +1024,7 @@ class MainWindow(QMainWindow):
             self.layer_panel.set_document(None)
             self.adjust_panel.set_document(None)
             self.properties_panel.set_document(None)
+            self.appearance_panel.set_document(None)
             self.setWindowTitle(f"Photoslop {__version__}")
             self.action_registry.update()
             return
@@ -1021,6 +1033,7 @@ class MainWindow(QMainWindow):
         self.layer_panel.set_document(doc)
         self.adjust_panel.set_document(doc)
         self.properties_panel.set_document(doc)
+        self.appearance_panel.set_document(doc)
         self._refresh_tab(doc)
         self.show_zoom(editor.canvas.zoom)
         editor.sync_rulers()
@@ -1047,6 +1060,7 @@ class MainWindow(QMainWindow):
         self.undo_group.removeStack(doc.undo_stack)
         self.layer_panel.set_document(None)
         self.adjust_panel.set_document(None)
+        self.appearance_panel.set_document(None)
         self.tabs.removeTab(index)
         editor.deleteLater()
 
@@ -1913,11 +1927,13 @@ class MainWindow(QMainWindow):
         form.addRow(buttons)
         if not dialog.exec():
             return
+        from photoslop.appearance import new_effect
         from photoslop.commands import SetLayerStyleCommand
 
-        effect = ("drop-shadow", spins["offset_x"].value(),
-                  spins["offset_y"].value(), spins["blur"].value(),
-                  [0, 0, 0, round(spins["opacity"].value() * 2.55)])
+        effect = new_effect(
+            "drop-shadow", offset_x=spins["offset_x"].value(),
+            offset_y=spins["offset_y"].value(), blur=spins["blur"].value(),
+            color=[0, 0, 0, round(spins["opacity"].value() * 2.55)])
         doc.undo_stack.push(SetLayerStyleCommand(
             doc, layer, [*layer.effects, effect], layer.fill_opacity,
             "Drop Shadow"))
@@ -1950,10 +1966,12 @@ class MainWindow(QMainWindow):
             return
 
         color.setAlpha(200)
+        from photoslop.appearance import new_effect
         from photoslop.commands import SetLayerStyleCommand
 
-        effect = ("glow", size, [color.red(), color.green(), color.blue(),
-                                 color.alpha()])
+        effect = new_effect("outer-glow", size=size,
+                            color=[color.red(), color.green(), color.blue(),
+                                   color.alpha()])
         doc.undo_stack.push(SetLayerStyleCommand(
             doc, layer, [*layer.effects, effect], layer.fill_opacity,
             "Outer Glow"))
@@ -1972,10 +1990,12 @@ class MainWindow(QMainWindow):
         color = QColorDialog.getColor(self.options.foreground, self, "Stroke colour")
         if not color.isValid():
             return
+        from photoslop.appearance import new_effect
         from photoslop.commands import SetLayerStyleCommand
 
-        effect = ("stroke", width, [color.red(), color.green(), color.blue(),
-                                    color.alpha()])
+        effect = new_effect("outline", width=width,
+                            color=[color.red(), color.green(), color.blue(),
+                                   color.alpha()])
         doc.undo_stack.push(SetLayerStyleCommand(
             doc, layer, [*layer.effects, effect], layer.fill_opacity,
             "Stroke"))

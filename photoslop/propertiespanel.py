@@ -66,7 +66,15 @@ class PropertiesPanel(QWidget):
             self.name.clear()
         else:
             vector_type = (layer.vector_data or {}).get("type")
-            self.kind.setText(f"{vector_type.title()} object" if vector_type else "Raster layer")
+            if layer.text_data:
+                label = "Text object"
+            elif vector_type:
+                label = f"{vector_type.title()} object"
+            else:
+                label = "Raster layer"
+            if layer.effects:
+                label += f" · {len(layer.effects)} effect(s)"
+            self.kind.setText(label)
             self.name.setText(layer.name)
             self.visible.setChecked(layer.visible)
             self.opacity.setValue(round(layer.opacity * 100))
