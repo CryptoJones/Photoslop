@@ -9,8 +9,9 @@ from PySide6.QtCore import QPoint, QSize
 from PySide6.QtGui import QColor, QImage
 
 from photoslop import cli
+from photoslop.appearance import EFFECT_DEFAULTS
 from photoslop.document import Document
-from photoslop.io_ora import save_ora
+from photoslop.io_ora import load_ora, save_ora
 from photoslop.layer import Layer
 
 # op name -> (canned good argv fragment, malformed value or None if flag)
@@ -241,6 +242,15 @@ def test_live_effect_ops_attach_and_bake(qapp, tmp_path):
     assert ring.blue() > 180 and ring.red() < 80  # blue stroke ring stays
 
     assert run([src, "--glow", "4", "--output", tmp_path / "out.png"]) == 0
+
+
+@pytest.mark.parametrize("kind", sorted(EFFECT_DEFAULTS))
+def test_structured_effect_cli_covers_every_appearance_kind(qapp, tmp_path, kind):
+    src = make_input(tmp_path)
+    output = tmp_path / f"{kind}.ora"
+    assert run([src, "--effect", json.dumps({"type": kind}),
+                "--output", output]) == 0
+    assert load_ora(str(output)).active_layer.effects[-1]["type"] == kind
 
 
 def test_layer_and_all_layers_scope(qapp, tmp_path):

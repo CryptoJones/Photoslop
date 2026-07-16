@@ -24,9 +24,13 @@ metric first, inches for the freedom-unit crowd) populate the size fields,
 and if the clipboard holds an image the dialog opens pre-filled with its
 dimensions, ready to paste into. Or open PNG/JPG/ORA/camera-raw files via File → Open
 (`Ctrl+O`) — the open dialog previews images and shows every file-detail column
-(Name / Size / Kind / Date Modified) in full, never truncated. Drag-and-drop onto the window
+(Name / Size / Kind / Date Modified) in full, never truncated. File → Open Recent
+keeps the last four successfully opened or saved documents, newest first, and
+automatically removes entries whose files no longer exist. Drag-and-drop onto the window
 also opens files. Save as OpenRaster (`.ora`) to keep layers; use File →
-Export As for flattened raster output.
+Export As for flattened raster output. Open and layered Save/Save As start in
+the directory of the last successfully opened or saved document; before the
+first one, they start in your home directory rather than the launch directory.
 
 ## The surface, in one minute
 

@@ -31,8 +31,9 @@ with the Move tool). Groups can carry **group opacity and blend mode**
 ## Live layer effects (styles)
 Layer Style → **Drop Shadow… / Outer Glow… / Stroke…** attach non-destructive
 effects rendered at composite time — shadow/glow beneath the fill, stroke
-above. The layer's own pixels never change; effects follow every edit
-(cached, re-derived only when pixels change). **Layer Style → Clear** removes
+above. The layer's own pixels never change; effects follow every edit and Move
+tool drag. Appearance caches use layer-local coordinates, so movement is cheap
+and effects re-derive only when pixels change. **Layer Style → Clear** removes
 all. Effects persist in ORA.
 
 ## Fill opacity

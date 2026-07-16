@@ -109,6 +109,9 @@ from photoslop.transform import TransformTool
 from photoslop.workspace import WorkspaceController
 
 CREDITS_TEXT = "Contributors: CryptoJones, GPT5.5, and Fable5"
+RECENT_FILES_KEY = "files/recent"
+RECENT_FILES_LIMIT = 4
+LAST_DIRECTORY_KEY = "files/last-directory"
 
 
 class MainWindow(QMainWindow):
@@ -631,6 +634,8 @@ class MainWindow(QMainWindow):
         m_file = menu.addMenu("&File")
         m_file.addAction(self._act("&New…", "Ctrl+N", self.action_new))
         m_file.addAction(self._act("&Open…", "Ctrl+O", self.action_open))
+        self._recent_menu = m_file.addMenu("Open &Recent")
+        self._refresh_recent_menu()
         m_file.addSeparator()
         m_file.addAction(self._act("&Save", "Ctrl+S", self.action_save))
         m_file.addAction(self._act("Save &As…", "Ctrl+Shift+S", self.action_save_as))
@@ -1103,7 +1108,7 @@ class MainWindow(QMainWindow):
 
     def action_open(self) -> None:
         gui_thread = self.thread()
-        for path in OpenImageDialog.get_paths(self):
+        for path in OpenImageDialog.get_paths(self, self._last_directory()):
             if is_raw_path(path):
                 from photoslop.rawdialog import RawDevelopDialog
 
@@ -1120,7 +1125,8 @@ class MainWindow(QMainWindow):
                 handle = self.task_service.submit(
                     "file.raw-develop", f"Develop {os.path.basename(path)}", develop,
                     512 * 1024 * 1024)
-                handle.succeeded.connect(self.add_document)
+                handle.succeeded.connect(
+                    lambda doc, source=path: self._finish_open(doc, source))
                 continue
 
             def operation(context, source=path):
@@ -1133,7 +1139,81 @@ class MainWindow(QMainWindow):
             handle = self.task_service.submit(
                 "file.open", f"Open {os.path.basename(path)}", operation,
                 256 * 1024 * 1024)
-            handle.succeeded.connect(self.add_document)
+            handle.succeeded.connect(
+                lambda doc, source=path: self._finish_open(doc, source))
+
+    def _recent_paths(self) -> list[str]:
+        value = self.settings.value(RECENT_FILES_KEY, [])
+        values = [value] if isinstance(value, str) else list(value or [])
+        result = []
+        for path in values:
+            normalized = os.path.abspath(os.path.expanduser(str(path)))
+            if normalized not in result:
+                result.append(normalized)
+        return result[:RECENT_FILES_LIMIT]
+
+    def _set_recent_paths(self, paths: list[str]) -> None:
+        self.settings.setValue(RECENT_FILES_KEY, paths[:RECENT_FILES_LIMIT])
+        self._refresh_recent_menu()
+
+    def _last_directory(self) -> str:
+        home = os.path.expanduser("~")
+        stored = str(self.settings.value(LAST_DIRECTORY_KEY, "")).strip()
+        directory = os.path.abspath(os.path.expanduser(stored)) if stored else home
+        return directory if os.path.isdir(directory) else home
+
+    def _set_last_directory(self, path: str) -> None:
+        directory = os.path.dirname(os.path.abspath(os.path.expanduser(path)))
+        if os.path.isdir(directory):
+            self.settings.setValue(LAST_DIRECTORY_KEY, directory)
+
+    def _remember_recent(self, path: str) -> None:
+        normalized = os.path.abspath(os.path.expanduser(path))
+        paths = [item for item in self._recent_paths() if item != normalized]
+        self._set_recent_paths([normalized, *paths])
+        self._set_last_directory(normalized)
+
+    def _refresh_recent_menu(self) -> None:
+        self._recent_menu.clear()
+        paths = self._recent_paths()
+        if not paths:
+            empty = self._recent_menu.addAction("(No Recent Documents)")
+            empty.setEnabled(False)
+            return
+        for index, path in enumerate(paths, 1):
+            action = self._recent_menu.addAction(f"&{index} {os.path.basename(path)}")
+            action.setData(path)
+            action.setStatusTip(path)
+            action.setToolTip(path)
+            action.triggered.connect(
+                lambda _checked=False, source=path: self._open_recent(source))
+
+    def _open_recent(self, path: str) -> None:
+        if not os.path.isfile(path):
+            self._set_recent_paths(
+                [item for item in self._recent_paths() if item != path])
+            self.statusBar().showMessage(
+                f"Recent document no longer exists: {path}", 8000)
+            return
+        self.open_path(path)
+
+    def _finish_open(self, doc: Document, path: str) -> None:
+        self.add_document(doc)
+        self._remember_recent(path)
+
+    def _save_document_path(self, suggested_name: str) -> tuple[str, str]:
+        dialog = QFileDialog(self, "Save layered document")
+        dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+        dialog.setFileMode(QFileDialog.FileMode.AnyFile)
+        dialog.setNameFilters([
+            "OpenRaster (*.ora)", "Scalable Vector Graphics (*.svg)"])
+        dialog.setDirectory(self._last_directory())
+        dialog.selectFile(suggested_name)
+        if not dialog.exec():
+            return "", ""
+        paths = dialog.selectedFiles()
+        return (paths[0] if paths else "", dialog.selectedNameFilter())
 
     def open_path(self, path: str) -> bool:
         try:
@@ -1170,16 +1250,14 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Could not open {path}: {exc}", 8000)
             return False
         self.add_document(doc)
+        self._remember_recent(path)
         return True
 
     def _save_doc(self, doc: Document, background: bool = False) -> bool:
         path = doc.path
         if path is None or not path.lower().endswith((".ora", ".svg")):
             suggested = os.path.splitext(doc.name)[0] + ".ora"
-            path, selected_filter = QFileDialog.getSaveFileName(
-                self, "Save layered document", suggested,
-                "OpenRaster (*.ora);;Scalable Vector Graphics (*.svg)"
-            )
+            path, selected_filter = self._save_document_path(suggested)
             if not path:
                 return False
             if not path.lower().endswith((".ora", ".svg")):
@@ -1204,6 +1282,7 @@ class MainWindow(QMainWindow):
                 if doc.undo_stack.index() == undo_index:
                     doc.undo_stack.setClean()
                 self._refresh_tab(doc)
+                self._remember_recent(saved_path)
 
             handle.succeeded.connect(installed)
             return True
@@ -1212,6 +1291,7 @@ class MainWindow(QMainWindow):
         doc.name = os.path.basename(path)
         doc.undo_stack.setClean()
         self._refresh_tab(doc)
+        self._remember_recent(path)
         self.statusBar().showMessage(f"Saved {path}", 4000)
         return True
 

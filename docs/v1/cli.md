@@ -63,6 +63,10 @@ message on stderr.
 | `--drop-shadow` `DX,DY,BLUR,ALPHA` | live drop-shadow effect |
 | `--glow` `SIZE` | live outer-glow effect |
 | `--stroke` `W,R,G,B` | live stroke effect |
+| `--effect` `JSON` | append any structured Appearance effect; supports all ten effect types and may repeat to build an ordered stack |
+| `--set-effects` `JSON_ARRAY` | replace the target layer's ordered Appearance stack |
+| `--clear-effects` | remove every Appearance effect from the target layer |
+| `--appearance-preset` `NAME` | apply a built-in or locally saved Appearance preset |
 | `--fill-opacity` `PCT` | fill opacity (effects keep full strength) |
 | `--layer` `N` | target layer index for following ops |
 | `--all-layers` | apply following ops to every visible layer |
@@ -112,6 +116,12 @@ photoslop-cli in.png --resize 400x300 --text "8,280,12,255,255,255:© CryptoJone
 
 # multi-colour headline — each letter styled via HTML (mirror of the GUI editor)
 photoslop-cli in.png --text-rich '40,40:<span style="font-family:Georgia;font-size:48pt;color:#e00">Big</span> <span style="font-size:48pt;color:#05a">Red</span>' --output headline.png
+
+# editable text with an ordered Drop Shadow + Outline appearance stack
+photoslop-cli --new 800x300 --text-rich '40,40:<span style="font-size:72pt">Photoslop</span>' \
+  --effect '{"type":"drop-shadow","parameters":{"offset_x":8,"offset_y":8,"blur":10}}' \
+  --effect '{"type":"outline","parameters":{"width":3,"color":[255,255,255,255]}}' \
+  --output title.ora
 
 # subject cut-out driven by your own model server
 photoslop-cli photo.png --model-url http://localhost:8188/ps --select-subject \

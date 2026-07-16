@@ -55,9 +55,9 @@ behavior or changing existing document/command APIs.
 - The **offscreen buffered path** (`render_region`) engages only when
   needed — adjustment layers or group opacity/blend — and renders just the
   exposed region.
-- **Live effects** render from per-layer caches keyed on the image's
-  generation (`cacheKey`), so shadows/glows/strokes re-derive only when
-  pixels change.
+- **Live effects** render into layer-local caches keyed on the image's
+  generation (`cacheKey`). Moving a layer translates the cached appearance;
+  shadows/glows/strokes re-derive only when pixels or effect parameters change.
 
 ## Undo
 - Brush-type edits record **128-px tile deltas** (only tiles that changed);

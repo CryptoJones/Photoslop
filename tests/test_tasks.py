@@ -110,13 +110,20 @@ def test_background_open_decodes_without_blocking_action(qapp, tmp_path, monkeyp
     image = QImage(20, 10, QImage.Format.Format_ARGB32_Premultiplied)
     image.fill(QColor("red"))
     assert image.save(str(image_path))
-    monkeypatch.setattr("photoslop.mainwindow.OpenImageDialog.get_paths",
-                        lambda _parent: [str(image_path)])
     win = MainWindow()
+    start = tmp_path / "chooser-start"
+    start.mkdir()
+    win.settings.setValue("files/last-directory", str(start))
+    requested = []
+    monkeypatch.setattr(
+        "photoslop.mainwindow.OpenImageDialog.get_paths",
+        lambda _parent, directory: requested.append(directory) or [str(image_path)])
     win.action_open()
+    assert requested == [str(start)]
     assert win.tabs.count() == 0
     _wait(qapp, lambda: not win.task_service.active)
     assert win.tabs.count() == 1
+    assert win._last_directory() == str(tmp_path)
 
 
 def test_gui_heartbeat_continues_while_worker_runs(qapp):
