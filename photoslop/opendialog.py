@@ -91,11 +91,13 @@ def preview_info(path: str, max_dim: int = _PREVIEW_DIM) -> tuple[QImage | None,
 class OpenImageDialog(QFileDialog):
     """Non-native Open dialog with a preview pane on the right."""
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, directory: str | None = None) -> None:
         super().__init__(parent, "Open images")
         self.setOption(QFileDialog.Option.DontUseNativeDialog, True)
         self.setFileMode(QFileDialog.FileMode.ExistingFiles)
         self.setNameFilter(OPEN_FILTER)
+        if directory:
+            self.setDirectory(directory)
         self._show_all_columns()
 
         self._image_label = QLabel("Select an image")
@@ -188,8 +190,8 @@ class OpenImageDialog(QFileDialog):
         self._info_label.setText(info)
 
     @staticmethod
-    def get_paths(parent=None) -> list[str]:
-        dialog = OpenImageDialog(parent)
+    def get_paths(parent=None, directory: str | None = None) -> list[str]:
+        dialog = OpenImageDialog(parent, directory)
         if dialog.exec():
             return list(dialog.selectedFiles())
         return []

@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
-"""New-document presets, clipboard-aware File→New, the Select menu, and the
-About button order (v1.0.5 UI polish)."""
+"""New-document presets, recent files, menus, and About dialog polish."""
 
-from PySide6.QtCore import QPoint, QSize
+from PySide6.QtCore import QPoint, QSettings, QSize
 from PySide6.QtGui import QColor, QGuiApplication, QImage
+from PySide6.QtWidgets import QDialog, QFileDialog
 
 from photoslop.dialogs import PAPER_SIZES, NewDocumentDialog
+from photoslop.document import Document
 from photoslop.mainwindow import MainWindow
 
 
@@ -86,6 +87,73 @@ def _menu_texts(win, title):
             return [a.text().replace("&", "")
                     for a in act.menu().actions() if a.text()]
     raise AssertionError(f"no menu titled {title!r}")
+
+
+def test_open_recent_is_most_recent_first_deduplicated_and_capped(qapp, tmp_path):
+    win = MainWindow()
+    paths = [str(tmp_path / f"document-{index}.png") for index in range(5)]
+    for path in [*paths, paths[2]]:
+        win._remember_recent(path)
+
+    expected = [paths[2], paths[4], paths[3], paths[1]]
+    assert win._recent_paths() == expected
+    assert QSettings("CryptoJones", "Photoslop").value("files/recent") == expected
+    actions = win._recent_menu.actions()
+    assert [action.data() for action in actions] == expected
+    assert [action.text().replace("&", "") for action in actions] == [
+        "1 document-2.png", "2 document-4.png",
+        "3 document-3.png", "4 document-1.png"]
+
+
+def test_open_recent_opens_existing_and_removes_missing(qapp, tmp_path):
+    existing = tmp_path / "existing.png"
+    image = QImage(12, 8, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(QColor("red"))
+    assert image.save(str(existing))
+    missing = str(tmp_path / "missing.png")
+    QSettings("CryptoJones", "Photoslop").setValue(
+        "files/recent", [missing, str(existing)])
+    win = MainWindow()
+
+    win._recent_menu.actions()[0].trigger()
+    assert win._recent_paths() == [str(existing)]
+    assert "no longer exists" in win.statusBar().currentMessage()
+    win._recent_menu.actions()[0].trigger()
+    assert win.tabs.count() == 1
+    assert win.current_doc().name == "existing.png"
+
+
+def test_file_dialog_directory_defaults_home_and_follows_successful_save(
+        qapp, tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    win = MainWindow()
+    assert win._last_directory() == str(home)
+
+    previous = tmp_path / "previous"
+    previous.mkdir()
+    win.settings.setValue("files/last-directory", str(previous))
+    destination = tmp_path / "saved" / "document.ora"
+    destination.parent.mkdir()
+    requested = []
+
+    def accept_dialog(dialog):
+        requested.append((
+            dialog.directory().absolutePath(), dialog.selectedFiles()[0],
+            dialog.testOption(QFileDialog.Option.DontUseNativeDialog)))
+        dialog.setDirectory(str(destination.parent))
+        dialog.selectFile(destination.name)
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr("photoslop.mainwindow.QFileDialog.exec", accept_dialog)
+    doc = Document.new(QSize(20, 10), 72, "document", QColor("white"))
+    win.add_document(doc)
+
+    assert win._save_doc(doc, background=False)
+    assert requested == [(str(previous), str(previous / "document.ora"), True)]
+    assert win._last_directory() == str(destination.parent)
+    assert destination.exists()
 
 
 def test_select_menu_owns_the_selection_actions(qapp):

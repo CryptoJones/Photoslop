@@ -278,11 +278,13 @@ class RenderedAppearance:
 
 
 def render(layer) -> RenderedAppearance:
-    """Render a bounded appearance stack from a layer's effective alpha."""
+    """Render a bounded, layer-local appearance from the effective alpha."""
     effects = normalize_effects(layer.effects)
     source = (layer.paint_image(layer.image.rect()) if layer.mask is not None
               else QImage(layer.image))
-    source_offset = QPoint(layer.offset)
+    # Keep cached geometry independent of canvas placement.  The compositor
+    # adds layer.offset when drawing, so moving a layer never rebuilds effects.
+    source_offset = QPoint()
     fill_override = None
     planes: list[Plane] = []
     for effect in effects:

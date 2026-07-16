@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.28.0] — 2026-07-16
+
+### Added
+- File → Open Recent remembers the last four successfully opened or saved
+  documents, newest first, with deduplication and automatic missing-file cleanup.
+
+### Fixed
+- Moving a text or raster layer with a cached live effect now translates the
+  complete appearance, including drop shadows, instead of leaving effect
+  planes behind at their previous canvas position.
+- Open and layered Save/Save As now share the last successfully used document
+  directory and default to the user's home directory before one is recorded,
+  rather than starting in the process launch directory.
+- The CLI guide now documents the released structured Appearance operations
+  for all ten effects, with an ordered text-effect recipe and exhaustive tests.
+
 ## [1.27.0] — 2026-07-15
 
 ### Added

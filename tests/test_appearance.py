@@ -2,10 +2,11 @@
 """Appearance schema, renderers, panel editing, presets, and SVG export."""
 
 import json
+from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QPoint, QSettings, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QImage, QTextDocument
+from PySide6.QtCore import QPoint, QPointF, QSettings, QSize, Qt
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QTextDocument
 from PySide6.QtSvg import QSvgRenderer
 
 from photoslop.appearance import EFFECT_DEFAULTS, new_effect, normalize_effects
@@ -15,6 +16,7 @@ from photoslop.io_ora import load_ora, save_ora
 from photoslop.io_svg import load_svg, save_svg
 from photoslop.layer import Layer
 from photoslop.textdialog import render_text_document, render_text_layer
+from photoslop.tools import MoveTool, ToolOptions
 
 
 def chip_document() -> tuple[Document, Layer]:
@@ -73,6 +75,37 @@ def test_effects_honor_masks_and_fill_opacity(qapp):
     flat = doc.flatten()
     assert flat.pixelColor(40, 40) == QColor("white")
     assert flat.pixelColor(27, 40) != QColor("white")
+
+
+def test_move_tool_translates_cached_text_and_drop_shadow(qapp):
+    doc = Document(QSize(240, 120), 72, "move appearance")
+    layer = render_text_layer(
+        "Move", QFont("Sans Serif", 20), QColor("black"), QPoint(20, 20))
+    layer.effects = [new_effect(
+        "drop-shadow", offset_x=5, offset_y=5, blur=4)]
+    doc.layers = [layer]
+    doc.active_index = 0
+    editor = SimpleNamespace(snap_layer_offset=lambda _layer, proposed, _mods: proposed)
+    canvas = SimpleNamespace(zoom=1.0, editor=editor)
+
+    before = doc.flatten()  # Populate the appearance cache before dragging.
+    cached = layer.fx_cache[1]
+    delta = QPoint(60, 20)
+    tool = MoveTool(ToolOptions())
+    start = QPointF(30, 30)
+    tool.press(doc, canvas, start, None)
+    tool.move(doc, canvas, start + delta, None)
+    tool.release(doc, canvas, start + delta, None)
+
+    expected = QImage(doc.size, before.format())
+    expected.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(expected)
+    painter.drawImage(delta, before)
+    painter.end()
+    after = doc.flatten()
+    assert layer.offset == QPoint(80, 40)
+    assert after == expected
+    assert layer.fx_cache[1] is cached
 
 
 def test_new_stack_round_trips_ora(qapp, tmp_path):

@@ -88,7 +88,7 @@ def _effects_margin(effects: list) -> int:
 
 
 def _effect_images(layer: Layer) -> list:
-    """Render and cache a layer's normalized appearance stack."""
+    """Render and cache a layer-local normalized appearance stack."""
     from photoslop.appearance import render, stack_key
 
     mask_key = layer.mask.cacheKey() if layer.mask is not None else 0
@@ -100,7 +100,8 @@ def _effect_images(layer: Layer) -> list:
     return out
 
 
-def _draw_effects(p: QPainter, appearance, region: QRect, under: bool) -> None:
+def _draw_effects(p: QPainter, appearance, region: QRect, under: bool,
+                  origin: QPoint) -> None:
     from photoslop.layer import BLEND_MODES
 
     base_opacity = p.opacity()
@@ -108,11 +109,12 @@ def _draw_effects(p: QPainter, appearance, region: QRect, under: bool) -> None:
     for plane in appearance.planes:
         if plane.under != under:
             continue
-        area = region.intersected(QRect(plane.offset, plane.image.size()))
+        offset = origin + plane.offset
+        area = region.intersected(QRect(offset, plane.image.size()))
         if not area.isEmpty():
             p.setOpacity(base_opacity * plane.opacity)
             p.setCompositionMode(BLEND_MODES[plane.blend_mode])
-            p.drawImage(area.topLeft(), plane.image, area.translated(-plane.offset))
+            p.drawImage(area.topLeft(), plane.image, area.translated(-offset))
     p.setOpacity(base_opacity)
     p.setCompositionMode(base_mode)
 
@@ -126,18 +128,18 @@ def draw_layer(p: QPainter, doc: Document, layer: Layer, region: QRect) -> None:
     if layer.effects or layer.fill_opacity != 1.0:
         base = p.opacity()
         appearance = _effect_images(layer)
-        _draw_effects(p, appearance, region, under=True)
+        _draw_effects(p, appearance, region, under=True, origin=layer.offset)
         p.setOpacity(base * layer.fill_opacity)
         if appearance.fill_image is None:
             _draw_fill(p, doc, layer, region)
         else:
-            fill_offset = appearance.fill_offset
+            fill_offset = layer.offset + appearance.fill_offset
             area = region.intersected(QRect(fill_offset, appearance.fill_image.size()))
             if not area.isEmpty():
                 p.drawImage(area.topLeft(), appearance.fill_image,
                             area.translated(-fill_offset))
         p.setOpacity(base)
-        _draw_effects(p, appearance, region, under=False)
+        _draw_effects(p, appearance, region, under=False, origin=layer.offset)
         return
     _draw_fill(p, doc, layer, region)
 
