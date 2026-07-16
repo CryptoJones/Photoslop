@@ -324,9 +324,12 @@ def _op_tilt_shift(ctx: Context, value: str) -> None:
 
 def _op_drop_shadow(ctx: Context, value: str) -> None:
     dx, dy, blur, alpha = _ints(value, 4, "--drop-shadow")
+    from photoslop.appearance import new_effect
+
     for layer in _target_layers(ctx):
-        layer.effects = [*layer.effects,
-                         ("drop-shadow", dx, dy, blur, [0, 0, 0, alpha])]
+        layer.effects = [*layer.effects, new_effect(
+            "drop-shadow", offset_x=dx, offset_y=dy, blur=blur,
+            color=[0, 0, 0, alpha])]
         layer.fx_cache = None
 
 
@@ -335,16 +338,81 @@ def _op_glow(ctx: Context, value: str) -> None:
         size = int(value)
     except ValueError as exc:
         raise _ValueError(f"--glow: {exc}") from exc
+    from photoslop.appearance import new_effect
+
     for layer in _target_layers(ctx):
-        layer.effects = [*layer.effects,
-                         ("glow", size, [255, 220, 120, 200])]
+        layer.effects = [*layer.effects, new_effect("outer-glow", size=size)]
         layer.fx_cache = None
 
 
 def _op_stroke(ctx: Context, value: str) -> None:
     w, r, g, b = _ints(value, 4, "--stroke")
+    from photoslop.appearance import new_effect
+
     for layer in _target_layers(ctx):
-        layer.effects = [*layer.effects, ("stroke", w, [r, g, b, 255])]
+        layer.effects = [*layer.effects, new_effect(
+            "outline", width=w, color=[r, g, b, 255])]
+        layer.fx_cache = None
+
+
+def _json_value(value: str, option: str):
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise _ValueError(f"{option}: invalid JSON: {exc.msg}") from exc
+
+
+def _op_effect(ctx: Context, value: str) -> None:
+    from photoslop.appearance import normalize_effect
+
+    try:
+        effect = normalize_effect(_json_value(value, "--effect"))
+    except ValueError as exc:
+        raise _ValueError(f"--effect: {exc}") from exc
+    for layer in _target_layers(ctx):
+        layer.effects = [*layer.effects, effect]
+        layer.fx_cache = None
+
+
+def _op_set_effects(ctx: Context, value: str) -> None:
+    from photoslop.appearance import normalize_effects
+
+    parsed = _json_value(value, "--set-effects")
+    if not isinstance(parsed, list):
+        raise _ValueError("--set-effects: expected a JSON array")
+    effects = normalize_effects(parsed)
+    if len(effects) != len(parsed):
+        raise _ValueError("--set-effects: contains an invalid effect")
+    for layer in _target_layers(ctx):
+        layer.effects = effects
+        layer.fx_cache = None
+
+
+def _op_clear_effects(ctx: Context, _value) -> None:
+    for layer in _target_layers(ctx):
+        layer.effects = []
+        layer.fx_cache = None
+
+
+def _op_appearance_preset(ctx: Context, value: str) -> None:
+    from PySide6.QtCore import QSettings
+
+    from photoslop.appearance import BUILTIN_PRESETS, normalize_effects
+
+    presets = BUILTIN_PRESETS
+    if value not in presets:
+        try:
+            custom = json.loads(str(QSettings("CryptoJones", "Photoslop").value(
+                "appearance/presets/v1", "{}")))
+        except (TypeError, json.JSONDecodeError):
+            custom = {}
+        if not isinstance(custom, dict):
+            custom = {}
+        presets = {**presets, **custom}
+    if value not in presets:
+        raise _ValueError(f"--appearance-preset: unknown preset {value!r}")
+    for layer in _target_layers(ctx):
+        layer.effects = normalize_effects(presets[value])
         layer.fx_cache = None
 
 
@@ -951,6 +1019,11 @@ OPS: dict = {
                     _op_drop_shadow),
     "glow": ("SIZE", "live outer-glow effect", _op_glow),
     "stroke": ("W,R,G,B", "live stroke effect", _op_stroke),
+    "effect": ("JSON", "append a structured live appearance effect", _op_effect),
+    "set-effects": ("JSON", "replace the target appearance stack", _op_set_effects),
+    "clear-effects": (None, "remove all target appearance effects", _op_clear_effects),
+    "appearance-preset": ("NAME", "apply a built-in or local appearance preset",
+                          _op_appearance_preset),
     "fill-opacity": ("PCT", "fill opacity (effects keep full strength)",
                      _op_fill_opacity),
     "layer": ("N", "target layer index for following ops", _op_layer),
@@ -1162,6 +1235,8 @@ def _export_artboards(doc, directory: str) -> list[str]:
 
 
 def _doc_info(doc) -> dict:
+    from photoslop.appearance import normalize_effects
+
     return {
         "size": [doc.size.width(), doc.size.height()],
         "dpi": doc.dpi,
@@ -1171,7 +1246,7 @@ def _doc_info(doc) -> dict:
              "blend_mode": layer.blend_mode,
              "offset": [layer.offset.x(), layer.offset.y()],
              "size": [layer.image.width(), layer.image.height()],
-             "effects": [list(f) for f in layer.effects],
+             "effects": normalize_effects(layer.effects),
              "smart_object": layer.source is not None,
              "vector_id": (layer.vector_data or {}).get("id"),
              "vector_type": (layer.vector_data or {}).get("type")}

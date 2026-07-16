@@ -151,9 +151,11 @@ class _FakeDialog:
 
     captured: dict = {}
 
-    def __init__(self, color, parent=None, text="", font=None, html=None):
+    def __init__(self, color, parent=None, text="", font=None, html=None,
+                 effects=None, fill_opacity=1.0):
         _FakeDialog.captured = {"color": QColor(color), "text": text,
-                                "font": font, "html": html}
+                                "font": font, "html": html, "effects": effects,
+                                "fill_opacity": fill_opacity}
         self.color = QColor(255, 0, 0)
 
     def exec(self):

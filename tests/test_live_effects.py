@@ -2,6 +2,7 @@
 from PySide6.QtCore import QPoint, QSize
 from PySide6.QtGui import QColor
 
+from photoslop.appearance import normalize_effects
 from photoslop.commands import SetLayerStyleCommand
 from photoslop.document import Document
 from photoslop.io_ora import load_ora, save_ora
@@ -67,9 +68,11 @@ def test_effects_round_trip_and_clone(qapp, tmp_path):
     save_ora(doc, path)
     loaded = load_ora(path)
     top = loaded.layers[1]
-    assert top.effects == chip.effects
+    migrated = normalize_effects(chip.effects)
+    assert [(effect["type"], effect["parameters"]) for effect in top.effects] == [
+        (effect["type"], effect["parameters"]) for effect in migrated]
     assert abs(top.fill_opacity - 0.25) < 1e-6
-    assert top.clone().effects == chip.effects
+    assert top.clone().effects == top.effects
 
     win.action_clear_style()
     assert chip.effects == [] and chip.fill_opacity == 1.0

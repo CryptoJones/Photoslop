@@ -82,55 +82,39 @@ def render_region(doc: Document, region: QRect,
 
 def _effects_margin(effects: list) -> int:
     """How far (px) any of these effects can reach beyond the layer."""
-    pad = 0
-    for fx in effects:
-        if fx[0] == "drop-shadow":
-            pad = max(pad, int(fx[3]) + max(abs(int(fx[1])), abs(int(fx[2]))))
-        elif fx[0] == "glow" or fx[0] == "stroke":
-            pad = max(pad, int(fx[1]))
-    return pad
+    from photoslop.appearance import effect_margin
+
+    return effect_margin(effects)
 
 
 def _effect_images(layer: Layer) -> list:
-    """Rendered live effects: [(image, canvas_offset, draws_under_fill)].
-    Cached against the layer image's cacheKey + the effects tuple."""
-    key = (layer.image.cacheKey(), tuple(tuple(f) for f in layer.effects))
+    """Render and cache a layer's normalized appearance stack."""
+    from photoslop.appearance import render, stack_key
+
+    mask_key = layer.mask.cacheKey() if layer.mask is not None else 0
+    key = (layer.image.cacheKey(), mask_key, stack_key(layer.effects))
     if layer.fx_cache is not None and layer.fx_cache[0] == key:
         return layer.fx_cache[1]
-    from PySide6.QtGui import QColor
-
-    from photoslop import npimage
-
-    out = []
-    for fx in layer.effects:
-        kind = fx[0]
-        if kind == "drop-shadow":
-            _, dx, dy, blur, rgba = fx
-            img = npimage.drop_shadow_image(layer.image, QColor(*rgba), blur)
-            pad = max(0, int(blur))
-            out.append((img, layer.offset + QPoint(int(dx) - pad, int(dy) - pad),
-                        True))
-        elif kind == "glow":
-            _, blur, rgba = fx
-            img = npimage.drop_shadow_image(layer.image, QColor(*rgba), blur)
-            pad = max(0, int(blur))
-            out.append((img, layer.offset - QPoint(pad, pad), True))
-        elif kind == "stroke":
-            _, width, rgba = fx
-            img = npimage.stroke_outline_image(layer.image, QColor(*rgba), width)
-            pad = max(1, int(width))
-            out.append((img, layer.offset - QPoint(pad, pad), False))
+    out = render(layer)
     layer.fx_cache = (key, out)
     return out
 
 
-def _draw_effects(p: QPainter, images: list, region: QRect, under: bool) -> None:
-    for img, off, is_under in images:
-        if is_under != under:
+def _draw_effects(p: QPainter, appearance, region: QRect, under: bool) -> None:
+    from photoslop.layer import BLEND_MODES
+
+    base_opacity = p.opacity()
+    base_mode = p.compositionMode()
+    for plane in appearance.planes:
+        if plane.under != under:
             continue
-        area = region.intersected(QRect(off, img.size()))
+        area = region.intersected(QRect(plane.offset, plane.image.size()))
         if not area.isEmpty():
-            p.drawImage(area.topLeft(), img, area.translated(-off))
+            p.setOpacity(base_opacity * plane.opacity)
+            p.setCompositionMode(BLEND_MODES[plane.blend_mode])
+            p.drawImage(area.topLeft(), plane.image, area.translated(-plane.offset))
+    p.setOpacity(base_opacity)
+    p.setCompositionMode(base_mode)
 
 
 def draw_layer(p: QPainter, doc: Document, layer: Layer, region: QRect) -> None:
@@ -141,12 +125,19 @@ def draw_layer(p: QPainter, doc: Document, layer: Layer, region: QRect) -> None:
     coords."""
     if layer.effects or layer.fill_opacity != 1.0:
         base = p.opacity()
-        images = _effect_images(layer)
-        _draw_effects(p, images, region, under=True)
+        appearance = _effect_images(layer)
+        _draw_effects(p, appearance, region, under=True)
         p.setOpacity(base * layer.fill_opacity)
-        _draw_fill(p, doc, layer, region)
+        if appearance.fill_image is None:
+            _draw_fill(p, doc, layer, region)
+        else:
+            fill_offset = appearance.fill_offset
+            area = region.intersected(QRect(fill_offset, appearance.fill_image.size()))
+            if not area.isEmpty():
+                p.drawImage(area.topLeft(), appearance.fill_image,
+                            area.translated(-fill_offset))
         p.setOpacity(base)
-        _draw_effects(p, images, region, under=False)
+        _draw_effects(p, appearance, region, under=False)
         return
     _draw_fill(p, doc, layer, region)
 

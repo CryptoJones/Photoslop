@@ -34,8 +34,10 @@ def test_ora_round_trip_preserves_everything(qapp, tmp_path):
     assert cli.main([src, "--levels", "10,240,1.1", "--output", out]) == 0
     loaded = load_ora(out)
     assert len(loaded.layers) == 2
-    assert loaded.layers[1].effects == [("stroke", 2, (0, 0, 255, 255))] or \
-        loaded.layers[1].effects == [("stroke", 2, [0, 0, 255, 255])]
+    effect = loaded.layers[1].effects[0]
+    assert effect["type"] == "outline"
+    assert effect["parameters"]["width"] == 2
+    assert effect["parameters"]["color"] == [0, 0, 255, 255]
     assert abs(loaded.layers[1].fill_opacity - 0.5) < 1e-6
     assert loaded.artboards[0][0] == "Cover"
 

@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v1.26.0** against six
+An honest, category-by-category comparison of **Photoslop v1.27.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -15,7 +15,7 @@ than "missing".
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 1.26.0 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
+| **Photoslop** | 1.27.0 | Apache-2.0, free | Linux / Windows / macOS (Qt) |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
@@ -118,6 +118,7 @@ for the versioned platform screen-reader and visual smoke procedures.
 | Text tool with font/size/colour | ✅ [Tools](tools.md) | ✅ | ✅ | ✅ | — | 🟡 (watermark) | 🟡 (watermark) |
 | Rich text — per-letter colour, bold/italic, WYSIWYG preview | ✅ (GUI editor + `--text-rich` HTML) | ✅ | ✅ | 🟡 (single style) | — | — | — |
 | Re-editable text layers | 🟡 (ORA parameters; SVG safe text subset) | ✅ | ✅ | ❌ | — | — | — |
+| Ordered text/layer appearance effects and presets | ✅ (10 live effects; ORA + SVG filters) | ✅ | 🟡 | 🟡 | — | — | — |
 | Shape tool (rect/ellipse/line) | ✅ (parametric, re-editable) | ✅ (vector) | ✅ (vector layers, 3.2) | ✅ (raster) | — | — | — |
 | Pen / path tool | 🟡 (native cubic model; narrower direct editing) | ✅ (full vector) | ✅ | ❌ | — | — | — |
 | Parametric (re-editable) vectors | 🟡 [Vector Model](vector-model.md) | ✅ | ✅ (3.2 vector layers) | ❌ | — | — | — |
@@ -130,7 +131,7 @@ for the versioned platform screen-reader and visual smoke procedures.
 |---|---|---|---|---|---|---|---|
 | Action/macro recording | ✅ [Actions](actions.md) | ✅ | 🟡 (script instead) | ❌ | 🟡 (presets/batch) | ✅ (styles) | ✅ (styles) |
 | Scripting language | ❌ (CLI instead) | ✅ (JS/AppleScript/VBS) | ✅ (Script-Fu, Python 3) | ❌ | ✅ (Lua SDK) | ✅ (Lua + AI API) | 🟡 (AppleScript, Mac) |
-| Headless CLI | ✅ **54 shared engine ops** [CLI](cli.md) | ❌ | ✅ (`gimp -i -b`, script-driven) | ❌ | ❌ | ✅ (`darktable-cli`, export-focused) | ❌ |
+| Headless CLI | ✅ **58 shared engine ops** [CLI](cli.md) | ❌ | ✅ (`gimp -i -b`, script-driven) | ❌ | ❌ | ✅ (`darktable-cli`, export-focused) | ❌ |
 | Start pipelines from blank docs | ✅ (`--new A4 --dpi 300`) | — | ✅ (script) | ❌ | — | — | — |
 | Batch export | ✅ (shell loops + CLI) | ✅ (Actions batch) | ✅ | ❌ | ✅ | ✅ | ✅ (process recipes) |
 

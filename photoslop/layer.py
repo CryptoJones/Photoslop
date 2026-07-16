@@ -77,7 +77,7 @@ class Layer:
         self.adjustment = None  # (3, 256) uint8 LUTs: applies to composite below
         self.source: QImage | None = None  # smart-object pristine snapshot
         self.smart_filters: list = []  # (kind, *params) applied to a smart object
-        self.effects: list = []  # live layer styles: (kind, *params) tuples
+        self.effects: list = []  # versioned live appearance-effect objects
         self.fill_opacity = 1.0  # scales the fill only, never the effects
         self.fx_cache = None  # (key, rendered effect images) — derived
         self.text_data: dict | None = None  # text/family/size/color for re-editing
@@ -106,13 +106,13 @@ class Layer:
         if self.source is not None:
             layer.source = QImage(self.source)
         layer.smart_filters = [tuple(f) for f in self.smart_filters]
-        layer.effects = [tuple(f) for f in self.effects]
+        from copy import deepcopy
+
+        layer.effects = deepcopy(self.effects)
         layer.fill_opacity = self.fill_opacity
         if self.text_data is not None:
             layer.text_data = dict(self.text_data)
         if self.vector_data is not None:
-            from copy import deepcopy
-
             layer.vector_data = deepcopy(self.vector_data)
         return layer
 

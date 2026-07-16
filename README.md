@@ -59,6 +59,10 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
   (`Ctrl+L`) with auto black/white points; Hue/Saturation (`Ctrl+U`); Color Balance (`Ctrl+B`); Curves (`Ctrl+M`).
 - **Undo/redo** — region-based undo that stores only the pixels a stroke
   touched, with a History panel to click back to any earlier state.
+- **Appearance effects** — an ordered, non-destructive stack for every layer:
+  shadows, glows, outlines, color/gradient overlays, bevel/emboss, blur, and
+  feather. Effects stay editable, support built-in and user presets, survive
+  OpenRaster saves, and export through SVG filters.
 - **Files** — opens and saves layered [OpenRaster](https://www.openraster.org/)
   (`.ora`, interoperable with GIMP and Krita); imports/exports PNG, JPEG, BMP,
   and WebP. The Open dialog shows a live thumbnail preview with dimensions,

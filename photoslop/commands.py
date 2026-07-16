@@ -234,16 +234,19 @@ class SetLayerStyleCommand(QUndoCommand):
     """Swap a layer's live effects list and/or fill opacity."""
 
     def __init__(self, doc, layer, effects: list, fill_opacity: float,
-                 text: str = "Layer Style") -> None:
+                 text: str = "Layer Style", merge_key=None) -> None:
         super().__init__(text)
         self._doc = doc
         self._layer = layer
-        self._old = ([tuple(f) for f in layer.effects], layer.fill_opacity)
-        self._new = ([tuple(f) for f in effects], float(fill_opacity))
+        from photoslop.appearance import normalize_effects
+
+        self._old = (deepcopy(normalize_effects(layer.effects)), layer.fill_opacity)
+        self._new = (deepcopy(normalize_effects(effects)), float(fill_opacity))
+        self._merge_key = merge_key
 
     def _apply(self, state) -> None:
         effects, fill = state
-        self._layer.effects = [tuple(f) for f in effects]
+        self._layer.effects = deepcopy(effects)
         self._layer.fill_opacity = fill
         self._layer.fx_cache = None
         self._doc.notify_pixels(self._doc.canvas_rect())
@@ -253,6 +256,17 @@ class SetLayerStyleCommand(QUndoCommand):
 
     def undo(self) -> None:
         self._apply(self._old)
+
+    def id(self) -> int:
+        return 0xA550 if self._merge_key is not None else -1
+
+    def mergeWith(self, other) -> bool:
+        if (not isinstance(other, SetLayerStyleCommand)
+                or self._doc is not other._doc or self._layer is not other._layer
+                or self._merge_key != other._merge_key):
+            return False
+        self._new = deepcopy(other._new)
+        return True
 
 
 class EditVectorLayerCommand(QUndoCommand):
@@ -293,17 +307,21 @@ class EditTextLayerCommand(QUndoCommand):
         self._doc = doc
         self._layer = layer
         self._old = (QImage(layer.image), QPoint(layer.offset), layer.name,
-                     dict(layer.text_data or {}))
+                     dict(layer.text_data or {}), deepcopy(layer.effects),
+                     layer.fill_opacity)
         self._new = (QImage(rendered.image), QPoint(rendered.offset),
-                     rendered.name, dict(rendered.text_data or {}))
+                     rendered.name, dict(rendered.text_data or {}),
+                     deepcopy(rendered.effects), rendered.fill_opacity)
 
     def _apply(self, state) -> None:
-        image, offset, name, data = state
+        image, offset, name, data, effects, fill_opacity = state
         dirty = self._layer.bounds()
         self._layer.image = QImage(image)
         self._layer.offset = QPoint(offset)
         self._layer.name = name
         self._layer.text_data = dict(data)
+        self._layer.effects = deepcopy(effects)
+        self._layer.fill_opacity = fill_opacity
         self._layer.fx_cache = None
         self._doc.notify_pixels(dirty.united(self._layer.bounds()))
 
