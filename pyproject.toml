@@ -60,7 +60,6 @@ dev = [
     "lensfunpy>=1.18",
     "exifread>=3.0",
     "mcp>=1.2",
-    "pyinstaller>=6.10",
 ]
 
 [project.scripts]

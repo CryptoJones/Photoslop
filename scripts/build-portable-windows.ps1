@@ -27,8 +27,10 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     throw "build-portable-windows.ps1: 'uv' not found - install it from https://astral.sh/uv"
 }
 
-Write-Host "Syncing dependencies (dev extra, includes pyinstaller)..."
-uv sync --extra dev --extra formats --extra raw
+Write-Host "Syncing dependencies (core + formats/raw)..."
+uv sync --extra formats --extra raw
+Write-Host "Installing PyInstaller..."
+uv pip install "pyinstaller>=6.10"
 
 Write-Host "Building Photoslop.exe (v$Version) with PyInstaller..."
 uv run pyinstaller `

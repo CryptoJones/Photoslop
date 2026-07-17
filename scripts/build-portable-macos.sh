@@ -29,8 +29,10 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Syncing dependencies (dev extra, includes pyinstaller)..."
-uv sync --extra dev --extra formats --extra raw
+echo "Syncing dependencies (core + formats/raw)..."
+uv sync --extra formats --extra raw
+echo "Installing PyInstaller..."
+uv pip install "pyinstaller>=6.10"
 
 echo "Building Photoslop.app (v$VERSION) with PyInstaller..."
 uv run pyinstaller \
