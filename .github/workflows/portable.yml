@@ -1,0 +1,48 @@
+name: portable
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+      - name: Build portable macOS app
+        run: ./scripts/build-portable-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Photoslop-macOS-portable
+          path: dist/portable-macos/*.zip
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" dist/portable-macos/*.zip --clobber
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+      - name: Build portable Windows app
+        shell: pwsh
+        run: ./scripts/build-portable-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Photoslop-Windows-portable
+          path: dist/portable-windows/*.zip
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh release upload "${env:GITHUB_REF_NAME}" (Get-Item dist/portable-windows/*.zip) --clobber
