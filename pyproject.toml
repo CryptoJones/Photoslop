@@ -1,6 +1,6 @@
 [project]
 name = "photoslop"
-version = "1.29.0"
+version = "1.29.1"
 description = "A memory-frugal, multiplatform, layered raster image editor built with Qt (PySide6)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -60,6 +60,7 @@ dev = [
     "lensfunpy>=1.18",
     "exifread>=3.0",
     "mcp>=1.2",
+    "pyinstaller>=6.10",
 ]
 
 [project.scripts]

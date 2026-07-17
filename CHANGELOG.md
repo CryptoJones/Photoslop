@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.29.1] — 2026-07-17
+
+### Added
+- Portable PyInstaller builds for macOS and Windows: self-contained bundles
+  with no `uv`/Python install or network required. Build locally via
+  `scripts/build-portable-macos.sh` / `scripts/build-portable-windows.ps1`,
+  or via the `portable` GitHub Actions workflow (`workflow_dispatch` or a
+  `v*` tag push), which also attaches the zips to GitHub Releases.
+
 ## [1.29.0] — 2026-07-16
 
 ### Added
