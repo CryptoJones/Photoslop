@@ -9,6 +9,11 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] Add a native iPadOS edition with Apple Pencil drawing, touch navigation,
+  layered raster editing, Photos/Files import, PNG export, device builds, and
+  simulator verification
+  ([#173](https://github.com/CryptoJones/Photoslop/issues/173)) — shipped v1.29.0
+
 - [x] Add accessibility, performance, cursor, UI, and vector workflow
   verification plus honest feature-parity documentation
   ([#158](https://github.com/CryptoJones/Photoslop/issues/158)) — shipped v1.26.0

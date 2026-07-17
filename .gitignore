@@ -20,3 +20,4 @@ htmlcov/
 Thumbs.db
 .claude/
 .agent-yes/
+ipados/*.xcodeproj/
