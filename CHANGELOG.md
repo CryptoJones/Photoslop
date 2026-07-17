@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.29.0] — 2026-07-16
+
+### Added
+- A native iPadOS 17+ edition built with SwiftUI and PencilKit, with Apple
+  Pencil pressure-aware drawing, optional finger drawing, one-finger pan,
+  pinch zoom, pen/eraser tools, adjustable ink color and width, and an
+  iPad-native split workspace.
+- Raster layer controls for add, duplicate, reorder, rename, visibility,
+  opacity, clear, merge down, and delete; flattened output preserves the
+  visible stack and PencilKit strokes.
+- Image import through both Photos and Files plus flattened PNG export through
+  the system document picker, including security-scoped file access.
+- A reproducible XcodeGen project, iPad-only application metadata and icon,
+  unit coverage for document/layer/compositing behavior, and a macOS CI build
+  that attaches the unsigned arm64 developer app to tagged GitHub releases.
+
+### Changed
+- The project version is now shared by the desktop/automation edition and the
+  initial native iPad edition. Desktop behavior is otherwise unchanged.
+
+### Fixed
+- Ruler cursor hairlines stay aligned with horizontal guides when a platform
+  layout pass recenters the canvas after zooming, including 200% zoom on macOS.
+
 ## [1.28.0] — 2026-07-16
 
 ### Added

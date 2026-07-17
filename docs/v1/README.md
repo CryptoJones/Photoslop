@@ -1,11 +1,12 @@
 # Photoslop v1 Documentation
 
 The authoritative reference for every Photoslop feature — desktop app and
-command line — as of **v1.28.0**.
+command line — as of **v1.29.0**.
 
 | Guide | Covers |
 |---|---|
 | [Getting Started](getting-started.md) | install, extras, launching the app and the CLI |
+| [iPadOS](ipados.md) | native iPad edition, Apple Pencil/touch workflows, building and signing |
 | [Tools](tools.md) | all 32 canvas tools with keys and behaviour |
 | [Vector Model](vector-model.md) | schema v1, cubic geometry, appearance, migration, ORA fallbacks |
 | [Keyboard Shortcuts](keyboard-shortcuts.md) | the complete keymap |

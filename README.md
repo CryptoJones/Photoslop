@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v1.23.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v1.29.0-orange)]()
 
 ---
 
@@ -22,7 +22,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 ## What it does
 
 Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
-(Linux, Windows, macOS) and treats RAM like it costs money:
+(Linux, Windows, macOS, and iPadOS) and treats RAM like it costs money:
 
 - **Layers** — add, delete, duplicate, reorder, hide/show, per-layer opacity,
   13 blend modes (multiply, screen, overlay, dodge/burn, difference…)
@@ -100,6 +100,25 @@ Prefer a one-command launcher? From a checkout, run **`./run.sh`**
 (Linux/macOS) or **`run.cmd`** (Windows) — each bootstraps `uv` if it's
 missing, then starts the app. Any arguments pass straight through to
 `photoslop` (e.g. `./run.sh path/to/image.png`).
+
+### iPadOS
+
+Photoslop v1.29.0 adds a native iPad edition under [`ipados/`](ipados/). It is
+built with SwiftUI and PencilKit because Qt for Python does not support direct
+iOS deployment. The initial iPad edition provides Apple Pencil/finger drawing,
+touch pan and pinch zoom, a native layer stack, Photos/Files import, and PNG
+export. The broader PySide desktop toolset, OpenRaster editing, vector model,
+CLI, and MCP server remain desktop-only in this release.
+
+Build the unsigned arm64 developer bundle with:
+
+```bash
+brew install xcodegen
+./scripts/build-ipados.sh
+```
+
+See the [iPadOS guide](docs/v1/ipados.md) for device signing, the exact feature
+boundary, and Xcode instructions.
 
 ## Tools & shortcuts
 

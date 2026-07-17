@@ -516,6 +516,7 @@ class EditorView(QWidget):
         self.scroll.horizontalScrollBar().valueChanged.connect(self.sync_rulers)
         self.scroll.verticalScrollBar().valueChanged.connect(self.sync_rulers)
         self.scroll.viewport().installEventFilter(self)
+        self.canvas.installEventFilter(self)
 
         self.canvas.mousePos.connect(self._on_mouse_pos)
         self.hruler.guideDragged.connect(lambda g: self._guide_drag("h", g))
@@ -530,6 +531,11 @@ class EditorView(QWidget):
 
     def eventFilter(self, obj, ev) -> bool:
         if obj is self.scroll.viewport() and ev.type() == QEvent.Type.Resize:
+            self.sync_rulers()
+        elif obj is self.canvas and ev.type() == QEvent.Type.Move:
+            # A style/layout pass can recenter the fixed-size canvas after the
+            # viewport resize (notably at 200% zoom on macOS). Keep both ruler
+            # origins tied to the canvas's final widget position.
             self.sync_rulers()
         return False
 

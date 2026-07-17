@@ -1,0 +1,51 @@
+name: iPadOS
+
+on:
+  pull_request:
+    paths:
+      - "ipados/**"
+      - "scripts/build-ipados.sh"
+      - ".github/workflows/ipados.yml"
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: ipados
+        run: xcodegen generate
+      - name: Build iPadOS app
+        run: scripts/build-ipados.sh
+      - name: Select iPad simulator
+        id: simulator
+        run: |
+          DEVICE_ID="$(xcrun simctl list devices available -j | jq -r \
+            '[.devices[][] | select(.name | startswith("iPad"))][0].udid')"
+          test -n "$DEVICE_ID" -a "$DEVICE_ID" != "null"
+          echo "id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
+      - name: Run iPadOS tests
+        working-directory: ipados
+        run: |
+          xcodebuild \
+            -project Photoslop-iPadOS.xcodeproj \
+            -scheme PhotoslopIPad \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}' \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Photoslop-iPadOS-unsigned
+          path: ipados/dist/Photoslop-iPadOS-unsigned.zip
+      - name: Attach developer build to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" ipados/dist/Photoslop-iPadOS-unsigned.zip --clobber
