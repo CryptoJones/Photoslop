@@ -71,8 +71,8 @@ from this Linux workspace:
 - VoiceOver, NVDA, Orca, high-contrast, 200%-text, and reduced-motion manual rows;
 - hosted matrix/security/portable/scheduled performance jobs on the final commit.
 
-Until those rows are recorded in the release-candidate checklist, the code is
-implemented but v1.30.0 is prepared rather than released.
+Those rows remain release-candidate evidence owned by hosted workflows and
+manual platform reviewers; this implementation record does not pre-claim them.
 
 Priority meanings:
 
