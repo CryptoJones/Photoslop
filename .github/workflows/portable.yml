@@ -2,6 +2,12 @@ name: portable
 
 on:
   workflow_dispatch:
+    inputs:
+      verify_macos_signing:
+        description: Import the protected Developer ID identity and sign the macOS validation artifact
+        required: false
+        type: boolean
+        default: false
   pull_request:
     paths:
       - "photoslop/**"
@@ -23,11 +29,11 @@ jobs:
   macos:
     runs-on: macos-15
     env:
-      PHOTOSLOP_REQUIRE_SIGNING: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+      PHOTOSLOP_REQUIRE_SIGNING: ${{ (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.verify_macos_signing)) && '1' || '0' }}
       # v1.30.0 is Developer ID signed but is not notarized. Later tags remain
       # fail-closed until the notary credentials are configured.
       PHOTOSLOP_REQUIRE_NOTARIZATION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name != 'v1.30.0' && '1' || '0' }}
-      PHOTOSLOP_ARTIFACT_QUALIFIER: ${{ github.ref_name == 'v1.30.0' && 'SIGNED-NOT-NOTARIZED' || '' }}
+      PHOTOSLOP_ARTIFACT_QUALIFIER: ${{ (github.ref_name == 'v1.30.0' || (github.event_name == 'workflow_dispatch' && inputs.verify_macos_signing)) && 'SIGNED-NOT-NOTARIZED' || '' }}
       PHOTOSLOP_APPLE_ID: ${{ secrets.PHOTOSLOP_APPLE_ID }}
       PHOTOSLOP_APPLE_TEAM_ID: ${{ secrets.PHOTOSLOP_APPLE_TEAM_ID }}
       PHOTOSLOP_APPLE_APP_PASSWORD: ${{ secrets.PHOTOSLOP_APPLE_APP_PASSWORD }}
@@ -38,7 +44,7 @@ jobs:
           python-version: "3.12"
       - run: python scripts/check-version.py
       - name: Import Developer ID identity
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.verify_macos_signing)
         env:
           MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -53,7 +59,7 @@ jobs:
             dist/portable-macos/*.json
             dist/portable-macos/THIRD_PARTY_NOTICES.md
       - name: Remove temporary signing keychain
-        if: always() && startsWith(github.ref, 'refs/tags/v')
+        if: always() && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.verify_macos_signing))
         run: security delete-keychain "$RUNNER_TEMP/photoslop-signing.keychain-db" 2>/dev/null || true
 
   windows:
