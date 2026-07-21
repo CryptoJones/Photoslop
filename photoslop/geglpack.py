@@ -92,6 +92,7 @@ def run_gegl(image: QImage, operation: str, props: dict) -> None:
 
 class _GeglFilter(Filter):
     operation = ""
+    unsafe = True
 
     def apply(self, image: QImage, params: dict) -> None:
         run_gegl(image, self.operation, dict(params))

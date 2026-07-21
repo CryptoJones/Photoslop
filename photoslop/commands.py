@@ -641,8 +641,14 @@ class ResizeImageCommand(QUndoCommand):
     objects; redo recomputes the scaled versions (CPU is cheaper than holding
     both resolutions in RAM)."""
 
-    def __init__(self, doc: Document, new_size: QSize):
+    def __init__(self, doc: Document, new_size: QSize,
+                 *, allow_large: bool = False):
         super().__init__("Resize Image")
+        from photoslop.resources import validate_dimensions
+
+        validate_dimensions(new_size.width(), new_size.height(),
+                            operation="resize image", buffers=2,
+                            allow_large=allow_large)
         self.doc = doc
         self.old_size = QSize(doc.size)
         self.new_size = QSize(new_size)
@@ -837,8 +843,14 @@ class ResizeCanvasCommand(QUndoCommand):
     """Change canvas size and shift layers; no pixels are copied or dropped,
     which also makes crop instant and fully undoable."""
 
-    def __init__(self, doc: Document, new_size: QSize, delta: QPoint, text: str = "Canvas Size"):
+    def __init__(self, doc: Document, new_size: QSize, delta: QPoint,
+                 text: str = "Canvas Size", *, allow_large: bool = False):
         super().__init__(text)
+        from photoslop.resources import validate_dimensions
+
+        validate_dimensions(new_size.width(), new_size.height(),
+                            operation=text.lower(), buffers=2,
+                            allow_large=allow_large)
         self.doc = doc
         self.old_size = QSize(doc.size)
         self.new_size = QSize(new_size)

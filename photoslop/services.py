@@ -7,7 +7,7 @@ import os
 from dataclasses import dataclass
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QColor, QImage
+from PySide6.QtGui import QColor, QImage, QImageReader
 
 from photoslop import color, io_formats, npimage
 from photoslop.atomicio import WriteTicket, atomic_write
@@ -15,27 +15,41 @@ from photoslop.document import Document
 from photoslop.io_ora import load_ora, save_ora
 from photoslop.io_raw import develop_raw, is_raw_path, load_raw
 from photoslop.io_svg import load_svg, save_svg
+from photoslop.resources import validate_dimensions
 
 
 class FileService:
     @staticmethod
-    def load(path: str, raw_params: dict | None = None) -> Document:
+    def load(path: str, raw_params: dict | None = None,
+             *, allow_large: bool = False) -> Document:
         if path.lower().endswith(".ora"):
-            return load_ora(path)
+            return load_ora(path, allow_large=allow_large)
         if path.lower().endswith(".svg"):
-            return load_svg(path)
+            return load_svg(path, allow_large=allow_large)
         if is_raw_path(path):
             image = (develop_raw(path, **raw_params) if raw_params is not None
                      else load_raw(path))
+            validate_dimensions(image.width(), image.height(),
+                                operation="RAW decode", buffers=2,
+                                allow_large=allow_large)
             return Document.from_image(image, os.path.basename(path), 72.0)
         if io_formats.is_extra_path(path):
             if not io_formats.available(path):
                 raise ValueError(io_formats.missing_hint(path))
-            image = io_formats.load_extra(path)
+            image = io_formats.load_extra(path, allow_large=allow_large)
         else:
-            image = QImage(path)
+            reader = QImageReader(path)
+            size = reader.size()
+            if size.isValid():
+                validate_dimensions(size.width(), size.height(),
+                                    operation="image decode", buffers=2,
+                                    allow_large=allow_large)
+            image = reader.read()
         if image is None or image.isNull():
             raise ValueError(f"Could not open {path}")
+        validate_dimensions(image.width(), image.height(),
+                            operation="image decode", buffers=2,
+                            allow_large=allow_large)
         dpm = image.dotsPerMeterX()
         dpi = round(dpm * 0.0254) if dpm > 0 else 72
         return Document.from_image(image, os.path.basename(path), float(dpi))

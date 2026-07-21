@@ -14,7 +14,7 @@ needs_gimp = pytest.mark.skipif(not HAVE_GIMP, reason="no gimp binary on PATH")
 
 @needs_gimp
 def test_bridge_registers_when_available(qapp):
-    reg = available_filters()
+    reg = available_filters(allow_unsafe=True)
     for name in ("gimp-script", "gimp-oilify", "gimp-softglow", "gimp-cubism"):
         assert name in reg
 
@@ -53,7 +53,7 @@ def test_script_error_is_clean_and_empty_rejected(qapp):
 def test_cli_bridge_selection_aware(qapp, tmp_path):
     out = str(tmp_path / "inv.png")
     assert cli.main([
-        "--new", "40x20", "--fill", "200,60,40",
+        "--allow-unsafe-plugins", "--new", "40x20", "--fill", "200,60,40",
         "--select", "0,0,20,20",
         "--filter", "gimp-script:script=(gimp-drawable-invert drawable FALSE)",
         "--deselect", "--output", out]) == 0

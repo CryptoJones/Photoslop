@@ -25,6 +25,7 @@ command line — as of **v1.30.0**.
 | [Filter Plugins](filter-plugins.md) | write a filter class + one entry point → menu, CLI, selections, smart replay |
 | [Command Line](cli.md) | the full `photoslop-cli` reference — every operation, exit codes, recipes |
 | [MCP Server](mcp.md) | drive the engine from an LLM/agent over the Model Context Protocol |
+| [Security](security.md) | parser/resource limits, plugin trust, model networking, and MCP confinement |
 | [Feature Parity](feature-parity.md) | Photoslop vs Photoshop, GIMP, Paint.NET, Lightroom Classic, darktable, Capture One — researched July 2026 |
 | [Architecture](architecture.md) | the memory-frugality design |
 

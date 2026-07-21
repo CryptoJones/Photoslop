@@ -908,7 +908,8 @@ class MainWindow(QMainWindow):
                                      self.action_denoise_model))
         from photoslop.filters import available_filters
 
-        plugins = available_filters()
+        plugins = available_filters(allow_unsafe=str(self.settings.value(
+            "security/allow_unsafe_plugins", "false")).lower() == "true")
         if plugins:
             m_filter.addSeparator()
             for fname in sorted(plugins):
@@ -1185,14 +1186,27 @@ class MainWindow(QMainWindow):
         img = QGuiApplication.clipboard().image()
         return img.size() if not img.isNull() else None
 
+    def _allow_large_documents(self) -> bool:
+        return str(self.settings.value(
+            "security/allow_large_documents", "false")).lower() == "true"
+
     def action_new(self) -> None:
         dialog = NewDocumentDialog(self, initial_size=self._clip_size_hint())
         if dialog.exec():
             name, size, dpi, background = dialog.values()
-            self.add_document(Document.new(size, dpi, name, background))
+            from photoslop.resources import validate_dimensions
+
+            try:
+                validate_dimensions(
+                    size.width(), size.height(), operation="new document",
+                    allow_large=self._allow_large_documents())
+                self.add_document(Document.new(size, dpi, name, background))
+            except ValueError as exc:
+                self.statusBar().showMessage(str(exc), 8000)
 
     def action_open(self) -> None:
         gui_thread = self.thread()
+        allow_large = self._allow_large_documents()
         for path in OpenImageDialog.get_paths(self, self._last_directory()):
             if is_raw_path(path):
                 from photoslop.rawdialog import RawDevelopDialog
@@ -1202,7 +1216,8 @@ class MainWindow(QMainWindow):
 
                 def develop(context, source=path, params=values):
                     context.progress(5, "Decoding RAW")
-                    doc = FileService.load(source, params)
+                    doc = FileService.load(
+                        source, params, allow_large=allow_large)
                     doc.moveToThread(gui_thread)
                     context.progress(100, "Developed")
                     return doc
@@ -1214,9 +1229,9 @@ class MainWindow(QMainWindow):
                     lambda doc, source=path: self._finish_open(doc, source))
                 continue
 
-            def operation(context, source=path):
+            def operation(context, source=path, permit=allow_large):
                 context.progress(5, "Reading")
-                doc = FileService.load(source)
+                doc = FileService.load(source, allow_large=permit)
                 doc.moveToThread(gui_thread)
                 context.progress(100, "Decoded")
                 return doc
@@ -1301,9 +1316,10 @@ class MainWindow(QMainWindow):
         return (paths[0] if paths else "", dialog.selectedNameFilter())
 
     def open_path(self, path: str) -> bool:
+        allow_large = self._allow_large_documents()
         try:
             if path.lower().endswith((".ora", ".svg")):
-                doc = FileService.load(path)
+                doc = FileService.load(path, allow_large=allow_large)
             elif is_raw_path(path):
                 from photoslop.io_raw import probe_raw
                 from photoslop.rawdialog import RawDevelopDialog
@@ -1313,24 +1329,23 @@ class MainWindow(QMainWindow):
                 # cancelled = camera defaults
                 img = (dialog.developed() if dialog.exec()
                        else load_raw(path))
+                from photoslop.resources import validate_dimensions
+
+                validate_dimensions(img.width(), img.height(),
+                                    operation="RAW decode", buffers=2,
+                                    allow_large=allow_large)
                 doc = Document.from_image(img, os.path.basename(path), 72.0)
             elif io_formats.is_extra_path(path):
                 if not io_formats.available(path):
                     self.statusBar().showMessage(io_formats.missing_hint(path), 8000)
                     return False
-                img = io_formats.load_extra(path)
+                img = io_formats.load_extra(path, allow_large=allow_large)
                 if img is None or img.isNull():
                     self.statusBar().showMessage(f"Could not open {path}", 5000)
                     return False
                 doc = Document.from_image(img, os.path.basename(path), 72.0)
             else:
-                img = QImage(path)
-                if img.isNull():
-                    self.statusBar().showMessage(f"Could not open {path}", 5000)
-                    return False
-                dpm = img.dotsPerMeterX()
-                dpi = round(dpm * 0.0254) if dpm > 0 else 72
-                doc = Document.from_image(img, os.path.basename(path), float(dpi))
+                doc = FileService.load(path, allow_large=allow_large)
         except Exception as exc:  # zip/XML errors from damaged files
             self.statusBar().showMessage(f"Could not open {path}: {exc}", 8000)
             return False
@@ -1542,6 +1557,7 @@ class MainWindow(QMainWindow):
         if (layer is not None and layer.source is not None
                 and not getattr(self, "_replaying_smart", False)):
             layer.smart_filters.append(tag)
+            layer.smart_filters_trusted = True
 
     def action_reapply_smart_filters(self) -> None:
         doc = self.current_doc()
@@ -1554,6 +1570,20 @@ class MainWindow(QMainWindow):
         if not layer.smart_filters:
             self.statusBar().showMessage("No smart filters recorded", 4000)
             return
+        if not layer.smart_filters_trusted:
+            answer = QMessageBox.warning(
+                self,
+                "Trust imported smart filters?",
+                "This recipe came from an imported file and may invoke enabled "
+                "native or third-party plugins. Re-apply it only if you trust "
+                "the file's source.",
+                QMessageBox.StandardButton.Apply
+                | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if answer != QMessageBox.StandardButton.Apply:
+                return
+            layer.smart_filters_trusted = True
         doc.undo_stack.beginMacro("Re-apply Smart Filters")
         self._replaying_smart = True
         try:
@@ -1607,7 +1637,8 @@ class MainWindow(QMainWindow):
         """Run a registered filter plugin through the shared plumbing."""
         from photoslop.filters import available_filters
 
-        cls = available_filters().get(name)
+        cls = available_filters(allow_unsafe=str(self.settings.value(
+            "security/allow_unsafe_plugins", "false")).lower() == "true").get(name)
         if cls is None:
             self.statusBar().showMessage(f"Filter not installed: {name}", 5000)
             return
@@ -1859,6 +1890,7 @@ class MainWindow(QMainWindow):
                 and not getattr(self, "_replaying_smart", False)):
             layer.smart_filters.append(
                 ("tilt-shift", centre, band, transition, radius))
+            layer.smart_filters_trusted = True
 
     def action_content_aware_fill(self) -> None:
         doc = self.current_doc()
@@ -2279,7 +2311,13 @@ class MainWindow(QMainWindow):
         name = s.value("model/adapter", "")
         if not name:
             return None
-        return create_adapter(name, {"url": s.value("model/http_url", "")})
+        return create_adapter(name, {
+            "url": s.value("model/http_url", ""),
+            "allow_insecure_http": str(s.value(
+                "model/allow_insecure_http", "false")).lower() == "true",
+            "allow_unsafe_plugins": str(s.value(
+                "security/allow_unsafe_plugins", "false")).lower() == "true",
+        })
 
     def action_preferences(self) -> None:
         from photoslop.preferences import PreferencesDialog
@@ -2719,7 +2757,12 @@ class MainWindow(QMainWindow):
             return
         dialog = ResizeImageDialog(doc.size, self)
         if dialog.exec() and dialog.value() != doc.size:
-            doc.undo_stack.push(ResizeImageCommand(doc, dialog.value()))
+            try:
+                doc.undo_stack.push(ResizeImageCommand(
+                    doc, dialog.value(),
+                    allow_large=self._allow_large_documents()))
+            except ValueError as exc:
+                self.statusBar().showMessage(str(exc), 8000)
 
     def action_canvas_size(self) -> None:
         doc = self.current_doc()
@@ -2729,7 +2772,12 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             new_size, delta = dialog.value()
             if new_size != doc.size:
-                doc.undo_stack.push(ResizeCanvasCommand(doc, new_size, delta))
+                try:
+                    doc.undo_stack.push(ResizeCanvasCommand(
+                        doc, new_size, delta,
+                        allow_large=self._allow_large_documents()))
+                except ValueError as exc:
+                    self.statusBar().showMessage(str(exc), 8000)
 
     # ------------------------------------------------------------------ view actions
 

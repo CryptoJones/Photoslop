@@ -93,6 +93,7 @@ def _merge_op(operation: str) -> str:
 
 
 class GimpOilify(Filter):
+    unsafe = True
     name = "gimp-oilify"
     label = "GIMP Oilify"
     params = ()
@@ -102,6 +103,7 @@ class GimpOilify(Filter):
 
 
 class GimpSoftglow(Filter):
+    unsafe = True
     name = "gimp-softglow"
     label = "GIMP Softglow"
     params = ()
@@ -111,6 +113,7 @@ class GimpSoftglow(Filter):
 
 
 class GimpCubism(Filter):
+    unsafe = True
     name = "gimp-cubism"
     label = "GIMP Cubism"
     params = ()
@@ -120,6 +123,7 @@ class GimpCubism(Filter):
 
 
 class GimpScript(Filter):
+    unsafe = True
     name = "gimp-script"
     label = "GIMP Script-Fu"
     params = (ParamSpec(

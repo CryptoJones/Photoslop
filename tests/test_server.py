@@ -9,6 +9,11 @@ from PySide6.QtGui import QColor, QImage
 from photoslop import cli, server
 
 
+@pytest.fixture(autouse=True)
+def _confine_server_to_test_directory(tmp_path):
+    server.configure(root=tmp_path)
+
+
 def make_png(tmp_path, name="pic.png", size=(600, 400)):
     img = QImage(QSize(*size), QImage.Format.Format_ARGB32_Premultiplied)
     img.fill(QColor(10, 120, 240))
@@ -20,9 +25,12 @@ def make_png(tmp_path, name="pic.png", size=(600, 400)):
 def test_list_operations_mirrors_cli_ops():
     catalog = server.list_operations()
     ops = catalog["operations"]
-    assert catalog["count"] == len(cli.OPS)
-    # exactly the CLI's op table — the parity promise, verbatim
-    assert [o["name"] for o in ops] == list(cli.OPS)
+    assert catalog["count"] == len(cli.OPS) - 4
+    assert [o["name"] for o in ops] == [
+        name for name in cli.OPS
+        if name not in {"model-url", "select-subject", "generative-fill",
+                        "denoise-model"}
+    ]
     by_name = {o["name"]: o for o in ops}
     assert by_name["resize"]["args"] == "WxH"
     assert by_name["auto-levels"]["args"] is None  # a no-argument flag op
@@ -96,9 +104,9 @@ def test_document_info_is_read_only(qapp, tmp_path):
     assert len(info["layers"]) == 1
 
 
-def test_build_server_registers_the_three_tools():
+def test_build_server_registers_the_three_tools(tmp_path):
     pytest.importorskip("mcp")
-    srv = server.build_server()
+    srv = server.build_server(root=tmp_path)
     assert srv.name == "photoslop"
     import asyncio
 

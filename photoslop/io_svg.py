@@ -4,11 +4,11 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import math
 import re
 import uuid
-import xml.etree.ElementTree as ET
 from html import escape
 
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QPoint, QRect, QSize
@@ -19,9 +19,17 @@ from photoslop import vector
 from photoslop.atomicio import WriteTicket, atomic_write
 from photoslop.document import Document
 from photoslop.layer import Layer
+from photoslop.resources import (
+    DESKTOP_BUDGET,
+    parse_xml_limited,
+    read_limited,
+    validate_dimensions,
+)
 
 _NUMBER = r"[-+]?(?:\d*\.\d+|\d+\.?)(?:[Ee][-+]?\d+)?"
-_TOKENS = re.compile(rf"[MLCZmlcz]|{_NUMBER}")
+_TOKEN = re.compile(rf"[A-Za-z]|{_NUMBER}")
+_SEPARATORS = re.compile(r"[\s,]*")
+_MAX_PATH_TOKENS = 1_000_000
 _SUPPORTED = {"svg", "g", "defs", "linearGradient", "radialGradient", "stop",
               "rect", "ellipse", "circle", "path", "text", "tspan", "image",
               "filter", "feGaussianBlur", "feOffset", "feFlood", "feComposite",
@@ -31,6 +39,31 @@ _SUPPORTED = {"svg", "g", "defs", "linearGradient", "radialGradient", "stop",
 
 def _tag(element) -> str:
     return element.tag.rsplit("}", 1)[-1]
+
+
+def _validate_resource_refs(root) -> None:
+    """Reject network/file references, including those nested in data SVGs."""
+    svg_prefix = "data:image/svg+xml;base64,"
+    for element in root.iter():
+        for key, value in element.attrib.items():
+            local = key.rsplit("}", 1)[-1]
+            if local == "href":
+                if value.startswith(svg_prefix):
+                    try:
+                        nested = base64.b64decode(
+                            value[len(svg_prefix):], validate=True)
+                    except (binascii.Error, ValueError) as exc:
+                        raise ValueError("SVG: invalid embedded SVG") from exc
+                    nested_root = parse_xml_limited(
+                        nested, operation="embedded SVG")
+                    _validate_resource_refs(nested_root)
+                elif not (value.startswith("#") or value.startswith(
+                        "data:image/png;base64,")):
+                    raise ValueError("SVG: external resources are not allowed")
+            for match in re.finditer(r"url\(([^)]+)\)", value,
+                                     flags=re.IGNORECASE):
+                if not match.group(1).strip(" \t\"'").startswith("#"):
+                    raise ValueError("SVG: external resources are not allowed")
 
 
 def _color(value: str | None, opacity: str | None = None):
@@ -44,7 +77,17 @@ def _color(value: str | None, opacity: str | None = None):
 
 
 def _commands(source: str) -> list[dict]:
-    tokens = _TOKENS.findall(source.replace(",", " "))
+    tokens: list[str] = []
+    end = 0
+    for match in _TOKEN.finditer(source):
+        if not _SEPARATORS.fullmatch(source[end:match.start()]):
+            raise ValueError("invalid SVG path syntax")
+        tokens.append(match.group(0))
+        if len(tokens) > _MAX_PATH_TOKENS:
+            raise ValueError("SVG path has too many tokens")
+        end = match.end()
+    if not _SEPARATORS.fullmatch(source[end:]):
+        raise ValueError("invalid SVG path syntax")
     commands, index, op = [], 0, None
     cursor = [0.0, 0.0]
     sizes = {"M": 2, "L": 2, "C": 6, "Z": 0}
@@ -133,14 +176,17 @@ def _transform(value: str | None) -> list[float]:
     return numbers if len(numbers) == 6 else [1, 0, 0, 1, 0, 0]
 
 
-def load_svg(path: str) -> Document:
-    with open(path, "rb") as handle:
-        source = handle.read()
-    root = ET.fromstring(source)
+def load_svg(path: str, *, allow_large: bool = False) -> Document:
+    source = read_limited(path, DESKTOP_BUDGET.max_xml_bytes,
+                          operation="SVG")
+    root = parse_xml_limited(source, operation="SVG")
+    _validate_resource_refs(root)
     view = [float(value) for value in root.get("viewBox", "").split()]
     width = int(round(view[2] if len(view) == 4 else float(root.get("width", 800))))
     height = int(round(view[3] if len(view) == 4 else float(root.get("height", 600))))
-    doc = Document(QSize(max(1, width), max(1, height)), 72, path)
+    validate_dimensions(width, height, operation="SVG canvas", buffers=2,
+                        allow_large=allow_large)
+    doc = Document(QSize(width, height), 72, path)
     gradients = {element.get("id"): _gradient(element) for element in root.iter()
                  if _tag(element) in {"linearGradient", "radialGradient"}
                  and element.get("id")}
@@ -154,8 +200,17 @@ def load_svg(path: str) -> Document:
                     or element.get("{http://www.w3.org/1999/xlink}href", ""))
             prefix = "data:image/png;base64,"
             if href.startswith(prefix):
-                image = QImage.fromData(base64.b64decode(href[len(prefix):]))
+                try:
+                    payload = base64.b64decode(href[len(prefix):], validate=True)
+                except ValueError as exc:
+                    raise ValueError("SVG: invalid embedded PNG") from exc
+                if len(payload) > DESKTOP_BUDGET.max_entry_bytes:
+                    raise ValueError("SVG: embedded PNG is too large")
+                image = QImage.fromData(payload)
                 if not image.isNull():
+                    validate_dimensions(image.width(), image.height(),
+                                        operation="SVG embedded image", buffers=2,
+                                        allow_large=allow_large)
                     layer = Layer(
                         element.get("id", "SVG image"), image,
                         QPoint(round(float(element.get("x", 0))),

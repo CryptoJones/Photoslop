@@ -4,6 +4,7 @@ with GIMP and Krita. An .ora is a zip: mimetype, stack.xml, layer PNGs."""
 
 from __future__ import annotations
 
+import os
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -13,6 +14,15 @@ from PySide6.QtGui import QImage
 from photoslop.atomicio import WriteTicket, atomic_write
 from photoslop.document import Document
 from photoslop.layer import FORMAT, ORA_OPS, ORA_OPS_REVERSE, Layer
+from photoslop.resources import (
+    DESKTOP_BUDGET,
+    ResourceLimitError,
+    parse_xml_limited,
+    read_archive_member,
+    validate_archive_members,
+    validate_dimensions,
+    validate_dpi,
+)
 
 MIMETYPE = "image/openraster"
 
@@ -141,16 +151,31 @@ def _write_ora(doc: Document, path: str) -> None:
         zf.writestr("Thumbnails/thumbnail.png", _png_bytes(thumb))
 
 
-def _walk_layers(zf: zipfile.ZipFile, node: ET.Element, base: QPoint, out: list[Layer]) -> None:
+def _walk_layers(zf: zipfile.ZipFile, members: dict, node: ET.Element,
+                 base: QPoint, out: list[Layer], *, allow_large: bool) -> None:
     """Collect layers depth-first, flattening nested stacks (groups) with
     accumulated offsets. XML order is top-first, so append order is too."""
+    if node is None:
+        raise ValueError("OpenRaster: stack.xml has no stack")
     for child in node:
         if child.tag == "stack":
             off = base + QPoint(int(float(child.get("x", "0"))), int(float(child.get("y", "0"))))
-            _walk_layers(zf, child, off, out)
+            _walk_layers(zf, members, child, off, out, allow_large=allow_large)
         elif child.tag == "layer":
+            if len(out) >= DESKTOP_BUDGET.max_layers:
+                raise ResourceLimitError(
+                    f"OpenRaster: maximum layer count is {DESKTOP_BUDGET.max_layers}")
             src = child.get("src", "")
-            img = QImage.fromData(zf.read(src)).convertToFormat(FORMAT)
+            if src not in members:
+                raise ValueError(f"OpenRaster: missing layer member {src!r}")
+            img = QImage.fromData(read_archive_member(
+                zf, members[src], operation="OpenRaster layer"))
+            if img.isNull():
+                raise ValueError(f"OpenRaster: undecodable layer {src!r}")
+            validate_dimensions(img.width(), img.height(),
+                                operation="OpenRaster layer", buffers=2,
+                                allow_large=allow_large)
+            img = img.convertToFormat(FORMAT)
             layer = Layer(
                 child.get("name") or "Layer",
                 img,
@@ -161,20 +186,30 @@ def _walk_layers(zf: zipfile.ZipFile, node: ET.Element, base: QPoint, out: list[
                 child.get("photoslop-id"),
             )
             mask_src = child.get("photoslop-mask")
-            if mask_src and mask_src in zf.namelist():
-                layer.mask = QImage.fromData(zf.read(mask_src)).convertToFormat(
-                    QImage.Format.Format_Grayscale8)
+            if mask_src and mask_src in members:
+                mask = QImage.fromData(read_archive_member(
+                    zf, members[mask_src], operation="OpenRaster mask"))
+                if mask.isNull() or mask.size() != img.size():
+                    raise ValueError("OpenRaster: invalid layer mask")
+                layer.mask = mask.convertToFormat(QImage.Format.Format_Grayscale8)
             layer.clipped = child.get("photoslop-clipped") == "1"
             layer.group = child.get("photoslop-group") or None
             source_src = child.get("photoslop-source")
             filters_json = child.get("photoslop-smart-filters")
-            if source_src and source_src in zf.namelist():
-                layer.source = QImage.fromData(
-                    zf.read(source_src)).convertToFormat(FORMAT)
+            if source_src and source_src in members:
+                source = QImage.fromData(read_archive_member(
+                    zf, members[source_src], operation="OpenRaster smart source"))
+                if source.isNull():
+                    raise ValueError("OpenRaster: invalid smart-object source")
+                validate_dimensions(source.width(), source.height(),
+                                    operation="OpenRaster smart source", buffers=2,
+                                    allow_large=allow_large)
+                layer.source = source.convertToFormat(FORMAT)
             if filters_json:
                 import json
 
                 layer.smart_filters = [tuple(f) for f in json.loads(filters_json)]
+                layer.smart_filters_trusted = False
             effects_json = child.get("photoslop-effects")
             if effects_json:
                 import json
@@ -198,23 +233,38 @@ def _walk_layers(zf: zipfile.ZipFile, node: ET.Element, base: QPoint, out: list[
 
                 layer.vector_data = migrate_vector(json.loads(vector_json))
             adj_src = child.get("photoslop-adjustment")
-            if adj_src and adj_src in zf.namelist():
+            if adj_src and adj_src in members:
                 import numpy as np
 
+                adjustment = read_archive_member(
+                    zf, members[adj_src], operation="OpenRaster adjustment")
+                if len(adjustment) != 3 * 256:
+                    raise ValueError("OpenRaster: invalid adjustment payload")
                 layer.adjustment = np.frombuffer(
-                    zf.read(adj_src), dtype=np.uint8).reshape(3, 256).copy()
+                    adjustment, dtype=np.uint8).reshape(3, 256).copy()
             out.append(layer)
 
 
-def load_ora(path: str) -> Document:
+def load_ora(path: str, *, allow_large: bool = False) -> Document:
+    if os.path.getsize(path) > DESKTOP_BUDGET.max_file_bytes:
+        raise ResourceLimitError("OpenRaster: archive exceeds 1 GiB")
     with zipfile.ZipFile(path, "r") as zf:
-        root = ET.fromstring(zf.read("stack.xml"))
+        members = validate_archive_members(zf.infolist(), operation="OpenRaster")
+        if "stack.xml" not in members:
+            raise ValueError("OpenRaster: missing stack.xml")
+        root = parse_xml_limited(read_archive_member(
+            zf, members["stack.xml"], operation="OpenRaster stack.xml"),
+            operation="OpenRaster")
         w = int(root.get("w", "0"))
         h = int(root.get("h", "0"))
         dpi = float(root.get("xres", "72") or 72)
+        validate_dimensions(w, h, operation="OpenRaster canvas", buffers=2,
+                            allow_large=allow_large)
+        validate_dpi(dpi, operation="OpenRaster")
 
         top_first: list[Layer] = []
-        _walk_layers(zf, root.find("stack"), QPoint(0, 0), top_first)
+        _walk_layers(zf, members, root.find("stack"), QPoint(0, 0), top_first,
+                     allow_large=allow_large)
 
     name = path.replace("\\", "/").rsplit("/", 1)[-1]
     doc = Document(QSize(w, h), dpi, name)

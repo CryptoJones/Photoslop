@@ -5,8 +5,14 @@ Subject** and **Generative Fill** — route through a pluggable `ModelAdapter`,
 and you connect whatever you run.
 
 ## Configure
-Edit → Options → **Model Backend…**: pick an adapter and (for the HTTP adapter) enter
+Edit → Preferences → **Model Backend**: pick an adapter and (for the HTTP adapter) enter
 your server's base URL. CLI: `--model-url URL` before any model op.
+
+HTTPS is required for remote hosts. Plain HTTP is accepted for loopback
+(`localhost`, `127.0.0.1`, `::1`); a trusted private-network endpoint needs the
+explicit preference or CLI `--allow-insecure-model-http` opt-in. Responses must
+be JSON, are bounded to 128 MiB, and decoded images are checked against the
+document resource budget.
 
 ## The generic HTTP contract
 JSON with base64-encoded PNGs. Three endpoints under your base URL:
@@ -30,7 +36,7 @@ reported cleanly, never crash.
 ## pip plugins
 Publish a package exposing a `photoslop.modeladapter.ModelAdapter` subclass
 under the **`photoslop.model_adapters`** entry-point group and it appears in
-the backend picker automatically. Implement `capabilities()` and whichever of
+the backend picker after unsafe plugins are explicitly enabled. Implement `capabilities()` and whichever of
 `select_subject(image)` / `generative_fill(image, mask, prompt)` you support.
 Broken plugins are skipped, never fatal.
 

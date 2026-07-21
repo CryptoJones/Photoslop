@@ -198,13 +198,14 @@ run the server (stdio transport):
 
 ```bash
 pip install "photoslop[mcp]"     # or: uv sync --extra mcp
-photoslop-mcp
+photoslop-mcp --root /path/to/images
 ```
 
 Three tools — `list_operations`, `edit_image` (load/create → ordered pipeline →
-write), and `document_info`. Operations are the CLI's table verbatim, so parity
-is automatic. See [docs/v1/mcp.md](docs/v1/mcp.md) for client-registration and
-examples.
+write), and `document_info`. Paths are confined to the configured root,
+overwrites are denied by default, and network-model/native-plugin operations
+remain local-only. See [docs/v1/mcp.md](docs/v1/mcp.md) for client registration
+and examples.
 
 ## Model backends (bring your own model)
 
@@ -218,7 +219,7 @@ model. Configure any backend under Edit → Options → **Model Backend…**:
   a cloud API in a few lines of Flask and you're in.
 - **pip plugins** — packages can register `photoslop.modeladapter.ModelAdapter`
   subclasses under the `photoslop.model_adapters` entry-point group and they
-  appear in the picker automatically.
+  appear after unsafe plugins are explicitly enabled in Preferences → Security.
 
 ## License
 

@@ -142,6 +142,7 @@ class _DenoiseHandler(BaseHTTPRequestHandler):
         clean.fill(QColor(7, 7, 200))
         data = json.dumps({"image": image_to_png_b64(clean)}).encode()
         self.send_response(200)
+        self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)

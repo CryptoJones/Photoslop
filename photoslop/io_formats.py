@@ -56,13 +56,17 @@ def missing_hint(path: str) -> str:
             'install with `pip install "photoslop[formats]"`')
 
 
-def load_extra(path: str) -> QImage | None:
+def load_extra(path: str, *, allow_large: bool = False) -> QImage | None:
     """Decode an AVIF/JXL file to a premultiplied ARGB32 QImage."""
     if not available(path):
         return None
     from PIL import Image
 
+    from photoslop.resources import validate_dimensions
+
     with Image.open(path) as im:
+        validate_dimensions(*im.size, operation="image decode", buffers=2,
+                            allow_large=allow_large)
         rgba = im.convert("RGBA")
         img = QImage(rgba.tobytes(), rgba.width, rgba.height,
                      rgba.width * 4, QImage.Format.Format_RGBA8888)

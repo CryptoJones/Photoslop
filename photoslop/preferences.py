@@ -35,18 +35,58 @@ class ModelBackendPanel(QWidget):
         form.setContentsMargins(0, 0, 0, 0)  # sit flush inside a tab
         self.combo = QComboBox()
         self.combo.addItem("(none)", "")
-        for name, cls in sorted(available_adapters().items()):
+        allow_unsafe = str(self._settings.value(
+            "security/allow_unsafe_plugins", "false")).lower() == "true"
+        for name, cls in sorted(available_adapters(
+                allow_unsafe=allow_unsafe).items()):
             self.combo.addItem(cls.label, name)
         self.combo.setCurrentIndex(max(0, self.combo.findData(
             self._settings.value("model/adapter", ""))))
         self.url = QLineEdit(self._settings.value("model/http_url", ""))
         self.url.setPlaceholderText("http://localhost:8188/photoslop")
+        self.insecure_http = QCheckBox(
+            "Allow unencrypted HTTP to non-local model servers")
+        self.insecure_http.setChecked(str(self._settings.value(
+            "model/allow_insecure_http", "false")).lower() == "true")
         form.addRow("&Adapter:", self.combo)
         form.addRow("HTTP &URL:", self.url)
+        form.addRow(self.insecure_http)
 
     def apply(self) -> None:
         self._settings.setValue("model/adapter", self.combo.currentData())
         self._settings.setValue("model/http_url", self.url.text().strip())
+        self._settings.setValue("model/allow_insecure_http",
+                                self.insecure_http.isChecked())
+
+
+class SecurityPanel(QWidget):
+    """Local-only opt-ins that deliberately widen a trust boundary."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._settings = QSettings("CryptoJones", "Photoslop")
+        form = QFormLayout(self)
+        self.unsafe_plugins = QCheckBox(
+            "Enable native and third-party filter plugins (restart required)")
+        self.unsafe_plugins.setToolTip(
+            "These filters may launch G'MIC, GEGL, or GIMP, or execute "
+            "third-party Python code. They are never exposed through MCP.")
+        self.unsafe_plugins.setChecked(str(self._settings.value(
+            "security/allow_unsafe_plugins", "false")).lower() == "true")
+        self.large_documents = QCheckBox(
+            "Allow trusted documents beyond the adaptive memory estimate")
+        self.large_documents.setToolTip(
+            "Hard dimension, pixel-count, archive, and parser limits still apply.")
+        self.large_documents.setChecked(str(self._settings.value(
+            "security/allow_large_documents", "false")).lower() == "true")
+        form.addRow(self.unsafe_plugins)
+        form.addRow(self.large_documents)
+
+    def apply(self) -> None:
+        self._settings.setValue("security/allow_unsafe_plugins",
+                                self.unsafe_plugins.isChecked())
+        self._settings.setValue("security/allow_large_documents",
+                                self.large_documents.isChecked())
 
 
 class AccessibilityPanel(QWidget):
@@ -89,9 +129,11 @@ class PreferencesDialog(QDialog):
         self.model_panel = ModelBackendPanel(self)
         self.color_panel = ColorSettingsPanel(self)
         self.accessibility_panel = AccessibilityPanel(self)
+        self.security_panel = SecurityPanel(self)
         self.tabs.addTab(self.model_panel, "Model Backend")
         self.tabs.addTab(self.color_panel, "Color")
         self.tabs.addTab(self.accessibility_panel, "Accessibility")
+        self.tabs.addTab(self.security_panel, "Security")
         layout.addWidget(self.tabs)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
@@ -105,4 +147,5 @@ class PreferencesDialog(QDialog):
         self.model_panel.apply()
         self.color_panel.apply()
         self.accessibility_panel.apply()
+        self.security_panel.apply()
         self.accept()

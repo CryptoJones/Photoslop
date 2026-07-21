@@ -81,6 +81,9 @@ class Context:
     proof_space: object = None  # QColorSpace for --proof simulation at write
     cmyk_icc: str = ""  # CMYK .icc path for --cmyk-out export
     input_path: str = ""  # the source file, for EXIF/raw re-develop ops
+    allow_large_document: bool = False
+    allow_unsafe_plugins: bool = False
+    allow_insecure_model_http: bool = False
 
 
 def _target_layers(ctx: Context) -> list:
@@ -131,7 +134,8 @@ def _op_resize(ctx: Context, value: str) -> None:
     from photoslop.commands import ResizeImageCommand
 
     w, h = _size(value, "--resize")
-    ResizeImageCommand(ctx.doc, QSize(w, h)).redo()
+    ResizeImageCommand(ctx.doc, QSize(w, h),
+                       allow_large=ctx.allow_large_document).redo()
 
 
 def _op_canvas_size(ctx: Context, value: str) -> None:
@@ -142,7 +146,8 @@ def _op_canvas_size(ctx: Context, value: str) -> None:
     w, h = _size(value, "--canvas-size")
     delta = QPoint((w - ctx.doc.size.width()) // 2,
                    (h - ctx.doc.size.height()) // 2)
-    ResizeCanvasCommand(ctx.doc, QSize(w, h), delta).redo()
+    ResizeCanvasCommand(ctx.doc, QSize(w, h), delta,
+                        allow_large=ctx.allow_large_document).redo()
 
 
 def _op_crop_real(ctx: Context, value: str) -> None:
@@ -153,7 +158,8 @@ def _op_crop_real(ctx: Context, value: str) -> None:
     x, y, w, h = _ints(value, 4, "--crop")
     if w < 1 or h < 1:
         raise _ValueError("--crop: width and height must be positive")
-    ResizeCanvasCommand(ctx.doc, QSize(w, h), QPoint(-x, -y), "Crop").redo()
+    ResizeCanvasCommand(ctx.doc, QSize(w, h), QPoint(-x, -y), "Crop",
+                        allow_large=ctx.allow_large_document).redo()
 
 
 def _op_rotate(ctx: Context, value: str) -> None:
@@ -202,7 +208,8 @@ def _op_cas(ctx: Context, value: str) -> None:
                               round(layer.offset.y() * ry))
         layer.fx_cache = None
     ResizeCanvasCommand(ctx.doc, QSize(w, h), QPoint(0, 0),
-                        "Content-Aware Scale").redo()
+                        "Content-Aware Scale",
+                        allow_large=ctx.allow_large_document).redo()
 
 
 def _op_levels(ctx: Context, value: str) -> None:
@@ -512,7 +519,7 @@ def _op_filter(ctx: Context, value: str) -> None:
 
     name, _sep, params_text = value.partition(":")
     name = name.strip()
-    registry = available_filters()
+    registry = available_filters(allow_unsafe=ctx.allow_unsafe_plugins)
     cls = registry.get(name)
     if cls is None:
         raise _ValueError(f"--filter: unknown filter {name!r}; installed: "
@@ -677,7 +684,10 @@ def _adapter(ctx: Context):
 
     if not ctx.model_url:
         raise _ValueError("model operations need --model-url first")
-    return HttpModelAdapter(ctx.model_url)
+    return HttpModelAdapter(
+        ctx.model_url,
+        allow_insecure_http=ctx.allow_insecure_model_http,
+    )
 
 
 def _op_select_subject(ctx: Context, value: str) -> None:
@@ -1106,6 +1116,16 @@ def build_parser() -> argparse.ArgumentParser:
                         help="write each artboard as <name>.png into DIR")
     parser.add_argument("--info", action="store_true",
                         help="print document info as JSON")
+    parser.add_argument(
+        "--allow-large-document", action="store_true",
+        help="for trusted local files, bypass only the adaptive working-set "
+             "estimate (hard geometry/parser limits remain)")
+    parser.add_argument(
+        "--allow-unsafe-plugins", action="store_true",
+        help="enable native-process and third-party filter plugins")
+    parser.add_argument(
+        "--allow-insecure-model-http", action="store_true",
+        help="allow unencrypted HTTP to a non-loopback model server")
     from photoslop import __version__
 
     parser.add_argument("--version", action="version",
@@ -1120,44 +1140,23 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _load_document(path: str):
-    from photoslop.document import Document
-    from photoslop.io_ora import load_ora
-    from photoslop.io_raw import is_raw_path, load_raw
-
+def _load_document(path: str, *, allow_large: bool = False):
     if not os.path.exists(path):
         raise _ValueError(f"input not found: {path}")
-    if path.lower().endswith(".ora"):
-        return load_ora(path)
-    if path.lower().endswith(".svg"):
-        from photoslop.io_svg import load_svg
+    from photoslop.services import FileService
 
-        return load_svg(path)
-    if is_raw_path(path):
-        return Document.from_image(load_raw(path),
-                                   os.path.basename(path), 72.0)
-    from photoslop import io_formats
-
-    if io_formats.is_extra_path(path):
-        if not io_formats.available(path):
-            raise _ValueError(io_formats.missing_hint(path))
-        img = io_formats.load_extra(path)
-        if img is None or img.isNull():
-            raise _ValueError(f"could not decode: {path}")
-        return Document.from_image(img, os.path.basename(path), 72.0)
-    from PySide6.QtGui import QImage
-
-    img = QImage(path)
-    if img.isNull():
-        raise _ValueError(f"could not decode: {path}")
-    return Document.from_image(img, os.path.basename(path), 72.0)
+    try:
+        return FileService.load(path, allow_large=allow_large)
+    except ValueError as exc:
+        raise _ValueError(str(exc)) from exc
 
 
-def _new_document(spec: str, dpi: int):
+def _new_document(spec: str, dpi: int, *, allow_large: bool = False):
     from PySide6.QtCore import QSize
     from PySide6.QtGui import QColor
 
     from photoslop.document import Document
+    from photoslop.resources import validate_dimensions, validate_dpi
     from photoslop.units import PAPER_SIZES
 
     for name, wmm, hmm, _metric, _inches in PAPER_SIZES:
@@ -1172,6 +1171,9 @@ def _new_document(spec: str, dpi: int):
             names = ", ".join(n for n, *_ in PAPER_SIZES)
             raise _ValueError(
                 f"--new expects WxH or a preset ({names})") from None
+    validate_dpi(dpi, operation="new document")
+    validate_dimensions(w, h, operation="new document",
+                        allow_large=allow_large)
     return Document.new(QSize(w, h), float(dpi), "Untitled",
                         QColor(255, 255, 255))
 
@@ -1274,6 +1276,9 @@ def apply_pipeline(
     output: str | None = None,
     info: bool = False,
     export_artboards: str | None = None,
+    allow_large_document: bool = False,
+    allow_unsafe_plugins: bool = False,
+    allow_insecure_model_http: bool = False,
 ) -> dict:
     """Run the same load → op-pipeline → write flow as ``main``, but driven by
     Python values and returning a structured result instead of printing.
@@ -1293,9 +1298,16 @@ def apply_pipeline(
     if not input_path and not new:
         raise _ValueError("give an input file, or start blank with new")
 
-    doc = (_load_document(input_path) if input_path
-           else _new_document(new, dpi))
-    ctx = Context(doc=doc, input_path=input_path or "")
+    doc = (_load_document(input_path, allow_large=allow_large_document)
+           if input_path else _new_document(
+               new, dpi, allow_large=allow_large_document))
+    ctx = Context(
+        doc=doc,
+        input_path=input_path or "",
+        allow_large_document=allow_large_document,
+        allow_unsafe_plugins=allow_unsafe_plugins,
+        allow_insecure_model_http=allow_insecure_model_http,
+    )
     for op, value in (operations or []):
         if op not in OPS:
             raise _ValueError(f"unknown operation: {op!r} "
@@ -1327,9 +1339,16 @@ def main(argv: list[str] | None = None) -> int:
     if not args.input and not args.new:
         parser.error("give an input file, or start blank with --new")
     try:
-        doc = (_load_document(args.input) if args.input
-               else _new_document(args.new, args.dpi))
-        ctx = Context(doc=doc, input_path=args.input or "")
+        doc = (_load_document(args.input, allow_large=args.allow_large_document)
+               if args.input else _new_document(
+                   args.new, args.dpi, allow_large=args.allow_large_document))
+        ctx = Context(
+            doc=doc,
+            input_path=args.input or "",
+            allow_large_document=args.allow_large_document,
+            allow_unsafe_plugins=args.allow_unsafe_plugins,
+            allow_insecure_model_http=args.allow_insecure_model_http,
+        )
         for op, value in pipeline:
             OPS[op][2](ctx, value)
         if args.info:

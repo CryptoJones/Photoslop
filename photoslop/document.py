@@ -15,6 +15,7 @@ from PySide6.QtCore import QObject, QPoint, QRect, QSize, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QUndoStack
 
 from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
+from photoslop.resources import validate_dimensions, validate_dpi
 
 UNDO_LIMIT = 64
 
@@ -200,6 +201,9 @@ class Document(QObject):
 
     def __init__(self, size: QSize, dpi: float = 72.0, name: str | None = None) -> None:
         super().__init__()
+        validate_dimensions(size.width(), size.height(), operation="document",
+                            allow_large=True)
+        validate_dpi(dpi)
         if name is None:
             Document._untitled_count += 1
             name = f"Untitled-{Document._untitled_count}"

@@ -29,6 +29,10 @@ photoslop-cli shot.cr2 --resize 1600x1067 --auto-levels \
 - `--info` — document JSON (size, dpi, layers, effects, vector IDs/types,
   artboards) to stdout.
 - `--version`.
+- `--allow-large-document` relaxes only the adaptive working-memory estimate
+  for trusted local files; hard geometry/archive/parser limits remain.
+- `--allow-unsafe-plugins` enables native-process and third-party plugins.
+- `--allow-insecure-model-http` permits plain HTTP to a non-loopback model host.
 
 ## Exit codes
 `0` success · `2` usage or option-value errors (nothing written) · `1`

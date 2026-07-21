@@ -39,6 +39,7 @@ class Filter:
     name = "abstract"
     label = "Abstract filter"
     params: tuple[ParamSpec, ...] = ()
+    unsafe = False  # native processes and third-party code must opt in
 
     def apply(self, image: QImage, params: dict) -> None:
         raise NotImplementedError
@@ -95,25 +96,29 @@ def register_filter(cls: type[Filter]) -> None:
     _REGISTRY[cls.name] = cls
 
 
-def available_filters() -> dict[str, type[Filter]]:
-    """Built-ins + packs + registered + pip-installed entry points."""
+def available_filters(*, allow_unsafe: bool = False) -> dict[str, type[Filter]]:
+    """Return safe built-ins, plus explicitly enabled native/plugin filters."""
     for cls in _BUILT_INS:
         _REGISTRY.setdefault(cls.name, cls)
-    from photoslop import geglpack, gimpbridge, gmicpack
+    if allow_unsafe:
+        from photoslop import geglpack, gimpbridge, gmicpack
 
-    gmicpack.register_all()
-    geglpack.register_all()
-    gimpbridge.register_all()
-    from importlib.metadata import entry_points
+        gmicpack.register_all()
+        geglpack.register_all()
+        gimpbridge.register_all()
+        from importlib.metadata import entry_points
 
-    for ep in entry_points(group="photoslop.filters"):
-        if ep.name in _REGISTRY:
-            continue
-        try:
-            register_filter(ep.load())
-        except Exception:  # a broken plugin must not break the app
-            continue
-    return dict(_REGISTRY)
+        for ep in entry_points(group="photoslop.filters"):
+            if ep.name in _REGISTRY:
+                continue
+            try:
+                cls = ep.load()
+                cls.unsafe = True
+                register_filter(cls)
+            except Exception:  # a broken plugin must not break the app
+                continue
+    return {name: cls for name, cls in _REGISTRY.items()
+            if allow_unsafe or not getattr(cls, "unsafe", False)}
 
 
 def parse_params(cls: type[Filter], text: str) -> dict:

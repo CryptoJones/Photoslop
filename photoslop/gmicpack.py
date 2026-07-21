@@ -125,6 +125,7 @@ class _GmicFilter(Filter):
     """Curated G'MIC filter: a command template formatted from params."""
 
     template = ""
+    unsafe = True
 
     def apply(self, image: QImage, params: dict) -> None:
         run_gmic(image, self.template.format(**params))

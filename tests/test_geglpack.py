@@ -22,7 +22,7 @@ def _grad(n=48):
 
 @needs_gegl
 def test_pack_registers_when_available(qapp):
-    reg = available_filters()
+    reg = available_filters(allow_unsafe=True)
     for name in ("gegl", "gegl-vignette", "gegl-bloom", "gegl-pixelize",
                  "gegl-newsprint", "gegl-posterize", "gegl-motion-blur",
                  "gegl-edge-sobel"):
@@ -44,7 +44,7 @@ def test_posterize_reduces_levels(qapp):
 
 @needs_gegl
 def test_every_curated_filter_produces_output(qapp):
-    reg = available_filters()
+    reg = available_filters(allow_unsafe=True)
     for cls in geglpack.CURATED:
         img = _grad()
         cls().apply(img, parse_params(reg[cls.name], ""))
@@ -67,7 +67,7 @@ def test_raw_operation_with_props_and_errors(qapp):
 @needs_gegl
 def test_cli_gegl_selection_aware(qapp, tmp_path):
     out = str(tmp_path / "post.png")
-    assert cli.main(["--new", "40x20", "--fill", "97,140,203",
+    assert cli.main(["--allow-unsafe-plugins", "--new", "40x20", "--fill", "97,140,203",
                      "--select", "0,0,20,20",
                      "--filter", "gegl-posterize:levels=2",
                      "--deselect", "--output", out]) == 0
