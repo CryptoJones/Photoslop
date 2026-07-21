@@ -33,8 +33,7 @@ def test_apply_stroke_inserts_below_and_undoes(qapp):
     win.add_document(doc)
 
     win.apply_stroke_style(doc, chip, 3, QColor(255, 0, 0))
-    assert [layer.name for layer in doc.layers] == [
-        "Background", "chip stroke", "chip"]
+    assert [layer.name for layer in doc.layers] == ["Background", "chip stroke", "chip"]
     assert doc.layers[1].offset == QPoint(17, 17)
     flat = doc.flatten()
     assert flat.pixelColor(18, 28).red() > 200  # ring visible left of the chip

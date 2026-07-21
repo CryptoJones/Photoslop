@@ -47,8 +47,7 @@ def test_assign_is_metadata_convert_moves_pixels(qapp):
 def test_viewport_transform_recovers_srgb_appearance(qapp):
     doc = _doc()
     color.convert_profile(doc, color.load_space("display-p3"))
-    color.settings.update(display=color.load_space("srgb"),
-                          proof=None, proof_on=False)
+    color.settings.update(display=color.load_space("srgb"), proof=None, proof_on=False)
     try:
         assert color.viewport_active()
         view = color.apply_viewport(doc.flatten(), doc)
@@ -87,8 +86,7 @@ def test_cli_convert_and_png_embeds_profile(qapp, tmp_path):
     img.fill(QColor(200, 60, 40))
     img.save(src)
     out = str(tmp_path / "p3.png")
-    assert cli.main([src, "--convert-profile", "display-p3",
-                     "--output", out]) == 0
+    assert cli.main([src, "--convert-profile", "display-p3", "--output", out]) == 0
     loaded = QImage(out)
     assert loaded.colorSpace().isValid()
     assert "P3" in loaded.colorSpace().description()
@@ -98,25 +96,41 @@ def test_cli_convert_and_png_embeds_profile(qapp, tmp_path):
 
 def test_cli_assign_and_proof_flags(qapp, tmp_path):
     out = str(tmp_path / "a.png")
-    assert cli.main(["--new", "10x8", "--fill", "10,200,60",
-                     "--assign-profile", "display-p3",
-                     "--proof", "srgb", "--output", out]) == 0
+    assert (
+        cli.main(
+            [
+                "--new",
+                "10x8",
+                "--fill",
+                "10,200,60",
+                "--assign-profile",
+                "display-p3",
+                "--proof",
+                "srgb",
+                "--output",
+                out,
+            ]
+        )
+        == 0
+    )
     assert QImage(out).colorSpace().isValid()
     with pytest.raises(SystemExit) as exc:
-        cli.main(["--new", "8x8", "--assign-profile", "bogus",
-                  "--output", str(tmp_path / "x.png")])
+        cli.main(["--new", "8x8", "--assign-profile", "bogus", "--output", str(tmp_path / "x.png")])
     assert exc.value.code == 2
 
 
-@pytest.mark.skipif(not os.path.exists(CMYK_ICC),
-                    reason="no ghostscript CMYK profile on this system")
+@pytest.mark.skipif(
+    not os.path.exists(CMYK_ICC), reason="no ghostscript CMYK profile on this system"
+)
 def test_cmyk_export_writes_cmyk_jpeg(qapp, tmp_path):
     pytest.importorskip("PIL")
     from PIL import Image
 
     out = str(tmp_path / "cmyk.jpg")
-    assert cli.main(["--new", "16x12", "--fill", "200,60,40",
-                     "--cmyk-out", CMYK_ICC, "--output", out]) == 0
+    assert (
+        cli.main(["--new", "16x12", "--fill", "200,60,40", "--cmyk-out", CMYK_ICC, "--output", out])
+        == 0
+    )
     with Image.open(out) as im:
         assert im.mode == "CMYK"
 
@@ -124,5 +138,4 @@ def test_cmyk_export_writes_cmyk_jpeg(qapp, tmp_path):
 def test_cmyk_export_needs_valid_target(qapp, tmp_path):
     doc = _doc()
     with pytest.raises(ValueError):
-        color.cmyk_export(doc.flatten(), str(tmp_path / "x.png"),
-                          "whatever.icc")
+        color.cmyk_export(doc.flatten(), str(tmp_path / "x.png"), "whatever.icc")

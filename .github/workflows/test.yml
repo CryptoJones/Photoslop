@@ -26,6 +26,8 @@ jobs:
         run: uv run python scripts/check-version.py
       - name: Lint
         run: uv run ruff check .
+      - name: Formatting baseline
+        run: uv run ruff format --check .
       - name: Deprecations are errors in the cleared CLI surface
         env:
           QT_QPA_PLATFORM: offscreen

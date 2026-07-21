@@ -39,8 +39,9 @@ class WorkspaceController:
 
     def validate_geometry(self) -> None:
         frame = self.window.frameGeometry()
-        if any(screen.availableGeometry().intersects(frame)
-               for screen in QGuiApplication.screens()):
+        if any(
+            screen.availableGeometry().intersects(frame) for screen in QGuiApplication.screens()
+        ):
             return
         screen = QGuiApplication.primaryScreen()
         if screen is None:

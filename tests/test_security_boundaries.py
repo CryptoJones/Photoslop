@@ -80,14 +80,15 @@ def test_svg_rejects_entities_external_resources_and_unknown_path_ops(tmp_path):
     entity.write_text(
         '<!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>'
         '<svg width="8" height="8"><text>&xxe;</text></svg>',
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     with pytest.raises(ValueError, match="unsafe XML"):
         load_svg(str(entity))
 
     external = tmp_path / "external.svg"
     external.write_text(
-        '<svg width="8" height="8"><image href="file:///etc/passwd"/></svg>',
-        encoding="utf-8")
+        '<svg width="8" height="8"><image href="file:///etc/passwd"/></svg>', encoding="utf-8"
+    )
     with pytest.raises(ValueError, match="external resources"):
         load_svg(str(external))
 
@@ -118,8 +119,9 @@ def test_model_url_and_payload_validation(monkeypatch):
 
 
 class _FakeResponse:
-    def __init__(self, body: bytes, content_type: str = "application/json",
-                 length: int | None = None):
+    def __init__(
+        self, body: bytes, content_type: str = "application/json", length: int | None = None
+    ):
         self.body = body
         self.headers = Message()
         self.headers["Content-Type"] = content_type
@@ -139,21 +141,21 @@ class _FakeResponse:
 def test_model_response_type_schema_and_length(monkeypatch):
     adapter = HttpModelAdapter("http://127.0.0.1:8188/model")
     monkeypatch.setattr(
-        "urllib.request.urlopen",
-        lambda *_args, **_kwargs: _FakeResponse(b"{}", "text/html"))
+        "urllib.request.urlopen", lambda *_args, **_kwargs: _FakeResponse(b"{}", "text/html")
+    )
     with pytest.raises(ValueError, match="application/json"):
         adapter._post("test", {})
 
     monkeypatch.setattr(
         "urllib.request.urlopen",
-        lambda *_args, **_kwargs: _FakeResponse(
-            b"{}", length=MAX_MODEL_RESPONSE + 1))
+        lambda *_args, **_kwargs: _FakeResponse(b"{}", length=MAX_MODEL_RESPONSE + 1),
+    )
     with pytest.raises(ValueError, match="too large"):
         adapter._post("test", {})
 
     monkeypatch.setattr(
-        "urllib.request.urlopen",
-        lambda *_args, **_kwargs: _FakeResponse(json.dumps([]).encode()))
+        "urllib.request.urlopen", lambda *_args, **_kwargs: _FakeResponse(json.dumps([]).encode())
+    )
     with pytest.raises(ValueError, match="JSON object"):
         adapter._post("test", {})
 
@@ -181,6 +183,4 @@ def test_mcp_confines_paths_blocks_overwrite_and_network_ops(qapp, tmp_path):
     with pytest.raises(ValueError, match="overwrite is disabled"):
         server.edit_image([], new="4x4", output="existing.png")
     with pytest.raises(ValueError, match="not exposed through MCP"):
-        server.edit_image(
-            [{"op": "model-url", "value": "http://127.0.0.1"}],
-            new="4x4", info=True)
+        server.edit_image([{"op": "model-url", "value": "http://127.0.0.1"}], new="4x4", info=True)

@@ -57,14 +57,12 @@ PAIR_ARGS = {
     "flip": ["--flip", "h"],
     "fill": ["--fill", "10,200,40"],
     "text": ["--text", "2,2,8,0,120,255:Hi"],
-    "text-rich": ["--text-rich",
-                  '2,2:<span style="color:#0078ff;font-size:8pt">Hi</span>'],
+    "text-rich": ["--text-rich", '2,2:<span style="color:#0078ff;font-size:8pt">Hi</span>'],
     "shape": ["--shape", "rect,2,2,10,8,255,0,0"],
     "vector-op": ["--vector-op", '{"op":"select","ids":[]}'],
     "blend-mode": ["--blend-mode", "multiply"],
     "layer-opacity": ["--layer-opacity", "70"],
-    "content-aware-fill": ["--select", "3,3,6,6", "--content-aware-fill",
-                           "--deselect"],
+    "content-aware-fill": ["--select", "3,3,6,6", "--content-aware-fill", "--deselect"],
     "feather": ["--select", "2,2,10,10", "--feather", "2"],
     "duplicate-layer": ["--duplicate-layer"],
     "flatten": ["--flatten"],
@@ -76,9 +74,15 @@ PAIR_ARGS = {
 # ops excluded from the pair sweep: need a backend or an on-disk
 # ICC profile the harness cannot assume (cmyk-out gets its own
 # skip-if-missing effect test in test_color.py)
-NETWORK_OPS = ("model-url", "select-subject", "generative-fill",
-               "cmyk-out", "raw-develop", "lens-correct",
-               "denoise-model")
+NETWORK_OPS = (
+    "model-url",
+    "select-subject",
+    "generative-fill",
+    "cmyk-out",
+    "raw-develop",
+    "lens-correct",
+    "denoise-model",
+)
 
 
 def test_pair_catalog_covers_all_non_network_ops():
@@ -96,12 +100,12 @@ def make_input(tmp_path) -> str:
 @pytest.mark.parametrize(
     "first,second",
     list(itertools.permutations(sorted(PAIR_ARGS), 2)),
-    ids=lambda v: v if isinstance(v, str) else str(v))
+    ids=lambda v: v if isinstance(v, str) else str(v),
+)
 def test_every_ordered_pair_runs(qapp, tmp_path, first, second):
     src = make_input(tmp_path)
     out = tmp_path / "out.png"
-    code = cli.main([src, *PAIR_ARGS[first], *PAIR_ARGS[second],
-                     "--output", str(out)])
+    code = cli.main([src, *PAIR_ARGS[first], *PAIR_ARGS[second], "--output", str(out)])
     assert code == 0
     img = QImage(str(out))
     assert not img.isNull()
@@ -120,10 +124,8 @@ def test_order_sensitivity_resize_vs_blur(qapp, tmp_path):
     img.save(src)
 
     a, b = tmp_path / "a.png", tmp_path / "b.png"
-    assert cli.main([src, "--resize", "30x20", "--gaussian-blur", "3",
-                     "--output", str(a)]) == 0
-    assert cli.main([src, "--gaussian-blur", "3", "--resize", "30x20",
-                     "--output", str(b)]) == 0
+    assert cli.main([src, "--resize", "30x20", "--gaussian-blur", "3", "--output", str(a)]) == 0
+    assert cli.main([src, "--gaussian-blur", "3", "--resize", "30x20", "--output", str(b)]) == 0
     ia, ib = QImage(str(a)), QImage(str(b))
     assert ia.size() == ib.size()
     assert any(ia.pixel(x, 10) != ib.pixel(x, 10) for x in range(30))
@@ -135,10 +137,8 @@ def test_order_sensitivity_crop_vs_effect(qapp, tmp_path):
     # levels-then-crop == crop-then-levels (both whole-layer), but
     # select-then-levels ≠ levels-then-select: the selection gates only ops
     # that FOLLOW it in the pipeline
-    assert cli.main([src, "--select", "2,2,8,8", "--hue-sat", "0,0,50",
-                     "--output", str(a)]) == 0
-    assert cli.main([src, "--hue-sat", "0,0,50", "--select", "2,2,8,8",
-                     "--output", str(b)]) == 0
+    assert cli.main([src, "--select", "2,2,8,8", "--hue-sat", "0,0,50", "--output", str(a)]) == 0
+    assert cli.main([src, "--hue-sat", "0,0,50", "--select", "2,2,8,8", "--output", str(b)]) == 0
     ia, ib = QImage(str(a)), QImage(str(b))
     assert ia.pixelColor(30, 30).red() == 120  # gated: outside untouched
     assert ib.pixelColor(30, 30).red() > 160  # ungated: everything lifted
@@ -156,8 +156,7 @@ class Handler(BaseHTTPRequestHandler):
                     mask.setPixel(x, y, 0xFFFFFF)
             out = {"mask": image_to_png_b64(mask)}
         else:
-            filled = QImage(img.size(),
-                            QImage.Format.Format_ARGB32_Premultiplied)
+            filled = QImage(img.size(), QImage.Format.Format_ARGB32_Premultiplied)
             filled.fill(QColor(10, 200, 40))
             out = {"image": image_to_png_b64(filled)}
         data = json.dumps(out).encode()
@@ -185,47 +184,93 @@ def test_model_op_pairs_against_live_server(qapp, tmp_path, model_server):
     src = make_input(tmp_path)
     out = tmp_path / "out.png"
     # select-subject then generative-fill: fill lands only in the subject
-    assert cli.main([src, "--model-url", model_server, "--select-subject",
-                     "--generative-fill", "a corn field",
-                     "--output", str(out)]) == 0
+    assert (
+        cli.main(
+            [
+                src,
+                "--model-url",
+                model_server,
+                "--select-subject",
+                "--generative-fill",
+                "a corn field",
+                "--output",
+                str(out),
+            ]
+        )
+        == 0
+    )
     img = QImage(str(out))
     assert img.pixelColor(10, 10) == QColor(10, 200, 40)  # inside subject
     assert img.pixelColor(40, 30) == QColor(120, 90, 60)  # outside untouched
 
     # model ops compose with ordinary ops
-    assert cli.main([src, "--resize", "40x30", "--model-url", model_server,
-                     "--select-subject", "--gaussian-blur", "2",
-                     "--deselect", "--levels", "10,240,1.1",
-                     "--output", str(out)]) == 0
+    assert (
+        cli.main(
+            [
+                src,
+                "--resize",
+                "40x30",
+                "--model-url",
+                model_server,
+                "--select-subject",
+                "--gaussian-blur",
+                "2",
+                "--deselect",
+                "--levels",
+                "10,240,1.1",
+                "--output",
+                str(out),
+            ]
+        )
+        == 0
+    )
     assert QImage(str(out)).width() == 40
 
 
 def test_kitchen_sink_pipeline(qapp, tmp_path, model_server):
     src = make_input(tmp_path)
     out = tmp_path / "out.png"
-    code = cli.main([
-        src,
-        "--canvas-size", "70x50",
-        "--rotate", "5",
-        "--auto-levels",
-        "--curves", "0:8,255:250",
-        "--hue-sat", "10,5,0",
-        "--color-balance", "5,0,0,0,0,0,0,0,-5",
-        "--select", "5,5,20,20",
-        "--gaussian-blur", "2",
-        "--deselect",
-        "--unsharp", "110",
-        "--tilt-shift", "20,10,6,3",
-        "--model-url", model_server,
-        "--select-subject",
-        "--generative-fill", "corn",
-        "--deselect",
-        "--drop-shadow", "3,3,2,140",
-        "--stroke", "1,255,255,255",
-        "--fill-opacity", "80",
-        "--resize", "50x36",
-        "--output", str(out),
-    ])
+    code = cli.main(
+        [
+            src,
+            "--canvas-size",
+            "70x50",
+            "--rotate",
+            "5",
+            "--auto-levels",
+            "--curves",
+            "0:8,255:250",
+            "--hue-sat",
+            "10,5,0",
+            "--color-balance",
+            "5,0,0,0,0,0,0,0,-5",
+            "--select",
+            "5,5,20,20",
+            "--gaussian-blur",
+            "2",
+            "--deselect",
+            "--unsharp",
+            "110",
+            "--tilt-shift",
+            "20,10,6,3",
+            "--model-url",
+            model_server,
+            "--select-subject",
+            "--generative-fill",
+            "corn",
+            "--deselect",
+            "--drop-shadow",
+            "3,3,2,140",
+            "--stroke",
+            "1,255,255,255",
+            "--fill-opacity",
+            "80",
+            "--resize",
+            "50x36",
+            "--output",
+            str(out),
+        ]
+    )
     assert code == 0
     img = QImage(str(out))
     assert img.size().width() == 50 and img.size().height() == 36

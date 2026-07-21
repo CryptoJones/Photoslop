@@ -95,5 +95,4 @@ class PropertiesPanel(QWidget):
         )
         for prop, value in desired:
             if getattr(layer, prop) != value:
-                self.doc.undo_stack.push(
-                    SetLayerPropertyCommand(self.doc, layer, prop, value))
+                self.doc.undo_stack.push(SetLayerPropertyCommand(self.doc, layer, prop, value))

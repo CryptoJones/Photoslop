@@ -25,9 +25,11 @@ def _window(qapp):
 def test_custom_canvas_and_rulers_have_accessible_interfaces(qapp):
     win = _window(qapp)
     editor = win.current_editor()
-    for widget, expected in ((editor.canvas, "Image canvas"),
-                             (editor.hruler, "Horizontal ruler"),
-                             (editor.vruler, "Vertical ruler")):
+    for widget, expected in (
+        (editor.canvas, "Image canvas"),
+        (editor.hruler, "Horizontal ruler"),
+        (editor.vruler, "Vertical ruler"),
+    ):
         assert widget.accessibleName() == expected
         interface = QAccessible.queryAccessibleInterface(widget)
         assert interface is not None and interface.isValid()
@@ -63,8 +65,11 @@ def test_canvas_exposes_dynamic_state_and_registered_assistive_actions(qapp):
 
 def test_icon_buttons_receive_unique_useful_names(qapp):
     win = _window(qapp)
-    buttons = [button for button in win.findChildren(QAbstractButton)
-               if button.isVisible() or button.toolTip()]
+    buttons = [
+        button
+        for button in win.findChildren(QAbstractButton)
+        if button.isVisible() or button.toolTip()
+    ]
     assert buttons
     assert all(button.accessibleName() for button in buttons)
 
@@ -96,12 +101,11 @@ def test_accessibility_preferences_apply_high_contrast_scale_and_motion(qapp):
     qapp.processEvents()
     image = canvas.grab().toImage()
     perimeter = [
-        image.pixelColor(x, y)
-        for y in range(min(6, image.height()))
-        for x in range(image.width())
+        image.pixelColor(x, y) for y in range(min(6, image.height())) for x in range(image.width())
     ]
-    assert any(color.red() > 230 and color.green() > 230 and color.blue() < 30
-               for color in perimeter)
+    assert any(
+        color.red() > 230 and color.green() > 230 and color.blue() < 30 for color in perimeter
+    )
 
 
 def test_dynamic_dialog_controls_are_named_from_form_labels(qapp):
@@ -147,7 +151,8 @@ def test_escape_cancels_interaction_before_clearing_selection(qapp):
     tool.press(doc, canvas, QPointF(40, 30), None)
     tool.move(doc, canvas, QPointF(70, 60), None)
     escape = QKeyEvent(
-        QEvent.Type.KeyPress, Qt.Key.Key_Escape,
+        QEvent.Type.KeyPress,
+        Qt.Key.Key_Escape,
         Qt.KeyboardModifier.NoModifier,
     )
 
@@ -164,14 +169,20 @@ def test_transform_has_keyboard_nudge_and_shift_acceleration(qapp):
     win.action_free_transform()
     session = win.active_tool.session
 
-    canvas.keyPressEvent(QKeyEvent(
-        QEvent.Type.KeyPress, Qt.Key.Key_Right,
-        Qt.KeyboardModifier.NoModifier,
-    ))
-    canvas.keyPressEvent(QKeyEvent(
-        QEvent.Type.KeyPress, Qt.Key.Key_Down,
-        Qt.KeyboardModifier.ShiftModifier,
-    ))
+    canvas.keyPressEvent(
+        QKeyEvent(
+            QEvent.Type.KeyPress,
+            Qt.Key.Key_Right,
+            Qt.KeyboardModifier.NoModifier,
+        )
+    )
+    canvas.keyPressEvent(
+        QKeyEvent(
+            QEvent.Type.KeyPress,
+            Qt.Key.Key_Down,
+            Qt.KeyboardModifier.ShiftModifier,
+        )
+    )
     assert session.translation == QPointF(1, 10)
 
 
@@ -206,8 +217,7 @@ def test_keyboard_focus_tree_exposes_roles_names_and_editable_values(qapp):
     win = _window(qapp)
     win.show()
     qapp.processEvents()
-    controls = [control for control in win.findChildren(QLineEdit)
-                if control.isEnabled()]
+    controls = [control for control in win.findChildren(QLineEdit) if control.isEnabled()]
     assert controls
     for control in controls:
         interface = QAccessible.queryAccessibleInterface(control)
@@ -217,8 +227,7 @@ def test_keyboard_focus_tree_exposes_roles_names_and_editable_values(qapp):
             assert parent is not None and parent.role() == QAccessible.Role.SpinBox
         else:
             assert interface.role() == QAccessible.Role.EditableText
-            assert (control.accessibleName() or control.placeholderText()
-                    or control.toolTip())
+            assert control.accessibleName() or control.placeholderText() or control.toolTip()
 
 
 def test_vector_workflow_has_keyboard_tool_alternatives(qapp):

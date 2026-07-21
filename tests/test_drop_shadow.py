@@ -37,8 +37,7 @@ def test_apply_drop_shadow_inserts_below_and_undoes(qapp):
     win.add_document(doc)
 
     win.apply_drop_shadow(doc, chip, 6, 6, 8, 60)
-    assert [layer.name for layer in doc.layers] == [
-        "Background", "chip shadow", "chip"]
+    assert [layer.name for layer in doc.layers] == ["Background", "chip shadow", "chip"]
     shadow = doc.layers[1]
     assert shadow.offset == QPoint(30 + 6 - 8, 20 + 6 - 8)  # offset minus pad
     # shadow visible just outside the chip's lower-right edge

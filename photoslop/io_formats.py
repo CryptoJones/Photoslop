@@ -52,8 +52,10 @@ def available(path: str) -> bool:
 
 
 def missing_hint(path: str) -> str:
-    return (f"{path}: this format needs the optional extra — "
-            'install with `pip install "photoslop[formats]"`')
+    return (
+        f"{path}: this format needs the optional extra — "
+        'install with `pip install "photoslop[formats]"`'
+    )
 
 
 def load_extra(path: str, *, allow_large: bool = False) -> QImage | None:
@@ -65,11 +67,11 @@ def load_extra(path: str, *, allow_large: bool = False) -> QImage | None:
     from photoslop.resources import validate_dimensions
 
     with Image.open(path) as im:
-        validate_dimensions(*im.size, operation="image decode", buffers=2,
-                            allow_large=allow_large)
+        validate_dimensions(*im.size, operation="image decode", buffers=2, allow_large=allow_large)
         rgba = im.convert("RGBA")
-        img = QImage(rgba.tobytes(), rgba.width, rgba.height,
-                     rgba.width * 4, QImage.Format.Format_RGBA8888)
+        img = QImage(
+            rgba.tobytes(), rgba.width, rgba.height, rgba.width * 4, QImage.Format.Format_RGBA8888
+        )
         return img.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
 
 
@@ -86,8 +88,7 @@ def encode_extra(image: QImage, ext: str, quality: int = 90) -> bytes | None:
     im = Image.frombytes("RGBA", (src.width(), src.height()), data)
     buf = io.BytesIO()
     try:
-        im.save(buf, format={".avif": "AVIF", ".jxl": "JXL"}[ext],
-                quality=quality)
+        im.save(buf, format={".avif": "AVIF", ".jxl": "JXL"}[ext], quality=quality)
     except (OSError, ValueError, KeyError):
         return None
     return buf.getvalue()

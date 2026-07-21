@@ -33,7 +33,9 @@ def test_record_replay_on_other_document(qapp):
     win.action_record_stop()
     assert win.action_recording is None
     assert [label for label, _fn in win.recorded_action] == [
-        "Gaussian Blur 8px", "Unsharp Mask 120%"]
+        "Gaussian Blur 8px",
+        "Unsharp Mask 120%",
+    ]
 
     # a second document gets the exact same treatment via Play
     doc_b = Document.new(QSize(60, 40), 72.0, "b", QColor(0, 0, 0))

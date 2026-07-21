@@ -28,8 +28,11 @@ def stroke_line(win):
 
 
 def vertical_spread(img) -> int:
-    rows = [y for y in range(img.height())
-            if any(img.pixelColor(x, y).red() < 200 for x in range(20, 180, 4))]
+    rows = [
+        y
+        for y in range(img.height())
+        if any(img.pixelColor(x, y).red() < 200 for x in range(20, 180, 4))
+    ]
     return max(rows) - min(rows) if rows else 0
 
 

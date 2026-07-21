@@ -32,8 +32,14 @@ class ActionRegistry:
         self.host = host
         self.entries: dict[str, tuple[ActionSpec, QAction]] = {}
 
-    def register(self, action: QAction, label: str, shortcut: str | None,
-                 slot, prerequisite: str | None = None) -> ActionSpec:
+    def register(
+        self,
+        action: QAction,
+        label: str,
+        shortcut: str | None,
+        slot,
+        prerequisite: str | None = None,
+    ) -> ActionSpec:
         base = getattr(slot, "__name__", "command").removeprefix("action_")
         command_id = re.sub(r"[^a-z0-9]+", ".", base.lower()).strip(".")
         if command_id in self.entries:
@@ -47,13 +53,13 @@ class ActionRegistry:
 
     @staticmethod
     def _infer(name: str) -> str:
-        if any(token in name for token in ("new", "open", "about", "preferences",
-                                           "quit", "workspace")):
+        if any(
+            token in name for token in ("new", "open", "about", "preferences", "quit", "workspace")
+        ):
             return "always"
         if any(token in name for token in ("paste",)):
             return "clipboard"
-        if any(token in name for token in ("deselect", "feather", "refine",
-                                           "content_aware_fill")):
+        if any(token in name for token in ("deselect", "feather", "refine", "content_aware_fill")):
             return "selection"
         return "document"
 
@@ -67,8 +73,9 @@ class ActionRegistry:
             "selection": doc is not None and doc.selection is not None,
             "clipboard": bool(self.host.pixel_clip or self.host.layer_clip),
             "idle": not bool(getattr(editor, "task_active", False)),
-            "task": bool(getattr(self.host, "task_service", None)
-                         and self.host.task_service.active),
+            "task": bool(
+                getattr(self.host, "task_service", None) and self.host.task_service.active
+            ),
         }
         for spec, action in self.entries.values():
             action.setEnabled(context.get(spec.prerequisite, True))
@@ -103,8 +110,7 @@ class CommandPalette(QDialog):
     def refresh(self, query: str = "") -> None:
         needle = query.casefold().strip()
         self.results.clear()
-        for spec, action in sorted(self.registry.entries.values(),
-                                   key=lambda item: item[0].label):
+        for spec, action in sorted(self.registry.entries.values(), key=lambda item: item[0].label):
             haystack = f"{spec.label} {spec.command_id} {spec.shortcut}".casefold()
             if needle and needle not in haystack:
                 continue
@@ -112,12 +118,17 @@ class CommandPalette(QDialog):
             item = QListWidgetItem(spec.label + suffix)
             item.setData(Qt.ItemDataRole.UserRole, spec.command_id)
             state = "available" if action.isEnabled() else f"requires {spec.prerequisite}"
-            item.setData(Qt.ItemDataRole.AccessibleTextRole,
-                         f"{spec.label}, {state}, shortcut {spec.shortcut or 'none'}")
+            item.setData(
+                Qt.ItemDataRole.AccessibleTextRole,
+                f"{spec.label}, {state}, shortcut {spec.shortcut or 'none'}",
+            )
             item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, spec.help_text)
             if not action.isEnabled():
-                item.setForeground(self.palette().color(self.palette().ColorGroup.Disabled,
-                                                        self.palette().ColorRole.Text))
+                item.setForeground(
+                    self.palette().color(
+                        self.palette().ColorGroup.Disabled, self.palette().ColorRole.Text
+                    )
+                )
             self.results.addItem(item)
         if self.results.count():
             self.results.setCurrentRow(0)

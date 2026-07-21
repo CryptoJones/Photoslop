@@ -47,8 +47,7 @@ def test_filter_menu_selection_aware_undo(qapp):
     path = QPainterPath()
     path.addRect(QRect(0, 0, 60, 20))  # top half only
     doc.set_selection(path)
-    win._run_filter("Gaussian Blur",
-                    lambda img, m: npimage.gaussian_blur(img, 8, m))
+    win._run_filter("Gaussian Blur", lambda img, m: npimage.gaussian_blur(img, 8, m))
 
     img = doc.active_layer.image
     assert 40 < img.pixelColor(30, 10).red() < 215  # blurred inside selection

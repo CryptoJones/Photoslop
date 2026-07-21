@@ -62,8 +62,7 @@ def test_cancellation_can_be_scoped_to_one_document(qapp):
             time.sleep(0.005)
 
     first = service.submit("first", "First", operation, scope_id="doc-a")
-    second = service.submit("second", "Second", lambda _context: 2,
-                            scope_id="doc-b")
+    second = service.submit("second", "Second", lambda _context: 2, scope_id="doc-b")
     _wait(qapp, lambda: first.state is TaskState.RUNNING)
     service.cancel_scope("doc-a")
     _wait(qapp, lambda: first.state is TaskState.CANCELLED)
@@ -113,19 +112,21 @@ def test_interactive_work_runs_before_earlier_bulk_queue_entries(qapp):
 
     first = service.submit("block", "Block", blocker)
     bulk = service.submit(
-        "bulk", "Bulk", lambda _context: order.append("bulk"),
-        priority=TaskPriority.BULK)
+        "bulk", "Bulk", lambda _context: order.append("bulk"), priority=TaskPriority.BULK
+    )
     interactive = service.submit(
-        "preview", "Preview", lambda _context: order.append("interactive"),
-        priority=TaskPriority.INTERACTIVE)
+        "preview",
+        "Preview",
+        lambda _context: order.append("interactive"),
+        priority=TaskPriority.INTERACTIVE,
+    )
     _wait(qapp, lambda: first.state is TaskState.RUNNING)
     release.set()
     _wait(qapp, lambda: bulk.state is TaskState.SUCCEEDED)
 
     assert interactive.state is TaskState.SUCCEEDED
     assert order == ["interactive", "bulk"]
-    assert [record.task_id for record in service.history][-3:] == [
-        "block", "preview", "bulk"]
+    assert [record.task_id for record in service.history][-3:] == ["block", "preview", "bulk"]
 
 
 def test_memory_scheduler_skips_oversized_head_of_line(qapp):
@@ -139,11 +140,9 @@ def test_memory_scheduler_skips_oversized_head_of_line(qapp):
 
     running = service.submit("running", "Running", blocker, 80)
     blocked = service.submit(
-        "blocked", "Blocked", lambda _context: None, 80,
-        priority=TaskPriority.INTERACTIVE)
-    small = service.submit(
-        "small", "Small", lambda _context: None, 20,
-        priority=TaskPriority.BULK)
+        "blocked", "Blocked", lambda _context: None, 80, priority=TaskPriority.INTERACTIVE
+    )
+    small = service.submit("small", "Small", lambda _context: None, 20, priority=TaskPriority.BULK)
     _wait(qapp, lambda: running.state is TaskState.RUNNING)
     _wait(qapp, lambda: small.state is TaskState.SUCCEEDED)
     assert blocked.state is TaskState.QUEUED
@@ -177,8 +176,7 @@ def test_task_monitor_shows_queue_and_cancels_one_task(qapp):
             time.sleep(0.005)
 
     running = service.submit("running", "Running", blocker, scope_id="doc-a")
-    queued = service.submit("queued", "Queued", lambda _context: None,
-                            scope_id="doc-b")
+    queued = service.submit("queued", "Queued", lambda _context: None, scope_id="doc-b")
     _wait(qapp, lambda: running.state is TaskState.RUNNING)
     dialog = TaskMonitorDialog(service)
     assert dialog.tasks.count() == 2
@@ -225,7 +223,8 @@ def test_background_open_decodes_without_blocking_action(qapp, tmp_path, monkeyp
     requested = []
     monkeypatch.setattr(
         "photoslop.mainwindow.OpenImageDialog.get_paths",
-        lambda _parent, directory: requested.append(directory) or [str(image_path)])
+        lambda _parent, directory: requested.append(directory) or [str(image_path)],
+    )
     win.action_open()
     assert requested == [str(start)]
     assert win.tabs.count() == 0

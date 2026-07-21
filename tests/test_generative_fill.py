@@ -47,8 +47,7 @@ def rect_path(x, y, w, h) -> QPainterPath:
 
 def make_window(qapp, adapter_name) -> MainWindow:
     win = MainWindow()
-    win.add_document(Document.new(QSize(40, 40), 72.0, "gf",
-                                  QColor(200, 100, 50)))
+    win.add_document(Document.new(QSize(40, 40), 72.0, "gf", QColor(200, 100, 50)))
     QSettings("CryptoJones", "Photoslop").setValue("model/adapter", adapter_name)
     return win
 

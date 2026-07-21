@@ -20,10 +20,10 @@ from photoslop.io_ora import load_ora, save_ora
 class RecoveryService:
     SCHEMA_VERSION = 1
 
-    def __init__(self, root: str | None = None, *, max_documents: int = 20,
-                 max_age_days: int = 30) -> None:
-        settings_dir = os.path.dirname(
-            QSettings("CryptoJones", "Photoslop").fileName())
+    def __init__(
+        self, root: str | None = None, *, max_documents: int = 20, max_age_days: int = 30
+    ) -> None:
+        settings_dir = os.path.dirname(QSettings("CryptoJones", "Photoslop").fileName())
         self.root = root or os.path.join(settings_dir, "recovery")
         self.max_documents = max(1, max_documents)
         self.max_age = timedelta(days=max(1, max_age_days))
@@ -34,12 +34,10 @@ class RecoveryService:
     def metadata_path_for(self, document_id: str) -> str:
         return os.path.join(self.root, f"{document_id}.recovery.json")
 
-    def write(self, document, *, ticket: WriteTicket | None = None,
-              before_commit=None) -> str:
+    def write(self, document, *, ticket: WriteTicket | None = None, before_commit=None) -> str:
         os.makedirs(self.root, exist_ok=True)
         path = self.path_for(document.document_id)
-        save_ora(
-            document, path, ticket=ticket, before_commit=before_commit)
+        save_ora(document, path, ticket=ticket, before_commit=before_commit)
         metadata = {
             "schema_version": self.SCHEMA_VERSION,
             "app_version": __version__,
@@ -55,8 +53,11 @@ class RecoveryService:
                 stream.write("\n")
 
         atomic_write(
-            self.metadata_path_for(document.document_id), write_metadata,
-            before_commit=before_commit, durable=True)
+            self.metadata_path_for(document.document_id),
+            write_metadata,
+            before_commit=before_commit,
+            durable=True,
+        )
         self.prune()
         return path
 
@@ -104,7 +105,7 @@ class RecoveryService:
                 self.clear(document_id)
                 continue
             snapshots.append((saved_at, document_id))
-        for _saved_at, document_id in sorted(snapshots, reverse=True)[self.max_documents:]:
+        for _saved_at, document_id in sorted(snapshots, reverse=True)[self.max_documents :]:
             self.clear(document_id)
 
     def available(self) -> list:

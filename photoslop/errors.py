@@ -34,8 +34,10 @@ def classify_error(exc: BaseException) -> ErrorCode:
     message = str(exc).casefold()
     if any(word in message for word in ("not exposed", "unsupported", "does not support")):
         return ErrorCode.UNSUPPORTED_CAPABILITY
-    if any(word in message for word in (
-            "unsafe", "overwrite is disabled", "must stay under", "insecure")):
+    if any(
+        word in message
+        for word in ("unsafe", "overwrite is disabled", "must stay under", "insecure")
+    ):
         return ErrorCode.UNSAFE_OPERATION
     if isinstance(exc, ValueError):
         return ErrorCode.INVALID_INPUT

@@ -43,8 +43,9 @@ def fixture(preset: BenchmarkPreset, scale: float = 1.0) -> Document:
     doc = Document.new(QSize(width, height), 72, preset.name, QColor(30, 30, 30))
     for index in range(1, preset.layers):
         layer = Layer.blank(f"Layer {index + 1}", QSize(width, height))
-        layer.image.fill(QColor(index * 37 % 255, index * 67 % 255,
-                                index * 97 % 255, 30 + index % 80))
+        layer.image.fill(
+            QColor(index * 37 % 255, index * 67 % 255, index * 97 % 255, 30 + index % 80)
+        )
         doc.layers.append(layer)
     doc.active_index = len(doc.layers) - 1
     return doc
@@ -69,8 +70,11 @@ def _measure_render_cancellation(doc: Document) -> float:
                 raise RuntimeError("cancel benchmark rendered the wrong region")
 
     handle = service.submit(
-        "benchmark.render", "Benchmark render", render_until_cancelled,
-        max(1, viewport.width() * viewport.height() * 8))
+        "benchmark.render",
+        "Benchmark render",
+        render_until_cancelled,
+        max(1, viewport.width() * viewport.height() * 8),
+    )
     deadline = time.monotonic() + 5
     while handle.state is TaskState.QUEUED and time.monotonic() < deadline:
         app.processEvents()
@@ -154,8 +158,9 @@ def main(argv=None) -> int:
     parser.add_argument("preset", choices=PRESETS)
     parser.add_argument("--scale", type=float, default=1.0)
     parser.add_argument("--samples", type=int, default=20)
-    parser.add_argument("--enforce", action="store_true",
-                        help="exit nonzero when a reviewed budget is exceeded")
+    parser.add_argument(
+        "--enforce", action="store_true", help="exit nonzero when a reviewed budget is exceeded"
+    )
     args = parser.parse_args(argv)
     report = run(PRESETS[args.preset], args.scale, args.samples)
     print(json.dumps(report, indent=2))

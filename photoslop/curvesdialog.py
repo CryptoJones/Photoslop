@@ -42,8 +42,10 @@ class CurveWidget(QWidget):
 
     def _to_value(self, pos: QPointF) -> tuple[float, float]:
         w, h = self.width() - 1, self.height() - 1
-        return (max(0.0, min(255.0, pos.x() / w * 255.0)),
-                max(0.0, min(255.0, (h - pos.y()) / h * 255.0)))
+        return (
+            max(0.0, min(255.0, pos.x() / w * 255.0)),
+            max(0.0, min(255.0, (h - pos.y()) / h * 255.0)),
+        )
 
     def _hit(self, pos: QPointF) -> int | None:
         for i, (x, y) in enumerate(self.points):

@@ -35,9 +35,14 @@ class _SampleLabel(QLabel):
         super().__init__()
         self._image = image
         self._on_pick = on_pick
-        self._pm = QPixmap.fromImage(image.scaled(
-            _THUMB, _THUMB, Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation))
+        self._pm = QPixmap.fromImage(
+            image.scaled(
+                _THUMB,
+                _THUMB,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
         self.setPixmap(self._pm)
         self.setCursor(Qt.CursorShape.CrossCursor)
         self.setToolTip("Click to sample the target color")
@@ -72,12 +77,13 @@ class PointColorDialog(ScopedAdjustMixin, QDialog):
         self._sliders: dict[str, QSlider] = {}
         self._labels: dict[str, QLabel] = {}
         for key, label, lo, hi, start in (
-                ("hue", "Hue", 0, 359, 20),
-                ("range", "Range", 5, 120, 30),
-                ("dh", "Hue shift", -90, 90, 0),
-                ("ds", "Saturation", -100, 100, 0),
-                ("dl", "Lightness", -100, 100, 0),
-                ("uniform", "Uniformity", 0, 100, 0)):
+            ("hue", "Hue", 0, 359, 20),
+            ("range", "Range", 5, 120, 30),
+            ("dh", "Hue shift", -90, 90, 0),
+            ("ds", "Saturation", -100, 100, 0),
+            ("dl", "Lightness", -100, 100, 0),
+            ("uniform", "Uniformity", 0, 100, 0),
+        ):
             slider = QSlider(Qt.Orientation.Horizontal)
             slider.setRange(lo, hi)
             slider.setValue(start)
@@ -122,14 +128,12 @@ class PointColorDialog(ScopedAdjustMixin, QDialog):
         self._sliders["hue"].setValue(max(0, color.hsvHue()))
 
     def _skin_preset(self) -> None:
-        for key, val in (("hue", 20), ("range", 28), ("dh", 0),
-                         ("ds", 0), ("dl", 0)):
+        for key, val in (("hue", 20), ("range", 28), ("dh", 0), ("ds", 0), ("dl", 0)):
             self._sliders[key].setValue(val)
 
     def _update_swatch(self) -> None:
         c = QColor.fromHsv(self._sliders["hue"].value() % 360, 200, 220)
-        self.swatch.setStyleSheet(
-            f"background:{c.name()}; border:1px solid #444;")
+        self.swatch.setStyleSheet(f"background:{c.name()}; border:1px solid #444;")
 
     def _changed(self) -> None:
         for key, slider in self._sliders.items():
@@ -139,8 +143,7 @@ class PointColorDialog(ScopedAdjustMixin, QDialog):
 
     def transform(self, img: QImage) -> None:
         v = self.values()
-        apply_point_color(img, v["hue"], v["range"], v["dh"], v["ds"],
-                          v["dl"], v["uniform"])
+        apply_point_color(img, v["hue"], v["range"], v["dh"], v["ds"], v["dl"], v["uniform"])
 
     def accept(self) -> None:
         self._debounce.stop()

@@ -32,8 +32,23 @@ from photoslop.rulers import Ruler
 
 # extends down to 1/32 so zoom-fit can hold 100MP-class frames
 # (Fuji GFX 11648px) inside an ordinary viewport
-ZOOM_LEVELS = (0.03125, 0.0625, 0.125, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0,
-               3.0, 4.0, 6.0, 8.0, 12.0, 16.0)
+ZOOM_LEVELS = (
+    0.03125,
+    0.0625,
+    0.125,
+    0.25,
+    0.5,
+    0.75,
+    1.0,
+    1.5,
+    2.0,
+    3.0,
+    4.0,
+    6.0,
+    8.0,
+    12.0,
+    16.0,
+)
 
 _GUIDE_COLOR = QColor(0, 200, 255)
 _TEMP_GUIDE_COLOR = QColor(255, 0, 200)
@@ -128,7 +143,11 @@ class CanvasView(QWidget):
         self.accessibility_context_changed()
 
     def set_accessibility_preferences(
-        self, *, high_contrast: bool, reduced_motion: bool, scale: int,
+        self,
+        *,
+        high_contrast: bool,
+        reduced_motion: bool,
+        scale: int,
     ) -> None:
         self._high_contrast = high_contrast
         self._reduced_motion = reduced_motion
@@ -144,13 +163,17 @@ class CanvasView(QWidget):
         active = "No active layer"
         if layer is not None:
             visibility = "visible" if layer.visible else "hidden"
-            active = (f"Active layer {layer.name}, {visibility}, "
-                      f"{round(layer.opacity * 100)} percent opacity")
+            active = (
+                f"Active layer {layer.name}, {visibility}, "
+                f"{round(layer.opacity * 100)} percent opacity"
+            )
         bounds = self.doc.selection_bounds()
         selection = "No selection"
         if bounds is not None:
-            selection = (f"Selection x {bounds.x()}, y {bounds.y()}, width "
-                         f"{bounds.width()}, height {bounds.height()}")
+            selection = (
+                f"Selection x {bounds.x()}, y {bounds.y()}, width "
+                f"{bounds.width()}, height {bounds.height()}"
+            )
         tool = self.editor.active_tool()
         tool_name = getattr(tool, "name", "none").replace("-", " ")
         guides = len(self.doc.guides_h) + len(self.doc.guides_v)
@@ -175,27 +198,31 @@ class CanvasView(QWidget):
     def accessibility_context_changed(self) -> None:
         self.setAccessibleDescription(self.accessible_summary())
         if QAccessible.isActive():
-            QAccessible.updateAccessibility(QAccessibleEvent(
-                self, QAccessible.Event.DescriptionChanged))
+            QAccessible.updateAccessibility(
+                QAccessibleEvent(self, QAccessible.Event.DescriptionChanged)
+            )
 
     def accessibility_cursor_changed(self) -> None:
         self.setAccessibleDescription(self.accessible_summary())
         if QAccessible.isActive():
-            QAccessible.updateAccessibility(QAccessibleEvent(
-                self, QAccessible.Event.DescriptionChanged))
+            QAccessible.updateAccessibility(
+                QAccessibleEvent(self, QAccessible.Event.DescriptionChanged)
+            )
 
     def refresh_cursor(self, dragging: bool = False) -> None:
         """Resolve the active tool's live cursor through the single controller."""
         if self._space_pan:
-            self.cursor_controller.apply(CursorIntent(
-                "hand-closed" if self._pan_last is not None else "hand-open"))
+            self.cursor_controller.apply(
+                CursorIntent("hand-closed" if self._pan_last is not None else "hand-open")
+            )
             return
         tool = self.editor.active_tool()
         if tool is None:
             self.cursor_controller.apply(CursorIntent("cross"))
             return
         intent = tool.cursor_intent(
-            self.doc, self, self.hover_pos, self._cursor_modifiers, dragging)
+            self.doc, self, self.hover_pos, self._cursor_modifiers, dragging
+        )
         self.cursor_controller.apply(intent)
 
     def _transform_session(self):
@@ -235,8 +262,9 @@ class CanvasView(QWidget):
         xs = [point.x() for point in points]
         ys = [point.y() for point in points]
         pad = max(12, round(getattr(tool.opts, "size", 16) / 2 + 8))
-        canvas_rect = QRectF(min(xs), min(ys), max(xs) - min(xs),
-                             max(ys) - min(ys)).adjusted(-pad, -pad, pad, pad)
+        canvas_rect = QRectF(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)).adjusted(
+            -pad, -pad, pad, pad
+        )
         return self._canvas_to_widget(canvas_rect.toAlignedRect()).intersected(self.rect())
 
     # -- document signals --
@@ -284,8 +312,11 @@ class CanvasView(QWidget):
         clip = QRectF(exposed).adjusted(-1, -1, 1, 1)
         p.setClipRect(QRectF(clip.x() / z, clip.y() / z, clip.width() / z, clip.height() / z))
         clip_canvas = QRect(
-            int(clip.x() / z), int(clip.y() / z),
-            int(clip.width() / z) + 2, int(clip.height() / z) + 2)
+            int(clip.x() / z),
+            int(clip.y() / z),
+            int(clip.width() / z) + 2,
+            int(clip.height() / z) + 2,
+        )
         from photoslop import color
 
         transform_session = self._transform_session()
@@ -293,8 +324,7 @@ class CanvasView(QWidget):
         if self.doc.needs_offscreen() or cms:
             region = clip_canvas.intersected(self.doc.canvas_rect())
             if not region.isEmpty():
-                exclude = (transform_session.layer
-                           if transform_session is not None else None)
+                exclude = transform_session.layer if transform_session is not None else None
                 rendered = render_region(self.doc, region, exclude)
                 if cms:  # DD-004: one viewport-region transform, only here
                     rendered = color.apply_viewport(rendered, self.doc)
@@ -346,15 +376,15 @@ class CanvasView(QWidget):
         font.setPointSizeF(8.0)
         p.setFont(font)
         for name, rect in self.doc.artboards:
-            wr = QRectF(rect.x() * z, rect.y() * z,
-                        rect.width() * z, rect.height() * z)
+            wr = QRectF(rect.x() * z, rect.y() * z, rect.width() * z, rect.height() * z)
             p.drawRect(wr)
             p.drawText(QPointF(wr.x() + 3, max(10.0, wr.y() - 3)), name)
 
     def _paint_grid(self, p: QPainter) -> None:
         host = self.editor.host
-        step = (units.minor_tick_step(host.unit, self.doc.dpi, self.zoom)
-                * units.px_per_unit(host.unit, self.doc.dpi))
+        step = units.minor_tick_step(host.unit, self.doc.dpi, self.zoom) * units.px_per_unit(
+            host.unit, self.doc.dpi
+        )
         if step * self.zoom < 4:  # too dense to be useful
             return
         p.setPen(QPen(QColor(128, 128, 128, 70), 1))
@@ -453,8 +483,7 @@ class CanvasView(QWidget):
         self._cursor_modifiers = _event_modifiers(ev)
         if self._pan_last is not None:
             current = ev.globalPosition()
-            self.editor.pan_by(current.x() - self._pan_last.x(),
-                               current.y() - self._pan_last.y())
+            self.editor.pan_by(current.x() - self._pan_last.x(), current.y() - self._pan_last.y())
             self._pan_last = current
             self.refresh_cursor(dragging=True)
             return
@@ -516,8 +545,11 @@ class CanvasView(QWidget):
             self.refresh_cursor()
             return
         tool = self.editor.active_tool()
-        if (key in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
-                and tool is not None and hasattr(tool, "commit")):
+        if (
+            key in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            and tool is not None
+            and hasattr(tool, "commit")
+        ):
             tool.commit(self)
             return
         if key == Qt.Key.Key_Escape:
@@ -526,13 +558,16 @@ class CanvasView(QWidget):
                 if tool.name == "transform":
                     self.editor.host.end_transform()
                 self.editor.host.statusBar().showMessage(
-                    f"Cancelled {tool.name.replace('-', ' ')} interaction", 3000)
+                    f"Cancelled {tool.name.replace('-', ' ')} interaction", 3000
+                )
             elif self.doc.selection is not None:
                 self.editor.host.action_deselect()
             return
         nudges = {
-            Qt.Key.Key_Left: (-1, 0), Qt.Key.Key_Right: (1, 0),
-            Qt.Key.Key_Up: (0, -1), Qt.Key.Key_Down: (0, 1),
+            Qt.Key.Key_Left: (-1, 0),
+            Qt.Key.Key_Right: (1, 0),
+            Qt.Key.Key_Up: (0, -1),
+            Qt.Key.Key_Down: (0, 1),
         }
         tool = self.editor.active_tool()
         if key in nudges and tool is not None and tool.name == "transform":
@@ -549,8 +584,7 @@ class CanvasView(QWidget):
                 else:
                     session.translation += delta
                 self.update()
-                self.editor.host.statusBar().showMessage(
-                    f"Transform moved {dx}, {dy} pixels", 2000)
+                self.editor.host.statusBar().showMessage(f"Transform moved {dx}, {dy} pixels", 2000)
             return
         if key in nudges and tool is not None and tool.name == "move":
             layer = self.doc.active_layer
@@ -560,10 +594,8 @@ class CanvasView(QWidget):
                     dx, dy = dx * 10, dy * 10
                 old = QPoint(layer.offset)
                 layer.offset = old + QPoint(dx, dy)
-                self.doc.notify_pixels(layer.bounds().united(
-                    QRect(old, layer.image.size())))
-                self.doc.undo_stack.push(
-                    SetLayerOffsetCommand(self.doc, layer, old, layer.offset))
+                self.doc.notify_pixels(layer.bounds().united(QRect(old, layer.image.size())))
+                self.doc.undo_stack.push(SetLayerOffsetCommand(self.doc, layer, old, layer.offset))
             return
         if key in (Qt.Key.Key_Shift, Qt.Key.Key_Alt, Qt.Key.Key_Control, Qt.Key.Key_Meta):
             self.refresh_cursor()
@@ -738,10 +770,14 @@ class EditorView(QWidget):
             return shift if distance <= tol else 0.0
 
         w, h = layer.image.width(), layer.image.height()
-        sx = best_shift([float(proposed.x()), float(proposed.x() + w)],
-                        [0.0, float(doc.size.width()), *doc.guides_v])
-        sy = best_shift([float(proposed.y()), float(proposed.y() + h)],
-                        [0.0, float(doc.size.height()), *doc.guides_h])
+        sx = best_shift(
+            [float(proposed.x()), float(proposed.x() + w)],
+            [0.0, float(doc.size.width()), *doc.guides_v],
+        )
+        sy = best_shift(
+            [float(proposed.y()), float(proposed.y() + h)],
+            [0.0, float(doc.size.height()), *doc.guides_h],
+        )
         return QPoint(proposed.x() + round(sx), proposed.y() + round(sy))
 
     def snap_guide(self, value: float, modifiers=None) -> float:
@@ -760,8 +796,7 @@ class EditorView(QWidget):
         z = self.canvas.zoom
         return self.snap_guide((local.y() if orient == "h" else local.x()) / z)
 
-    def show_guide_feedback(self, orient: str, pos: float,
-                            anchor: QPointF | None = None) -> None:
+    def show_guide_feedback(self, orient: str, pos: float, anchor: QPointF | None = None) -> None:
         """Live drag feedback: marker on the matching ruler, floating X/Y
         readout on the canvas, echo in the status bar."""
         ruler = self.vruler if orient == "h" else self.hruler

@@ -39,7 +39,8 @@ class _ProfileRow(QHBoxLayout):
 
     def _browse(self) -> None:
         path, _f = QFileDialog.getOpenFileName(
-            None, "Choose ICC profile", "", "ICC profiles (*.icc *.icm)")
+            None, "Choose ICC profile", "", "ICC profiles (*.icc *.icm)"
+        )
         if path:
             self._file = path
             self.combo.addItem(path)
@@ -84,8 +85,7 @@ class ColorSettingsPanel(QWidget):
         super().__init__(parent)
         form = QFormLayout(self)
         form.setContentsMargins(0, 0, 0, 0)  # sit flush inside a tab
-        form.addRow(QLabel("Display transform and soft-proof apply to the "
-                           "viewport only (DD-004)."))
+        form.addRow(QLabel("Display transform and soft-proof apply to the viewport only (DD-004)."))
         self.display_row = _ProfileRow()
         self.proof_row = _ProfileRow()
         form.addRow("Monitor profile", self.display_row)

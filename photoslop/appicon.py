@@ -31,13 +31,15 @@ PALETTE_DARK = QColor("#a9805b")
 
 
 def _tentacle(p: QPainter, path: QPainterPath) -> None:
-    outline = QPen(BODY_DARK, 16, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
-                   Qt.PenJoinStyle.RoundJoin)
+    outline = QPen(
+        BODY_DARK, 16, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin
+    )
     p.setPen(outline)
     p.setBrush(Qt.BrushStyle.NoBrush)
     p.drawPath(path)
-    inner = QPen(BODY, 11, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
-                 Qt.PenJoinStyle.RoundJoin)
+    inner = QPen(
+        BODY, 11, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin
+    )
     p.setPen(inner)
     p.drawPath(path)
 
@@ -90,8 +92,7 @@ def draw_mascot(p: QPainter) -> None:
 
     # --- mustache (handlebar) --------------------------------------------------
     p.setBrush(Qt.BrushStyle.NoBrush)
-    pen = QPen(INK, 7, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
-               Qt.PenJoinStyle.RoundJoin)
+    pen = QPen(INK, 7, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
     p.setPen(pen)
     left = QPainterPath(QPointF(128, 137))
     left.cubicTo(QPointF(114, 147), QPointF(99, 147), QPointF(92, 136))
@@ -136,8 +137,10 @@ def draw_mascot(p: QPainter) -> None:
     p.setBrush(QBrush(PALETTE_DARK))
     p.drawEllipse(QPointF(-14, 7), 4.5, 4.5)  # thumb hole
     for color, (dx, dy) in (
-        ("#e53935", (-12, -8)), ("#fdd835", (-2, -11)),
-        ("#1e88e5", (8, -8)), ("#fafafa", (15, 0)),
+        ("#e53935", (-12, -8)),
+        ("#fdd835", (-2, -11)),
+        ("#1e88e5", (8, -8)),
+        ("#fafafa", (15, 0)),
     ):
         p.setBrush(QBrush(QColor(color)))
         p.drawEllipse(QPointF(dx, dy), 4.0, 4.0)

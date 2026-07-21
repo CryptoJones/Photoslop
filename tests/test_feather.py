@@ -60,7 +60,6 @@ def test_feather_resets_with_new_selection(qapp):
     select_left_half(doc)  # replacing the selection clears the feather
     assert doc.selection_feather == 0.0
 
-    weights = npimage.feathered_weights(doc.selection, QSize(80, 40),
-                                        doc.layers[0].offset, 8.0)
+    weights = npimage.feathered_weights(doc.selection, QSize(80, 40), doc.layers[0].offset, 8.0)
     assert weights[20, 5] > 0.95 and weights[20, 75] < 0.05
     assert 0.2 < weights[20, 40] < 0.8  # gradient at the boundary

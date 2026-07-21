@@ -59,13 +59,11 @@ def test_wand_shift_adds_alt_subtracts(qapp):
     win.options.tolerance = 0
 
     tool.press(doc, editor.canvas, QPointF(15, 15), None)
-    tool.press(doc, editor.canvas, QPointF(65, 45),
-               _Mods(Qt.KeyboardModifier.ShiftModifier))
+    tool.press(doc, editor.canvas, QPointF(65, 45), _Mods(Qt.KeyboardModifier.ShiftModifier))
     bounds = doc.selection_bounds()
     assert bounds == QRect(10, 10, 70, 50)  # union spans both boxes
 
-    tool.press(doc, editor.canvas, QPointF(65, 45),
-               _Mods(Qt.KeyboardModifier.AltModifier))
+    tool.press(doc, editor.canvas, QPointF(65, 45), _Mods(Qt.KeyboardModifier.AltModifier))
     assert doc.selection_bounds() == QRect(10, 10, 30, 20)  # back to box one
 
 

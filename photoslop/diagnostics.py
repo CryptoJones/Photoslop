@@ -22,7 +22,8 @@ from PySide6.QtWidgets import (
 
 _ASSIGNMENT_SECRET = re.compile(
     r"(?i)\b(password|passwd|token|secret|api[_-]?key|authorization)"
-    r"(\s*[:=]\s*)([^\s,;]+)")
+    r"(\s*[:=]\s*)([^\s,;]+)"
+)
 _BEARER_SECRET = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
 _AUTHORIZATION_HEADER = re.compile(r"(?im)^(Authorization\s*:\s*).+$")
 _SECRET_KEY = re.compile(r"(?i)^(password|passwd|token|secret|api[_-]?key|authorization)$")
@@ -55,11 +56,9 @@ class DiagnosticRecord:
 class DiagnosticStore(QObject):
     recordAdded = Signal(object)
 
-    def __init__(self, root: str | None = None, *, retention: int = 200,
-                 parent=None) -> None:
+    def __init__(self, root: str | None = None, *, retention: int = 200, parent=None) -> None:
         super().__init__(parent)
-        settings_dir = os.path.dirname(
-            QSettings("CryptoJones", "Photoslop").fileName())
+        settings_dir = os.path.dirname(QSettings("CryptoJones", "Photoslop").fileName())
         self.root = root or os.path.join(settings_dir, "diagnostics")
         self.path = os.path.join(self.root, "operations.jsonl")
         self.retention = max(10, retention)
@@ -87,18 +86,18 @@ class DiagnosticStore(QObject):
             redact(details),
             redact(guidance),
             {
-                redact(key): "[REDACTED]" if _SECRET_KEY.fullmatch(str(key))
-                else redact(value)
+                redact(key): "[REDACTED]" if _SECRET_KEY.fullmatch(str(key)) else redact(value)
                 for key, value in (context or {}).items()
             },
         )
         fingerprint = self._fingerprint(record)
         if fingerprint in self._fingerprints:
-            return next(item for item in reversed(self._records)
-                        if self._fingerprint(item) == fingerprint)
+            return next(
+                item for item in reversed(self._records) if self._fingerprint(item) == fingerprint
+            )
         self._records.append(record)
         self._fingerprints.add(fingerprint)
-        self._records = self._records[-self.retention:]
+        self._records = self._records[-self.retention :]
         self._persist()
         self.recordAdded.emit(record)
         return record
@@ -106,10 +105,10 @@ class DiagnosticStore(QObject):
     def record_task_failure(self, handle, traceback_text: str) -> DiagnosticRecord:
         guidance = (
             "Check the destination and available disk space, then retry."
-            if handle.task_id.startswith(("file.", "recovery.")) else
-            "Check the configured endpoint and network policy, then retry."
-            if handle.task_id.startswith("model.") else
-            "Retry once; if it repeats, disable the related optional backend."
+            if handle.task_id.startswith(("file.", "recovery."))
+            else "Check the configured endpoint and network policy, then retry."
+            if handle.task_id.startswith("model.")
+            else "Retry once; if it repeats, disable the related optional backend."
         )
         return self.record(
             handle.task_id,
@@ -135,7 +134,8 @@ class DiagnosticStore(QObject):
             guidance=(
                 "No action is required."
                 if handle.state.value == "succeeded"
-                else "Retry the operation when ready."),
+                else "Retry the operation when ready."
+            ),
             context={
                 "scope": handle.scope_id or "application",
                 "priority": handle.priority.name.lower(),
@@ -150,7 +150,7 @@ class DiagnosticStore(QObject):
     def _load(self) -> list[DiagnosticRecord]:
         try:
             with open(self.path, encoding="utf-8") as stream:
-                lines = stream.readlines()[-self.retention:]
+                lines = stream.readlines()[-self.retention :]
         except OSError:
             return []
         records = []
@@ -180,7 +180,8 @@ class DiagnosticsDialog(QDialog):
         self.setWindowTitle("Diagnostics")
         self.resize(720, 480)
         self.summary = QLabel(
-            "Persistent operation results and failures are redacted before being stored.")
+            "Persistent operation results and failures are redacted before being stored."
+        )
         self.records = QListWidget()
         self.records.setAccessibleName("Diagnostic records")
         self.details = QTextEdit()
@@ -200,7 +201,8 @@ class DiagnosticsDialog(QDialog):
         self.records.clear()
         for record in reversed(self.store.records):
             self.records.addItem(
-                f"{record.timestamp[:19]}  {record.summary}  [{record.identifier}]")
+                f"{record.timestamp[:19]}  {record.summary}  [{record.identifier}]"
+            )
         if self.records.count():
             self.records.setCurrentRow(0)
         else:
@@ -214,4 +216,5 @@ class DiagnosticsDialog(QDialog):
         self.details.setPlainText(
             f"ID: {record.identifier}\nOperation: {record.operation}\n"
             f"When: {record.timestamp}\n{context}\n\n{record.summary}\n\n"
-            f"{record.details}\n\nNext step: {record.guidance}")
+            f"{record.details}\n\nNext step: {record.guidance}"
+        )

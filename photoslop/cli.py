@@ -101,8 +101,7 @@ class Context:
 def _target_layers(ctx: Context) -> list:
     doc = ctx.doc
     if ctx.all_layers:
-        return [layer for layer in doc.layers
-                if layer.visible and layer.adjustment is None]
+        return [layer for layer in doc.layers if layer.visible and layer.adjustment is None]
     return [doc.active_layer]
 
 
@@ -116,11 +115,10 @@ def _filter_region(ctx: Context, layer, apply) -> None:
     if doc.selection is not None:
         if doc.selection_feather > 0:
             weights = npimage.feathered_weights(
-                doc.selection, layer.image.size(), layer.offset,
-                doc.selection_feather)
+                doc.selection, layer.image.size(), layer.offset, doc.selection_feather
+            )
         else:
-            mask = npimage.selection_mask(doc.selection, layer.image.size(),
-                                          layer.offset)
+            mask = npimage.selection_mask(doc.selection, layer.image.size(), layer.offset)
             if not mask.any():
                 mask = None
     from PySide6.QtGui import QImage
@@ -146,8 +144,7 @@ def _op_resize(ctx: Context, value: str) -> None:
     from photoslop.commands import ResizeImageCommand
 
     w, h = _size(value, "--resize")
-    ResizeImageCommand(ctx.doc, QSize(w, h),
-                       allow_large=ctx.allow_large_document).redo()
+    ResizeImageCommand(ctx.doc, QSize(w, h), allow_large=ctx.allow_large_document).redo()
 
 
 def _op_canvas_size(ctx: Context, value: str) -> None:
@@ -156,10 +153,8 @@ def _op_canvas_size(ctx: Context, value: str) -> None:
     from photoslop.commands import ResizeCanvasCommand
 
     w, h = _size(value, "--canvas-size")
-    delta = QPoint((w - ctx.doc.size.width()) // 2,
-                   (h - ctx.doc.size.height()) // 2)
-    ResizeCanvasCommand(ctx.doc, QSize(w, h), delta,
-                        allow_large=ctx.allow_large_document).redo()
+    delta = QPoint((w - ctx.doc.size.width()) // 2, (h - ctx.doc.size.height()) // 2)
+    ResizeCanvasCommand(ctx.doc, QSize(w, h), delta, allow_large=ctx.allow_large_document).redo()
 
 
 def _op_crop_real(ctx: Context, value: str) -> None:
@@ -170,8 +165,9 @@ def _op_crop_real(ctx: Context, value: str) -> None:
     x, y, w, h = _ints(value, 4, "--crop")
     if w < 1 or h < 1:
         raise _ValueError("--crop: width and height must be positive")
-    ResizeCanvasCommand(ctx.doc, QSize(w, h), QPoint(-x, -y), "Crop",
-                        allow_large=ctx.allow_large_document).redo()
+    ResizeCanvasCommand(
+        ctx.doc, QSize(w, h), QPoint(-x, -y), "Crop", allow_large=ctx.allow_large_document
+    ).redo()
 
 
 def _op_rotate(ctx: Context, value: str) -> None:
@@ -197,8 +193,9 @@ def _op_rotate_layer(ctx: Context, value: str) -> None:
         cx = layer.offset.x() + layer.image.width() / 2.0
         cy = layer.offset.y() + layer.image.height() / 2.0
         layer.image = layer.image.transformed(QTransform().rotate(deg))
-        layer.offset = QPoint(round(cx - layer.image.width() / 2.0),
-                              round(cy - layer.image.height() / 2.0))
+        layer.offset = QPoint(
+            round(cx - layer.image.width() / 2.0), round(cy - layer.image.height() / 2.0)
+        )
         layer.fx_cache = None
 
 
@@ -216,12 +213,15 @@ def _op_cas(ctx: Context, value: str) -> None:
         lw = max(2, round(layer.image.width() * rx))
         lh = max(2, round(layer.image.height() * ry))
         layer.image = npimage.seam_carve(layer.image, lw, lh)
-        layer.offset = QPoint(round(layer.offset.x() * rx),
-                              round(layer.offset.y() * ry))
+        layer.offset = QPoint(round(layer.offset.x() * rx), round(layer.offset.y() * ry))
         layer.fx_cache = None
-    ResizeCanvasCommand(ctx.doc, QSize(w, h), QPoint(0, 0),
-                        "Content-Aware Scale",
-                        allow_large=ctx.allow_large_document).redo()
+    ResizeCanvasCommand(
+        ctx.doc,
+        QSize(w, h),
+        QPoint(0, 0),
+        "Content-Aware Scale",
+        allow_large=ctx.allow_large_document,
+    ).redo()
 
 
 def _op_levels(ctx: Context, value: str) -> None:
@@ -239,8 +239,7 @@ def _op_levels(ctx: Context, value: str) -> None:
     lut = adjust.levels_lut(black, white, gamma, 0, 255)
     luts = np.repeat(lut[None, :], 3, axis=0)
     for layer in _target_layers(ctx):
-        _filter_region(ctx, layer,
-                       lambda img, m, luts=luts: adjust.apply_luts(img, luts))
+        _filter_region(ctx, layer, lambda img, m, luts=luts: adjust.apply_luts(img, luts))
 
 
 def _op_auto_levels(ctx: Context, value: str) -> None:
@@ -255,11 +254,9 @@ def _op_auto_levels(ctx: Context, value: str) -> None:
         b = arr & 0xFF
         luma = (0.299 * r + 0.587 * g + 0.114 * b).astype(np.uint8).ravel()
         lo, hi = np.percentile(luma, [0.1, 99.9])
-        lut = adjust.levels_lut(int(min(lo, 253)), int(max(hi, lo + 2)),
-                                1.0, 0, 255)
+        lut = adjust.levels_lut(int(min(lo, 253)), int(max(hi, lo + 2)), 1.0, 0, 255)
         luts = np.repeat(lut[None, :], 3, axis=0)
-        _filter_region(ctx, layer,
-                       lambda img, m, luts=luts: adjust.apply_luts(img, luts))
+        _filter_region(ctx, layer, lambda img, m, luts=luts: adjust.apply_luts(img, luts))
 
 
 def _op_hue_sat(ctx: Context, value: str) -> None:
@@ -267,20 +264,17 @@ def _op_hue_sat(ctx: Context, value: str) -> None:
 
     h, s, li = _ints(value, 3, "--hue-sat")
     for layer in _target_layers(ctx):
-        _filter_region(ctx, layer,
-                       lambda img, m: adjust.apply_hsl(img, h, s, li))
+        _filter_region(ctx, layer, lambda img, m: adjust.apply_hsl(img, h, s, li))
 
 
 def _op_color_balance(ctx: Context, value: str) -> None:
     from photoslop import adjust
 
     v = _ints(value, 9, "--color-balance")
-    values = {"shadows": tuple(v[0:3]), "midtones": tuple(v[3:6]),
-              "highlights": tuple(v[6:9])}
+    values = {"shadows": tuple(v[0:3]), "midtones": tuple(v[3:6]), "highlights": tuple(v[6:9])}
     luts = adjust.color_balance_luts(values)
     for layer in _target_layers(ctx):
-        _filter_region(ctx, layer,
-                       lambda img, m, luts=luts: adjust.apply_luts(img, luts))
+        _filter_region(ctx, layer, lambda img, m, luts=luts: adjust.apply_luts(img, luts))
 
 
 def _op_curves(ctx: Context, value: str) -> None:
@@ -289,8 +283,7 @@ def _op_curves(ctx: Context, value: str) -> None:
     points = _curve_points(value)
     luts = adjust.curves_luts({"rgb": points})
     for layer in _target_layers(ctx):
-        _filter_region(ctx, layer,
-                       lambda img, m, luts=luts: adjust.apply_luts(img, luts))
+        _filter_region(ctx, layer, lambda img, m, luts=luts: adjust.apply_luts(img, luts))
 
 
 def _op_gaussian_blur(ctx: Context, value: str) -> None:
@@ -303,8 +296,7 @@ def _op_gaussian_blur(ctx: Context, value: str) -> None:
     if radius < 1:
         raise _ValueError("--gaussian-blur: radius must be >= 1")
     for layer in _target_layers(ctx):
-        _filter_region(ctx, layer,
-                       lambda img, m: npimage.gaussian_blur(img, radius, m))
+        _filter_region(ctx, layer, lambda img, m: npimage.gaussian_blur(img, radius, m))
 
 
 def _op_unsharp(ctx: Context, value: str) -> None:
@@ -315,9 +307,7 @@ def _op_unsharp(ctx: Context, value: str) -> None:
     except ValueError as exc:
         raise _ValueError(f"--unsharp: {exc}") from exc
     for layer in _target_layers(ctx):
-        _filter_region(
-            ctx, layer,
-            lambda img, m: npimage.unsharp_mask(img, 4, amount / 100.0, m))
+        _filter_region(ctx, layer, lambda img, m: npimage.unsharp_mask(img, 4, amount / 100.0, m))
 
 
 def _op_tilt_shift(ctx: Context, value: str) -> None:
@@ -332,8 +322,7 @@ def _op_tilt_shift(ctx: Context, value: str) -> None:
         ys = np.arange(layer.image.height(), dtype=np.float32)
         dist = np.maximum(0.0, np.abs(ys - centre) - band / 2.0)
         blur_w = np.clip(dist / max(1.0, float(transition)), 0.0, 1.0)
-        weights = np.repeat(blur_w[:, None].astype(np.float32),
-                            layer.image.width(), axis=1)
+        weights = np.repeat(blur_w[:, None].astype(np.float32), layer.image.width(), axis=1)
         before = QImage(layer.image)
         blurred = QImage(before)
         npimage.gaussian_blur(blurred, max(1, radius), None)
@@ -346,9 +335,10 @@ def _op_drop_shadow(ctx: Context, value: str) -> None:
     from photoslop.appearance import new_effect
 
     for layer in _target_layers(ctx):
-        layer.effects = [*layer.effects, new_effect(
-            "drop-shadow", offset_x=dx, offset_y=dy, blur=blur,
-            color=[0, 0, 0, alpha])]
+        layer.effects = [
+            *layer.effects,
+            new_effect("drop-shadow", offset_x=dx, offset_y=dy, blur=blur, color=[0, 0, 0, alpha]),
+        ]
         layer.fx_cache = None
 
 
@@ -369,8 +359,7 @@ def _op_stroke(ctx: Context, value: str) -> None:
     from photoslop.appearance import new_effect
 
     for layer in _target_layers(ctx):
-        layer.effects = [*layer.effects, new_effect(
-            "outline", width=w, color=[r, g, b, 255])]
+        layer.effects = [*layer.effects, new_effect("outline", width=w, color=[r, g, b, 255])]
         layer.fx_cache = None
 
 
@@ -421,8 +410,9 @@ def _op_appearance_preset(ctx: Context, value: str) -> None:
     presets = BUILTIN_PRESETS
     if value not in presets:
         try:
-            custom = json.loads(str(QSettings("CryptoJones", "Photoslop").value(
-                "appearance/presets/v1", "{}")))
+            custom = json.loads(
+                str(QSettings("CryptoJones", "Photoslop").value("appearance/presets/v1", "{}"))
+            )
         except (TypeError, json.JSONDecodeError):
             custom = {}
         if not isinstance(custom, dict):
@@ -453,8 +443,7 @@ def _op_layer(ctx: Context, value: str) -> None:
     except ValueError as exc:
         raise _ValueError(f"--layer: {exc}") from exc
     if not 0 <= index < len(ctx.doc.layers):
-        raise _ValueError(
-            f"--layer: index {index} out of range (0..{len(ctx.doc.layers) - 1})")
+        raise _ValueError(f"--layer: index {index} out of range (0..{len(ctx.doc.layers) - 1})")
     ctx.doc.active_index = index
     ctx.all_layers = False
 
@@ -498,8 +487,7 @@ def _op_clear(ctx: Context, value: str) -> None:
         raise _ValueError("--clear needs a selection earlier in the pipeline")
     for layer in _target_layers(ctx):
         p = QPainter(layer.image)
-        p.setClipPath(doc.selection.translated(-layer.offset.x(),
-                                               -layer.offset.y()))
+        p.setClipPath(doc.selection.translated(-layer.offset.x(), -layer.offset.y()))
         p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
         p.fillRect(layer.image.rect(), Qt.GlobalColor.black)
         p.end()
@@ -514,16 +502,16 @@ def _op_adjust(ctx: Context, value: str) -> None:
         key, sep, num = chunk.partition("=")
         key = key.strip()
         if not sep or key not in AdjustSettings.FIELDS:
-            raise _ValueError("--adjust expects KEY=VALUE pairs from: "
-                              + ", ".join(AdjustSettings.FIELDS))
+            raise _ValueError(
+                "--adjust expects KEY=VALUE pairs from: " + ", ".join(AdjustSettings.FIELDS)
+            )
         try:
             values[key] = float(num)
         except ValueError as exc:
             raise _ValueError(f"--adjust {key}: {exc}") from exc
     settings = AdjustSettings(**values)
     for layer in _target_layers(ctx):
-        _filter_region(ctx, layer,
-                       lambda img, m: apply_settings(img, settings))
+        _filter_region(ctx, layer, lambda img, m: apply_settings(img, settings))
 
 
 def _op_filter(ctx: Context, value: str) -> None:
@@ -534,8 +522,10 @@ def _op_filter(ctx: Context, value: str) -> None:
     registry = available_filters(allow_unsafe=ctx.allow_unsafe_plugins)
     cls = registry.get(name)
     if cls is None:
-        raise _ValueError(f"--filter: unknown filter {name!r}; installed: "
-                          + (", ".join(sorted(registry)) or "none"))
+        raise _ValueError(
+            f"--filter: unknown filter {name!r}; installed: "
+            + (", ".join(sorted(registry)) or "none")
+        )
     try:
         params = parse_params(cls, params_text.strip())
     except ValueError as exc:
@@ -545,8 +535,12 @@ def _op_filter(ctx: Context, value: str) -> None:
 
 
 _POINT_COLOR_FIELDS = {
-    "hue": (0.0, 359.9), "range": (1.0, 180.0), "dh": (-180.0, 180.0),
-    "ds": (-100.0, 100.0), "dl": (-100.0, 100.0), "uniform": (0.0, 100.0),
+    "hue": (0.0, 359.9),
+    "range": (1.0, 180.0),
+    "dh": (-180.0, 180.0),
+    "ds": (-100.0, 100.0),
+    "dl": (-100.0, 100.0),
+    "uniform": (0.0, 100.0),
 }
 
 
@@ -560,8 +554,9 @@ def _op_raw_develop(ctx: Context, value: str) -> None:
         key, sep, num = chunk.partition("=")
         key = key.strip()
         if not sep or key not in DEVELOP_FIELDS:
-            raise _ValueError("--raw-develop expects KEY=VALUE pairs from: "
-                              + ", ".join(DEVELOP_FIELDS))
+            raise _ValueError(
+                "--raw-develop expects KEY=VALUE pairs from: " + ", ".join(DEVELOP_FIELDS)
+            )
         lo, hi, _default = DEVELOP_FIELDS[key]
         try:
             v = float(num)
@@ -651,8 +646,9 @@ def _op_point_color(ctx: Context, value: str) -> None:
         key, sep, num = chunk.partition("=")
         key = key.strip()
         if not sep or key not in _POINT_COLOR_FIELDS:
-            raise _ValueError("--point-color expects KEY=VALUE pairs from: "
-                              + ", ".join(_POINT_COLOR_FIELDS))
+            raise _ValueError(
+                "--point-color expects KEY=VALUE pairs from: " + ", ".join(_POINT_COLOR_FIELDS)
+            )
         try:
             v = float(num)
         except ValueError as exc:
@@ -664,9 +660,19 @@ def _op_point_color(ctx: Context, value: str) -> None:
     if "hue" not in values:
         raise _ValueError("--point-color needs hue=DEGREES (0..359)")
     for layer in _target_layers(ctx):
-        _filter_region(ctx, layer, lambda img, m: apply_point_color(
-            img, values["hue"], values["range"], values["dh"],
-            values["ds"], values["dl"], values["uniform"]))
+        _filter_region(
+            ctx,
+            layer,
+            lambda img, m: apply_point_color(
+                img,
+                values["hue"],
+                values["range"],
+                values["dh"],
+                values["ds"],
+                values["dl"],
+                values["uniform"],
+            ),
+        )
 
 
 def _op_select_ellipse(ctx: Context, value: str) -> None:
@@ -711,8 +717,7 @@ def _op_select_subject(ctx: Context, value: str) -> None:
     mask_img = _adapter(ctx).select_subject(ctx.doc.flatten())
     gray = mask_img.convertToFormat(QImage.Format.Format_Grayscale8)
     h, w = gray.height(), gray.width()
-    buf = np.frombuffer(gray.constBits(), np.uint8,
-                        count=h * gray.bytesPerLine())
+    buf = np.frombuffer(gray.constBits(), np.uint8, count=h * gray.bytesPerLine())
     mask = buf.reshape(h, gray.bytesPerLine())[:, :w] > 127
     if not mask.any():
         raise RuntimeError("backend found no subject")
@@ -728,13 +733,15 @@ def _op_generative_fill(ctx: Context, value: str) -> None:
 
     doc = ctx.doc
     if doc.selection is None:
-        raise _ValueError("--generative-fill needs a selection "
-                          "(--select or --select-subject first)")
+        raise _ValueError(
+            "--generative-fill needs a selection (--select or --select-subject first)"
+        )
     sel = npimage.selection_mask(doc.selection, doc.size, QPoint(0, 0))
     mask_img = QImage(doc.size, QImage.Format.Format_Grayscale8)
     mask_img.fill(0)
-    buf = np.frombuffer(mask_img.bits(), np.uint8,
-                        count=doc.size.height() * mask_img.bytesPerLine())
+    buf = np.frombuffer(
+        mask_img.bits(), np.uint8, count=doc.size.height() * mask_img.bytesPerLine()
+    )
     view = buf.reshape(doc.size.height(), mask_img.bytesPerLine())
     view[:, : doc.size.width()][sel] = 255
     result = _adapter(ctx).generative_fill(doc.flatten(), mask_img, value)
@@ -765,8 +772,7 @@ def _op_flip(ctx: Context, value: str) -> None:
     if value not in ("h", "v"):
         raise _ValueError("--flip expects h or v")
     transform = QTransform()
-    transform.scale(-1 if value == "h" else 1,
-                    -1 if value == "v" else 1)
+    transform.scale(-1 if value == "h" else 1, -1 if value == "v" else 1)
     for layer in _target_layers(ctx):
         layer.image = layer.image.transformed(transform)
         layer.fx_cache = None
@@ -777,8 +783,7 @@ def _op_fill(ctx: Context, value: str) -> None:
 
     r, g, b = _ints(value, 3, "--fill")
     for layer in _target_layers(ctx):
-        filled = QImage(layer.image.size(),
-                        QImage.Format.Format_ARGB32_Premultiplied)
+        filled = QImage(layer.image.size(), QImage.Format.Format_ARGB32_Premultiplied)
         filled.fill(QColor(r, g, b))
         layer.image = filled
         layer.fx_cache = None
@@ -837,14 +842,17 @@ def _op_shape(ctx: Context, value: str) -> None:
     if kind not in ("rect", "ellipse", "line"):
         raise _ValueError("--shape kind must be rect, ellipse, or line")
     x, y, w, h, r, g, b = _ints(",".join(parts[1:]), 7, "--shape")
-    data = {"kind": kind, "x1": x, "y1": y,
-            "x2": x + (w - 1 if kind == "line" else w),
-            "y2": y + (h - 1 if kind == "line" else h),
-            "color": [r, g, b, 255]}
+    data = {
+        "kind": kind,
+        "x1": x,
+        "y1": y,
+        "x2": x + (w - 1 if kind == "line" else w),
+        "y2": y + (h - 1 if kind == "line" else h),
+        "color": [r, g, b, 255],
+    }
     if kind == "line":
         data["width"] = 2
-    layer = vector.render_vector(data, f"Shape {len(ctx.doc.layers)}",
-                                 ctx.doc.canvas_rect())
+    layer = vector.render_vector(data, f"Shape {len(ctx.doc.layers)}", ctx.doc.canvas_rect())
     if layer is None:
         raise _ValueError("--shape: degenerate geometry")
     ctx.doc.layers.append(layer)
@@ -886,8 +894,7 @@ def _op_blend_mode(ctx: Context, value: str) -> None:
     from photoslop.layer import BLEND_MODES
 
     if value not in BLEND_MODES:
-        raise _ValueError(
-            f"--blend-mode: unknown mode (choose from {sorted(BLEND_MODES)})")
+        raise _ValueError(f"--blend-mode: unknown mode (choose from {sorted(BLEND_MODES)})")
     for layer in _target_layers(ctx):
         layer.blend_mode = value
 
@@ -910,8 +917,7 @@ def _op_content_aware_fill(ctx: Context, value: str) -> None:
     if doc.selection is None:
         raise _ValueError("--content-aware-fill needs a selection first")
     for layer in _target_layers(ctx):
-        mask = npimage.selection_mask(doc.selection, layer.image.size(),
-                                      layer.offset)
+        mask = npimage.selection_mask(doc.selection, layer.image.size(), layer.offset)
         if not mask.any():
             continue
         from PySide6.QtGui import QImage
@@ -993,112 +999,124 @@ def _op_artboard_op(ctx: Context, value: str) -> None:
 # name -> (metavar, help, apply_fn). Drives argparse AND the test catalog.
 OPS: dict = {
     "resize": ("WxH", "rescale the whole image", _op_resize),
-    "canvas-size": ("WxH", "grow/shrink the canvas (content centred)",
-                    _op_canvas_size),
+    "canvas-size": ("WxH", "grow/shrink the canvas (content centred)", _op_canvas_size),
     "crop": ("X,Y,W,H", "crop the canvas to a rectangle", _op_crop_real),
     "rotate": ("DEG", "rotate the whole image by any angle", _op_rotate),
-    "rotate-layer": ("DEG", "rotate the target layer(s) about their centre",
-                     _op_rotate_layer),
+    "rotate-layer": ("DEG", "rotate the target layer(s) about their centre", _op_rotate_layer),
     "content-aware-scale": ("WxH", "seam-carve the target layer(s)", _op_cas),
     "levels": ("B,W,GAMMA", "levels adjustment", _op_levels),
     "auto-levels": (None, "0.1%-percentile auto levels", _op_auto_levels),
-    "hue-sat": ("H,S,L", "hue/saturation/lightness (-180..180,-100..100)",
-                _op_hue_sat),
-    "color-balance": ("9 INTS", "shadows,midtones,highlights r,g,b each",
-                      _op_color_balance),
+    "hue-sat": ("H,S,L", "hue/saturation/lightness (-180..180,-100..100)", _op_hue_sat),
+    "color-balance": ("9 INTS", "shadows,midtones,highlights r,g,b each", _op_color_balance),
     "curves": ("X:Y,...", "master curve points in 0..255", _op_curves),
-    "adjust": ('"KEY=VAL,..."',
-               "Lightroom Basic sliders (temperature, tint, exposure, "
-               "contrast, highlights, shadows, whites, blacks, vibrance, "
-               "saturation)", _op_adjust),
-    "raw-develop": ('"KEY=VAL,..."',
-                    "re-develop a raw input: exposure (EV), temp (K), tint, "
-                    "highlights, shadows — 16-bit transient, 8-bit out",
-                    _op_raw_develop),
-    "lens-correct": (None, "distortion + vignetting from the input's EXIF "
-                     "(needs photoslop[lens])", _op_lens_correct),
-    "denoise-model": ("STRENGTH", "AI denoise via the model backend "
-                      "(--model-url)", _op_denoise_model),
-    "assign-profile": ("PROFILE", "assign an ICC profile (preset name or "
-                       ".icc path) — metadata only", _op_assign_profile),
-    "convert-profile": ("PROFILE", "convert pixels to an ICC profile "
-                        "(srgb, adobe-rgb, display-p3, prophoto-rgb, or "
-                        ".icc path)", _op_convert_profile),
-    "proof": ("PROFILE", "soft-proof simulation applied to raster output",
-              _op_proof),
-    "cmyk-out": ("FILE.icc", "write --output as CMYK JPEG/TIFF through "
-                 "this profile (needs photoslop[formats])", _op_cmyk_out),
-    "point-color": ('"KEY=VAL,..."',
-                    "targeted hue-band HSL: hue (required), range, dh, ds, "
-                    "dl, uniform — skin tones ≈ hue=20,range=28",
-                    _op_point_color),
-    "gaussian-blur": ("RADIUS", "gaussian blur (selection-aware)",
-                      _op_gaussian_blur),
-    "filter": ('"NAME:KEY=VAL,..."',
-               "run a filter plugin (built-ins: sepia, pixelate; more via "
-               "the photoslop.filters entry-point group)", _op_filter),
+    "adjust": (
+        '"KEY=VAL,..."',
+        "Lightroom Basic sliders (temperature, tint, exposure, "
+        "contrast, highlights, shadows, whites, blacks, vibrance, "
+        "saturation)",
+        _op_adjust,
+    ),
+    "raw-develop": (
+        '"KEY=VAL,..."',
+        "re-develop a raw input: exposure (EV), temp (K), tint, "
+        "highlights, shadows — 16-bit transient, 8-bit out",
+        _op_raw_develop,
+    ),
+    "lens-correct": (
+        None,
+        "distortion + vignetting from the input's EXIF (needs photoslop[lens])",
+        _op_lens_correct,
+    ),
+    "denoise-model": (
+        "STRENGTH",
+        "AI denoise via the model backend (--model-url)",
+        _op_denoise_model,
+    ),
+    "assign-profile": (
+        "PROFILE",
+        "assign an ICC profile (preset name or .icc path) — metadata only",
+        _op_assign_profile,
+    ),
+    "convert-profile": (
+        "PROFILE",
+        "convert pixels to an ICC profile "
+        "(srgb, adobe-rgb, display-p3, prophoto-rgb, or "
+        ".icc path)",
+        _op_convert_profile,
+    ),
+    "proof": ("PROFILE", "soft-proof simulation applied to raster output", _op_proof),
+    "cmyk-out": (
+        "FILE.icc",
+        "write --output as CMYK JPEG/TIFF through this profile (needs photoslop[formats])",
+        _op_cmyk_out,
+    ),
+    "point-color": (
+        '"KEY=VAL,..."',
+        "targeted hue-band HSL: hue (required), range, dh, ds, "
+        "dl, uniform — skin tones ≈ hue=20,range=28",
+        _op_point_color,
+    ),
+    "gaussian-blur": ("RADIUS", "gaussian blur (selection-aware)", _op_gaussian_blur),
+    "filter": (
+        '"NAME:KEY=VAL,..."',
+        "run a filter plugin (built-ins: sepia, pixelate; more via "
+        "the photoslop.filters entry-point group)",
+        _op_filter,
+    ),
     "unsharp": ("AMOUNT", "unsharp mask, percent", _op_unsharp),
-    "tilt-shift": ("C,B,T,R", "tilt-shift blur: centre,band,transition,radius",
-                   _op_tilt_shift),
-    "drop-shadow": ("DX,DY,BLUR,ALPHA", "live drop-shadow effect",
-                    _op_drop_shadow),
+    "tilt-shift": ("C,B,T,R", "tilt-shift blur: centre,band,transition,radius", _op_tilt_shift),
+    "drop-shadow": ("DX,DY,BLUR,ALPHA", "live drop-shadow effect", _op_drop_shadow),
     "glow": ("SIZE", "live outer-glow effect", _op_glow),
     "stroke": ("W,R,G,B", "live stroke effect", _op_stroke),
     "effect": ("JSON", "append a structured live appearance effect", _op_effect),
     "set-effects": ("JSON", "replace the target appearance stack", _op_set_effects),
     "clear-effects": (None, "remove all target appearance effects", _op_clear_effects),
-    "appearance-preset": ("NAME", "apply a built-in or local appearance preset",
-                          _op_appearance_preset),
-    "fill-opacity": ("PCT", "fill opacity (effects keep full strength)",
-                     _op_fill_opacity),
+    "appearance-preset": (
+        "NAME",
+        "apply a built-in or local appearance preset",
+        _op_appearance_preset,
+    ),
+    "fill-opacity": ("PCT", "fill opacity (effects keep full strength)", _op_fill_opacity),
     "layer": ("N", "target layer index for following ops", _op_layer),
-    "all-layers": (None, "apply following ops to every visible layer",
-                   _op_all_layers),
-    "select": ("X,Y,W,H", "rectangular selection for region-aware ops",
-               _op_select),
-    "select-ellipse": ("X,Y,W,H", "elliptical selection inscribed in the box",
-                       _op_select_ellipse),
-    "select-poly": ('"X,Y X,Y X,Y..."',
-                    "polygon selection from three or more points",
-                    _op_select_poly),
+    "all-layers": (None, "apply following ops to every visible layer", _op_all_layers),
+    "select": ("X,Y,W,H", "rectangular selection for region-aware ops", _op_select),
+    "select-ellipse": ("X,Y,W,H", "elliptical selection inscribed in the box", _op_select_ellipse),
+    "select-poly": (
+        '"X,Y X,Y X,Y..."',
+        "polygon selection from three or more points",
+        _op_select_poly,
+    ),
     "deselect": (None, "clear the selection", _op_deselect),
-    "clear": (None, "erase the selection to transparency (headless Cut)",
-              _op_clear),
+    "clear": (None, "erase the selection to transparency (headless Cut)", _op_clear),
     "flip": ("h|v", "mirror the target layer(s)", _op_flip),
     "fill": ("R,G,B", "fill the whole target layer with a colour", _op_fill),
-    "text": ('"X,Y,SIZE[,R,G,B]:TEXT"',
-             "rasterise text onto a new layer (default colour black)", _op_text),
-    "text-rich": ('"X,Y:<html>"',
-                  "rasterise rich HTML text onto a new layer — per-letter "
-                  "colour, font-family, bold/italic (mirror of the GUI Text "
-                  "tool's styled editor)", _op_text_rich),
-    "shape": ("KIND,X,Y,W,H,R,G,B", "rect/ellipse/line onto a new layer",
-              _op_shape),
-    "vector-op": ("JSON", "structured native-vector selection/edit operation",
-                  _op_vector_op),
-    "blend-mode": ("NAME", "set the target layer's blend mode",
-                   _op_blend_mode),
+    "text": (
+        '"X,Y,SIZE[,R,G,B]:TEXT"',
+        "rasterise text onto a new layer (default colour black)",
+        _op_text,
+    ),
+    "text-rich": (
+        '"X,Y:<html>"',
+        "rasterise rich HTML text onto a new layer — per-letter "
+        "colour, font-family, bold/italic (mirror of the GUI Text "
+        "tool's styled editor)",
+        _op_text_rich,
+    ),
+    "shape": ("KIND,X,Y,W,H,R,G,B", "rect/ellipse/line onto a new layer", _op_shape),
+    "vector-op": ("JSON", "structured native-vector selection/edit operation", _op_vector_op),
+    "blend-mode": ("NAME", "set the target layer's blend mode", _op_blend_mode),
     "layer-opacity": ("PCT", "set the target layer's opacity", _op_layer_opacity),
-    "content-aware-fill": (None, "diffusion-fill the selection",
-                           _op_content_aware_fill),
+    "content-aware-fill": (None, "diffusion-fill the selection", _op_content_aware_fill),
     "feather": ("RADIUS", "feather the current selection's edge", _op_feather),
-    "duplicate-layer": (None, "duplicate the active layer",
-                        _op_duplicate_layer),
+    "duplicate-layer": (None, "duplicate the active layer", _op_duplicate_layer),
     "flatten": (None, "collapse all layers into one", _op_flatten),
-    "convert-smart": (None, "snapshot target layer(s) as smart objects",
-                      _op_convert_smart),
-    "restore-smart": (None, "restore smart-object pristine pixels",
-                      _op_restore_smart),
-    "add-artboard": ("NAME,X,Y,W,H", "register a named export region",
-                     _op_add_artboard),
-    "artboard-op": ("JSON", "add/update/delete/reorder named artboards",
-                    _op_artboard_op),
-    "model-url": ("URL", "backend for model ops (generic HTTP adapter)",
-                  _op_model_url),
-    "select-subject": (None, "ask the model backend for a subject selection",
-                       _op_select_subject),
-    "generative-fill": ("PROMPT", "model-paint the selection from a prompt",
-                        _op_generative_fill),
+    "convert-smart": (None, "snapshot target layer(s) as smart objects", _op_convert_smart),
+    "restore-smart": (None, "restore smart-object pristine pixels", _op_restore_smart),
+    "add-artboard": ("NAME,X,Y,W,H", "register a named export region", _op_add_artboard),
+    "artboard-op": ("JSON", "add/update/delete/reorder named artboards", _op_artboard_op),
+    "model-url": ("URL", "backend for model ops (generic HTTP adapter)", _op_model_url),
+    "select-subject": (None, "ask the model backend for a subject selection", _op_select_subject),
+    "generative-fill": ("PROMPT", "model-paint the selection from a prompt", _op_generative_fill),
 }
 
 
@@ -1106,45 +1124,62 @@ class _PipelineAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         if not hasattr(namespace, "pipeline") or namespace.pipeline is None:
             namespace.pipeline = []
-        namespace.pipeline.append((self.dest.replace("_", "-"),
-                                   values if values is not None else ""))
+        namespace.pipeline.append(
+            (self.dest.replace("_", "-"), values if values is not None else "")
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="photoslop-cli",
         description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("input", nargs="?",
-                        help="input image (PNG/JPG/ORA/camera-raw); "
-                             "omit when starting from --new")
-    parser.add_argument("--new", metavar="WxH|PRESET",
-                        help="start from a blank white document instead of an "
-                             "input file: pixel size (800x600) or a paper "
-                             "preset (A5, A4, A3, Letter, Legal) at --dpi")
-    parser.add_argument("--dpi", type=int, default=72, metavar="N",
-                        help="resolution for --new documents and paper "
-                             "presets (default 72)")
-    parser.add_argument("--output", "-o", metavar="PATH",
-                        help=".ora keeps layers; raster extensions flatten")
-    parser.add_argument("--export-artboards", metavar="DIR",
-                        help="write each artboard as <name>.png into DIR")
-    parser.add_argument("--info", action="store_true",
-                        help="print document info as JSON")
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
-        "--allow-large-document", action="store_true",
+        "input",
+        nargs="?",
+        help="input image (PNG/JPG/ORA/camera-raw); omit when starting from --new",
+    )
+    parser.add_argument(
+        "--new",
+        metavar="WxH|PRESET",
+        help="start from a blank white document instead of an "
+        "input file: pixel size (800x600) or a paper "
+        "preset (A5, A4, A3, Letter, Legal) at --dpi",
+    )
+    parser.add_argument(
+        "--dpi",
+        type=int,
+        default=72,
+        metavar="N",
+        help="resolution for --new documents and paper presets (default 72)",
+    )
+    parser.add_argument(
+        "--output", "-o", metavar="PATH", help=".ora keeps layers; raster extensions flatten"
+    )
+    parser.add_argument(
+        "--export-artboards", metavar="DIR", help="write each artboard as <name>.png into DIR"
+    )
+    parser.add_argument("--info", action="store_true", help="print document info as JSON")
+    parser.add_argument(
+        "--allow-large-document",
+        action="store_true",
         help="for trusted local files, bypass only the adaptive working-set "
-             "estimate (hard geometry/parser limits remain)")
+        "estimate (hard geometry/parser limits remain)",
+    )
     parser.add_argument(
-        "--allow-unsafe-plugins", action="store_true",
-        help="enable native-process and third-party filter plugins")
+        "--allow-unsafe-plugins",
+        action="store_true",
+        help="enable native-process and third-party filter plugins",
+    )
     parser.add_argument(
-        "--allow-insecure-model-http", action="store_true",
-        help="allow unencrypted HTTP to a non-loopback model server")
+        "--allow-insecure-model-http",
+        action="store_true",
+        help="allow unencrypted HTTP to a non-loopback model server",
+    )
     from photoslop import __version__
 
-    parser.add_argument("--version", action="version",
-                        version=f"photoslop-cli {__version__}")
+    parser.add_argument("--version", action="version", version=f"photoslop-cli {__version__}")
     for name, (metavar, help_text, _fn) in OPS.items():
         kwargs: dict = {"action": _PipelineAction, "help": help_text}
         if metavar is None:
@@ -1184,20 +1219,21 @@ def _new_document(spec: str, dpi: int, *, allow_large: bool = False):
             w, h = _size(spec, "--new")
         except _ValueError:
             names = ", ".join(n for n, *_ in PAPER_SIZES)
-            raise _ValueError(
-                f"--new expects WxH or a preset ({names})") from None
+            raise _ValueError(f"--new expects WxH or a preset ({names})") from None
     validate_dpi(dpi, operation="new document")
-    validate_dimensions(w, h, operation="new document",
-                        allow_large=allow_large)
-    return Document.new(QSize(w, h), float(dpi), "Untitled",
-                        QColor(255, 255, 255))
+    validate_dimensions(w, h, operation="new document", allow_large=allow_large)
+    return Document.new(QSize(w, h), float(dpi), "Untitled", QColor(255, 255, 255))
 
 
 RASTER_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff")
 
 
-def _write_output(doc, path: str, proof=None, cmyk_icc: str | None = None,
-                  ) -> None:
+def _write_output(
+    doc,
+    path: str,
+    proof=None,
+    cmyk_icc: str | None = None,
+) -> None:
     from photoslop import color, io_formats
     from photoslop.atomicio import atomic_write
     from photoslop.io_ora import save_ora
@@ -1232,6 +1268,7 @@ def _write_output(doc, path: str, proof=None, cmyk_icc: str | None = None,
         return
     if not lower.endswith(RASTER_EXTS):
         raise _ValueError(f"unsupported output extension: {path}")
+
     def writer(temporary: str) -> None:
         if not flat.save(temporary):
             raise RuntimeError(f"could not write {path}")
@@ -1252,19 +1289,22 @@ def _doc_info(doc) -> dict:
         "size": [doc.size.width(), doc.size.height()],
         "dpi": doc.dpi,
         "layers": [
-            {"name": layer.name, "visible": layer.visible,
-             "opacity": layer.opacity, "fill_opacity": layer.fill_opacity,
-             "blend_mode": layer.blend_mode,
-             "offset": [layer.offset.x(), layer.offset.y()],
-             "size": [layer.image.width(), layer.image.height()],
-             "effects": normalize_effects(layer.effects),
-             "smart_object": layer.source is not None,
-             "vector_id": (layer.vector_data or {}).get("id"),
-             "vector_type": (layer.vector_data or {}).get("type")}
+            {
+                "name": layer.name,
+                "visible": layer.visible,
+                "opacity": layer.opacity,
+                "fill_opacity": layer.fill_opacity,
+                "blend_mode": layer.blend_mode,
+                "offset": [layer.offset.x(), layer.offset.y()],
+                "size": [layer.image.width(), layer.image.height()],
+                "effects": normalize_effects(layer.effects),
+                "smart_object": layer.source is not None,
+                "vector_id": (layer.vector_data or {}).get("id"),
+                "vector_type": (layer.vector_data or {}).get("type"),
+            }
             for layer in doc.layers
         ],
-        "artboards": [[n, r.x(), r.y(), r.width(), r.height()]
-                      for n, r in doc.artboards],
+        "artboards": [[n, r.x(), r.y(), r.width(), r.height()] for n, r in doc.artboards],
     }
 
 
@@ -1313,9 +1353,11 @@ def apply_pipeline(
     if not input_path and not new:
         raise _ValueError("give an input file, or start blank with new")
 
-    doc = (_load_document(input_path, allow_large=allow_large_document)
-           if input_path else _new_document(
-               new, dpi, allow_large=allow_large_document))
+    doc = (
+        _load_document(input_path, allow_large=allow_large_document)
+        if input_path
+        else _new_document(new, dpi, allow_large=allow_large_document)
+    )
     ctx = Context(
         doc=doc,
         input_path=input_path or "",
@@ -1323,10 +1365,9 @@ def apply_pipeline(
         allow_unsafe_plugins=allow_unsafe_plugins,
         allow_insecure_model_http=allow_insecure_model_http,
     )
-    for op, value in (operations or []):
+    for op, value in operations or []:
         if op not in OPS:
-            raise _ValueError(f"unknown operation: {op!r} "
-                              f"(see list_operations)")
+            raise _ValueError(f"unknown operation: {op!r} (see list_operations)")
         OPS[op][2](ctx, value or "")
 
     result: dict = {}
@@ -1338,8 +1379,7 @@ def apply_pipeline(
         _write_output(doc, output, ctx.proof_space, ctx.cmyk_icc or None)
         result["output"] = output
     if not (info or export_artboards or output):
-        raise _ValueError("nothing to do: request output, info, or "
-                          "export_artboards")
+        raise _ValueError("nothing to do: request output, info, or export_artboards")
     return result
 
 
@@ -1354,9 +1394,11 @@ def main(argv: list[str] | None = None) -> int:
     if not args.input and not args.new:
         parser.error("give an input file, or start blank with --new")
     try:
-        doc = (_load_document(args.input, allow_large=args.allow_large_document)
-               if args.input else _new_document(
-                   args.new, args.dpi, allow_large=args.allow_large_document))
+        doc = (
+            _load_document(args.input, allow_large=args.allow_large_document)
+            if args.input
+            else _new_document(args.new, args.dpi, allow_large=args.allow_large_document)
+        )
         ctx = Context(
             doc=doc,
             input_path=args.input or "",
@@ -1373,14 +1415,11 @@ def main(argv: list[str] | None = None) -> int:
             for path in written:
                 print(path)
         if args.output:
-            _write_output(doc, args.output, ctx.proof_space,
-                          ctx.cmyk_icc or None)
+            _write_output(doc, args.output, ctx.proof_space, ctx.cmyk_icc or None)
         if not (args.info or args.export_artboards or args.output):
-            parser.error("nothing to do: give --output, --info, "
-                         "or --export-artboards")
+            parser.error("nothing to do: give --output, --info, or --export-artboards")
     except _ValueError as exc:
-        parser.exit(_EXIT_CODES[exc.code],
-                    f"photoslop-cli: error [{exc.code.value}]: {exc}\n")
+        parser.exit(_EXIT_CODES[exc.code], f"photoslop-cli: error [{exc.code.value}]: {exc}\n")
     except Exception as exc:  # engine/backend/IO failures
         return _die(exc)
     return 0

@@ -53,8 +53,8 @@ def test_cancellation_before_commit_preserves_destination(tmp_path):
 
     with pytest.raises(CancelledError):
         atomic_write(
-            str(destination), lambda temporary: _write(temporary, b"new"),
-            before_commit=cancelled)
+            str(destination), lambda temporary: _write(temporary, b"new"), before_commit=cancelled
+        )
     assert destination.read_bytes() == b"old"
 
 
@@ -71,8 +71,7 @@ def test_newer_write_ticket_prevents_older_snapshot_from_committing(tmp_path):
     assert destination.read_bytes() == b"newer"
 
 
-def test_ora_encoder_failure_does_not_truncate_existing_project(
-        qapp, tmp_path, monkeypatch):
+def test_ora_encoder_failure_does_not_truncate_existing_project(qapp, tmp_path, monkeypatch):
     destination = tmp_path / "existing.ora"
     destination.write_bytes(b"valid old project")
     doc = Document.new(QSize(10, 10), 72.0, "atomic", QColor("white"))
@@ -98,7 +97,10 @@ def test_artboard_export_deduplicates_sanitized_names(qapp, tmp_path):
     written = export_artboards(doc, str(tmp_path))
 
     assert [os.path.basename(path) for path in written] == [
-        "Hero_Card.png", "hero_card-2.png", "Hero_Card-3.png"]
+        "Hero_Card.png",
+        "hero_card-2.png",
+        "Hero_Card-3.png",
+    ]
     assert all(os.path.getsize(path) > 0 for path in written)
 
 
@@ -108,8 +110,7 @@ def test_recovery_snapshot_round_trips_identity_and_stays_unsaved(qapp, tmp_path
     document_id = doc.document_id
 
     service.write(doc)
-    metadata = json.loads(
-        (tmp_path / "recovery" / f"{document_id}.recovery.json").read_text())
+    metadata = json.loads((tmp_path / "recovery" / f"{document_id}.recovery.json").read_text())
     assert metadata["schema_version"] == RecoveryService.SCHEMA_VERSION
     assert metadata["document_id"] == document_id
     recovered = service.available()
@@ -124,11 +125,9 @@ def test_recovery_snapshot_round_trips_identity_and_stays_unsaved(qapp, tmp_path
 
 
 def test_recovery_retention_prunes_old_and_excess_documents(qapp, tmp_path):
-    service = RecoveryService(
-        str(tmp_path / "bounded"), max_documents=2, max_age_days=30)
+    service = RecoveryService(str(tmp_path / "bounded"), max_documents=2, max_age_days=30)
     documents = [
-        Document.new(QSize(6, 6), 72, f"doc-{index}", QColor("white"))
-        for index in range(3)
+        Document.new(QSize(6, 6), 72, f"doc-{index}", QColor("white")) for index in range(3)
     ]
     for document in documents:
         service.write(document)
@@ -145,8 +144,7 @@ def test_recovery_retention_prunes_old_and_excess_documents(qapp, tmp_path):
     assert not os.path.exists(service.path_for(stale.document_id))
 
 
-def test_failed_recovery_write_preserves_last_complete_snapshot(
-        qapp, tmp_path, monkeypatch):
+def test_failed_recovery_write_preserves_last_complete_snapshot(qapp, tmp_path, monkeypatch):
     service = RecoveryService(str(tmp_path / "disk-full"))
     doc = Document.new(QSize(8, 8), 72, "stable", QColor("blue"))
     service.write(doc)
@@ -187,12 +185,12 @@ def test_recovery_ignores_invalid_metadata_and_corrupt_snapshots(qapp, tmp_path)
     assert service.available() == []
 
     (root / "broken.recovery.json").write_text(
-        json.dumps({"schema_version": 999}), encoding="utf-8")
+        json.dumps({"schema_version": 999}), encoding="utf-8"
+    )
     assert service._metadata("broken") == {}
 
 
-def test_recovery_legacy_snapshot_uses_file_time_and_missing_root_is_empty(
-        qapp, tmp_path):
+def test_recovery_legacy_snapshot_uses_file_time_and_missing_root_is_empty(qapp, tmp_path):
     root = tmp_path / "legacy"
     service = RecoveryService(str(root))
     assert service.available() == []
@@ -209,14 +207,12 @@ def test_recovery_legacy_snapshot_uses_file_time_and_missing_root_is_empty(
     assert recovered[0].recovery_saved_at is None
 
 
-def test_dirty_document_schedules_recovery_and_clean_state_removes_it(
-        qapp, tmp_path):
+def test_dirty_document_schedules_recovery_and_clean_state_removes_it(qapp, tmp_path):
     win = MainWindow(recovery_enabled=True)
     win.recovery_service = RecoveryService(str(tmp_path / "autosave"))
     doc = Document.new(QSize(10, 10), 72.0, "scheduled", QColor("white"))
     win.add_document(doc)
-    doc.undo_stack.push(SetLayerPropertyCommand(
-        doc, doc.active_layer, "opacity", 0.5))
+    doc.undo_stack.push(SetLayerPropertyCommand(doc, doc.active_layer, "opacity", 0.5))
     timer = win._recovery_timers[doc.document_id]
     timer.setInterval(0)
     timer.start()

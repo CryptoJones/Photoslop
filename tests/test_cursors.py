@@ -55,7 +55,8 @@ def test_clone_cursor_reports_source_required_and_source_set(qapp):
     tool._source = QPointF(5, 5)
     assert tool.cursor_intent(canvas.doc, canvas, QPointF(20, 20)).valid is True
     sampling = tool.cursor_intent(
-        canvas.doc, canvas, QPointF(20, 20), Qt.KeyboardModifier.AltModifier)
+        canvas.doc, canvas, QPointF(20, 20), Qt.KeyboardModifier.AltModifier
+    )
     assert sampling.badge == "S"
 
 

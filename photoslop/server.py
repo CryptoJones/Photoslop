@@ -29,12 +29,22 @@ from photoslop.errors import ErrorCode, StructuredError, ToolError, classify_err
 # A tool value the model can pass for a flag-style op (e.g. auto-levels),
 # which take no argument.
 _FLAG = ""
-_BLOCKED_OPS = frozenset({
-    "model-url", "select-subject", "generative-fill", "denoise-model",
-})
-_PATH_VALUE_OPS = frozenset({
-    "assign-profile", "convert-profile", "proof", "cmyk-out",
-})
+_BLOCKED_OPS = frozenset(
+    {
+        "model-url",
+        "select-subject",
+        "generative-fill",
+        "denoise-model",
+    }
+)
+_PATH_VALUE_OPS = frozenset(
+    {
+        "assign-profile",
+        "convert-profile",
+        "proof",
+        "cmyk-out",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -43,8 +53,7 @@ class PathPolicy:
     allow_overwrite: bool = False
 
     @classmethod
-    def create(cls, root: str | os.PathLike[str],
-               *, allow_overwrite: bool = False) -> PathPolicy:
+    def create(cls, root: str | os.PathLike[str], *, allow_overwrite: bool = False) -> PathPolicy:
         resolved = Path(root).expanduser().resolve(strict=True)
         if not resolved.is_dir():
             raise ToolError(f"MCP root is not a directory: {resolved}")
@@ -59,8 +68,8 @@ class PathPolicy:
             resolved.relative_to(self.root)
         except ValueError as exc:
             raise ToolError(
-                f"{purpose} must stay under MCP root {self.root}",
-                ErrorCode.UNSAFE_OPERATION) from exc
+                f"{purpose} must stay under MCP root {self.root}", ErrorCode.UNSAFE_OPERATION
+            ) from exc
         return resolved
 
     def input(self, value: str, *, purpose: str = "input") -> str:
@@ -76,31 +85,31 @@ class PathPolicy:
             parent.relative_to(self.root)
         except ValueError as exc:
             raise ToolError(
-                f"{purpose} must stay under MCP root {self.root}",
-                ErrorCode.UNSAFE_OPERATION) from exc
+                f"{purpose} must stay under MCP root {self.root}", ErrorCode.UNSAFE_OPERATION
+            ) from exc
         if resolved.exists() and not self.allow_overwrite:
             raise ToolError(
                 f"{purpose} already exists; MCP overwrite is disabled: {resolved}",
-                ErrorCode.UNSAFE_OPERATION)
+                ErrorCode.UNSAFE_OPERATION,
+            )
         return str(resolved)
 
     def directory(self, value: str, *, purpose: str) -> str:
         resolved = self._resolve(value, purpose=purpose)
         if resolved.exists() and not resolved.is_dir():
             raise ToolError(f"{purpose} is not a directory: {resolved}")
-        if (resolved.exists() and any(resolved.iterdir())
-                and not self.allow_overwrite):
+        if resolved.exists() and any(resolved.iterdir()) and not self.allow_overwrite:
             raise ToolError(
                 f"{purpose} is not empty; MCP overwrite is disabled: {resolved}",
-                ErrorCode.UNSAFE_OPERATION)
+                ErrorCode.UNSAFE_OPERATION,
+            )
         return str(resolved)
 
 
 _POLICY = PathPolicy.create(os.getcwd())
 
 
-def configure(*, root: str | os.PathLike[str],
-              allow_overwrite: bool = False) -> PathPolicy:
+def configure(*, root: str | os.PathLike[str], allow_overwrite: bool = False) -> PathPolicy:
     """Set the filesystem sandbox used by the exposed MCP tool functions."""
     global _POLICY
     _POLICY = PathPolicy.create(root, allow_overwrite=allow_overwrite)
@@ -131,12 +140,13 @@ def _normalise_ops(operations: list[dict] | None) -> list[tuple[str, str]]:
         if not isinstance(entry, dict) or "op" not in entry:
             raise ToolError(
                 f"operations[{i}] must be an object with an 'op' key, e.g. "
-                '{"op": "resize", "value": "800x600"}')
+                '{"op": "resize", "value": "800x600"}'
+            )
         name = str(entry["op"])
         if name in _BLOCKED_OPS:
             raise ToolError(
-                f"operation {name!r} is not exposed through MCP",
-                ErrorCode.UNSUPPORTED_CAPABILITY)
+                f"operation {name!r} is not exposed through MCP", ErrorCode.UNSUPPORTED_CAPABILITY
+            )
         value = str(entry.get("value", _FLAG))
         if name in _PATH_VALUE_OPS and value.lower().endswith(".icc"):
             value = _POLICY.input(value, purpose=f"{name} profile")
@@ -175,9 +185,11 @@ def edit_image(
         raise ToolError("give an input file or new, not both")
     confined_input = _POLICY.input(input) if input else None
     confined_output = _POLICY.output(output) if output else None
-    confined_artboards = (_POLICY.directory(
-        export_artboards, purpose="artboard export directory")
-        if export_artboards else None)
+    confined_artboards = (
+        _POLICY.directory(export_artboards, purpose="artboard export directory")
+        if export_artboards
+        else None
+    )
     try:
         return cli.apply_pipeline(
             input_path=confined_input,
@@ -201,8 +213,7 @@ def document_info(input: str) -> dict:
     native vector ID/type) plus
     any artboards. Read-only — nothing is written."""
     try:
-        return cli.apply_pipeline(
-            input_path=_POLICY.input(input), info=True)["info"]
+        return cli.apply_pipeline(input_path=_POLICY.input(input), info=True)["info"]
     except ToolError:
         raise
     except Exception as exc:
@@ -210,8 +221,7 @@ def document_info(input: str) -> dict:
         raise ToolError(str(exc), code) from exc
 
 
-def build_server(*, root: str | os.PathLike[str] | None = None,
-                 allow_overwrite: bool = False):
+def build_server(*, root: str | os.PathLike[str] | None = None, allow_overwrite: bool = False):
     """Construct the FastMCP server with the three tools registered.
 
     Needs the optional ``mcp`` dependency (``pip install 'photoslop[mcp]'``)."""
@@ -246,11 +256,15 @@ def main() -> None:
     """Console entry point: serve over stdio (the MCP default transport)."""
     parser = argparse.ArgumentParser(prog="photoslop-mcp")
     parser.add_argument(
-        "--root", default=os.getcwd(),
-        help="filesystem root visible to tools (default: current directory)")
+        "--root",
+        default=os.getcwd(),
+        help="filesystem root visible to tools (default: current directory)",
+    )
     parser.add_argument(
-        "--allow-overwrite", action="store_true",
-        help="permit tools to replace existing outputs under --root")
+        "--allow-overwrite",
+        action="store_true",
+        help="permit tools to replace existing outputs under --root",
+    )
     args = parser.parse_args()
     build_server(root=args.root, allow_overwrite=args.allow_overwrite).run()
 

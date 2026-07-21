@@ -24,8 +24,10 @@ def test_diagnostics_persist_redacted_bounded_records(qapp, tmp_path):
     record = store.record(
         "model.request",
         "Backend failed",
-        details=("Authorization: Bearer top-secret\npassword=hunter2\n"
-                 "https://alice:secret@example.test/model"),  # pragma: allowlist secret
+        details=(
+            "Authorization: Bearer top-secret\npassword=hunter2\n"
+            "https://alice:secret@example.test/model"
+        ),  # pragma: allowlist secret
         context={"api_key": "sk-private"},  # pragma: allowlist secret
     )
 

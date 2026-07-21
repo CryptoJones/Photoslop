@@ -19,14 +19,23 @@ def vector_layers(doc):
 
 
 def by_id(doc, object_id: str):
-    return next((layer for layer in vector_layers(doc)
-                 if vector.migrate_vector(layer.vector_data)["id"] == object_id), None)
+    return next(
+        (
+            layer
+            for layer in vector_layers(doc)
+            if vector.migrate_vector(layer.vector_data)["id"] == object_id
+        ),
+        None,
+    )
 
 
 def selected(doc):
     ids = set(doc.vector_selection)
-    return [layer for layer in vector_layers(doc)
-            if vector.migrate_vector(layer.vector_data)["id"] in ids]
+    return [
+        layer
+        for layer in vector_layers(doc)
+        if vector.migrate_vector(layer.vector_data)["id"] in ids
+    ]
 
 
 def select(doc, ids: list[str], mode: str = "replace") -> list[str]:
@@ -80,13 +89,28 @@ def _transform_data(data: dict, transform: QTransform) -> dict:
     a, b, c, d, tx, ty = migrated.get("transform", [1, 0, 0, 1, 0, 0])
     current = QTransform(a, b, c, d, tx, ty)
     result = transform * current
-    migrated["transform"] = [result.m11(), result.m12(), result.m21(), result.m22(),
-                             result.dx(), result.dy()]
+    migrated["transform"] = [
+        result.m11(),
+        result.m12(),
+        result.m21(),
+        result.m22(),
+        result.dx(),
+        result.dy(),
+    ]
     return migrated
 
 
-def transform(doc, ids: list[str], *, dx=0.0, dy=0.0, rotate=0.0,
-              sx=1.0, sy=1.0, origin: tuple[float, float] | None = None) -> None:
+def transform(
+    doc,
+    ids: list[str],
+    *,
+    dx=0.0,
+    dy=0.0,
+    rotate=0.0,
+    sx=1.0,
+    sy=1.0,
+    origin: tuple[float, float] | None = None,
+) -> None:
     layers = [by_id(doc, item) for item in ids]
     layers = [layer for layer in layers if layer is not None]
     if not layers:
@@ -102,9 +126,13 @@ def transform(doc, ids: list[str], *, dx=0.0, dy=0.0, rotate=0.0,
     matrix.rotate(rotate)
     matrix.scale(sx, sy)
     matrix.translate(-ox, -oy)
-    doc.undo_stack.push(SetVectorDataCommand(
-        doc, [(layer, _transform_data(layer.vector_data, matrix)) for layer in layers],
-        "Transform Vector Objects"))
+    doc.undo_stack.push(
+        SetVectorDataCommand(
+            doc,
+            [(layer, _transform_data(layer.vector_data, matrix)) for layer in layers],
+            "Transform Vector Objects",
+        )
+    )
 
 
 def set_appearance(doc, ids: list[str], **values) -> None:
@@ -159,8 +187,9 @@ def align(doc, ids: list[str], axis: str, target: str = "selection") -> None:
             dx, dy = 0, union.center().y() - rect.center().y()
         else:
             raise ValueError(f"Unknown alignment: {axis}")
-        changes.append((layer, _transform_data(layer.vector_data,
-                                                QTransform.fromTranslate(dx, dy))))
+        changes.append(
+            (layer, _transform_data(layer.vector_data, QTransform.fromTranslate(dx, dy)))
+        )
     doc.undo_stack.push(SetVectorDataCommand(doc, changes, "Align Vector Objects"))
 
 
@@ -169,37 +198,50 @@ def distribute(doc, ids: list[str], axis: str) -> None:
     layers = [layer for layer in layers if layer is not None]
     if len(layers) < 3:
         return
+
     def key(layer):
         center = vector.native_path(layer.vector_data).boundingRect().center()
         return center.x() if axis == "horizontal" else center.y()
+
     layers.sort(key=key)
     first, last = key(layers[0]), key(layers[-1])
     step = (last - first) / (len(layers) - 1)
     changes = []
     for index, layer in enumerate(layers):
         delta = first + step * index - key(layer)
-        matrix = QTransform.fromTranslate(delta if axis == "horizontal" else 0,
-                                          delta if axis == "vertical" else 0)
+        matrix = QTransform.fromTranslate(
+            delta if axis == "horizontal" else 0, delta if axis == "vertical" else 0
+        )
         changes.append((layer, _transform_data(layer.vector_data, matrix)))
     doc.undo_stack.push(SetVectorDataCommand(doc, changes, "Distribute Vector Objects"))
 
 
-def edit_node(doc, object_id: str, index: int, action: str,
-              point: tuple[float, float] | None = None, node_type: str | None = None) -> None:
+def edit_node(
+    doc,
+    object_id: str,
+    index: int,
+    action: str,
+    point: tuple[float, float] | None = None,
+    node_type: str | None = None,
+) -> None:
     layer = by_id(doc, object_id)
     if layer is None:
         return
     data = vector.migrate_vector(layer.vector_data)
     commands = data["geometry"].get("commands", [])
-    nodes = [position for position, command in enumerate(commands)
-             if command.get("op") in {"M", "L", "C"}]
+    nodes = [
+        position
+        for position, command in enumerate(commands)
+        if command.get("op") in {"M", "L", "C"}
+    ]
     if action == "delete":
         commands.pop(nodes[index])
     elif action == "add":
         if point is None:
             raise ValueError("add node requires point")
-        commands.insert(nodes[index] + 1, {"op": "L", "p": list(point),
-                                           "node": node_type or "corner"})
+        commands.insert(
+            nodes[index] + 1, {"op": "L", "p": list(point), "node": node_type or "corner"}
+        )
     elif action == "convert":
         commands[nodes[index]]["node"] = node_type or "corner"
     else:
@@ -214,14 +256,13 @@ def _path_data(path: QPainterPath, template: dict, name: str) -> dict:
         polygon = list(raw_polygon)
         if not polygon:
             continue
-        commands.append({"op": "M", "p": [polygon[0].x(), polygon[0].y()],
-                         "node": "corner"})
-        commands.extend({"op": "L", "p": [point.x(), point.y()], "node": "corner"}
-                        for point in polygon[1:])
+        commands.append({"op": "M", "p": [polygon[0].x(), polygon[0].y()], "node": "corner"})
+        commands.extend(
+            {"op": "L", "p": [point.x(), point.y()], "node": "corner"} for point in polygon[1:]
+        )
         commands.append({"op": "Z"})
     data = vector.migrate_vector(template)
-    for key in ("kind", "x1", "y1", "x2", "y2", "points", "close", "fill",
-                "width", "color"):
+    for key in ("kind", "x1", "y1", "x2", "y2", "points", "close", "fill", "width", "color"):
         data.pop(key, None)
     data["id"] = uuid.uuid4().hex
     data["name"] = name
@@ -249,10 +290,10 @@ def boolean_path(doc, ids: list[str], operation: str) -> dict | None:
             result = result.united(other).subtracted(result.intersected(other))
         else:
             raise ValueError(f"Unknown Boolean operation: {operation}")
-    data = _path_data(result.simplified(), layers[0].vector_data,
-                      f"{operation.title()} Result")
-    doc.undo_stack.push(SetVectorDataCommand(doc, [(layers[0], data)],
-                                                f"Vector {operation.title()}"))
+    data = _path_data(result.simplified(), layers[0].vector_data, f"{operation.title()} Result")
+    doc.undo_stack.push(
+        SetVectorDataCommand(doc, [(layers[0], data)], f"Vector {operation.title()}")
+    )
     return data
 
 
@@ -269,13 +310,22 @@ def snap(doc, point: QPointF, tolerance: float = 8.0) -> SnapResult:
     candidates.extend((QPointF(point.x(), y), "horizontal guide") for y in doc.guides_h)
     for layer in vector_layers(doc):
         rect = vector.native_path(layer.vector_data).boundingRect()
-        candidates.extend((candidate, name) for candidate, name in (
-            (rect.topLeft(), "object corner"), (rect.bottomRight(), "object corner"),
-            (rect.center(), "object center")))
+        candidates.extend(
+            (candidate, name)
+            for candidate, name in (
+                (rect.topLeft(), "object corner"),
+                (rect.bottomRight(), "object corner"),
+                (rect.center(), "object center"),
+            )
+        )
     if not candidates:
         return SnapResult(QPointF(point), None, math.inf)
-    candidate, name = min(candidates, key=lambda item: math.hypot(
-        item[0].x() - point.x(), item[0].y() - point.y()))
+    candidate, name = min(
+        candidates, key=lambda item: math.hypot(item[0].x() - point.x(), item[0].y() - point.y())
+    )
     distance = math.hypot(candidate.x() - point.x(), candidate.y() - point.y())
-    return (SnapResult(candidate, name, distance) if distance <= tolerance
-            else SnapResult(QPointF(point), None, distance))
+    return (
+        SnapResult(candidate, name, distance)
+        if distance <= tolerance
+        else SnapResult(QPointF(point), None, distance)
+    )

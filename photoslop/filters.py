@@ -68,10 +68,12 @@ class SepiaFilter(Filter):
         r = r + (sr - r) * k
         g = g + (sg - g) * k
         b = b + (sb - b) * k
-        arr[...] = ((a.astype(np.uint32) << np.uint32(24))
-                    | (np.clip(r, 0, 255).astype(np.uint32) << np.uint32(16))
-                    | (np.clip(g, 0, 255).astype(np.uint32) << np.uint32(8))
-                    | np.clip(b, 0, 255).astype(np.uint32))
+        arr[...] = (
+            (a.astype(np.uint32) << np.uint32(24))
+            | (np.clip(r, 0, 255).astype(np.uint32) << np.uint32(16))
+            | (np.clip(g, 0, 255).astype(np.uint32) << np.uint32(8))
+            | np.clip(b, 0, 255).astype(np.uint32)
+        )
 
 
 class PixelateFilter(Filter):
@@ -129,11 +131,13 @@ def available_filters(*, allow_unsafe: bool = False) -> dict[str, type[Filter]]:
                 register_filter(cls)
             except Exception:  # a broken plugin must not break the app
                 key = ("photoslop.filters", ep.name)
-                _PLUGIN_FAILURES[key] = PluginFailure(
-                    key[0], key[1], traceback.format_exc())
+                _PLUGIN_FAILURES[key] = PluginFailure(key[0], key[1], traceback.format_exc())
                 continue
-    return {name: cls for name, cls in _REGISTRY.items()
-            if allow_unsafe or not getattr(cls, "unsafe", False)}
+    return {
+        name: cls
+        for name, cls in _REGISTRY.items()
+        if allow_unsafe or not getattr(cls, "unsafe", False)
+    }
 
 
 def plugin_failures() -> tuple[PluginFailure, ...]:
@@ -152,8 +156,7 @@ def parse_params(cls: type[Filter], text: str) -> dict:
         # (commas belong to the value, e.g. gmic:command=blur 3,1)
         key, sep, val = text.partition("=")
         if not sep or key.strip() != cls.params[0].key:
-            raise ValueError(
-                f"{cls.name}: expects {cls.params[0].key}=<text>")
+            raise ValueError(f"{cls.name}: expects {cls.params[0].key}=<text>")
         values[cls.params[0].key] = val
         return values
     for chunk in text.split(","):
@@ -161,17 +164,17 @@ def parse_params(cls: type[Filter], text: str) -> dict:
         key = key.strip()
         if not sep or key not in specs:
             raise ValueError(
-                f"{cls.name}: unknown parameter {key!r}; expects "
-                + ", ".join(specs) if specs else
-                f"{cls.name} takes no parameters")
+                f"{cls.name}: unknown parameter {key!r}; expects " + ", ".join(specs)
+                if specs
+                else f"{cls.name} takes no parameters"
+            )
         spec = specs[key]
         try:
             v = int(num) if spec.type == "int" else float(num)
         except ValueError as exc:
             raise ValueError(f"{cls.name}: {key}: {exc}") from exc
         if not spec.minimum <= v <= spec.maximum:
-            raise ValueError(f"{cls.name}: {key} must be in "
-                             f"{spec.minimum}..{spec.maximum}")
+            raise ValueError(f"{cls.name}: {key} must be in {spec.minimum}..{spec.maximum}")
         values[key] = v
     return values
 
@@ -201,19 +204,24 @@ class DenoiseFilter(Filter):
             for axis in (0, 1):
                 for _ in range(3):  # 3x box ~ gaussian
                     k = 2 * radius + 1
-                    pad = np.pad(chan, [(radius, radius) if ax == axis
-                                        else (0, 0) for ax in (0, 1)],
-                                 mode="edge")
+                    pad = np.pad(
+                        chan,
+                        [(radius, radius) if ax == axis else (0, 0) for ax in (0, 1)],
+                        mode="edge",
+                    )
                     csum = np.cumsum(pad, axis=axis, dtype=np.float32)
-                    take = np.take(csum, range(k - 1, pad.shape[axis]),
-                                   axis=axis)
-                    lead = np.take(csum, range(0, pad.shape[axis] - k + 1),
-                                   axis=axis)
+                    take = np.take(csum, range(k - 1, pad.shape[axis]), axis=axis)
+                    lead = np.take(csum, range(0, pad.shape[axis] - k + 1), axis=axis)
                     first = np.take(csum, [k - 1], axis=axis)
-                    chan = np.concatenate(
-                        [first, take[1:] - lead[:-1]] if axis == 0 else
-                        [np.take(take, [0], axis=1),
-                         take[:, 1:] - lead[:, :-1]], axis=axis) / k
+                    chan = (
+                        np.concatenate(
+                            [first, take[1:] - lead[:-1]]
+                            if axis == 0
+                            else [np.take(take, [0], axis=1), take[:, 1:] - lead[:, :-1]],
+                            axis=axis,
+                        )
+                        / k
+                    )
             return chan
 
         cb = box(cb)
@@ -221,10 +229,12 @@ class DenoiseFilter(Filter):
         r = np.clip(y + cr, 0, 255)
         b = np.clip(y + cb, 0, 255)
         g = np.clip((y - 0.299 * r - 0.114 * b) / 0.587, 0, 255)
-        arr[...] = ((a.astype(np.uint32) << np.uint32(24))
-                    | (r.astype(np.uint32) << np.uint32(16))
-                    | (g.astype(np.uint32) << np.uint32(8))
-                    | b.astype(np.uint32))
+        arr[...] = (
+            (a.astype(np.uint32) << np.uint32(24))
+            | (r.astype(np.uint32) << np.uint32(16))
+            | (g.astype(np.uint32) << np.uint32(8))
+            | b.astype(np.uint32)
+        )
 
 
 class RetroConsoleFilter(Filter):
@@ -244,10 +254,10 @@ class RetroConsoleFilter(Filter):
     )
 
     # 4x4 Bayer threshold matrix, centred to [-0.5, 0.5)
-    _BAYER = (np.array([[0, 8, 2, 10],
-                        [12, 4, 14, 6],
-                        [3, 11, 1, 9],
-                        [15, 7, 13, 5]], dtype=np.float32) + 0.5) / 16.0 - 0.5
+    _BAYER = (
+        np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]], dtype=np.float32)
+        + 0.5
+    ) / 16.0 - 0.5
 
     def apply(self, image: QImage, params: dict) -> None:
         size = max(1, int(params.get("size", 6)))
@@ -271,8 +281,7 @@ class RetroConsoleFilter(Filter):
         step = 255.0 / (levels - 1)
         if dither:
             sh = arr.shape
-            bias = np.tile(self._BAYER,
-                           (sh[0] // 4 + 1, sh[1] // 4 + 1))[:sh[0], :sh[1]]
+            bias = np.tile(self._BAYER, (sh[0] // 4 + 1, sh[1] // 4 + 1))[: sh[0], : sh[1]]
             bias = bias * step
             r = r + bias
             g = g + bias
@@ -285,10 +294,12 @@ class RetroConsoleFilter(Filter):
 
         # re-premultiply by the untouched alpha and pack back to ARGB32
         af = a / 255.0
-        arr[...] = ((a.astype(np.uint32) << np.uint32(24))
-                    | ((r * af).astype(np.uint32) << np.uint32(16))
-                    | ((g * af).astype(np.uint32) << np.uint32(8))
-                    | (b * af).astype(np.uint32))
+        arr[...] = (
+            (a.astype(np.uint32) << np.uint32(24))
+            | ((r * af).astype(np.uint32) << np.uint32(16))
+            | ((g * af).astype(np.uint32) << np.uint32(8))
+            | (b * af).astype(np.uint32)
+        )
 
         big = small.scaled(w, h)  # nearest-neighbour up = crisp blocks
         view_u32(image)[...] = view_u32(big)

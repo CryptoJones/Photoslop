@@ -27,7 +27,8 @@ class TaskMonitorDialog(QDialog):
 
         summary = QLabel(
             "Queued and running work appears first; completed work is retained "
-            "for this application session.")
+            "for this application session."
+        )
         summary.setWordWrap(True)
         self.tasks = QListWidget()
         self.tasks.setAccessibleName("Background task queue and history")
@@ -38,9 +39,11 @@ class TaskMonitorDialog(QDialog):
         self.cancel_scope = QPushButton("Cancel Scope")
         self.cancel_all = QPushButton("Cancel All Active")
         self.cancel_selected.setAccessibleDescription(
-            "Cancel only the selected queued or running task")
+            "Cancel only the selected queued or running task"
+        )
         self.cancel_scope.setAccessibleDescription(
-            "Cancel queued and running tasks for the selected document or operation scope")
+            "Cancel queued and running tasks for the selected document or operation scope"
+        )
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(self.reject)
 
@@ -73,8 +76,8 @@ class TaskMonitorDialog(QDialog):
     def _label(item: TaskHandle | TaskRecord) -> str:
         progress = f" {item.progress_percent}%" if item.progress_percent else ""
         return (
-            f"{item.state.value.title():10}  {item.label}{progress}  "
-            f"[{item.priority.name.lower()}]")
+            f"{item.state.value.title():10}  {item.label}{progress}  [{item.priority.name.lower()}]"
+        )
 
     def _refresh(self) -> None:
         selected = self._selected_item()
@@ -102,15 +105,15 @@ class TaskMonitorDialog(QDialog):
             return
         created = item.created_at.isoformat(timespec="seconds")
         started = item.started_at.isoformat(timespec="seconds") if item.started_at else "—"
-        finished = (
-            item.finished_at.isoformat(timespec="seconds") if item.finished_at else "—")
+        finished = item.finished_at.isoformat(timespec="seconds") if item.finished_at else "—"
         error = item.error.strip().splitlines()[-1] if item.error.strip() else "—"
         self.details.setPlainText(
             f"Operation: {item.label}\nID: {item.task_id}\nState: {item.state.value}\n"
             f"Priority: {item.priority.name.lower()}\nScope: {item.scope_id or 'application'}\n"
             f"Progress: {item.progress_percent}% {item.progress_message}\n"
             f"Queued: {created}\nStarted: {started}\nFinished: {finished}\n"
-            f"Result/error: {error}")
+            f"Result/error: {error}"
+        )
 
     def _update_buttons(self, item: TaskHandle | TaskRecord | None) -> None:
         active = isinstance(item, TaskHandle) and item in self.service.active

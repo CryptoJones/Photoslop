@@ -20,18 +20,20 @@ from photoslop.resources import validate_dimensions
 
 class FileService:
     @staticmethod
-    def load(path: str, raw_params: dict | None = None,
-             *, allow_large: bool = False) -> Document:
+    def load(path: str, raw_params: dict | None = None, *, allow_large: bool = False) -> Document:
         if path.lower().endswith(".ora"):
             return load_ora(path, allow_large=allow_large)
         if path.lower().endswith(".svg"):
             return load_svg(path, allow_large=allow_large)
         if is_raw_path(path):
-            image = (develop_raw(path, **raw_params) if raw_params is not None
-                     else load_raw(path))
-            validate_dimensions(image.width(), image.height(),
-                                operation="RAW decode", buffers=2,
-                                allow_large=allow_large)
+            image = develop_raw(path, **raw_params) if raw_params is not None else load_raw(path)
+            validate_dimensions(
+                image.width(),
+                image.height(),
+                operation="RAW decode",
+                buffers=2,
+                allow_large=allow_large,
+            )
             return Document.from_image(image, os.path.basename(path), 72.0)
         if io_formats.is_extra_path(path):
             if not io_formats.available(path):
@@ -41,24 +43,34 @@ class FileService:
             reader = QImageReader(path)
             size = reader.size()
             if size.isValid():
-                validate_dimensions(size.width(), size.height(),
-                                    operation="image decode", buffers=2,
-                                    allow_large=allow_large)
+                validate_dimensions(
+                    size.width(),
+                    size.height(),
+                    operation="image decode",
+                    buffers=2,
+                    allow_large=allow_large,
+                )
             image = reader.read()
         if image is None or image.isNull():
             raise ValueError(f"Could not open {path}")
-        validate_dimensions(image.width(), image.height(),
-                            operation="image decode", buffers=2,
-                            allow_large=allow_large)
+        validate_dimensions(
+            image.width(),
+            image.height(),
+            operation="image decode",
+            buffers=2,
+            allow_large=allow_large,
+        )
         dpm = image.dotsPerMeterX()
         dpi = round(dpm * 0.0254) if dpm > 0 else 72
         return Document.from_image(image, os.path.basename(path), float(dpi))
 
     @staticmethod
-    def save(document: Document, path: str, *, ticket: WriteTicket | None = None,
-             before_commit=None) -> str:
+    def save(
+        document: Document, path: str, *, ticket: WriteTicket | None = None, before_commit=None
+    ) -> str:
         (save_svg if path.lower().endswith(".svg") else save_ora)(
-            document, path, ticket=ticket, before_commit=before_commit)
+            document, path, ticket=ticket, before_commit=before_commit
+        )
         return path
 
 
@@ -73,18 +85,30 @@ class ExportRequest:
 
 class ExportService:
     @staticmethod
-    def write(base: QImage, document: Document, request: ExportRequest,
-              *, ticket: WriteTicket | None = None, before_commit=None) -> str:
-        image = (base if request.size == base.size() else base.scaled(
-            request.size, Qt.AspectRatioMode.IgnoreAspectRatio,
-            Qt.TransformationMode.SmoothTransformation))
+    def write(
+        base: QImage,
+        document: Document,
+        request: ExportRequest,
+        *,
+        ticket: WriteTicket | None = None,
+        before_commit=None,
+    ) -> str:
+        image = (
+            base
+            if request.size == base.size()
+            else base.scaled(
+                request.size,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
         image.setDotsPerMeterX(round(request.dpi / 0.0254))
         image.setDotsPerMeterY(round(request.dpi / 0.0254))
         color.tag_for_export(image, document)
+
         def writer(temporary: str) -> None:
             if request.format in {"AVIF", "JPEG XL"}:
-                ok = io_formats.save_extra(
-                    image, temporary, max(1, request.quality))
+                ok = io_formats.save_extra(image, temporary, max(1, request.quality))
             else:
                 ok = image.save(temporary, request.format, request.quality)
             if not ok:
@@ -107,9 +131,10 @@ def export_artboards(document: Document, directory: str) -> list[str]:
         region = rect.intersected(document.canvas_rect())
         if region.isEmpty():
             continue
-        stem = "".join(
-            char if char.isalnum() or char in "-_ " else "_" for char in name
-        ).strip() or "artboard"
+        stem = (
+            "".join(char if char.isalnum() or char in "-_ " else "_" for char in name).strip()
+            or "artboard"
+        )
         candidate = stem
         number = 2
         while candidate.casefold() in used:
@@ -147,8 +172,9 @@ class ModelService:
         return result.convertToFormat(image.format())
 
     @staticmethod
-    def generative_fill(adapter, image: QImage, mask: QImage, prompt: str,
-                        expected: QSize) -> QImage:
+    def generative_fill(
+        adapter, image: QImage, mask: QImage, prompt: str, expected: QSize
+    ) -> QImage:
         result = adapter.generative_fill(image, mask, prompt)
         if result.size() != expected:
             raise ValueError("Backend returned an image of the wrong size")
@@ -163,5 +189,6 @@ class ModelService:
 
 
 def opaque_export_base(document: Document, fmt: str, transparent: QImage) -> QImage:
-    return (document.flatten(QColor(255, 255, 255))
-            if fmt in {"JPEG", "BMP"} else QImage(transparent))
+    return (
+        document.flatten(QColor(255, 255, 255)) if fmt in {"JPEG", "BMP"} else QImage(transparent)
+    )

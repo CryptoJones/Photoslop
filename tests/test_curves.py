@@ -20,10 +20,12 @@ def test_curve_lut_identity_and_scurve(qapp):
 
 
 def test_curves_luts_master_composes_with_channel(qapp):
-    luts = curves_luts({
-        "rgb": [(0, 0), (128, 160), (255, 255)],
-        "r": [(0, 0), (160, 100), (255, 255)],
-    })
+    luts = curves_luts(
+        {
+            "rgb": [(0, 0), (128, 160), (255, 255)],
+            "r": [(0, 0), (160, 100), (255, 255)],
+        }
+    )
     assert abs(int(luts[0][128]) - 100) <= 2  # master 128→160, red 160→100
     assert abs(int(luts[1][128]) - 160) <= 1  # green: master only
 

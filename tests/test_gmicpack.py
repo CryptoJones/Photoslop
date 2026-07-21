@@ -22,8 +22,16 @@ def _grad(n=48):
 @needs_gmic
 def test_pack_registers_when_available(qapp):
     reg = available_filters(allow_unsafe=True)
-    for name in ("gmic", "gmic-cartoon", "gmic-old-photo", "gmic-drawing",
-                 "gmic-stencil", "gmic-spread", "gmic-solarize", "gmic-smooth"):
+    for name in (
+        "gmic",
+        "gmic-cartoon",
+        "gmic-old-photo",
+        "gmic-drawing",
+        "gmic-stencil",
+        "gmic-spread",
+        "gmic-solarize",
+        "gmic-smooth",
+    ):
         assert name in reg
 
 
@@ -67,8 +75,22 @@ def test_gmic_error_is_a_clean_usage_error(qapp):
 def test_cli_gmic_raw_with_commas(qapp, tmp_path):
     # the single-str-param parse keeps commas: "command=add 10" style
     out = str(tmp_path / "g.png")
-    assert cli.main(["--allow-unsafe-plugins", "--new", "20x20", "--fill", "10,20,30",
-                     "--filter", "gmic:command=add 40", "--output", out]) == 0
+    assert (
+        cli.main(
+            [
+                "--allow-unsafe-plugins",
+                "--new",
+                "20x20",
+                "--fill",
+                "10,20,30",
+                "--filter",
+                "gmic:command=add 40",
+                "--output",
+                out,
+            ]
+        )
+        == 0
+    )
     c = QImage(out).pixelColor(10, 10)
     assert (c.red(), c.green(), c.blue()) == (50, 60, 70)
 
@@ -76,13 +98,28 @@ def test_cli_gmic_raw_with_commas(qapp, tmp_path):
 @needs_gmic
 def test_cli_curated_selection_aware(qapp, tmp_path):
     out = str(tmp_path / "sol.png")
-    assert cli.main(["--allow-unsafe-plugins", "--new", "40x20", "--fill", "200,200,200",
-                     "--select", "0,0,20,20",
-                     "--filter", "gmic-solarize:threshold=128",
-                     "--deselect", "--output", out]) == 0
+    assert (
+        cli.main(
+            [
+                "--allow-unsafe-plugins",
+                "--new",
+                "40x20",
+                "--fill",
+                "200,200,200",
+                "--select",
+                "0,0,20,20",
+                "--filter",
+                "gmic-solarize:threshold=128",
+                "--deselect",
+                "--output",
+                out,
+            ]
+        )
+        == 0
+    )
     img = QImage(out)
     assert img.pixelColor(35, 10) == QColor(200, 200, 200)  # outside untouched
-    assert img.pixelColor(5, 10) != QColor(200, 200, 200)   # inside solarized
+    assert img.pixelColor(5, 10) != QColor(200, 200, 200)  # inside solarized
 
 
 @needs_gmic

@@ -19,8 +19,7 @@ def test_render_text_layer(qapp):
     assert layer.image.width() > 10 and layer.image.height() > 10
     # some rendered pixels are red-ish
     found = any(
-        layer.image.pixelColor(x, y).red() > 100
-        and layer.image.pixelColor(x, y).alpha() > 100
+        layer.image.pixelColor(x, y).red() > 100 and layer.image.pixelColor(x, y).alpha() > 100
         for x in range(layer.image.width())
         for y in range(layer.image.height())
     )
@@ -34,20 +33,28 @@ def test_render_text_layer(qapp):
 
 def test_render_text_document_per_letter_colour(qapp):
     doc = QTextDocument()
-    doc.setHtml('<span style="color:#ff0000;font-size:40pt">A</span>'
-                '<span style="color:#00ff00;font-size:40pt">B</span>')
+    doc.setHtml(
+        '<span style="color:#ff0000;font-size:40pt">A</span>'
+        '<span style="color:#00ff00;font-size:40pt">B</span>'
+    )
     layer = render_text_document(doc, QPoint(7, 9))
     assert layer is not None
     assert layer.offset == QPoint(7, 9)
     img = layer.image
     has_red = any(
-        img.pixelColor(x, y).red() > 180 and img.pixelColor(x, y).green() < 80
+        img.pixelColor(x, y).red() > 180
+        and img.pixelColor(x, y).green() < 80
         and img.pixelColor(x, y).alpha() > 150
-        for x in range(img.width()) for y in range(img.height()))
+        for x in range(img.width())
+        for y in range(img.height())
+    )
     has_green = any(
-        img.pixelColor(x, y).green() > 180 and img.pixelColor(x, y).red() < 80
+        img.pixelColor(x, y).green() > 180
+        and img.pixelColor(x, y).red() < 80
         and img.pixelColor(x, y).alpha() > 150
-        for x in range(img.width()) for y in range(img.height()))
+        for x in range(img.width())
+        for y in range(img.height())
+    )
     assert has_red and has_green  # each letter keeps its own colour
     # the HTML is stamped for re-editing
     assert layer.text_data["text"] == "AB"
@@ -106,14 +113,14 @@ def test_text_dialog_prefill_and_color_swatch(qapp, monkeypatch):
     assert dlg.windowTitle() == "Edit Text"
     assert dlg.chosen_font().pointSize() == 44
 
-    monkeypatch.setattr(textdialog.QColorDialog, "getColor",
-                        staticmethod(lambda *a, **k: QColor(0, 200, 0)))
+    monkeypatch.setattr(
+        textdialog.QColorDialog, "getColor", staticmethod(lambda *a, **k: QColor(0, 200, 0))
+    )
     dlg.pick_color()
     assert dlg.color == QColor(0, 200, 0)
 
     # cancelled picker (invalid color) keeps the current choice
-    monkeypatch.setattr(textdialog.QColorDialog, "getColor",
-                        staticmethod(lambda *a, **k: QColor()))
+    monkeypatch.setattr(textdialog.QColorDialog, "getColor", staticmethod(lambda *a, **k: QColor()))
     dlg.pick_color()
     assert dlg.color == QColor(0, 200, 0)
 
@@ -151,11 +158,17 @@ class _FakeDialog:
 
     captured: dict = {}
 
-    def __init__(self, color, parent=None, text="", font=None, html=None,
-                 effects=None, fill_opacity=1.0):
-        _FakeDialog.captured = {"color": QColor(color), "text": text,
-                                "font": font, "html": html, "effects": effects,
-                                "fill_opacity": fill_opacity}
+    def __init__(
+        self, color, parent=None, text="", font=None, html=None, effects=None, fill_opacity=1.0
+    ):
+        _FakeDialog.captured = {
+            "color": QColor(color),
+            "text": text,
+            "font": font,
+            "html": html,
+            "effects": effects,
+            "fill_opacity": fill_opacity,
+        }
         self.color = QColor(255, 0, 0)
 
     def exec(self):

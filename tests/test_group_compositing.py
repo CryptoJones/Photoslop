@@ -26,8 +26,9 @@ def test_group_opacity_blends_as_one_unit(qapp):
     win = make_window(qapp)
     doc = win.current_doc()
 
-    doc.undo_stack.push(SetGroupPropsCommand(
-        doc, "Group 1", {"opacity": 0.5, "blend_mode": "normal"}))
+    doc.undo_stack.push(
+        SetGroupPropsCommand(doc, "Group 1", {"opacity": 0.5, "blend_mode": "normal"})
+    )
     flat = doc.flatten()
     # the overlap region (x 25..40) must blend ONCE at 50% — red over white
     # at half strength = (255, 128, 128), same as the non-overlap region
@@ -46,8 +47,9 @@ def test_defaults_return_to_fast_path(qapp):
     win = make_window(qapp)
     doc = win.current_doc()
     assert not doc.needs_offscreen()
-    doc.undo_stack.push(SetGroupPropsCommand(
-        doc, "Group 1", {"opacity": 0.7, "blend_mode": "normal"}))
+    doc.undo_stack.push(
+        SetGroupPropsCommand(doc, "Group 1", {"opacity": 0.7, "blend_mode": "normal"})
+    )
     assert doc.needs_offscreen()
     doc.undo_stack.push(SetGroupPropsCommand(doc, "Group 1", None))
     assert not doc.needs_offscreen()

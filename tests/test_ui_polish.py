@@ -84,8 +84,7 @@ def _menu_texts(win, title):
     # bare QMenu wrapper out of the loop leaves it prone to shiboken GC
     for act in win.menuBar().actions():
         if act.text() == title:
-            return [a.text().replace("&", "")
-                    for a in act.menu().actions() if a.text()]
+            return [a.text().replace("&", "") for a in act.menu().actions() if a.text()]
     raise AssertionError(f"no menu titled {title!r}")
 
 
@@ -101,8 +100,11 @@ def test_open_recent_is_most_recent_first_deduplicated_and_capped(qapp, tmp_path
     actions = win._recent_menu.actions()
     assert [action.data() for action in actions] == expected
     assert [action.text().replace("&", "") for action in actions] == [
-        "1 document-2.png", "2 document-4.png",
-        "3 document-3.png", "4 document-1.png"]
+        "1 document-2.png",
+        "2 document-4.png",
+        "3 document-3.png",
+        "4 document-1.png",
+    ]
 
 
 def test_open_recent_opens_existing_and_removes_missing(qapp, tmp_path):
@@ -111,8 +113,7 @@ def test_open_recent_opens_existing_and_removes_missing(qapp, tmp_path):
     image.fill(QColor("red"))
     assert image.save(str(existing))
     missing = str(tmp_path / "missing.png")
-    QSettings("CryptoJones", "Photoslop").setValue(
-        "files/recent", [missing, str(existing)])
+    QSettings("CryptoJones", "Photoslop").setValue("files/recent", [missing, str(existing)])
     win = MainWindow()
 
     win._recent_menu.actions()[0].trigger()
@@ -124,7 +125,8 @@ def test_open_recent_opens_existing_and_removes_missing(qapp, tmp_path):
 
 
 def test_file_dialog_directory_defaults_home_and_follows_successful_save(
-        qapp, tmp_path, monkeypatch):
+    qapp, tmp_path, monkeypatch
+):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
@@ -139,9 +141,13 @@ def test_file_dialog_directory_defaults_home_and_follows_successful_save(
     requested = []
 
     def accept_dialog(dialog):
-        requested.append((
-            dialog.directory().absolutePath(), dialog.selectedFiles()[0],
-            dialog.testOption(QFileDialog.Option.DontUseNativeDialog)))
+        requested.append(
+            (
+                dialog.directory().absolutePath(),
+                dialog.selectedFiles()[0],
+                dialog.testOption(QFileDialog.Option.DontUseNativeDialog),
+            )
+        )
         dialog.setDirectory(str(destination.parent))
         dialog.selectFile(destination.name)
         return QDialog.DialogCode.Accepted
@@ -159,8 +165,7 @@ def test_file_dialog_directory_defaults_home_and_follows_successful_save(
 def test_select_menu_owns_the_selection_actions(qapp):
     win = MainWindow()
     select_texts = _menu_texts(win, "&Select")
-    for expected in ("All", "Deselect", "Subject (Model)",
-                     "Feather…", "Refine…"):
+    for expected in ("All", "Deselect", "Subject (Model)", "Feather…", "Refine…"):
         assert expected in select_texts
 
     edit_texts = _menu_texts(win, "&Edit")
@@ -182,8 +187,9 @@ def test_preferences_lives_in_edit_and_options_keeps_rulers(qapp):
         if act.text() == "&Edit":
             for sub in act.menu().actions():
                 if sub.text() == "&Options":
-                    options_texts = [a.text().replace("&", "")
-                                     for a in sub.menu().actions() if a.text()]
+                    options_texts = [
+                        a.text().replace("&", "") for a in sub.menu().actions() if a.text()
+                    ]
                     assert "Rulers" in options_texts
                     assert "Model Backend…" not in options_texts
                     return
@@ -198,15 +204,15 @@ def test_edit_menu_layer_transforms(qapp):
     doc = win.current_doc()
 
     edit_texts = _menu_texts(win, "&Edit")
-    for expected in ("Rotate 90° CW", "Rotate 90° CCW",
-                     "Flip Horizontal", "Flip Vertical"):
+    for expected in ("Rotate 90° CW", "Rotate 90° CCW", "Flip Horizontal", "Flip Vertical"):
         assert expected in edit_texts
 
     # the entries act on the ACTIVE LAYER (Photoshop's Edit → Transform)
     for act in win.menuBar().actions():
         if act.text() == "&Edit":
-            rotate = next(a for a in act.menu().actions()
-                          if a.text().replace("&", "") == "Rotate 90° CW")
+            rotate = next(
+                a for a in act.menu().actions() if a.text().replace("&", "") == "Rotate 90° CW"
+            )
             rotate.trigger()
     layer = doc.active_layer
     assert layer.image.width() == 30 and layer.image.height() == 40

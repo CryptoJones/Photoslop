@@ -64,8 +64,7 @@ class NewDocumentDialog(QDialog):
         self.preset_radios = {}
         for name, wmm, hmm, metric, inches in PAPER_SIZES:
             radio = QRadioButton(f"{name} — {metric} ({inches})")
-            radio.toggled.connect(
-                lambda on, w=wmm, h=hmm: on and self._apply_preset(w, h))
+            radio.toggled.connect(lambda on, w=wmm, h=hmm: on and self._apply_preset(w, h))
             preset_lay.addWidget(radio)
             self.preset_radios[name] = radio
         self._applying_preset = False

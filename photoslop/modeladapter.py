@@ -44,8 +44,7 @@ class ModelAdapter:
         """Return a Grayscale8 mask (white = subject) sized like image."""
         raise NotImplementedError
 
-    def generative_fill(self, image: QImage, mask: QImage,
-                        prompt: str) -> QImage:
+    def generative_fill(self, image: QImage, mask: QImage, prompt: str) -> QImage:
         """Return a full replacement image; white mask marks the fill area."""
         raise NotImplementedError
 
@@ -76,8 +75,7 @@ def png_b64_to_image(data: str) -> QImage:
     img = QImage.fromData(decoded)
     if img.isNull():
         raise ValueError("backend returned data that is not a decodable PNG")
-    validate_dimensions(img.width(), img.height(), operation="model response",
-                        buffers=2)
+    validate_dimensions(img.width(), img.height(), operation="model response", buffers=2)
     return img
 
 
@@ -96,11 +94,11 @@ def _validate_endpoint(url: str, *, allow_insecure_http: bool) -> None:
         raise ValueError("model URL must use http:// or https:// with a host")
     if parsed.username or parsed.password:
         raise ValueError("model URL must not contain credentials")
-    if (parsed.scheme == "http" and not _is_loopback(parsed.hostname)
-            and not allow_insecure_http):
+    if parsed.scheme == "http" and not _is_loopback(parsed.hostname) and not allow_insecure_http:
         raise ValueError(
             "unencrypted HTTP model URLs are limited to loopback; "
-            "explicitly allow insecure HTTP for a trusted local network")
+            "explicitly allow insecure HTTP for a trusted local network"
+        )
 
 
 class HttpModelAdapter(ModelAdapter):
@@ -114,10 +112,10 @@ class HttpModelAdapter(ModelAdapter):
     name = "http"
     label = "Generic HTTP backend (JSON / base64 PNG)"
 
-    def __init__(self, base_url: str, timeout: float = 120.0,
-                 *, allow_insecure_http: bool = False) -> None:
-        _validate_endpoint(
-            base_url, allow_insecure_http=allow_insecure_http)
+    def __init__(
+        self, base_url: str, timeout: float = 120.0, *, allow_insecure_http: bool = False
+    ) -> None:
+        _validate_endpoint(base_url, allow_insecure_http=allow_insecure_http)
         if not math.isfinite(float(timeout)) or not 0 < float(timeout) <= 600:
             raise ValueError("model timeout must be in 0..600 seconds")
         self.base_url = base_url.rstrip("/")
@@ -132,11 +130,13 @@ class HttpModelAdapter(ModelAdapter):
             f"{self.base_url}/{op}",
             data=json.dumps(payload).encode(),
             headers={"Content-Type": "application/json"},
-            method="POST")
+            method="POST",
+        )
         # Endpoint construction and every redirect target are scheme/host
         # validated by __init__ and below before response data is accepted.
         with urllib.request.urlopen(  # nosec B310
-                req, timeout=self.timeout) as resp:
+            req, timeout=self.timeout
+        ) as resp:
             final_url = getattr(resp, "geturl", lambda: self.base_url)()
             _validate_endpoint(
                 final_url,
@@ -169,18 +169,19 @@ class HttpModelAdapter(ModelAdapter):
         out = self._post(SELECT_SUBJECT, {"image": image_to_png_b64(image)})
         return self._image_field(out, "mask")
 
-    def generative_fill(self, image: QImage, mask: QImage,
-                        prompt: str) -> QImage:
-        out = self._post(GENERATIVE_FILL, {
-            "image": image_to_png_b64(image),
-            "mask": image_to_png_b64(mask),
-            "prompt": prompt,
-        })
+    def generative_fill(self, image: QImage, mask: QImage, prompt: str) -> QImage:
+        out = self._post(
+            GENERATIVE_FILL,
+            {
+                "image": image_to_png_b64(image),
+                "mask": image_to_png_b64(mask),
+                "prompt": prompt,
+            },
+        )
         return self._image_field(out, "image")
 
     def denoise(self, image: QImage, strength: int) -> QImage:
-        out = self._post(DENOISE, {"image": image_to_png_b64(image),
-                                   "strength": int(strength)})
+        out = self._post(DENOISE, {"image": image_to_png_b64(image), "strength": int(strength)})
         return self._image_field(out, "image")
 
 
@@ -216,11 +217,13 @@ def available_adapters(*, allow_unsafe: bool = False) -> dict[str, type[ModelAda
                 register_adapter(cls)
             except Exception:  # a broken plugin must not break the app
                 key = ("photoslop.model_adapters", ep.name)
-                _PLUGIN_FAILURES[key] = PluginFailure(
-                    key[0], key[1], traceback.format_exc())
+                _PLUGIN_FAILURES[key] = PluginFailure(key[0], key[1], traceback.format_exc())
                 continue
-    return {name: cls for name, cls in _REGISTRY.items()
-            if allow_unsafe or not getattr(cls, "unsafe", False)}
+    return {
+        name: cls
+        for name, cls in _REGISTRY.items()
+        if allow_unsafe or not getattr(cls, "unsafe", False)
+    }
 
 
 def plugin_failures() -> tuple[PluginFailure, ...]:
@@ -228,14 +231,19 @@ def plugin_failures() -> tuple[PluginFailure, ...]:
 
 
 def create_adapter(name: str, settings: dict) -> ModelAdapter | None:
-    cls = available_adapters(
-        allow_unsafe=bool(settings.get("allow_unsafe_plugins", False))).get(name)
+    cls = available_adapters(allow_unsafe=bool(settings.get("allow_unsafe_plugins", False))).get(
+        name
+    )
     if cls is None:
         return None
     if cls is HttpModelAdapter:
         url = settings.get("url", "")
-        return HttpModelAdapter(
-            url,
-            allow_insecure_http=bool(settings.get("allow_insecure_http", False)),
-        ) if url else None
+        return (
+            HttpModelAdapter(
+                url,
+                allow_insecure_http=bool(settings.get("allow_insecure_http", False)),
+            )
+            if url
+            else None
+        )
     return cls()

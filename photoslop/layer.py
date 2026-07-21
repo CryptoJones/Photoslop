@@ -33,8 +33,10 @@ BLEND_MODES: dict[str, QPainter.CompositionMode] = {
 }
 
 # OpenRaster composite-op names (GIMP/Krita-interoperable)
-ORA_OPS = {name: f"svg:{'src-over' if name == 'normal' else 'plus' if name == 'addition' else name}"
-           for name in BLEND_MODES}
+ORA_OPS = {
+    name: f"svg:{'src-over' if name == 'normal' else 'plus' if name == 'addition' else name}"
+    for name in BLEND_MODES
+}
 ORA_OPS_REVERSE = {v: k for k, v in ORA_OPS.items()}
 
 
@@ -47,16 +49,38 @@ def blank_image(size: QSize) -> QImage:
 def mask_to_alpha(mask: QImage) -> QImage:
     """Reinterpret a Grayscale8 mask's bytes as Alpha8 (convertToFormat would
     route through ARGB and produce opaque alpha everywhere)."""
-    alpha = QImage(mask.constBits(), mask.width(), mask.height(),
-                   mask.bytesPerLine(), QImage.Format.Format_Alpha8)
+    alpha = QImage(
+        mask.constBits(),
+        mask.width(),
+        mask.height(),
+        mask.bytesPerLine(),
+        QImage.Format.Format_Alpha8,
+    )
     return alpha.copy()  # detach from the mask's buffer
 
 
 class Layer:
-    __slots__ = ("adjustment", "blend_mode", "clipped", "effects",
-                 "fill_opacity", "fx_cache", "group", "image", "mask", "name",
-                 "offset", "opacity", "smart_filters", "source", "text_data", "id",
-                 "smart_filters_trusted", "vector_data", "visible")
+    __slots__ = (
+        "adjustment",
+        "blend_mode",
+        "clipped",
+        "effects",
+        "fill_opacity",
+        "fx_cache",
+        "group",
+        "image",
+        "mask",
+        "name",
+        "offset",
+        "opacity",
+        "smart_filters",
+        "source",
+        "text_data",
+        "id",
+        "smart_filters_trusted",
+        "vector_data",
+        "visible",
+    )
 
     def __init__(
         self,

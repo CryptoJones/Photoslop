@@ -130,9 +130,11 @@ class AdjustPanel(QWidget):
         if self.doc is None or self._layer is None:
             return []
         if self.scope_all.isChecked():
-            return [layer for layer in self.doc.layers
-                    if layer.visible and layer.adjustment is None
-                    and not layer.image.isNull()]
+            return [
+                layer
+                for layer in self.doc.layers
+                if layer.visible and layer.adjustment is None and not layer.image.isNull()
+            ]
         return [self._layer]
 
     def _pristine_for(self, layer) -> QImage:
@@ -145,9 +147,7 @@ class AdjustPanel(QWidget):
             return
         for key, _label, _extent, div in _SLIDERS:
             value = self._sliders[key].value()
-            self._values[key].setText(
-                f"{value / div:+.2f}" if div != 1 else f"{value:+d}"
-            )
+            self._values[key].setText(f"{value / div:+.2f}" if div != 1 else f"{value:+d}")
         layer = self.doc.active_layer
         if layer is None:
             return
@@ -186,19 +186,27 @@ class AdjustPanel(QWidget):
             return
         self._debounce.stop()
         self._recompute()
-        changed = [(layer, pristine)
-                   for layer, pristine in self._pristines.items()
-                   if layer.image != pristine]
+        changed = [
+            (layer, pristine)
+            for layer, pristine in self._pristines.items()
+            if layer.image != pristine
+        ]
         if changed and not self.settings().is_identity():
             self._committing = True
             try:
                 self.doc.undo_stack.beginMacro("Adjust")
                 for layer, pristine in changed:
-                    self.doc.undo_stack.push(LayerRegionCommand(
-                        self.doc, layer, layer.image.rect(),
-                        QImage(pristine), QImage(layer.image),
-                        "Adjust", applied=True,
-                    ))
+                    self.doc.undo_stack.push(
+                        LayerRegionCommand(
+                            self.doc,
+                            layer,
+                            layer.image.rect(),
+                            QImage(pristine),
+                            QImage(layer.image),
+                            "Adjust",
+                            applied=True,
+                        )
+                    )
                 self.doc.undo_stack.endMacro()
             finally:
                 self._committing = False

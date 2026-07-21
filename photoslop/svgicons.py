@@ -38,10 +38,12 @@ def _svg(name: str, color: QColor) -> QByteArray:
     # #AARRGGBB. Keep the color and opacity separate so every Qt SVG backend
     # renders palette icons visibly and consistently.
     ink = color.name(QColor.NameFormat.HexRgb)
-    source = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
-              f'fill="none" stroke="{ink}" stroke-opacity="{color.alphaF():.3f}" '
-              f'stroke-width="2" '
-              f'stroke-linecap="round" stroke-linejoin="round">{PATHS[name]}</svg>')
+    source = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+        f'fill="none" stroke="{ink}" stroke-opacity="{color.alphaF():.3f}" '
+        f'stroke-width="2" '
+        f'stroke-linecap="round" stroke-linejoin="round">{PATHS[name]}</svg>'
+    )
     return QByteArray(source.encode())
 
 
@@ -53,8 +55,9 @@ def svg_icon(name: str) -> QIcon:
         QIcon.Mode.Normal: palette.color(palette.ColorRole.ButtonText),
         QIcon.Mode.Active: palette.color(palette.ColorRole.Highlight),
         QIcon.Mode.Selected: palette.color(palette.ColorRole.HighlightedText),
-        QIcon.Mode.Disabled: palette.color(palette.ColorGroup.Disabled,
-                                           palette.ColorRole.ButtonText),
+        QIcon.Mode.Disabled: palette.color(
+            palette.ColorGroup.Disabled, palette.ColorRole.ButtonText
+        ),
     }
     for mode, color in colors.items():
         renderer = QSvgRenderer(_svg(name, color))

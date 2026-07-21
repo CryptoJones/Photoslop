@@ -33,9 +33,7 @@ from photoslop.layer import Layer
 HANDLE_RADIUS = 10.0  # doc-space pixels for grabbing a handle
 SCHEMA_VERSION = 1
 
-_LEGACY_KEYS = {
-    "kind", "x1", "y1", "x2", "y2", "points", "close", "fill", "width", "color"
-}
+_LEGACY_KEYS = {"kind", "x1", "y1", "x2", "y2", "points", "close", "fill", "width", "color"}
 
 
 def _path_commands(pts: list[QPointF], close: bool) -> list[dict]:
@@ -45,16 +43,14 @@ def _path_commands(pts: list[QPointF], close: bool) -> list[dict]:
     if len(pts) == 2:
         commands.append({"op": "L", "p": [pts[1].x(), pts[1].y()], "node": "corner"})
     else:
-        ring = ([pts[-1], *pts, pts[0], pts[1]] if close
-                else [pts[0], *pts, pts[-1]])
+        ring = [pts[-1], *pts, pts[0], pts[1]] if close else [pts[0], *pts, pts[-1]]
         for i in range(1, len(ring) - 2):
             p0, p1, p2, p3 = ring[i - 1], ring[i], ring[i + 1], ring[i + 2]
-            c1 = [p1.x() + (p2.x() - p0.x()) / 6,
-                  p1.y() + (p2.y() - p0.y()) / 6]
-            c2 = [p2.x() - (p3.x() - p1.x()) / 6,
-                  p2.y() - (p3.y() - p1.y()) / 6]
-            commands.append({"op": "C", "c1": c1, "c2": c2,
-                             "p": [p2.x(), p2.y()], "node": "smooth"})
+            c1 = [p1.x() + (p2.x() - p0.x()) / 6, p1.y() + (p2.y() - p0.y()) / 6]
+            c2 = [p2.x() - (p3.x() - p1.x()) / 6, p2.y() - (p3.y() - p1.y()) / 6]
+            commands.append(
+                {"op": "C", "c1": c1, "c2": c2, "p": [p2.x(), p2.y()], "node": "smooth"}
+            )
     if close:
         commands.append({"op": "Z"})
     return commands
@@ -72,24 +68,51 @@ def migrate_vector(data: dict) -> dict:
     stroke_enabled = kind == "line" or (kind == "path" and not fill_enabled)
     if kind == "path":
         pts = [QPointF(float(x), float(y)) for x, y in source.get("points", [])]
-        geometry = {"kind": "path", "commands": _path_commands(
-            pts, bool(source.get("close", fill_enabled)))} if pts else {
-                "kind": "path", "commands": []}
+        geometry = (
+            {
+                "kind": "path",
+                "commands": _path_commands(pts, bool(source.get("close", fill_enabled))),
+            }
+            if pts
+            else {"kind": "path", "commands": []}
+        )
     elif kind in {"rect", "ellipse"}:
-        geometry = {"kind": kind, "rect": [float(source["x1"]), float(source["y1"]),
-                                               float(source["x2"]), float(source["y2"])]}
+        geometry = {
+            "kind": kind,
+            "rect": [
+                float(source["x1"]),
+                float(source["y1"]),
+                float(source["x2"]),
+                float(source["y2"]),
+            ],
+        }
     else:
-        geometry = {"kind": "path", "commands": [
-            {"op": "M", "p": [float(source["x1"]), float(source["y1"])],
-             "node": "corner"},
-            {"op": "L", "p": [float(source["x2"]), float(source["y2"])],
-             "node": "corner"},
-        ]}
-    known_schema = {"schema_version", "id", "name", "type", "parent_id", "geometry",
-                    "transform", "appearance", "opacity", "blend_mode", "text",
-                    "extensions"}
-    unknown = {key: copy.deepcopy(value) for key, value in source.items()
-               if key not in _LEGACY_KEYS and key not in known_schema}
+        geometry = {
+            "kind": "path",
+            "commands": [
+                {"op": "M", "p": [float(source["x1"]), float(source["y1"])], "node": "corner"},
+                {"op": "L", "p": [float(source["x2"]), float(source["y2"])], "node": "corner"},
+            ],
+        }
+    known_schema = {
+        "schema_version",
+        "id",
+        "name",
+        "type",
+        "parent_id",
+        "geometry",
+        "transform",
+        "appearance",
+        "opacity",
+        "blend_mode",
+        "text",
+        "extensions",
+    }
+    unknown = {
+        key: copy.deepcopy(value)
+        for key, value in source.items()
+        if key not in _LEGACY_KEYS and key not in known_schema
+    }
     extensions = copy.deepcopy(source.get("extensions", {}))
     extensions.update(unknown)
     migrated = {
@@ -102,11 +125,17 @@ def migrate_vector(data: dict) -> dict:
         "geometry": geometry,
         "transform": copy.deepcopy(source.get("transform", [1, 0, 0, 1, 0, 0])),
         "appearance": {
-            "fill": copy.deepcopy(source.get("appearance", {}).get(
-                "fill", {"type": "solid", "color": rgba} if fill_enabled else None)),
+            "fill": copy.deepcopy(
+                source.get("appearance", {}).get(
+                    "fill", {"type": "solid", "color": rgba} if fill_enabled else None
+                )
+            ),
             "fill_rule": source.get("appearance", {}).get("fill_rule", "winding"),
-            "stroke": copy.deepcopy(source.get("appearance", {}).get(
-                "stroke", {"type": "solid", "color": rgba} if stroke_enabled else None)),
+            "stroke": copy.deepcopy(
+                source.get("appearance", {}).get(
+                    "stroke", {"type": "solid", "color": rgba} if stroke_enabled else None
+                )
+            ),
             "stroke_width": source.get("appearance", {}).get("stroke_width", width),
             "cap": source.get("appearance", {}).get("cap", "round"),
             "join": source.get("appearance", {}).get("join", "round"),
@@ -162,14 +191,19 @@ def draw_native(painter: QPainter, data: dict) -> None:
     painter.setBrush(_paint_brush(fill, path.boundingRect()))
     stroke = appearance.get("stroke")
     if stroke:
-        pen = QPen(_paint_brush(stroke, path.boundingRect()),
-                   float(appearance.get("stroke_width", 1)))
-        pen.setCapStyle({"flat": Qt.PenCapStyle.FlatCap,
-                         "square": Qt.PenCapStyle.SquareCap}.get(
-                             appearance.get("cap"), Qt.PenCapStyle.RoundCap))
-        pen.setJoinStyle({"miter": Qt.PenJoinStyle.MiterJoin,
-                          "bevel": Qt.PenJoinStyle.BevelJoin}.get(
-                              appearance.get("join"), Qt.PenJoinStyle.RoundJoin))
+        pen = QPen(
+            _paint_brush(stroke, path.boundingRect()), float(appearance.get("stroke_width", 1))
+        )
+        pen.setCapStyle(
+            {"flat": Qt.PenCapStyle.FlatCap, "square": Qt.PenCapStyle.SquareCap}.get(
+                appearance.get("cap"), Qt.PenCapStyle.RoundCap
+            )
+        )
+        pen.setJoinStyle(
+            {"miter": Qt.PenJoinStyle.MiterJoin, "bevel": Qt.PenJoinStyle.BevelJoin}.get(
+                appearance.get("join"), Qt.PenJoinStyle.RoundJoin
+            )
+        )
         pen.setMiterLimit(float(appearance.get("miter_limit", 4)))
         if appearance.get("dash"):
             pen.setDashPattern([float(value) for value in appearance["dash"]])
@@ -177,11 +211,17 @@ def draw_native(painter: QPainter, data: dict) -> None:
         painter.setPen(pen)
     else:
         painter.setPen(Qt.PenStyle.NoPen)
-    path.setFillRule(Qt.FillRule.OddEvenFill if appearance.get("fill_rule") == "evenodd"
-                     else Qt.FillRule.WindingFill)
+    path.setFillRule(
+        Qt.FillRule.OddEvenFill
+        if appearance.get("fill_rule") == "evenodd"
+        else Qt.FillRule.WindingFill
+    )
     if data.get("type") == "text" and data.get("text"):
-        painter.drawText(path.boundingRect(), int(Qt.AlignmentFlag.AlignLeft |
-                         Qt.AlignmentFlag.AlignTop), str(data["text"].get("content", "")))
+        painter.drawText(
+            path.boundingRect(),
+            int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
+            str(data["text"].get("content", "")),
+        )
     else:
         painter.drawPath(path)
     painter.restore()
@@ -213,14 +253,11 @@ def smooth_path(pts: list[QPointF], close: bool) -> QPainterPath:
     if len(pts) == 2:
         path.lineTo(pts[1])
         return path
-    ring = ([pts[-1], *pts, pts[0], pts[1]] if close
-            else [pts[0], *pts, pts[-1]])
+    ring = [pts[-1], *pts, pts[0], pts[1]] if close else [pts[0], *pts, pts[-1]]
     for i in range(1, len(ring) - 2):
         p0, p1, p2, p3 = ring[i - 1], ring[i], ring[i + 1], ring[i + 2]
-        c1 = QPointF(p1.x() + (p2.x() - p0.x()) / 6.0,
-                     p1.y() + (p2.y() - p0.y()) / 6.0)
-        c2 = QPointF(p2.x() - (p3.x() - p1.x()) / 6.0,
-                     p2.y() - (p3.y() - p1.y()) / 6.0)
+        c1 = QPointF(p1.x() + (p2.x() - p0.x()) / 6.0, p1.y() + (p2.y() - p0.y()) / 6.0)
+        c2 = QPointF(p2.x() - (p3.x() - p1.x()) / 6.0, p2.y() - (p3.y() - p1.y()) / 6.0)
         path.cubicTo(c1, c2, p2)
     if close:
         path.closeSubpath()
@@ -242,10 +279,11 @@ def render_vector(data: dict, name: str, canvas_rect: QRect) -> Layer | None:
     appearance = data["appearance"]
     width = max(1, int(float(appearance.get("stroke_width", 1))))
     margin = max(2, width) if appearance.get("stroke") else 2
-    bounds = (raw.toAlignedRect()
-              .adjusted(-margin, -margin, margin, margin)
-              .intersected(canvas_rect.adjusted(-margin, -margin,
-                                                margin, margin)))
+    bounds = (
+        raw.toAlignedRect()
+        .adjusted(-margin, -margin, margin, margin)
+        .intersected(canvas_rect.adjusted(-margin, -margin, margin, margin))
+    )
     if bounds.width() < 2 or bounds.height() < 2:
         return None
     layer = Layer.blank(name, bounds.size(), bounds.topLeft())
@@ -273,8 +311,7 @@ def rerender_into(layer, data: dict, canvas_rect: QRect) -> bool:
 def _map_points(data: dict, fn) -> dict:
     out = dict(data)
     if data.get("kind") == "path":
-        out["points"] = [list(fn(float(x), float(y)))
-                         for x, y in data["points"]]
+        out["points"] = [list(fn(float(x), float(y))) for x, y in data["points"]]
     else:
         x1, y1 = fn(float(data["x1"]), float(data["y1"]))
         x2, y2 = fn(float(data["x2"]), float(data["y2"]))
@@ -309,8 +346,7 @@ def flip_vector(data: dict, horizontal: bool, w: int, h: int) -> dict:
 def handles(data: dict) -> list[tuple[str, float, float]]:
     """Named drag handles in doc coords."""
     if data.get("kind") == "path":
-        return [(str(i), float(x), float(y))
-                for i, (x, y) in enumerate(data.get("points", []))]
+        return [(str(i), float(x), float(y)) for i, (x, y) in enumerate(data.get("points", []))]
     x1, y1 = float(data["x1"]), float(data["y1"])
     x2, y2 = float(data["x2"]), float(data["y2"])
     if data.get("kind") == "line":
@@ -328,13 +364,14 @@ def grab(data: dict, x: float, y: float) -> str | None:
         ys = [p[1] for p in data["points"]]
         box = QRectF(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
     else:
-        box = QRectF(QPointF(float(data["x1"]), float(data["y1"])),
-                     QPointF(float(data["x2"]), float(data["y2"]))).normalized()
+        box = QRectF(
+            QPointF(float(data["x1"]), float(data["y1"])),
+            QPointF(float(data["x2"]), float(data["y2"])),
+        ).normalized()
     return "move" if box.adjusted(-4, -4, 4, 4).contains(x, y) else None
 
 
-def drag(data: dict, name: str, x: float, y: float,
-         dx: float, dy: float) -> dict:
+def drag(data: dict, name: str, x: float, y: float, dx: float, dy: float) -> dict:
     """New vector_data after dragging handle `name` to (x, y), or the whole
     geometry by (dx, dy) when name == "move"."""
     out = dict(data)

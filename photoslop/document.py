@@ -40,8 +40,7 @@ def clip_base_for(doc: Document, layer: Layer) -> Layer | None:
     return None
 
 
-def render_region(doc: Document, region: QRect,
-                  exclude: Layer | None = None) -> QImage:
+def render_region(doc: Document, region: QRect, exclude: Layer | None = None) -> QImage:
     """Composite every visible layer's contribution to a canvas-space region
     into a region-sized image — the offscreen path used when adjustment
     layers exist (they post-process the accumulated composite below them)."""
@@ -81,8 +80,7 @@ def render_region(doc: Document, region: QRect,
                 draw_layer(gp, doc, member, region)
             gp.end()
             p.setOpacity(props.get("opacity", 1.0))
-            p.setCompositionMode(
-                BLEND_MODES[props.get("blend_mode", "normal")])
+            p.setCompositionMode(BLEND_MODES[props.get("blend_mode", "normal")])
             p.drawImage(region.topLeft(), group_buf)
             index = j
             continue
@@ -114,8 +112,7 @@ def _effect_images(layer: Layer) -> list:
     return out
 
 
-def _draw_effects(p: QPainter, appearance, region: QRect, under: bool,
-                  origin: QPoint) -> None:
+def _draw_effects(p: QPainter, appearance, region: QRect, under: bool, origin: QPoint) -> None:
     from photoslop.layer import BLEND_MODES
 
     base_opacity = p.opacity()
@@ -150,8 +147,7 @@ def draw_layer(p: QPainter, doc: Document, layer: Layer, region: QRect) -> None:
             fill_offset = layer.offset + appearance.fill_offset
             area = region.intersected(QRect(fill_offset, appearance.fill_image.size()))
             if not area.isEmpty():
-                p.drawImage(area.topLeft(), appearance.fill_image,
-                            area.translated(-fill_offset))
+                p.drawImage(area.topLeft(), appearance.fill_image, area.translated(-fill_offset))
         p.setOpacity(base)
         _draw_effects(p, appearance, region, under=False, origin=layer.offset)
         return
@@ -181,8 +177,10 @@ def _draw_fill(p: QPainter, doc: Document, layer: Layer, region: QRect) -> None:
     base_area = area.intersected(base.bounds())
     if not base_area.isEmpty():
         bp = QPainter(base_alpha)
-        bp.drawImage(base_area.topLeft() - area.topLeft(),
-                     base.paint_image(base_area.translated(-base.offset)))
+        bp.drawImage(
+            base_area.topLeft() - area.topLeft(),
+            base.paint_image(base_area.translated(-base.offset)),
+        )
         bp.end()
     cp = QPainter(content)
     cp.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
@@ -201,8 +199,7 @@ class Document(QObject):
 
     def __init__(self, size: QSize, dpi: float = 72.0, name: str | None = None) -> None:
         super().__init__()
-        validate_dimensions(size.width(), size.height(), operation="document",
-                            allow_large=True)
+        validate_dimensions(size.width(), size.height(), operation="document", allow_large=True)
         validate_dpi(dpi)
         if name is None:
             Document._untitled_count += 1
@@ -239,8 +236,7 @@ class Document(QObject):
         return None
 
     def has_adjustments(self) -> bool:
-        return any(layer.visible and layer.adjustment is not None
-                   for layer in self.layers)
+        return any(layer.visible and layer.adjustment is not None for layer in self.layers)
 
     def needs_offscreen(self) -> bool:
         """True when compositing needs the buffered path: adjustment layers
@@ -278,8 +274,7 @@ class Document(QObject):
         for layer in self.layers:
             if layer.effects and layer.visible:
                 margin = _effects_margin(layer.effects)
-                if rect.adjusted(-margin, -margin, margin, margin).intersects(
-                        layer.bounds()):
+                if rect.adjusted(-margin, -margin, margin, margin).intersects(layer.bounds()):
                     pad = max(pad, margin)
         if pad:
             rect = rect.adjusted(-pad, -pad, pad, pad)
@@ -299,7 +294,9 @@ class Document(QObject):
         )
 
     def accepts_revision(
-        self, revision: DocumentRevision, layer: Layer | None = None,
+        self,
+        revision: DocumentRevision,
+        layer: Layer | None = None,
     ) -> bool:
         """Return whether a task may still commit to this document/layer."""
         if self._closed or revision != self.capture_revision():

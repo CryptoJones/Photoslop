@@ -15,7 +15,11 @@ ROOT = Path(__file__).resolve().parent.parent
 def _check(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, "scripts/check-version.py", *args],
-        cwd=ROOT, capture_output=True, text=True, check=False)
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def test_runtime_distribution_and_release_declarations_agree():
@@ -48,8 +52,7 @@ def test_release_permissions_are_confined_to_tag_upload_jobs():
 
 def test_external_workflow_actions_are_pinned_to_full_commit_shas():
     for workflow in (ROOT / ".github/workflows").glob("*.yml"):
-        for action, ref in re.findall(
-                r"\buses:\s*([^@\s]+)@([^\s#]+)", workflow.read_text()):
+        for action, ref in re.findall(r"\buses:\s*([^@\s]+)@([^\s#]+)", workflow.read_text()):
             if not action.startswith("./"):
                 assert re.fullmatch(r"[0-9a-f]{40}", ref), (workflow, action, ref)
 
@@ -66,7 +69,9 @@ def test_external_ipados_and_portable_build_inputs_are_locked():
         assert "--locked" in source
         assert "uv pip install" not in source
         for required in (
-            "--portable-smoke", "photoslop.cdx.json", "BUILD-IDENTITY.json",
+            "--portable-smoke",
+            "photoslop.cdx.json",
+            "BUILD-IDENTITY.json",
             "THIRD_PARTY_NOTICES.md",
         ):
             assert required in source

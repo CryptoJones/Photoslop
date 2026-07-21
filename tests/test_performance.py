@@ -40,16 +40,23 @@ def test_export_preview_is_proxy_bounded(qapp):
 
 def test_scaled_benchmarks_report_p50_p95_memory_and_targets(qapp):
     report = run(PRESETS["4k-50"], scale=0.01, samples=3)
-    for key in ("frame_ms_p50", "frame_ms_p95", "document_bytes", "peak_rss_kb",
-                "cancellation_ms", "target_frame_ms_p95",
-                "target_gui_heartbeat_ms", "target_cancellation_ms",
-                "target_peak_rss_kb", "layer_surface_bytes",
-                "rendered_viewport_bytes"):
+    for key in (
+        "frame_ms_p50",
+        "frame_ms_p95",
+        "document_bytes",
+        "peak_rss_kb",
+        "cancellation_ms",
+        "target_frame_ms_p95",
+        "target_gui_heartbeat_ms",
+        "target_cancellation_ms",
+        "target_peak_rss_kb",
+        "layer_surface_bytes",
+        "rendered_viewport_bytes",
+    ):
         assert key in report and report[key] >= 0
     assert report["cancellation_ms"] < report["target_cancellation_ms"]
     assert report["frame_ms_p95"] < report["target_frame_ms_p95"]
     assert report["measured"]["layers"] == 50
     assert report["measured"]["layer_surface_bytes"] == report["layer_surface_bytes"]
-    assert report["configured_limits"] == {"open_preview_max_px": 256,
-                                             "export_preview_max_px": 512}
+    assert report["configured_limits"] == {"open_preview_max_px": 256, "export_preview_max_px": 512}
     assert report["passed"] and all(report["gates"].values())

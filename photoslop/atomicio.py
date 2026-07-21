@@ -32,7 +32,8 @@ def atomic_write(
     directory = os.path.dirname(destination) or os.curdir
     suffix = f".tmp{Path(destination).suffix}"
     fd, temporary = tempfile.mkstemp(
-        prefix=f".{Path(destination).name}.", suffix=suffix, dir=directory)
+        prefix=f".{Path(destination).name}.", suffix=suffix, dir=directory
+    )
     os.close(fd)
     try:
         writer(temporary)
@@ -69,8 +70,7 @@ def atomic_bytes(
             handle.write(data)
             handle.flush()
 
-    return atomic_write(
-        path, write, before_commit=before_commit, durable=durable)
+    return atomic_write(path, write, before_commit=before_commit, durable=durable)
 
 
 @dataclass
@@ -80,8 +80,9 @@ class _PathState:
 
 
 class WriteTicket:
-    def __init__(self, coordinator: WriteCoordinator, path: str,
-                 state: _PathState, generation: int) -> None:
+    def __init__(
+        self, coordinator: WriteCoordinator, path: str, state: _PathState, generation: int
+    ) -> None:
         self._coordinator = coordinator
         self.path = path
         self._state = state
@@ -102,12 +103,10 @@ class WriteTicket:
             if before_commit is not None:
                 before_commit()
             if not self.is_current():
-                raise SupersededWriteError(
-                    f"A newer write superseded {self.path}")
+                raise SupersededWriteError(f"A newer write superseded {self.path}")
 
         with self._state.lock:
-            return atomic_write(
-                self.path, writer, before_commit=validate, durable=durable)
+            return atomic_write(self.path, writer, before_commit=validate, durable=durable)
 
 
 class WriteCoordinator:

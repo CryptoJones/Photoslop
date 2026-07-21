@@ -13,8 +13,10 @@ from PySide6.QtGui import QImage
 
 
 def lens_available() -> bool:
-    return (importlib.util.find_spec("lensfunpy") is not None
-            and importlib.util.find_spec("exifread") is not None)
+    return (
+        importlib.util.find_spec("lensfunpy") is not None
+        and importlib.util.find_spec("exifread") is not None
+    )
 
 
 def read_exif(path: str) -> dict:
@@ -29,23 +31,27 @@ def read_exif(path: str) -> dict:
     def _f(key: str) -> float:
         try:
             v = tags[key].values[0]
-            return float(v.num) / float(v.den) if hasattr(v, "num") \
-                else float(v)
+            return float(v.num) / float(v.den) if hasattr(v, "num") else float(v)
         except (KeyError, IndexError, ZeroDivisionError, AttributeError):
             return 0.0
 
-    return {"maker": _s("Image Make"), "model": _s("Image Model"),
-            "lens": _s("EXIF LensModel"),
-            "focal": _f("EXIF FocalLength"),
-            "aperture": _f("EXIF FNumber")}
+    return {
+        "maker": _s("Image Make"),
+        "model": _s("Image Model"),
+        "lens": _s("EXIF LensModel"),
+        "focal": _f("EXIF FocalLength"),
+        "aperture": _f("EXIF FNumber"),
+    }
 
 
 def correct_lens(image: QImage, source_path: str) -> QImage:
     """Distortion + vignetting corrected copy, or ValueError with a clear
     reason (missing extra, no EXIF, camera/lens not in the lensfun db)."""
     if not lens_available():
-        raise ValueError("lens corrections need the optional extra — "
-                         'install with `pip install "photoslop[lens]"`')
+        raise ValueError(
+            "lens corrections need the optional extra — "
+            'install with `pip install "photoslop[lens]"`'
+        )
     import lensfunpy
 
     exif = read_exif(source_path)
@@ -54,8 +60,7 @@ def correct_lens(image: QImage, source_path: str) -> QImage:
     db = lensfunpy.Database()
     cams = db.find_cameras(exif["maker"], exif["model"])
     if not cams:
-        raise ValueError(f"camera not in lensfun db: {exif['maker']} "
-                         f"{exif['model']}")
+        raise ValueError(f"camera not in lensfun db: {exif['maker']} {exif['model']}")
     lenses = db.find_lenses(cams[0], None, exif["lens"] or None)
     if not lenses:
         raise ValueError(f"lens not in lensfun db: {exif['lens'] or '(none)'}")
@@ -80,6 +85,5 @@ def correct_lens(image: QImage, source_path: str) -> QImage:
         ys = np.clip(np.rint(coords[..., 1]).astype(np.int32), 0, h - 1)
         arr = arr[ys, xs]
 
-    out = QImage(np.ascontiguousarray(arr).tobytes(), w, h, w * 4,
-                 QImage.Format.Format_ARGB32)
+    out = QImage(np.ascontiguousarray(arr).tobytes(), w, h, w * 4, QImage.Format.Format_ARGB32)
     return out.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)

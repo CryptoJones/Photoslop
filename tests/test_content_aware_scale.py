@@ -20,7 +20,8 @@ def striped_image(w=80, h=40):
 
 def count_red_columns(img) -> int:
     return sum(
-        1 for x in range(img.width())
+        1
+        for x in range(img.width())
         if img.pixelColor(x, img.height() // 2).red() > 200
         and img.pixelColor(x, img.height() // 2).green() < 60
     )

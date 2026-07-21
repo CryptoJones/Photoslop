@@ -88,6 +88,7 @@ def test_ellipse_select_drag(qapp):
 class _ShiftEv:
     def modifiers(self):
         from PySide6.QtCore import Qt
+
         return Qt.KeyboardModifier.ShiftModifier
 
 

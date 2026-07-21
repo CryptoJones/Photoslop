@@ -61,9 +61,14 @@ class TaskHandle(QObject):
     failed = Signal(str)
     cancelled = Signal()
 
-    def __init__(self, task_id: str, label: str, estimated_bytes: int,
-                 scope_id: str | None = None,
-                 priority: TaskPriority = TaskPriority.BULK) -> None:
+    def __init__(
+        self,
+        task_id: str,
+        label: str,
+        estimated_bytes: int,
+        scope_id: str | None = None,
+        priority: TaskPriority = TaskPriority.BULK,
+    ) -> None:
         super().__init__()
         self.task_id = task_id
         self.label = label
@@ -151,8 +156,9 @@ class TaskService(QObject):
     taskFinished = Signal(object)
     queueChanged = Signal()
 
-    def __init__(self, max_workers: int = 2, memory_budget: int = 512 * 1024 * 1024,
-                 parent=None) -> None:
+    def __init__(
+        self, max_workers: int = 2, memory_budget: int = 512 * 1024 * 1024, parent=None
+    ) -> None:
         super().__init__(parent)
         self.pool = QThreadPool(self)
         self.pool.setMaxThreadCount(max(1, max_workers))
@@ -172,9 +178,15 @@ class TaskService(QObject):
     def history(self) -> tuple[TaskRecord, ...]:
         return tuple(self._history)
 
-    def submit(self, task_id: str, label: str, operation: Callable[[TaskContext], Any],
-               estimated_bytes: int = 1, scope_id: str | None = None,
-               priority: TaskPriority = TaskPriority.BULK) -> TaskHandle:
+    def submit(
+        self,
+        task_id: str,
+        label: str,
+        operation: Callable[[TaskContext], Any],
+        estimated_bytes: int = 1,
+        scope_id: str | None = None,
+        priority: TaskPriority = TaskPriority.BULK,
+    ) -> TaskHandle:
         handle = TaskHandle(task_id, label, estimated_bytes, scope_id, priority)
         self._sequence += 1
         self._queued.append(_Pending(handle, operation, self._sequence))
@@ -227,7 +239,9 @@ class TaskService(QObject):
             worker.signals.progress.connect(pending.handle._set_progress)
             worker.signals.done.connect(
                 lambda state, result, error, h=pending.handle: self._complete(
-                    h, state, result, error))
+                    h, state, result, error
+                )
+            )
             self._running[pending.handle] = (pending, worker)
             self._running_bytes += needed
             pending.handle._set_state(TaskState.RUNNING)
@@ -246,11 +260,21 @@ class TaskService(QObject):
         return None
 
     def _record(self, handle: TaskHandle) -> None:
-        self._history.append(TaskRecord(
-            handle.task_id, handle.label, handle.scope_id, handle.priority,
-            handle.state, handle.progress_percent, handle.progress_message,
-            handle.created_at, handle.started_at, handle.finished_at, handle.error,
-        ))
+        self._history.append(
+            TaskRecord(
+                handle.task_id,
+                handle.label,
+                handle.scope_id,
+                handle.priority,
+                handle.state,
+                handle.progress_percent,
+                handle.progress_message,
+                handle.created_at,
+                handle.started_at,
+                handle.finished_at,
+                handle.error,
+            )
+        )
 
     def _complete(self, handle: TaskHandle, state: TaskState, result, error: str) -> None:
         pending, _worker = self._running.pop(handle)

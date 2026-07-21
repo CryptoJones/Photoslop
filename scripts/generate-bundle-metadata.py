@@ -38,13 +38,15 @@ def _packages() -> list[dict[str, object]]:
                     _label, homepage = entry.split(",", 1)
                     homepage = homepage.strip()
                     break
-        packages.append({
-            "name": name,
-            "version": distribution.version,
-            "license": license_expression,
-            "homepage": homepage,
-            "distribution": distribution,
-        })
+        packages.append(
+            {
+                "name": name,
+                "version": distribution.version,
+                "license": license_expression,
+                "homepage": homepage,
+                "distribution": distribution,
+            }
+        )
     packages.sort(key=lambda item: str(item["name"]).casefold())
     return packages
 
@@ -69,16 +71,17 @@ def _license_texts(distribution) -> list[tuple[str, str]]:
 
 def _write_notices(path: Path, base: Path, packages: list[dict[str, object]]) -> None:
     lines = [base.read_text(encoding="utf-8").rstrip(), "", "## Bundled Python packages", ""]
-    lines.extend([
-        "This section is generated from the exact build environment. License",
-        "identifiers are package metadata supplied by each upstream project.",
-        "A compliance owner must review this inventory before public release.",
-        "",
-    ])
+    lines.extend(
+        [
+            "This section is generated from the exact build environment. License",
+            "identifiers are package metadata supplied by each upstream project.",
+            "A compliance owner must review this inventory before public release.",
+            "",
+        ]
+    )
     for package in packages:
         link = f" — {package['homepage']}" if package["homepage"] else ""
-        lines.append(
-            f"### {package['name']} {package['version']} — {package['license']}{link}")
+        lines.append(f"### {package['name']} {package['version']} — {package['license']}{link}")
         texts = _license_texts(package["distribution"])
         if not texts:
             lines.extend(["", "No license file was exposed by the installed distribution.", ""])
@@ -89,13 +92,18 @@ def _write_notices(path: Path, base: Path, packages: list[dict[str, object]]) ->
 
 
 def _write_sbom(path: Path, packages: list[dict[str, object]]) -> None:
-    components = [{
-        "type": "library",
-        "name": str(package["name"]),
-        "version": str(package["version"]),
-        "purl": f"pkg:pypi/{str(package['name']).lower().replace('_', '-')}@{package['version']}",
-        "licenses": [{"license": {"name": str(package["license"])}}],
-    } for package in packages]
+    components = [
+        {
+            "type": "library",
+            "name": str(package["name"]),
+            "version": str(package["version"]),
+            "purl": (
+                f"pkg:pypi/{str(package['name']).lower().replace('_', '-')}@{package['version']}"
+            ),
+            "licenses": [{"license": {"name": str(package["license"])}}],
+        }
+        for package in packages
+    ]
     fingerprint = json.dumps(components, sort_keys=True, separators=(",", ":"))
     serial = uuid.uuid5(uuid.NAMESPACE_URL, f"photoslop:{__version__}:{fingerprint}")
     document = {
@@ -103,10 +111,14 @@ def _write_sbom(path: Path, packages: list[dict[str, object]]) -> None:
         "specVersion": "1.5",
         "serialNumber": f"urn:uuid:{serial}",
         "version": 1,
-        "metadata": {"component": {
-            "type": "application", "name": "Photoslop", "version": __version__,
-            "licenses": [{"license": {"id": "Apache-2.0"}}],
-        }},
+        "metadata": {
+            "component": {
+                "type": "application",
+                "name": "Photoslop",
+                "version": __version__,
+                "licenses": [{"license": {"id": "Apache-2.0"}}],
+            }
+        },
         "components": components,
     }
     path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -119,8 +131,7 @@ def _write_identity(path: Path, packages: list[dict[str, object]]) -> None:
         "commit": os.environ.get("GITHUB_SHA", "unknown"),
         "python": platform.python_version(),
         "platform": platform.platform(),
-        "dependency_inventory_sha256": hashlib.sha256(
-            "\n".join(inventory).encode()).hexdigest(),
+        "dependency_inventory_sha256": hashlib.sha256("\n".join(inventory).encode()).hexdigest(),
         "dependencies": inventory,
     }
     path.write_text(json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -133,8 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     packages = _packages()
-    _write_notices(
-        args.output_dir / "THIRD_PARTY_NOTICES.md", args.base_notices, packages)
+    _write_notices(args.output_dir / "THIRD_PARTY_NOTICES.md", args.base_notices, packages)
     _write_sbom(args.output_dir / "photoslop.cdx.json", packages)
     _write_identity(args.output_dir / "BUILD-IDENTITY.json", packages)
     return 0

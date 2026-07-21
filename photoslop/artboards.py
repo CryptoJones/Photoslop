@@ -23,8 +23,15 @@ class SetArtboardsCommand(QUndoCommand):
         self._set(self.old)
 
 
-def edit(doc, operation: str, *, index: int | None = None, name: str | None = None,
-         rect: list[int] | None = None, to: int | None = None) -> None:
+def edit(
+    doc,
+    operation: str,
+    *,
+    index: int | None = None,
+    name: str | None = None,
+    rect: list[int] | None = None,
+    to: int | None = None,
+) -> None:
     boards = [(label, QRect(bounds)) for label, bounds in doc.artboards]
     if operation == "add":
         if rect is None:

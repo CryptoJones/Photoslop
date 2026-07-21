@@ -37,8 +37,9 @@ def _png_bytes(img: QImage) -> bytes:
     return bytes(buf.data())
 
 
-def save_ora(doc: Document, path: str, *, ticket: WriteTicket | None = None,
-             before_commit=None) -> None:
+def save_ora(
+    doc: Document, path: str, *, ticket: WriteTicket | None = None, before_commit=None
+) -> None:
     def writer(temporary: str) -> None:
         _write_ora(doc, temporary)
 
@@ -64,14 +65,16 @@ def _write_ora(doc: Document, path: str) -> None:
     if doc.artboards:
         import json
 
-        image.set("photoslop-artboards", json.dumps(
-            [[n, r.x(), r.y(), r.width(), r.height()]
-             for n, r in doc.artboards]))
+        image.set(
+            "photoslop-artboards",
+            json.dumps([[n, r.x(), r.y(), r.width(), r.height()] for n, r in doc.artboards]),
+        )
     if doc.icc_space is not None and doc.icc_space.isValid():
         import base64
 
-        image.set("photoslop-icc", base64.b64encode(
-            bytes(doc.icc_space.iccProfile())).decode("ascii"))
+        image.set(
+            "photoslop-icc", base64.b64encode(bytes(doc.icc_space.iccProfile())).decode("ascii")
+        )
     stack = ET.SubElement(image, "stack")
 
     entries: list[tuple[str, bytes]] = []
@@ -103,15 +106,15 @@ def _write_ora(doc: Document, path: str) -> None:
         if layer.smart_filters:
             import json
 
-            attrib["photoslop-smart-filters"] = json.dumps(
-                [list(f) for f in layer.smart_filters])
+            attrib["photoslop-smart-filters"] = json.dumps([list(f) for f in layer.smart_filters])
         if layer.effects:
             import json
 
             from photoslop.appearance import normalize_effects
 
             attrib["photoslop-effects"] = json.dumps(
-                normalize_effects(layer.effects), separators=(",", ":"))
+                normalize_effects(layer.effects), separators=(",", ":")
+            )
         if layer.fill_opacity != 1.0:
             attrib["photoslop-fill-opacity"] = f"{layer.fill_opacity:.4f}"
         if layer.text_data:
@@ -138,10 +141,15 @@ def _write_ora(doc: Document, path: str) -> None:
         entries.append((src, _png_bytes(layer.image)))
 
     merged = doc.flatten()
-    thumb = merged.scaled(
-        QSize(256, 256), Qt.AspectRatioMode.KeepAspectRatio,
-        Qt.TransformationMode.SmoothTransformation,
-    ) if max(merged.width(), merged.height()) > 256 else merged
+    thumb = (
+        merged.scaled(
+            QSize(256, 256),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        if max(merged.width(), merged.height()) > 256
+        else merged
+    )
 
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
         info = zipfile.ZipInfo("mimetype")
@@ -153,8 +161,15 @@ def _write_ora(doc: Document, path: str) -> None:
         zf.writestr("Thumbnails/thumbnail.png", _png_bytes(thumb))
 
 
-def _walk_layers(zf: zipfile.ZipFile, members: dict, node: ET.Element,
-                 base: QPoint, out: list[Layer], *, allow_large: bool) -> None:
+def _walk_layers(
+    zf: zipfile.ZipFile,
+    members: dict,
+    node: ET.Element,
+    base: QPoint,
+    out: list[Layer],
+    *,
+    allow_large: bool,
+) -> None:
     """Collect layers depth-first, flattening nested stacks (groups) with
     accumulated offsets. XML order is top-first, so append order is too."""
     if node is None:
@@ -166,17 +181,23 @@ def _walk_layers(zf: zipfile.ZipFile, members: dict, node: ET.Element,
         elif child.tag == "layer":
             if len(out) >= DESKTOP_BUDGET.max_layers:
                 raise ResourceLimitError(
-                    f"OpenRaster: maximum layer count is {DESKTOP_BUDGET.max_layers}")
+                    f"OpenRaster: maximum layer count is {DESKTOP_BUDGET.max_layers}"
+                )
             src = child.get("src", "")
             if src not in members:
                 raise ValueError(f"OpenRaster: missing layer member {src!r}")
-            img = QImage.fromData(read_archive_member(
-                zf, members[src], operation="OpenRaster layer"))
+            img = QImage.fromData(
+                read_archive_member(zf, members[src], operation="OpenRaster layer")
+            )
             if img.isNull():
                 raise ValueError(f"OpenRaster: undecodable layer {src!r}")
-            validate_dimensions(img.width(), img.height(),
-                                operation="OpenRaster layer", buffers=2,
-                                allow_large=allow_large)
+            validate_dimensions(
+                img.width(),
+                img.height(),
+                operation="OpenRaster layer",
+                buffers=2,
+                allow_large=allow_large,
+            )
             img = img.convertToFormat(FORMAT)
             layer = Layer(
                 child.get("name") or "Layer",
@@ -189,8 +210,9 @@ def _walk_layers(zf: zipfile.ZipFile, members: dict, node: ET.Element,
             )
             mask_src = child.get("photoslop-mask")
             if mask_src and mask_src in members:
-                mask = QImage.fromData(read_archive_member(
-                    zf, members[mask_src], operation="OpenRaster mask"))
+                mask = QImage.fromData(
+                    read_archive_member(zf, members[mask_src], operation="OpenRaster mask")
+                )
                 if mask.isNull() or mask.size() != img.size():
                     raise ValueError("OpenRaster: invalid layer mask")
                 layer.mask = mask.convertToFormat(QImage.Format.Format_Grayscale8)
@@ -199,13 +221,20 @@ def _walk_layers(zf: zipfile.ZipFile, members: dict, node: ET.Element,
             source_src = child.get("photoslop-source")
             filters_json = child.get("photoslop-smart-filters")
             if source_src and source_src in members:
-                source = QImage.fromData(read_archive_member(
-                    zf, members[source_src], operation="OpenRaster smart source"))
+                source = QImage.fromData(
+                    read_archive_member(
+                        zf, members[source_src], operation="OpenRaster smart source"
+                    )
+                )
                 if source.isNull():
                     raise ValueError("OpenRaster: invalid smart-object source")
-                validate_dimensions(source.width(), source.height(),
-                                    operation="OpenRaster smart source", buffers=2,
-                                    allow_large=allow_large)
+                validate_dimensions(
+                    source.width(),
+                    source.height(),
+                    operation="OpenRaster smart source",
+                    buffers=2,
+                    allow_large=allow_large,
+                )
                 layer.source = source.convertToFormat(FORMAT)
             if filters_json:
                 import json
@@ -239,11 +268,11 @@ def _walk_layers(zf: zipfile.ZipFile, members: dict, node: ET.Element,
                 import numpy as np
 
                 adjustment = read_archive_member(
-                    zf, members[adj_src], operation="OpenRaster adjustment")
+                    zf, members[adj_src], operation="OpenRaster adjustment"
+                )
                 if len(adjustment) != 3 * 256:
                     raise ValueError("OpenRaster: invalid adjustment payload")
-                layer.adjustment = np.frombuffer(
-                    adjustment, dtype=np.uint8).reshape(3, 256).copy()
+                layer.adjustment = np.frombuffer(adjustment, dtype=np.uint8).reshape(3, 256).copy()
             out.append(layer)
 
 
@@ -254,19 +283,20 @@ def load_ora(path: str, *, allow_large: bool = False) -> Document:
         members = validate_archive_members(zf.infolist(), operation="OpenRaster")
         if "stack.xml" not in members:
             raise ValueError("OpenRaster: missing stack.xml")
-        root = parse_xml_limited(read_archive_member(
-            zf, members["stack.xml"], operation="OpenRaster stack.xml"),
-            operation="OpenRaster")
+        root = parse_xml_limited(
+            read_archive_member(zf, members["stack.xml"], operation="OpenRaster stack.xml"),
+            operation="OpenRaster",
+        )
         w = int(root.get("w", "0"))
         h = int(root.get("h", "0"))
         dpi = float(root.get("xres", "72") or 72)
-        validate_dimensions(w, h, operation="OpenRaster canvas", buffers=2,
-                            allow_large=allow_large)
+        validate_dimensions(w, h, operation="OpenRaster canvas", buffers=2, allow_large=allow_large)
         validate_dpi(dpi, operation="OpenRaster")
 
         top_first: list[Layer] = []
-        _walk_layers(zf, members, root.find("stack"), QPoint(0, 0), top_first,
-                     allow_large=allow_large)
+        _walk_layers(
+            zf, members, root.find("stack"), QPoint(0, 0), top_first, allow_large=allow_large
+        )
 
     name = path.replace("\\", "/").rsplit("/", 1)[-1]
     doc = Document(QSize(w, h), dpi, name)
@@ -288,8 +318,7 @@ def load_ora(path: str, *, allow_large: bool = False) -> Document:
     if boards_json:
         import json
 
-        doc.artboards = [(n, QRect(x, y, w2, h2))
-                         for n, x, y, w2, h2 in json.loads(boards_json)]
+        doc.artboards = [(n, QRect(x, y, w2, h2)) for n, x, y, w2, h2 in json.loads(boards_json)]
     doc.active_index = len(doc.layers) - 1
     doc.path = path
     return doc

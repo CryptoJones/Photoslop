@@ -31,8 +31,7 @@ def make_window(qapp) -> MainWindow:
 
 
 def region_stats(img, x0, y0, size=10):
-    values = [img.pixelColor(x0 + dx, y0 + dy).red()
-              for dx in range(size) for dy in range(size)]
+    values = [img.pixelColor(x0 + dx, y0 + dy).red() for dx in range(size) for dy in range(size)]
     mean = sum(values) / len(values)
     var = sum((v - mean) ** 2 for v in values) / len(values)
     return mean, var

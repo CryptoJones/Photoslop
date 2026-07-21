@@ -9,8 +9,7 @@ from photoslop.mainwindow import CREDITS_TEXT, MainWindow
 
 def test_fill_layer_fills_everything_and_undoes(qapp):
     win = MainWindow()
-    win.add_document(Document.new(QSize(30, 30), 72.0, "fl",
-                                  QColor(255, 255, 255)))
+    win.add_document(Document.new(QSize(30, 30), 72.0, "fl", QColor(255, 255, 255)))
     doc = win.current_doc()
     win.options.foreground = QColor(10, 40, 220)
 
@@ -32,8 +31,9 @@ def test_about_has_credits_button_with_the_names(qapp):
     box = win._build_about()
     labels = [b.text().replace("&", "") for b in box.buttons()]
     assert "Credits" in labels
-    assert any(b == QMessageBox.StandardButton.Ok
-               for b in (box.standardButtons(),)) or "OK" in labels
+    assert (
+        any(b == QMessageBox.StandardButton.Ok for b in (box.standardButtons(),)) or "OK" in labels
+    )
     assert CREDITS_TEXT == "Contributors: CryptoJones, GPT5.5, and Fable5"
 
 

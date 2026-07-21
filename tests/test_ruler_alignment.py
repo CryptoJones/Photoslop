@@ -50,8 +50,14 @@ def test_hairline_continuous_with_guide(qapp, zoom):
     gp = QPointF(canvas.mapToGlobal(wpt.toPoint()))
     QApplication.sendEvent(
         canvas,
-        QMouseEvent(QEvent.Type.MouseMove, wpt, gp, Qt.MouseButton.NoButton,
-                    Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier),
+        QMouseEvent(
+            QEvent.Type.MouseMove,
+            wpt,
+            gp,
+            Qt.MouseButton.NoButton,
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+        ),
     )
     QApplication.processEvents()
     arr = window_pixels(win)

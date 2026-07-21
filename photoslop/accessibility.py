@@ -29,12 +29,13 @@ class AccessibilityController(QObject):
 
     def apply(self) -> None:
         settings = self.window.settings
-        high_contrast = str(settings.value(
-            "accessibility/high_contrast", "false")).lower() == "true"
-        reduced_motion = str(settings.value(
-            "accessibility/reduced_motion", "false")).lower() == "true"
-        scale = max(100, min(200, int(settings.value(
-            "accessibility/control_scale", 100))))
+        high_contrast = (
+            str(settings.value("accessibility/high_contrast", "false")).lower() == "true"
+        )
+        reduced_motion = (
+            str(settings.value("accessibility/reduced_motion", "false")).lower() == "true"
+        )
+        scale = max(100, min(200, int(settings.value("accessibility/control_scale", 100))))
         self.window.setProperty("reducedMotion", reduced_motion)
         self.window.setProperty("highContrast", high_contrast)
         self.window.setProperty("controlScale", scale)
@@ -49,8 +50,7 @@ class AccessibilityController(QObject):
             )
 
     def eventFilter(self, obj, event) -> bool:
-        if (event.type() in {QEvent.Type.Polish, QEvent.Type.Show}
-                and isinstance(obj, QWidget)):
+        if event.type() in {QEvent.Type.Polish, QEvent.Type.Show} and isinstance(obj, QWidget):
             self._polish_subtree(obj)
         return False
 
@@ -113,15 +113,17 @@ class AccessibilityController(QObject):
             f"QSlider::handle:vertical {{ height: {handle}px; margin: 0 -6px; }}",
         ]
         if high_contrast:
-            rules.extend([
-                "QWidget { color: #fff; background: #000; }",
-                "QWidget:focus { border: 3px solid #ff0; }",
-                "QToolButton:checked, QPushButton:checked { "
-                "background: #06f; border: 3px double #fff; }",
-                "QLineEdit, QComboBox, QSpinBox, QListView { "
-                "selection-color: #000; selection-background-color: #ff0; }",
-                "QToolTip { color: #000; background: #ff0; border: 2px solid #fff; }",
-            ])
+            rules.extend(
+                [
+                    "QWidget { color: #fff; background: #000; }",
+                    "QWidget:focus { border: 3px solid #ff0; }",
+                    "QToolButton:checked, QPushButton:checked { "
+                    "background: #06f; border: 3px double #fff; }",
+                    "QLineEdit, QComboBox, QSpinBox, QListView { "
+                    "selection-color: #000; selection-background-color: #ff0; }",
+                    "QToolTip { color: #000; background: #ff0; border: 2px solid #fff; }",
+                ]
+            )
         return "\n".join(rules)
 
     def announce(self, message: str) -> None:

@@ -92,8 +92,10 @@ def test_error_paths(qapp, tmp_path, capsys):
     assert exc.value.code == 2
 
     # unreachable model backend is a distinguishable I/O failure, not usage.
-    assert cli.main([src, "--model-url", "http://127.0.0.1:1/x",
-                     "--select-subject", "--output", out]) == 6
+    assert (
+        cli.main([src, "--model-url", "http://127.0.0.1:1/x", "--select-subject", "--output", out])
+        == 6
+    )
     assert "[io_failure]" in capsys.readouterr().err
 
 
@@ -107,17 +109,18 @@ def test_console_entry_point_end_to_end(qapp, tmp_path):
     # same interpreter/venv as the test run — portable to any CI runner
     cmd = [sys.executable, "-m", "photoslop.cli"]
     proc = subprocess.run(
-        [*cmd, src, "--resize", "15x10", "--hue-sat", "0,0,40",
-         "--output", out],
-        capture_output=True, text=True)
+        [*cmd, src, "--resize", "15x10", "--hue-sat", "0,0,40", "--output", out],
+        capture_output=True,
+        text=True,
+    )
     assert proc.returncode == 0, proc.stderr
     result = QImage(out)
     assert result.size() == QSize(15, 10)
     assert result.pixelColor(5, 5).red() > 120
 
     proc = subprocess.run(
-        [*cmd, src, "--resize", "banana", "--output", out],
-        capture_output=True, text=True)
+        [*cmd, src, "--resize", "banana", "--output", out], capture_output=True, text=True
+    )
     assert proc.returncode == 2
     assert "WxH" in proc.stderr
     assert "[invalid_input]" in proc.stderr

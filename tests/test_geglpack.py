@@ -9,7 +9,8 @@ from photoslop.filters import available_filters, parse_params
 
 HAVE_GEGL = geglpack.gegl_available()
 needs_gegl = pytest.mark.skipif(
-    not HAVE_GEGL, reason="no GEGL-capable python (python3-gi + gir1.2-gegl)")
+    not HAVE_GEGL, reason="no GEGL-capable python (python3-gi + gir1.2-gegl)"
+)
 
 
 def _grad(n=48):
@@ -23,9 +24,16 @@ def _grad(n=48):
 @needs_gegl
 def test_pack_registers_when_available(qapp):
     reg = available_filters(allow_unsafe=True)
-    for name in ("gegl", "gegl-vignette", "gegl-bloom", "gegl-pixelize",
-                 "gegl-newsprint", "gegl-posterize", "gegl-motion-blur",
-                 "gegl-edge-sobel"):
+    for name in (
+        "gegl",
+        "gegl-vignette",
+        "gegl-bloom",
+        "gegl-pixelize",
+        "gegl-newsprint",
+        "gegl-posterize",
+        "gegl-motion-blur",
+        "gegl-edge-sobel",
+    ):
         assert name in reg
 
 
@@ -55,8 +63,7 @@ def test_every_curated_filter_produces_output(qapp):
 def test_raw_operation_with_props_and_errors(qapp):
     img = QImage(32, 32, QImage.Format.Format_ARGB32_Premultiplied)
     img.fill(QColor(30, 200, 90))
-    geglpack.GeglRaw().apply(
-        img, {"operation": "gegl:pixelize size-x=8,size-y=8"})
+    geglpack.GeglRaw().apply(img, {"operation": "gegl:pixelize size-x=8,size-y=8"})
     assert img.pixelColor(16, 16).green() == 200  # flat stays flat
     with pytest.raises(ValueError):
         geglpack.GeglRaw().apply(img, {"operation": ""})
@@ -67,17 +74,33 @@ def test_raw_operation_with_props_and_errors(qapp):
 @needs_gegl
 def test_cli_gegl_selection_aware(qapp, tmp_path):
     out = str(tmp_path / "post.png")
-    assert cli.main(["--allow-unsafe-plugins", "--new", "40x20", "--fill", "97,140,203",
-                     "--select", "0,0,20,20",
-                     "--filter", "gegl-posterize:levels=2",
-                     "--deselect", "--output", out]) == 0
+    assert (
+        cli.main(
+            [
+                "--allow-unsafe-plugins",
+                "--new",
+                "40x20",
+                "--fill",
+                "97,140,203",
+                "--select",
+                "0,0,20,20",
+                "--filter",
+                "gegl-posterize:levels=2",
+                "--deselect",
+                "--output",
+                out,
+            ]
+        )
+        == 0
+    )
     img = QImage(out)
-    assert img.pixelColor(35, 10) == QColor(97, 140, 203)   # untouched half
-    assert img.pixelColor(5, 10) != QColor(97, 140, 203)    # posterized half
+    assert img.pixelColor(35, 10) == QColor(97, 140, 203)  # untouched half
+    assert img.pixelColor(5, 10) != QColor(97, 140, 203)  # posterized half
 
 
 def test_worker_probe_handles_no_interpreter(qapp, monkeypatch):
     import photoslop.geglpack as gp
+
     monkeypatch.setattr(gp, "_worker", None)
     img = QImage(4, 4, QImage.Format.Format_ARGB32_Premultiplied)
     img.fill(QColor(1, 2, 3))
