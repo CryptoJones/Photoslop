@@ -189,6 +189,53 @@ class SetLayerOffsetCommand(QUndoCommand):
         self._apply(self.old)
 
 
+class SetLayerPropertyCommand(QUndoCommand):
+    """Undo one layer property edit; consecutive opacity edits merge."""
+
+    _TEXT = {
+        "name": "Rename Layer",
+        "visible": "Layer Visibility",
+        "opacity": "Layer Opacity",
+        "blend_mode": "Layer Blend Mode",
+    }
+    _VISUAL = frozenset({"visible", "opacity", "blend_mode"})
+
+    def __init__(self, doc: Document, layer: Layer, prop: str, value) -> None:
+        if prop not in self._TEXT:
+            raise ValueError(f"Unsupported layer property: {prop}")
+        super().__init__(self._TEXT[prop])
+        self.doc = doc
+        self.layer = layer
+        self.prop = prop
+        self.old = getattr(layer, prop)
+        self.new = value
+
+    def _apply(self, value) -> None:
+        if not any(candidate is self.layer for candidate in self.doc.layers):
+            return
+        setattr(self.layer, self.prop, value)
+        if self.prop in self._VISUAL:
+            self.doc.notify_pixels(self.layer.bounds())
+        self.doc.notify_structure()
+
+    def redo(self) -> None:
+        self._apply(self.new)
+
+    def undo(self) -> None:
+        self._apply(self.old)
+
+    def id(self) -> int:
+        return 0x4F504143 if self.prop == "opacity" else -1  # "OPAC"
+
+    def mergeWith(self, other) -> bool:
+        if (not isinstance(other, SetLayerPropertyCommand)
+                or other.doc is not self.doc or other.layer is not self.layer
+                or other.prop != self.prop):
+            return False
+        self.new = other.new
+        return True
+
+
 class MergeDownCommand(QUndoCommand):
     def __init__(self, doc: Document, index: int):
         super().__init__("Merge Down")

@@ -1063,6 +1063,8 @@ class MainWindow(QMainWindow):
             if answer == QMessageBox.StandardButton.Save and not self._save_doc(doc):
                 return
         self.undo_group.removeStack(doc.undo_stack)
+        self.task_service.cancel_scope(doc.document_id)
+        doc.close()
         self.layer_panel.set_document(None)
         self.adjust_panel.set_document(None)
         self.appearance_panel.set_document(None)
@@ -1088,6 +1090,11 @@ class MainWindow(QMainWindow):
                     ev.ignore()
                     return
         self.settings.setValue("workspace/geometry", self.saveGeometry())
+        self.task_service.cancel_all()
+        for i in range(self.tabs.count()):
+            editor = self.tabs.widget(i)
+            if isinstance(editor, EditorView):
+                editor.doc.close()
         ev.accept()
 
     # ------------------------------------------------------------------ file actions
@@ -1274,7 +1281,7 @@ class MainWindow(QMainWindow):
                 return path
 
             handle = self.task_service.submit("file.save", f"Save {os.path.basename(path)}",
-                                              operation, estimated)
+                                              operation, estimated, doc.document_id)
 
             def installed(saved_path):
                 doc.path = saved_path
@@ -1340,7 +1347,7 @@ class MainWindow(QMainWindow):
 
         self.task_service.submit(
             "file.export", f"Export {os.path.basename(path)}", operation,
-            max(1, base.sizeInBytes() * 3))
+            max(1, base.sizeInBytes() * 3), doc.document_id)
 
     def action_close_tab(self) -> None:
         if self.tabs.count():
@@ -1573,7 +1580,7 @@ class MainWindow(QMainWindow):
         # camera-sized documents.
         estimated = max(1, before.sizeInBytes() * 3)
         if not force_sync and before.width() * before.height() >= 1_000_000:
-            source_key = layer.image.cacheKey()
+            revision = doc.capture_revision()
 
             def operation(context):
                 context.progress(5, "Preparing snapshot")
@@ -1582,12 +1589,13 @@ class MainWindow(QMainWindow):
                 return image
 
             handle = self.task_service.submit(
-                f"filter.{title.lower().replace(' ', '-')}", title, operation, estimated)
+                f"filter.{title.lower().replace(' ', '-')}", title, operation, estimated,
+                doc.document_id)
 
             def install(image):
-                if layer.image.cacheKey() != source_key:
+                if not doc.accepts_revision(revision, layer):
                     self.statusBar().showMessage(
-                        f"{title} result discarded because the layer changed", 6000)
+                        f"{title} result discarded because the document changed", 6000)
                     return
                 rect = image.rect()
                 layer.image = image
@@ -1644,7 +1652,7 @@ class MainWindow(QMainWindow):
             return
         layer = doc.active_layer
         snapshot = QImage(layer.image)
-        source_key = layer.image.cacheKey()
+        revision = doc.capture_revision()
 
         def operation(context):
             context.progress(10, "Sending to backend")
@@ -1653,11 +1661,13 @@ class MainWindow(QMainWindow):
             return result
 
         handle = self.task_service.submit(
-            "model.denoise", "Denoise (Model)", operation, snapshot.sizeInBytes() * 3)
+            "model.denoise", "Denoise (Model)", operation, snapshot.sizeInBytes() * 3,
+            doc.document_id)
 
         def install(result):
-            if layer.image.cacheKey() != source_key:
-                self.statusBar().showMessage("Denoise result discarded after layer edit", 6000)
+            if not doc.accepts_revision(revision, layer):
+                self.statusBar().showMessage(
+                    "Denoise result discarded after document edit", 6000)
                 return
             self._run_filter("Denoise (Model)",
                              lambda img, _mask: (None, img.swap(result))[0], True)
@@ -2234,7 +2244,10 @@ class MainWindow(QMainWindow):
         view[:, : doc.size.width()][sel] = 255
         layer = doc.active_layer
         offset = QPoint(layer.offset)
-        source_key = layer.image.cacheKey()
+        before = QImage(layer.image)
+        local_selection = npimage.selection_mask(
+            doc.selection, layer.image.size(), offset)
+        revision = doc.capture_revision()
 
         def operation(context):
             context.progress(10, "Sending image and mask")
@@ -2245,28 +2258,28 @@ class MainWindow(QMainWindow):
 
         handle = self.task_service.submit(
             "model.generative-fill", "Generative Fill", operation,
-            max(1, flat.sizeInBytes() * 4))
+            max(1, flat.sizeInBytes() * 4), doc.document_id)
 
         def install(result):
-            if layer.image.cacheKey() != source_key:
+            if not doc.accepts_revision(revision, layer):
                 self.statusBar().showMessage(
-                    "Generative Fill result discarded after layer edit", 6000)
+                    "Generative Fill result discarded after document edit", 6000)
                 return
-
-            def paste(img: QImage, mask) -> None:
-                aligned = QImage(img.size(), QImage.Format.Format_ARGB32_Premultiplied)
-                aligned.fill(0)
-                p = QPainter(aligned)
-                p.drawImage(-offset, result)
-                p.end()
-                src = npimage.view_u32(aligned)
-                dst = npimage.view_u32(img)
-                if mask is None:
-                    dst[:] = src
-                else:
-                    dst[mask] = src[mask]
-
-            self._run_filter("Generative Fill", paste, True)
+            after = QImage(before)
+            aligned = QImage(after.size(), QImage.Format.Format_ARGB32_Premultiplied)
+            aligned.fill(0)
+            painter = QPainter(aligned)
+            painter.drawImage(-offset, result)
+            painter.end()
+            source = npimage.view_u32(aligned)
+            target = npimage.view_u32(after)
+            target[local_selection] = source[local_selection]
+            layer.image = after
+            rect = after.rect()
+            doc.undo_stack.push(LayerRegionCommand(
+                doc, layer, rect, before.copy(rect), after.copy(rect),
+                "Generative Fill", applied=True))
+            doc.notify_pixels(layer.bounds())
 
         handle.succeeded.connect(install)
 
@@ -2286,7 +2299,7 @@ class MainWindow(QMainWindow):
                 f"“{adapter.label}” does not support Select Subject", 5000)
             return
         snapshot = doc.flatten()
-        generation = tuple(layer.image.cacheKey() for layer in doc.layers)
+        revision = doc.capture_revision()
 
         def operation(context):
             context.progress(10, "Sending composite")
@@ -2296,10 +2309,10 @@ class MainWindow(QMainWindow):
 
         handle = self.task_service.submit(
             "model.select-subject", "Select Subject", operation,
-            max(1, snapshot.sizeInBytes() * 3))
+            max(1, snapshot.sizeInBytes() * 3), doc.document_id)
 
         def install(mask_img):
-            if generation != tuple(layer.image.cacheKey() for layer in doc.layers):
+            if not doc.accepts_revision(revision):
                 self.statusBar().showMessage(
                     "Select Subject result discarded after document edit", 6000)
                 return

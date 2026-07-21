@@ -52,6 +52,23 @@ def test_cooperative_cancellation_has_no_success_result(qapp):
     _wait(qapp, lambda: handle.state is TaskState.CANCELLED)
 
 
+def test_cancellation_can_be_scoped_to_one_document(qapp):
+    service = TaskService(max_workers=1)
+
+    def operation(context):
+        while True:
+            context.check_cancelled()
+            time.sleep(0.005)
+
+    first = service.submit("first", "First", operation, scope_id="doc-a")
+    second = service.submit("second", "Second", lambda _context: 2,
+                            scope_id="doc-b")
+    _wait(qapp, lambda: first.state is TaskState.RUNNING)
+    service.cancel_scope("doc-a")
+    _wait(qapp, lambda: first.state is TaskState.CANCELLED)
+    _wait(qapp, lambda: second.state is TaskState.SUCCEEDED)
+
+
 def test_failure_is_reported_without_killing_queue(qapp):
     service = TaskService(max_workers=1)
     errors = []

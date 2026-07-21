@@ -50,7 +50,10 @@ def save_ora(doc: Document, path: str) -> None:
     # ORA stores layers top-first; our list is bottom-first.
     for i, layer in enumerate(reversed(doc.layers)):
         src = f"data/layer{i}.png"
-        attrib = {"composite-op": ORA_OPS.get(layer.blend_mode, "svg:src-over")}
+        attrib = {
+            "composite-op": ORA_OPS.get(layer.blend_mode, "svg:src-over"),
+            "photoslop-id": layer.id,
+        }
         if layer.mask is not None:
             # Photoslop extension: ORA has no standard layer-mask entry.
             # GIMP/Krita ignore the attribute; Photoslop round-trips it.
@@ -139,6 +142,7 @@ def _walk_layers(zf: zipfile.ZipFile, node: ET.Element, base: QPoint, out: list[
                 child.get("visibility", "visible") != "hidden",
                 float(child.get("opacity", "1.0")),
                 ORA_OPS_REVERSE.get(child.get("composite-op", "svg:src-over"), "normal"),
+                child.get("photoslop-id"),
             )
             mask_src = child.get("photoslop-mask")
             if mask_src and mask_src in zf.namelist():

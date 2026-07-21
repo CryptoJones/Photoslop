@@ -8,12 +8,25 @@ cached flattened composite — views composite the visible region on demand.
 
 from __future__ import annotations
 
+import uuid
+from dataclasses import dataclass
+
 from PySide6.QtCore import QObject, QPoint, QRect, QSize, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QUndoStack
 
 from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
 
 UNDO_LIMIT = 64
+
+
+@dataclass(frozen=True)
+class DocumentRevision:
+    """Immutable generation token for background work."""
+
+    document_id: str
+    pixels: int
+    structure: int
+    selection: int
 
 
 def clip_base_for(doc: Document, layer: Layer) -> Layer | None:
@@ -191,6 +204,11 @@ class Document(QObject):
             Document._untitled_count += 1
             name = f"Untitled-{Document._untitled_count}"
         self.name = name
+        self.document_id = uuid.uuid4().hex
+        self._pixel_revision = 0
+        self._structure_revision = 0
+        self._selection_revision = 0
+        self._closed = False
         self.size = QSize(size)
         self.dpi = float(dpi)
         self.layers: list[Layer] = []  # index 0 = bottom
@@ -231,23 +249,23 @@ class Document(QObject):
     def insert_layer(self, index: int, layer: Layer) -> None:
         self.layers.insert(index, layer)
         self.active_index = index
-        self.structureChanged.emit()
-        self.pixelsChanged.emit(layer.bounds())
+        self.notify_structure()
+        self.notify_pixels(layer.bounds())
 
     def take_layer(self, index: int) -> Layer:
         layer = self.layers.pop(index)
         if self.active_index >= len(self.layers):
             self.active_index = len(self.layers) - 1
-        self.structureChanged.emit()
-        self.pixelsChanged.emit(layer.bounds())
+        self.notify_structure()
+        self.notify_pixels(layer.bounds())
         return layer
 
     def move_layer(self, src: int, dst: int) -> None:
         layer = self.layers.pop(src)
         self.layers.insert(dst, layer)
         self.active_index = dst
-        self.structureChanged.emit()
-        self.pixelsChanged.emit(layer.bounds())
+        self.notify_structure()
+        self.notify_pixels(layer.bounds())
 
     def notify_pixels(self, rect: QRect) -> None:
         # live effects (shadows, strokes) reach beyond layer bounds — pad the
@@ -261,16 +279,39 @@ class Document(QObject):
                     pad = max(pad, margin)
         if pad:
             rect = rect.adjusted(-pad, -pad, pad, pad)
+        self._pixel_revision += 1
         self.pixelsChanged.emit(rect)
 
     def notify_structure(self) -> None:
+        self._structure_revision += 1
         self.structureChanged.emit()
+
+    def capture_revision(self) -> DocumentRevision:
+        return DocumentRevision(
+            self.document_id,
+            self._pixel_revision,
+            self._structure_revision,
+            self._selection_revision,
+        )
+
+    def accepts_revision(
+        self, revision: DocumentRevision, layer: Layer | None = None,
+    ) -> bool:
+        """Return whether a task may still commit to this document/layer."""
+        if self._closed or revision != self.capture_revision():
+            return False
+        return layer is None or any(candidate is layer for candidate in self.layers)
+
+    def close(self) -> None:
+        """Permanently reject completion callbacks captured for this document."""
+        self._closed = True
 
     # ----- selection ------------------------------------------------------
 
     def set_selection(self, path: QPainterPath | None) -> None:
         self.selection = path if path is not None and not path.isEmpty() else None
         self.selection_feather = 0.0  # feather belongs to one selection
+        self._selection_revision += 1
         self.selectionChanged.emit()
 
     def selection_bounds(self) -> QRect | None:

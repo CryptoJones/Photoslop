@@ -51,11 +51,13 @@ class TaskHandle(QObject):
     failed = Signal(str)
     cancelled = Signal()
 
-    def __init__(self, task_id: str, label: str, estimated_bytes: int) -> None:
+    def __init__(self, task_id: str, label: str, estimated_bytes: int,
+                 scope_id: str | None = None) -> None:
         super().__init__()
         self.task_id = task_id
         self.label = label
         self.estimated_bytes = max(1, estimated_bytes)
+        self.scope_id = scope_id
         self.state = TaskState.QUEUED
         self._cancel = threading.Event()
 
@@ -119,8 +121,8 @@ class TaskService(QObject):
         return tuple(self._running) + tuple(item.handle for item in self._queued)
 
     def submit(self, task_id: str, label: str, operation: Callable[[TaskContext], Any],
-               estimated_bytes: int = 1) -> TaskHandle:
-        handle = TaskHandle(task_id, label, estimated_bytes)
+               estimated_bytes: int = 1, scope_id: str | None = None) -> TaskHandle:
+        handle = TaskHandle(task_id, label, estimated_bytes, scope_id)
         self._queued.append(_Pending(handle, operation))
         self.taskAdded.emit(handle)
         self._drain()
@@ -129,6 +131,12 @@ class TaskService(QObject):
     def cancel_all(self) -> None:
         for handle in self.active:
             handle.cancel()
+        self._drain_cancelled()
+
+    def cancel_scope(self, scope_id: str) -> None:
+        for handle in self.active:
+            if handle.scope_id == scope_id:
+                handle.cancel()
         self._drain_cancelled()
 
     def _drain_cancelled(self) -> None:
@@ -185,7 +193,7 @@ def snapshot_document(doc):
     from photoslop.document import Document
 
     snapshot = Document(doc.size, doc.dpi, doc.name)
-    snapshot.layers = [layer.clone() for layer in doc.layers]
+    snapshot.layers = [layer.clone(preserve_id=True) for layer in doc.layers]
     snapshot.active_index = doc.active_index
     snapshot.selection = QPainterPath(doc.selection) if doc.selection is not None else None
     snapshot.selection_feather = doc.selection_feather

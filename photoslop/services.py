@@ -85,7 +85,10 @@ class FilterService:
 class ModelService:
     @staticmethod
     def denoise(adapter, image: QImage, strength: int) -> QImage:
-        return adapter.denoise(image, strength).convertToFormat(image.format())
+        result = adapter.denoise(image, strength)
+        if result.isNull() or result.size() != image.size():
+            raise ValueError("Backend returned an image of the wrong size")
+        return result.convertToFormat(image.format())
 
     @staticmethod
     def generative_fill(adapter, image: QImage, mask: QImage, prompt: str,
@@ -97,7 +100,10 @@ class ModelService:
 
     @staticmethod
     def select_subject(adapter, image: QImage) -> QImage:
-        return adapter.select_subject(image)
+        result = adapter.select_subject(image)
+        if result.isNull() or result.size() != image.size():
+            raise ValueError("Backend returned a mask of the wrong size")
+        return result.convertToFormat(QImage.Format.Format_Grayscale8)
 
 
 def opaque_export_base(document: Document, fmt: str, transparent: QImage) -> QImage:

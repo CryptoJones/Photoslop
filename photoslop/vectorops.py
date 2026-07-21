@@ -44,7 +44,7 @@ def select(doc, ids: list[str], mode: str = "replace") -> list[str]:
     else:
         raise ValueError(f"Unknown selection mode: {mode}")
     doc.vector_selection = result
-    doc.structureChanged.emit()
+    doc.notify_structure()
     return result
 
 

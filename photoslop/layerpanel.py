@@ -23,6 +23,7 @@ from photoslop.commands import (
     MergeDownCommand,
     MoveLayerStackCommand,
     RemoveLayerCommand,
+    SetLayerPropertyCommand,
 )
 from photoslop.document import Document
 from photoslop.layer import BLEND_MODES, Layer
@@ -214,10 +215,13 @@ class LayerPanel(QWidget):
         visible = item.checkState() == Qt.CheckState.Checked
         name = item.text().strip() or layer.name
         if visible != layer.visible:
-            layer.visible = visible
-            self.doc.notify_pixels(layer.bounds())
+            self.doc.undo_stack.push(
+                SetLayerPropertyCommand(self.doc, layer, "visible", visible))
         if name != layer.name:
-            layer.name = name
+            self.doc.undo_stack.push(
+                SetLayerPropertyCommand(self.doc, layer, "name", name))
+        elif not item.text().strip():
+            self.rebuild()
 
     def _on_double_click(self, item: QListWidgetItem) -> None:
         if self.doc is None:
@@ -231,17 +235,21 @@ class LayerPanel(QWidget):
             return
         layer = self.doc.active_layer
         if layer is not None:
-            layer.blend_mode = self.blend.currentText()
-            self.doc.notify_pixels(layer.bounds())
+            value = self.blend.currentText()
+            if value != layer.blend_mode:
+                self.doc.undo_stack.push(
+                    SetLayerPropertyCommand(self.doc, layer, "blend_mode", value))
 
     def _on_opacity(self, value: int) -> None:
         if self.doc is None or self._updating:
             return
         layer = self.doc.active_layer
         if layer is not None:
-            layer.opacity = value / 100.0
             self.opacity_label.setText(f"{value}%")
-            self.doc.notify_pixels(layer.bounds())
+            opacity = value / 100.0
+            if opacity != layer.opacity:
+                self.doc.undo_stack.push(
+                    SetLayerPropertyCommand(self.doc, layer, "opacity", opacity))
 
     # -- stack ops --
 

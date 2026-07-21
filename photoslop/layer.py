@@ -8,6 +8,8 @@ side is painted on.
 
 from __future__ import annotations
 
+import uuid
+
 from PySide6.QtCore import QPoint, QRect, QSize
 from PySide6.QtGui import QImage, QPainter, Qt
 
@@ -53,7 +55,7 @@ def mask_to_alpha(mask: QImage) -> QImage:
 class Layer:
     __slots__ = ("adjustment", "blend_mode", "clipped", "effects",
                  "fill_opacity", "fx_cache", "group", "image", "mask", "name",
-                 "offset", "opacity", "smart_filters", "source", "text_data",
+                 "offset", "opacity", "smart_filters", "source", "text_data", "id",
                  "vector_data", "visible")
 
     def __init__(
@@ -64,7 +66,9 @@ class Layer:
         visible: bool = True,
         opacity: float = 1.0,
         blend_mode: str = "normal",
+        layer_id: str | None = None,
     ) -> None:
+        self.id = layer_id or uuid.uuid4().hex
         self.name = name
         self.image = image if image.format() == FORMAT else image.convertToFormat(FORMAT)
         self.offset = QPoint(offset) if offset is not None else QPoint(0, 0)
@@ -87,7 +91,7 @@ class Layer:
     def blank(cls, name: str, size: QSize, offset: QPoint | None = None) -> Layer:
         return cls(name, blank_image(size), offset)
 
-    def clone(self, name: str | None = None) -> Layer:
+    def clone(self, name: str | None = None, *, preserve_id: bool = False) -> Layer:
         # QImage(...) copy construction shares pixel data (copy-on-write).
         layer = Layer(
             name if name is not None else self.name,
@@ -96,6 +100,7 @@ class Layer:
             self.visible,
             self.opacity,
             self.blend_mode,
+            self.id if preserve_id else None,
         )
         if self.mask is not None:
             layer.mask = QImage(self.mask)
