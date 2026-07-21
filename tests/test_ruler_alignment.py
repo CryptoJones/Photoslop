@@ -74,10 +74,20 @@ def test_hairline_continuous_with_guide(qapp, zoom):
     vr_geo = (vr.x(), vr.y(), vr.x() + editor.vruler.width(), vr.y() + editor.vruler.height())
     cv = canvas.mapTo(win, QPoint(0, 0))
     cv_geo = (cv.x(), cv.y(), cv.x() + canvas.width(), cv.y() + canvas.height())
+    viewport = editor.scroll.viewport()
+    vp = viewport.mapTo(win, QPoint(0, 0))
+    vp_geo = (vp.x(), vp.y(), vp.x() + viewport.width(), vp.y() + viewport.height())
+    visible = (
+        max(cv_geo[0], vp_geo[0]),
+        max(cv_geo[1], vp_geo[1]),
+        min(cv_geo[2], vp_geo[2]),
+        min(cv_geo[3], vp_geo[3]),
+    )
 
-    # strips that contain only one of the two guides
-    v_strip = (cv_geo[0], cv_geo[1] + 4, cv_geo[2], cv_geo[1] + 40)
-    h_strip = (cv_geo[0] + 4, cv_geo[1], cv_geo[0] + 40, cv_geo[3])
+    # Visible strips that contain only one of the two guides. At high zoom the
+    # fixed-size canvas extends beneath the scroll area's clipped frame.
+    v_strip = (visible[0], visible[1] + 4, visible[2], min(visible[1] + 40, visible[3]))
+    h_strip = (visible[0] + 4, visible[1], min(visible[0] + 40, visible[2]), visible[3])
 
     marker_cols = color_hits(arr, hr_geo, RED, "col")
     guide_cols = color_hits(arr, v_strip, CYAN, "col")
