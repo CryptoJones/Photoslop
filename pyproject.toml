@@ -51,12 +51,12 @@ mcp = [
     "mcp>=1.2",
 ]
 build = [
-    "pyinstaller==6.16.0",
+    "pyinstaller==6.21.0",
 ]
 security = [
-    "bandit==1.8.6",
+    "bandit==1.9.4",
     "detect-secrets==1.5.0",
-    "pip-audit==2.9.0",
+    "pip-audit==2.10.1",
 ]
 dev = [
     "pytest>=8.0",
