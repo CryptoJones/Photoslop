@@ -22,8 +22,7 @@ class RefineSelectionDialog(QDialog):
         self.setWindowTitle("Refine Selection")
         self._doc = doc
         self._original = doc.selection  # QPainterPath (immutable by copy)
-        self._base_mask = npimage.selection_mask(
-            self._original, doc.size, QPoint(0, 0))
+        self._base_mask = npimage.selection_mask(self._original, doc.size, QPoint(0, 0))
 
         form = QFormLayout(self)
         self.smooth = QSpinBox()
@@ -54,8 +53,7 @@ class RefineSelectionDialog(QDialog):
         self._debounce.start()
 
     def _preview(self) -> None:
-        mask = npimage.refine_mask(
-            self._base_mask, self.smooth.value(), self.expand.value())
+        mask = npimage.refine_mask(self._base_mask, self.smooth.value(), self.expand.value())
         if mask.any():
             self._doc.set_selection(npimage.mask_to_path(mask))
         else:

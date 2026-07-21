@@ -10,15 +10,27 @@ from __future__ import annotations
 import numpy as np
 from PySide6.QtGui import QImage
 
-RAW_EXTENSIONS = (".arw", ".cr2", ".cr3", ".dng", ".nef", ".nrw", ".orf",
-                  ".pef", ".raf", ".rw2", ".srw")
+RAW_EXTENSIONS = (
+    ".arw",
+    ".cr2",
+    ".cr3",
+    ".dng",
+    ".nef",
+    ".nrw",
+    ".orf",
+    ".pef",
+    ".raf",
+    ".rw2",
+    ".srw",
+)
 
 
 class RawSupportError(RuntimeError):
     def __init__(self) -> None:
         super().__init__(
             "Camera-raw support is not installed — pip install photoslop[raw] "
-            "(or: uv pip install rawpy)")
+            "(or: uv pip install rawpy)"
+        )
 
 
 def is_raw_path(path: str) -> bool:
@@ -65,12 +77,9 @@ def _kelvin_rgb(kelvin: float) -> tuple[float, float, float]:
     """Approximate RGB of a black-body at `kelvin` (Tanner Helland fit)."""
     t = max(1000.0, min(40000.0, kelvin)) / 100.0
     r = 255.0 if t <= 66 else 329.7 * ((t - 60.0) ** -0.1332)
-    g = (99.47 * np.log(t) - 161.12 if t <= 66
-         else 288.12 * ((t - 60.0) ** -0.0755))
-    b = (255.0 if t >= 66 else
-         0.0 if t <= 19 else 138.52 * np.log(t - 10.0) - 305.04)
-    return (float(np.clip(r, 1, 255)), float(np.clip(g, 1, 255)),
-            float(np.clip(b, 1, 255)))
+    g = 99.47 * np.log(t) - 161.12 if t <= 66 else 288.12 * ((t - 60.0) ** -0.0755)
+    b = 255.0 if t >= 66 else 0.0 if t <= 19 else 138.52 * np.log(t - 10.0) - 305.04
+    return (float(np.clip(r, 1, 255)), float(np.clip(g, 1, 255)), float(np.clip(b, 1, 255)))
 
 
 def wb_multipliers(temp: float, tint: float) -> list[float]:
@@ -84,22 +93,25 @@ def wb_multipliers(temp: float, tint: float) -> list[float]:
     return [m / lo for m in muls] + [muls[1] / lo]
 
 
-def tone_map(f: np.ndarray, highlights: float, shadows: float
-             ) -> np.ndarray:
+def tone_map(f: np.ndarray, highlights: float, shadows: float) -> np.ndarray:
     """Float [0,1] RGB tone adjustment: highlights weight ~ luma^2,
     shadows weight ~ (1-luma)^2 — monotone and bounded."""
     if not highlights and not shadows:
         return f
-    luma = (0.299 * f[..., 0] + 0.587 * f[..., 1]
-            + 0.114 * f[..., 2])[..., None]
-    factor = (1.0 + (highlights / 100.0) * luma ** 2
-              + (shadows / 100.0) * (1.0 - luma) ** 2)
+    luma = (0.299 * f[..., 0] + 0.587 * f[..., 1] + 0.114 * f[..., 2])[..., None]
+    factor = 1.0 + (highlights / 100.0) * luma**2 + (shadows / 100.0) * (1.0 - luma) ** 2
     return np.clip(f * factor, 0.0, 1.0)
 
 
-def develop_raw(path: str, exposure: float = 0.0, temp: float = 0.0,
-                tint: float = 0.0, highlights: float = 0.0,
-                shadows: float = 0.0, half_size: bool = False) -> QImage:
+def develop_raw(
+    path: str,
+    exposure: float = 0.0,
+    temp: float = 0.0,
+    tint: float = 0.0,
+    highlights: float = 0.0,
+    shadows: float = 0.0,
+    half_size: bool = False,
+) -> QImage:
     """Raw develop stage (DD-007): rawpy decodes at 16 bits, exposure/WB
     happen in the demosaic, tone work happens in float — all transient —
     and the returned layer content is 8-bit."""
@@ -109,7 +121,7 @@ def develop_raw(path: str, exposure: float = 0.0, temp: float = 0.0,
         raise RawSupportError() from exc
     kwargs: dict = {"output_bps": 16, "half_size": half_size}
     if exposure:
-        kwargs["exp_shift"] = float(np.clip(2.0 ** exposure, 0.25, 8.0))
+        kwargs["exp_shift"] = float(np.clip(2.0**exposure, 0.25, 8.0))
         kwargs["no_auto_bright"] = True
     if temp > 0:
         kwargs["user_wb"] = wb_multipliers(temp, tint)

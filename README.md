@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v1.29.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v1.30.0-orange)]()
 
 ---
 
@@ -103,12 +103,13 @@ missing, then starts the app. Any arguments pass straight through to
 
 ### iPadOS
 
-Photoslop v1.29.0 adds a native iPad edition under [`ipados/`](ipados/). It is
+Photoslop v1.30.0 includes a native iPad edition under [`ipados/`](ipados/). It is
 built with SwiftUI and PencilKit because Qt for Python does not support direct
-iOS deployment. The initial iPad edition provides Apple Pencil/finger drawing,
-touch pan and pinch zoom, a native layer stack, Photos/Files import, and PNG
-export. The broader PySide desktop toolset, OpenRaster editing, vector model,
-CLI, and MCP server remain desktop-only in this release.
+iOS deployment. The iPad edition provides Apple Pencil/finger drawing, touch
+pan and pinch zoom, a native layer stack, versioned `.photoslop` package
+documents with iPadOS autosave, document-wide undo/redo, Photos/Files import,
+and off-main PNG export. The broader PySide desktop toolset, OpenRaster editing,
+vector model, CLI, and MCP server remain desktop-only in this release.
 
 Build the unsigned arm64 developer bundle with:
 
@@ -198,13 +199,14 @@ run the server (stdio transport):
 
 ```bash
 pip install "photoslop[mcp]"     # or: uv sync --extra mcp
-photoslop-mcp
+photoslop-mcp --root /path/to/images
 ```
 
 Three tools — `list_operations`, `edit_image` (load/create → ordered pipeline →
-write), and `document_info`. Operations are the CLI's table verbatim, so parity
-is automatic. See [docs/v1/mcp.md](docs/v1/mcp.md) for client-registration and
-examples.
+write), and `document_info`. Paths are confined to the configured root,
+overwrites are denied by default, and network-model/native-plugin operations
+remain local-only. See [docs/v1/mcp.md](docs/v1/mcp.md) for client registration
+and examples.
 
 ## Model backends (bring your own model)
 
@@ -218,7 +220,7 @@ model. Configure any backend under Edit → Options → **Model Backend…**:
   a cloud API in a few lines of Flask and you're in.
 - **pip plugins** — packages can register `photoslop.modeladapter.ModelAdapter`
   subclasses under the `photoslop.model_adapters` entry-point group and they
-  appear in the picker automatically.
+  appear after unsafe plugins are explicitly enabled in Preferences → Security.
 
 ## License
 

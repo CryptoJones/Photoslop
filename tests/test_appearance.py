@@ -35,11 +35,11 @@ def test_legacy_effects_migrate_to_versioned_objects():
         ("stroke", 2, [10, 20, 30, 255]),
     ]
     effects = normalize_effects(legacy)
-    assert [effect["type"] for effect in effects] == [
-        "drop-shadow", "outer-glow", "outline"]
+    assert [effect["type"] for effect in effects] == ["drop-shadow", "outer-glow", "outline"]
     assert all(effect["schema_version"] == 1 and effect["id"] for effect in effects)
     assert [effect["id"] for effect in effects] == [
-        effect["id"] for effect in normalize_effects(legacy)]
+        effect["id"] for effect in normalize_effects(legacy)
+    ]
 
 
 def test_future_effect_fields_are_preserved():
@@ -79,10 +79,8 @@ def test_effects_honor_masks_and_fill_opacity(qapp):
 
 def test_move_tool_translates_cached_text_and_drop_shadow(qapp):
     doc = Document(QSize(240, 120), 72, "move appearance")
-    layer = render_text_layer(
-        "Move", QFont("Sans Serif", 20), QColor("black"), QPoint(20, 20))
-    layer.effects = [new_effect(
-        "drop-shadow", offset_x=5, offset_y=5, blur=4)]
+    layer = render_text_layer("Move", QFont("Sans Serif", 20), QColor("black"), QPoint(20, 20))
+    layer.effects = [new_effect("drop-shadow", offset_x=5, offset_y=5, blur=4)]
     doc.layers = [layer]
     doc.active_index = 0
     editor = SimpleNamespace(snap_layer_offset=lambda _layer, proposed, _mods: proposed)
@@ -124,8 +122,7 @@ def test_appearance_panel_add_duplicate_toggle_reorder_and_delete(qapp):
     panel.effect_kind.setCurrentIndex(panel.effect_kind.findData("inner-shadow"))
     panel.add_effect()
     panel.duplicate_effect()
-    assert [effect["type"] for effect in layer.effects] == [
-        "inner-shadow", "inner-shadow"]
+    assert [effect["type"] for effect in layer.effects] == ["inner-shadow", "inner-shadow"]
     first_id = layer.effects[0]["id"]
     panel.effects.setCurrentRow(0)
     panel.move_effect(1)
@@ -158,8 +155,9 @@ def test_custom_preset_is_versioned_json(qapp, monkeypatch):
     layer.effects = [new_effect("outline")]
     panel = AppearancePanel()
     panel.set_document(doc)
-    monkeypatch.setattr("photoslop.appearancepanel.QInputDialog.getText",
-                        lambda *_args: ("My Style", True))
+    monkeypatch.setattr(
+        "photoslop.appearancepanel.QInputDialog.getText", lambda *_args: ("My Style", True)
+    )
     panel.save_preset()
     saved = json.loads(str(settings.value("appearance/presets/v1")))
     assert saved["My Style"][0]["type"] == "outline"
@@ -181,8 +179,7 @@ def test_svg_exports_text_runs_raster_layers_and_filters(qapp, tmp_path):
     assert "photoslop" in source and "appearances" in source
     restored = load_svg(str(path))
     assert restored.layers[0].text_data["text"] == "Nebraska"
-    assert [effect["type"] for effect in restored.layers[0].effects] == [
-        "drop-shadow", "outline"]
+    assert [effect["type"] for effect in restored.layers[0].effects] == ["drop-shadow", "outline"]
 
 
 def test_svg_round_trips_embedded_raster_with_appearance(qapp, tmp_path):
@@ -199,9 +196,11 @@ def test_svg_round_trips_embedded_raster_with_appearance(qapp, tmp_path):
 
 def test_svg_styled_text_runs_are_valid_and_editable(qapp, tmp_path):
     rich = QTextDocument()
-    rich.setHtml('<span style="color:#ff0000;font-size:24pt;font-weight:700">A</span>'
-                 '<span style="color:#0000ff;font-size:18pt;font-style:italic">B</span>'
-                 '<br>C')
+    rich.setHtml(
+        '<span style="color:#ff0000;font-size:24pt;font-weight:700">A</span>'
+        '<span style="color:#0000ff;font-size:18pt;font-style:italic">B</span>'
+        "<br>C"
+    )
     layer = render_text_document(rich, QPoint(8, 12))
     layer.effects = [new_effect("gradient-overlay"), new_effect("bevel-emboss")]
     doc = Document(QSize(160, 90), 72, "rich svg")

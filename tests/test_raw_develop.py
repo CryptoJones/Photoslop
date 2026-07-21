@@ -33,8 +33,7 @@ class _FakeRaw:
         arr = np.full((20, 30, 3), 20000, dtype=np.uint16)
         arr[:10, :15] = 60000
         if "exp_shift" in kwargs:
-            arr = np.clip(arr.astype(np.float64) * kwargs["exp_shift"],
-                          0, 65535).astype(np.uint16)
+            arr = np.clip(arr.astype(np.float64) * kwargs["exp_shift"], 0, 65535).astype(np.uint16)
         return arr
 
 
@@ -59,20 +58,19 @@ def test_wb_multipliers_directions(qapp):
 def test_tone_map_monotone_and_bounded(qapp):
     hi = np.full((2, 2, 3), 0.9, np.float32)
     lo = np.full((2, 2, 3), 0.1, np.float32)
-    assert tone_map(hi, -50, 0)[0, 0, 0] < 0.9      # recovery pulls down
-    assert tone_map(lo, 0, 50)[0, 0, 0] > 0.1       # shadow lift
-    assert tone_map(hi, 100, 100).max() <= 1.0      # bounded
+    assert tone_map(hi, -50, 0)[0, 0, 0] < 0.9  # recovery pulls down
+    assert tone_map(lo, 0, 50)[0, 0, 0] > 0.1  # shadow lift
+    assert tone_map(hi, 100, 100).max() <= 1.0  # bounded
 
 
 def test_develop_pipeline_16bit_in_8bit_out(qapp, fake_rawpy):
-    img = develop_raw(fake_rawpy, exposure=1.0, temp=6500, tint=10,
-                      highlights=-40, shadows=20)
+    img = develop_raw(fake_rawpy, exposure=1.0, temp=6500, tint=10, highlights=-40, shadows=20)
     assert img.format() == QImage.Format.Format_ARGB32_Premultiplied
     assert (img.width(), img.height()) == (30, 20)
     kwargs = _FakeRaw.last_kwargs
-    assert kwargs["output_bps"] == 16                # DD-007 transient depth
-    assert kwargs["exp_shift"] == 2.0                # +1 EV
-    assert "user_wb" in kwargs                       # temp engaged
+    assert kwargs["output_bps"] == 16  # DD-007 transient depth
+    assert kwargs["exp_shift"] == 2.0  # +1 EV
+    assert "user_wb" in kwargs  # temp engaged
     bright = img.pixelColor(5, 5)
     gray = img.pixelColor(25, 15)
     assert bright.red() > gray.red()
@@ -83,21 +81,19 @@ def test_cli_raw_develop_and_errors(qapp, fake_rawpy, tmp_path, monkeypatch):
 
     assert fake_rawpy.endswith(".dng") and ".dng" in RAW_EXTENSIONS
     out = str(tmp_path / "dev.png")
-    monkeypatch.setattr("photoslop.io_raw.load_raw",
-                        lambda p: develop_raw(p))
-    assert cli.main([fake_rawpy, "--raw-develop",
-                     "exposure=1,highlights=-30", "--output", out]) == 0
+    monkeypatch.setattr("photoslop.io_raw.load_raw", lambda p: develop_raw(p))
+    assert (
+        cli.main([fake_rawpy, "--raw-develop", "exposure=1,highlights=-30", "--output", out]) == 0
+    )
     assert QImage(out).width() == 30
     # non-raw input is a clean usage error
     png = str(tmp_path / "x.png")
     QImage(8, 8, QImage.Format.Format_ARGB32_Premultiplied).save(png)
     with pytest.raises(SystemExit) as exc:
-        cli.main([png, "--raw-develop", "exposure=1",
-                  "--output", str(tmp_path / "n.png")])
+        cli.main([png, "--raw-develop", "exposure=1", "--output", str(tmp_path / "n.png")])
     assert exc.value.code == 2
     with pytest.raises(SystemExit) as exc2:
-        cli.main([fake_rawpy, "--raw-develop", "exposure=99",
-                  "--output", str(tmp_path / "n2.png")])
+        cli.main([fake_rawpy, "--raw-develop", "exposure=99", "--output", str(tmp_path / "n2.png")])
     assert exc2.value.code == 2
 
 
@@ -121,8 +117,7 @@ def test_lens_gating_and_errors(qapp, tmp_path, monkeypatch):
         lens.correct_lens(img, "whatever.jpg")
 
 
-@pytest.mark.skipif(not lens.lens_available(),
-                    reason="photoslop[lens] not installed")
+@pytest.mark.skipif(not lens.lens_available(), reason="photoslop[lens] not installed")
 def test_lens_no_exif_is_clean_error(qapp, tmp_path):
     img = QImage(8, 8, QImage.Format.Format_ARGB32_Premultiplied)
     img.fill(QColor(1, 2, 3))
@@ -142,6 +137,7 @@ class _DenoiseHandler(BaseHTTPRequestHandler):
         clean.fill(QColor(7, 7, 200))
         data = json.dumps({"image": image_to_png_b64(clean)}).encode()
         self.send_response(200)
+        self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -156,14 +152,37 @@ def test_cli_denoise_model_against_live_server(qapp, tmp_path):
     try:
         url = f"http://127.0.0.1:{server.server_port}/photoslop"
         out = str(tmp_path / "dn.png")
-        assert cli.main(["--new", "12x10", "--fill", "90,90,90",
-                         "--model-url", url, "--denoise-model", "40",
-                         "--output", out]) == 0
+        assert (
+            cli.main(
+                [
+                    "--new",
+                    "12x10",
+                    "--fill",
+                    "90,90,90",
+                    "--model-url",
+                    url,
+                    "--denoise-model",
+                    "40",
+                    "--output",
+                    out,
+                ]
+            )
+            == 0
+        )
         assert QImage(out).pixelColor(6, 5) == QColor(7, 7, 200)
         with pytest.raises(SystemExit) as exc:
-            cli.main(["--new", "8x8", "--model-url", url,
-                      "--denoise-model", "500",
-                      "--output", str(tmp_path / "n.png")])
+            cli.main(
+                [
+                    "--new",
+                    "8x8",
+                    "--model-url",
+                    url,
+                    "--denoise-model",
+                    "500",
+                    "--output",
+                    str(tmp_path / "n.png"),
+                ]
+            )
         assert exc.value.code == 2
     finally:
         server.shutdown()

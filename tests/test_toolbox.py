@@ -20,8 +20,7 @@ def test_registry_covers_every_interactive_toolbar_tool(qapp):
 
 def test_svg_icons_supply_normal_disabled_and_hidpi_pixmaps(qapp):
     icon = svg_icon("brush")
-    for mode in (QIcon.Mode.Normal, QIcon.Mode.Active,
-                 QIcon.Mode.Selected, QIcon.Mode.Disabled):
+    for mode in (QIcon.Mode.Normal, QIcon.Mode.Active, QIcon.Mode.Selected, QIcon.Mode.Disabled):
         pm = icon.pixmap(24, 24, mode)
         assert not pm.isNull()
         assert pm.devicePixelRatio() >= 1.0
@@ -35,8 +34,11 @@ def test_toolbox_groups_every_action_into_keyboard_named_flyouts(qapp):
         assert button.accessibleName()
         assert button.menu().accessibleName()
         ids = {spec.tool_id for spec in TOOL_SPECS if spec.group == group_id}
-        grouped = {tool_id for tool_id, action in win._tool_actions.items()
-                   if action in button.menu().actions()}
+        grouped = {
+            tool_id
+            for tool_id, action in win._tool_actions.items()
+            if action in button.menu().actions()
+        }
         assert grouped == ids
         action_ids |= grouped
     assert action_ids == set(TOOL_SPEC_BY_ID)
@@ -55,12 +57,16 @@ def test_density_modes_are_persisted_and_change_button_style(qapp):
     win = MainWindow()
     win._set_toolbox_density("labels")
     assert win.settings.value("toolbox/density") == "labels"
-    assert all(button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-               for button in win._tool_group_buttons.values())
+    assert all(
+        button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        for button in win._tool_group_buttons.values()
+    )
     win._set_toolbox_density("compact")
     assert win._tools_bar.iconSize().width() == 20
-    assert all(button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
-               for button in win._tool_group_buttons.values())
+    assert all(
+        button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
+        for button in win._tool_group_buttons.values()
+    )
 
 
 def test_layer_panel_uses_stable_named_icons_instead_of_font_glyphs(qapp):

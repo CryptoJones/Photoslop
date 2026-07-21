@@ -62,8 +62,9 @@ def _tolerance_mask(arr: np.ndarray, target: int, tolerance: int) -> np.ndarray:
 def _mask_bbox(mask: np.ndarray) -> QRect:
     rows = np.flatnonzero(mask.any(axis=1))
     cols = np.flatnonzero(mask.any(axis=0))
-    return QRect(int(cols[0]), int(rows[0]),
-                 int(cols[-1] - cols[0] + 1), int(rows[-1] - rows[0] + 1))
+    return QRect(
+        int(cols[0]), int(rows[0]), int(cols[-1] - cols[0] + 1), int(rows[-1] - rows[0] + 1)
+    )
 
 
 def global_mask(
@@ -177,15 +178,19 @@ def heal_patch(src: QImage, dst: QImage) -> QImage:
     s, d = s[:h, :w], d[:h, :w]
 
     def channels(arr):
-        return [((arr >> np.uint32(k)) & 0xFF).astype(np.float32)
-                for k in (16, 8, 0)]
+        return [((arr >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (16, 8, 0)]
 
     def blur(c):
         out = c
         for _ in range(3):
             padded = np.pad(out, 1, mode="edge")
-            out = (padded[:-2, 1:-1] + padded[2:, 1:-1] + padded[1:-1, :-2]
-                   + padded[1:-1, 2:] + padded[1:-1, 1:-1]) / 5.0
+            out = (
+                padded[:-2, 1:-1]
+                + padded[2:, 1:-1]
+                + padded[1:-1, :-2]
+                + padded[1:-1, 2:]
+                + padded[1:-1, 1:-1]
+            ) / 5.0
         return out
 
     healed = []
@@ -199,8 +204,7 @@ def heal_patch(src: QImage, dst: QImage) -> QImage:
     g = np.minimum(g, alpha)
     b = np.minimum(b, alpha)
     out = QImage(w, h, src.format())
-    view_u32(out)[:] = ((alpha << np.uint32(24)) | (r << np.uint32(16))
-                        | (g << np.uint32(8)) | b)
+    view_u32(out)[:] = (alpha << np.uint32(24)) | (r << np.uint32(16)) | (g << np.uint32(8)) | b
     return out
 
 
@@ -211,33 +215,36 @@ def drop_shadow_image(img: QImage, color, blur: int) -> QImage:
     h, w = img.height(), img.width()
     alpha = np.zeros((h + 2 * pad, w + 2 * pad), dtype=np.float32)
     src = view_u32(img)
-    alpha[pad:pad + h, pad:pad + w] = (src >> np.uint32(24)).astype(np.float32)
+    alpha[pad : pad + h, pad : pad + w] = (src >> np.uint32(24)).astype(np.float32)
 
     if pad:
         r = max(1, pad // 2)
         for _ in range(3):  # triple box blur ~ gaussian
             k = 2 * r + 1
             csum = np.cumsum(alpha, axis=0)
-            alpha = (np.vstack((csum[r:], np.repeat(csum[-1:], r, axis=0)))
-                     - np.vstack((np.zeros((r + 1, alpha.shape[1]), np.float32),
-                                  csum[:-r - 1]))) / k
+            alpha = (
+                np.vstack((csum[r:], np.repeat(csum[-1:], r, axis=0)))
+                - np.vstack((np.zeros((r + 1, alpha.shape[1]), np.float32), csum[: -r - 1]))
+            ) / k
             csum = np.cumsum(alpha, axis=1)
-            alpha = (np.hstack((csum[:, r:], np.repeat(csum[:, -1:], r, axis=1)))
-                     - np.hstack((np.zeros((alpha.shape[0], r + 1), np.float32),
-                                  csum[:, :-r - 1]))) / k
+            alpha = (
+                np.hstack((csum[:, r:], np.repeat(csum[:, -1:], r, axis=1)))
+                - np.hstack((np.zeros((alpha.shape[0], r + 1), np.float32), csum[:, : -r - 1]))
+            ) / k
 
     a = np.clip(alpha * (color.alpha() / 255.0), 0, 255).astype(np.uint32)
     scale = a / 255.0
     out = QImage(alpha.shape[1], alpha.shape[0], img.format())
-    view_u32(out)[:] = ((a << np.uint32(24))
-                        | ((color.red() * scale).astype(np.uint32) << np.uint32(16))
-                        | ((color.green() * scale).astype(np.uint32) << np.uint32(8))
-                        | (color.blue() * scale).astype(np.uint32))
+    view_u32(out)[:] = (
+        (a << np.uint32(24))
+        | ((color.red() * scale).astype(np.uint32) << np.uint32(16))
+        | ((color.green() * scale).astype(np.uint32) << np.uint32(8))
+        | (color.blue() * scale).astype(np.uint32)
+    )
     return out
 
 
-def warp_push(img: QImage, cx: float, cy: float, radius: float,
-              dx: float, dy: float) -> QRect:
+def warp_push(img: QImage, cx: float, cy: float, radius: float, dx: float, dy: float) -> QRect:
     """Liquify push: pixels inside the brush shift along (dx, dy) with a
     smooth falloff — bilinear backward resample over the local region only.
     Returns the dirty rect."""
@@ -266,8 +273,9 @@ def warp_push(img: QImage, cx: float, cy: float, radius: float,
     ty = (sy - fy0)[..., None]
 
     def planes(a):
-        return np.stack([((a >> np.uint32(k)) & 0xFF).astype(np.float32)
-                         for k in (24, 16, 8, 0)], axis=-1)
+        return np.stack(
+            [((a >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (24, 16, 8, 0)], axis=-1
+        )
 
     p00 = planes(sub[fy0, fx0])
     p01 = planes(sub[fy0, fx1])
@@ -276,8 +284,7 @@ def warp_push(img: QImage, cx: float, cy: float, radius: float,
     top = p00 * (1 - tx) + p01 * tx
     bot = p10 * (1 - tx) + p11 * tx
     out = top * (1 - ty) + bot * ty
-    a, r, g, b = [np.clip(out[..., i] + 0.5, 0, 255).astype(np.uint32)
-                  for i in range(4)]
+    a, r, g, b = [np.clip(out[..., i] + 0.5, 0, 255).astype(np.uint32) for i in range(4)]
     packed = (a << np.uint32(24)) | (r << np.uint32(16)) | (g << np.uint32(8)) | b
     changed = weight > 0.001
     target = arr[y0:y1, x0:x1]
@@ -317,41 +324,40 @@ def puppet_warp(img: QImage, pins: list) -> QImage:
     ty = (sy - fy0)[..., None]
 
     def planes(a):
-        return np.stack([((a >> np.uint32(k)) & 0xFF).astype(np.float32)
-                         for k in (24, 16, 8, 0)], axis=-1)
+        return np.stack(
+            [((a >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (24, 16, 8, 0)], axis=-1
+        )
 
     top = planes(src[fy0, fx0]) * (1 - tx) + planes(src[fy0, fx1]) * tx
     bot = planes(src[fy1, fx0]) * (1 - tx) + planes(src[fy1, fx1]) * tx
     out_p = top * (1 - ty) + bot * ty
-    a, r, g, b = [np.clip(out_p[..., i] + 0.5, 0, 255).astype(np.uint32)
-                  for i in range(4)]
+    a, r, g, b = [np.clip(out_p[..., i] + 0.5, 0, 255).astype(np.uint32) for i in range(4)]
     out = QImage(w, h, img.format())
-    view_u32(out)[:] = ((a << np.uint32(24)) | (r << np.uint32(16))
-                        | (g << np.uint32(8)) | b)
+    view_u32(out)[:] = (a << np.uint32(24)) | (r << np.uint32(16)) | (g << np.uint32(8)) | b
     return out
 
 
 def _box_blur_plane(c: np.ndarray, r: int) -> np.ndarray:
     k = 2 * r + 1
     csum = np.cumsum(c, axis=0)
-    c = (np.vstack((csum[r:], np.repeat(csum[-1:], r, axis=0)))
-         - np.vstack((np.zeros((r + 1, c.shape[1]), np.float32),
-                      csum[:-r - 1]))) / k
+    c = (
+        np.vstack((csum[r:], np.repeat(csum[-1:], r, axis=0)))
+        - np.vstack((np.zeros((r + 1, c.shape[1]), np.float32), csum[: -r - 1]))
+    ) / k
     csum = np.cumsum(c, axis=1)
-    c = (np.hstack((csum[:, r:], np.repeat(csum[:, -1:], r, axis=1)))
-         - np.hstack((np.zeros((c.shape[0], r + 1), np.float32),
-                      csum[:, :-r - 1]))) / k
+    c = (
+        np.hstack((csum[:, r:], np.repeat(csum[:, -1:], r, axis=1)))
+        - np.hstack((np.zeros((c.shape[0], r + 1), np.float32), csum[:, : -r - 1]))
+    ) / k
     return c
 
 
-def gaussian_blur(img: QImage, radius: int,
-                  mask: np.ndarray | None = None) -> None:
+def gaussian_blur(img: QImage, radius: int, mask: np.ndarray | None = None) -> None:
     """Approximate gaussian blur (triple box blur) on all four premultiplied
     channels, in place; when `mask` is given only masked pixels change."""
     r = max(1, int(radius) // 2 + 1)
     arr = view_u32(img)
-    planes = [((arr >> np.uint32(k)) & 0xFF).astype(np.float32)
-              for k in (24, 16, 8, 0)]
+    planes = [((arr >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (24, 16, 8, 0)]
     blurred = planes
     for _ in range(3):
         blurred = [_box_blur_plane(c, r) for c in blurred]
@@ -363,13 +369,11 @@ def gaussian_blur(img: QImage, radius: int,
         arr[mask] = out[mask]
 
 
-def unsharp_mask(img: QImage, radius: int, amount: float,
-                 mask: np.ndarray | None = None) -> None:
+def unsharp_mask(img: QImage, radius: int, amount: float, mask: np.ndarray | None = None) -> None:
     """Sharpen: original + amount * (original - blur), premultiplied-safe."""
     r = max(1, int(radius) // 2 + 1)
     arr = view_u32(img)
-    planes = [((arr >> np.uint32(k)) & 0xFF).astype(np.float32)
-              for k in (24, 16, 8, 0)]
+    planes = [((arr >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (24, 16, 8, 0)]
     sharpened = []
     for i, c in enumerate(planes):
         blur = c
@@ -378,8 +382,7 @@ def unsharp_mask(img: QImage, radius: int, amount: float,
         if i == 0:
             sharpened.append(c)  # alpha untouched
         else:
-            sharpened.append(np.minimum(
-                np.clip(c + amount * (c - blur), 0, 255), planes[0]))
+            sharpened.append(np.minimum(np.clip(c + amount * (c - blur), 0, 255), planes[0]))
     a, rr, g, b = [np.clip(c + 0.5, 0, 255).astype(np.uint32) for c in sharpened]
     out = (a << np.uint32(24)) | (rr << np.uint32(16)) | (g << np.uint32(8)) | b
     if mask is None:
@@ -388,8 +391,7 @@ def unsharp_mask(img: QImage, radius: int, amount: float,
         arr[mask] = out[mask]
 
 
-def livewire_path(img: QImage, a, b, margin: int = 16,
-                  max_area: int = 60000) -> list:
+def livewire_path(img: QImage, a, b, margin: int = 16, max_area: int = 60000) -> list:
     """Minimum-cost 8-connected path from a to b (layer coords) where cost is
     low along strong edges — the magnetic-lasso livewire. Runs Dijkstra in a
     corridor around the endpoints; falls back to a straight segment when the
@@ -495,19 +497,23 @@ def patch_heal(img: QImage, mask: np.ndarray, dx: int, dy: int) -> QRect:
         out = c
         for _ in range(3):
             padded = np.pad(out, 1, mode="edge")
-            out = (padded[:-2, 1:-1] + padded[2:, 1:-1] + padded[1:-1, :-2]
-                   + padded[1:-1, 2:] + padded[1:-1, 1:-1]) / 5.0
+            out = (
+                padded[:-2, 1:-1]
+                + padded[2:, 1:-1]
+                + padded[1:-1, :-2]
+                + padded[1:-1, 2:]
+                + padded[1:-1, 1:-1]
+            ) / 5.0
         return out
 
     alpha = (dst >> np.uint32(24)) & 0xFF
     healed = []
     for sc, tc in zip(channels(src), channels(tone), strict=True):
-        healed.append(np.minimum(
-            np.clip(sc - blur(sc) + blur(tc), 0, 255).astype(np.uint32),
-            alpha))
+        healed.append(
+            np.minimum(np.clip(sc - blur(sc) + blur(tc), 0, 255).astype(np.uint32), alpha)
+        )
     r, g, b = healed
-    out = ((alpha << np.uint32(24)) | (r << np.uint32(16))
-           | (g << np.uint32(8)) | b)
+    out = (alpha << np.uint32(24)) | (r << np.uint32(16)) | (g << np.uint32(8)) | b
     dst[hole] = out[hole]
     return QRect(int(x0), int(y0), int(x1 - x0), int(y1 - y0))
 
@@ -519,7 +525,7 @@ def stroke_outline_image(img: QImage, color, width: int) -> QImage:
     h, w = img.height(), img.width()
     solid = np.zeros((h + 2 * pad, w + 2 * pad), dtype=bool)
     src = view_u32(img)
-    solid[pad:pad + h, pad:pad + w] = (src >> np.uint32(24)) > 12
+    solid[pad : pad + h, pad : pad + w] = (src >> np.uint32(24)) > 12
     grown = solid.copy()
     for _ in range(pad):
         grown = _dilate(grown)
@@ -528,10 +534,12 @@ def stroke_outline_image(img: QImage, color, width: int) -> QImage:
     a = np.where(ring, np.uint32(color.alpha()), np.uint32(0))
     scale = color.alpha() / 255.0
     out = QImage(solid.shape[1], solid.shape[0], img.format())
-    view_u32(out)[:] = ((a << np.uint32(24))
-                        | (np.where(ring, np.uint32(int(color.red() * scale)), 0) << np.uint32(16))
-                        | (np.where(ring, np.uint32(int(color.green() * scale)), 0) << np.uint32(8))
-                        | np.where(ring, np.uint32(int(color.blue() * scale)), 0))
+    view_u32(out)[:] = (
+        (a << np.uint32(24))
+        | (np.where(ring, np.uint32(int(color.red() * scale)), 0) << np.uint32(16))
+        | (np.where(ring, np.uint32(int(color.green() * scale)), 0) << np.uint32(8))
+        | np.where(ring, np.uint32(int(color.blue() * scale)), 0)
+    )
     return out
 
 
@@ -560,7 +568,7 @@ def _min_seam(arr: np.ndarray) -> np.ndarray:
     for y in range(h - 2, -1, -1):
         x = seam[y + 1]
         x0 = max(0, x - 1)
-        seam[y] = x0 + int(np.argmin(m[y, x0:min(w, x + 2)]))
+        seam[y] = x0 + int(np.argmin(m[y, x0 : min(w, x + 2)]))
     return seam
 
 
@@ -650,14 +658,15 @@ def inpaint_diffuse(img: QImage, mask: np.ndarray, blend_passes: int = 3) -> QRe
 
     arr = view_u32(img)[y0:y1, x0:x1]
     hole = mask[y0:y1, x0:x1].copy()
-    channels = [((arr >> np.uint32(shift)) & 0xFF).astype(np.float32)
-                for shift in (24, 16, 8, 0)]
+    channels = [((arr >> np.uint32(shift)) & 0xFF).astype(np.float32) for shift in (24, 16, 8, 0)]
     known = ~hole
 
-    shifts = (((slice(1, None), slice(None)), (slice(None, -1), slice(None))),
-              ((slice(None, -1), slice(None)), (slice(1, None), slice(None))),
-              ((slice(None), slice(1, None)), (slice(None), slice(None, -1))),
-              ((slice(None), slice(None, -1)), (slice(None), slice(1, None))))
+    shifts = (
+        ((slice(1, None), slice(None)), (slice(None, -1), slice(None))),
+        ((slice(None, -1), slice(None)), (slice(1, None), slice(None))),
+        ((slice(None), slice(1, None)), (slice(None), slice(None, -1))),
+        ((slice(None), slice(None, -1)), (slice(None), slice(1, None))),
+    )
     while not known.all():
         cnt = np.zeros_like(channels[0])
         for src, dst in shifts:
@@ -676,8 +685,9 @@ def inpaint_diffuse(img: QImage, mask: np.ndarray, blend_passes: int = 3) -> QRe
     for _ in range(blend_passes):  # soften the fill against its surroundings
         for c in channels:
             blur = c.copy()
-            blur[1:-1, 1:-1] = (c[:-2, 1:-1] + c[2:, 1:-1] + c[1:-1, :-2]
-                                + c[1:-1, 2:] + c[1:-1, 1:-1]) / 5.0
+            blur[1:-1, 1:-1] = (
+                c[:-2, 1:-1] + c[2:, 1:-1] + c[1:-1, :-2] + c[1:-1, 2:] + c[1:-1, 1:-1]
+            ) / 5.0
             c[healed] = blur[healed]
 
     a, r, g, b = [np.clip(c + 0.5, 0, 255).astype(np.uint32) for c in channels]
@@ -686,19 +696,19 @@ def inpaint_diffuse(img: QImage, mask: np.ndarray, blend_passes: int = 3) -> QRe
     return QRect(int(x0), int(y0), int(x1 - x0), int(y1 - y0))
 
 
-def blend_by_weights(filtered: QImage, original: QImage,
-                     weights: np.ndarray) -> None:
+def blend_by_weights(filtered: QImage, original: QImage, weights: np.ndarray) -> None:
     """filtered = original*(1-w) + filtered*w, per premultiplied channel."""
     f = view_u32(filtered)
     o = view_u32(original)
     w = weights[..., None]
-    fp = np.stack([((f >> np.uint32(k)) & 0xFF).astype(np.float32)
-                   for k in (24, 16, 8, 0)], axis=-1)
-    op = np.stack([((o >> np.uint32(k)) & 0xFF).astype(np.float32)
-                   for k in (24, 16, 8, 0)], axis=-1)
+    fp = np.stack(
+        [((f >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (24, 16, 8, 0)], axis=-1
+    )
+    op = np.stack(
+        [((o >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (24, 16, 8, 0)], axis=-1
+    )
     out = op * (1.0 - w) + fp * w
-    a, r, g, b = [np.clip(out[..., i] + 0.5, 0, 255).astype(np.uint32)
-                  for i in range(4)]
+    a, r, g, b = [np.clip(out[..., i] + 0.5, 0, 255).astype(np.uint32) for i in range(4)]
     f[:] = (a << np.uint32(24)) | (r << np.uint32(16)) | (g << np.uint32(8)) | b
 
 
@@ -768,8 +778,7 @@ def mask_to_path(mask: np.ndarray, offset: QPoint | None = None) -> QPainterPath
         for span in list(open_bands):
             y0, last = open_bands[span]
             if span not in spans or y != last + 1:
-                rects.append(QRect(span[0] + ox, y0 + oy,
-                                   span[1] - span[0] + 1, last - y0 + 1))
+                rects.append(QRect(span[0] + ox, y0 + oy, span[1] - span[0] + 1, last - y0 + 1))
                 del open_bands[span]
         for span in spans:
             if span in open_bands:

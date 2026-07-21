@@ -17,7 +17,11 @@ CYAN = (0, 200, 255)
 
 
 def window_pixels(win) -> np.ndarray:
-    img = win.grab().toImage().convertToFormat(QImage.Format.Format_RGB888)
+    # Render into a DPR-1 image so logical widget coordinates remain pixel
+    # coordinates even when the host desktop uses display scaling.
+    img = QImage(win.size(), QImage.Format.Format_RGB888)
+    img.fill(QColor("black"))
+    win.render(img)
     w, h, bpl = img.width(), img.height(), img.bytesPerLine()
     arr = np.frombuffer(img.constBits(), np.uint8, count=h * bpl).reshape(h, bpl)
     return arr[:, : w * 3].reshape(h, w, 3).copy()
@@ -25,6 +29,8 @@ def window_pixels(win) -> np.ndarray:
 
 def color_hits(arr, region, color, axis, tol=40):
     x0, y0, x1, y1 = region
+    x0, y0 = max(0, x0), max(0, y0)
+    x1, y1 = min(arr.shape[1], x1), min(arr.shape[0], y1)
     sub = arr[y0:y1, x0:x1].astype(int)
     mask = (np.abs(sub - np.array(color)) <= tol).all(axis=2)
     idx = np.flatnonzero(mask.any(axis=0 if axis == "col" else 1))
@@ -50,8 +56,14 @@ def test_hairline_continuous_with_guide(qapp, zoom):
     gp = QPointF(canvas.mapToGlobal(wpt.toPoint()))
     QApplication.sendEvent(
         canvas,
-        QMouseEvent(QEvent.Type.MouseMove, wpt, gp, Qt.MouseButton.NoButton,
-                    Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier),
+        QMouseEvent(
+            QEvent.Type.MouseMove,
+            wpt,
+            gp,
+            Qt.MouseButton.NoButton,
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+        ),
     )
     QApplication.processEvents()
     arr = window_pixels(win)
@@ -62,10 +74,20 @@ def test_hairline_continuous_with_guide(qapp, zoom):
     vr_geo = (vr.x(), vr.y(), vr.x() + editor.vruler.width(), vr.y() + editor.vruler.height())
     cv = canvas.mapTo(win, QPoint(0, 0))
     cv_geo = (cv.x(), cv.y(), cv.x() + canvas.width(), cv.y() + canvas.height())
+    viewport = editor.scroll.viewport()
+    vp = viewport.mapTo(win, QPoint(0, 0))
+    vp_geo = (vp.x(), vp.y(), vp.x() + viewport.width(), vp.y() + viewport.height())
+    visible = (
+        max(cv_geo[0], vp_geo[0]),
+        max(cv_geo[1], vp_geo[1]),
+        min(cv_geo[2], vp_geo[2]),
+        min(cv_geo[3], vp_geo[3]),
+    )
 
-    # strips that contain only one of the two guides
-    v_strip = (cv_geo[0], cv_geo[1] + 4, cv_geo[2], cv_geo[1] + 40)
-    h_strip = (cv_geo[0] + 4, cv_geo[1], cv_geo[0] + 40, cv_geo[3])
+    # Visible strips that contain only one of the two guides. At high zoom the
+    # fixed-size canvas extends beneath the scroll area's clipped frame.
+    v_strip = (visible[0], visible[1] + 4, visible[2], min(visible[1] + 40, visible[3]))
+    h_strip = (visible[0] + 4, visible[1], min(visible[0] + 40, visible[2]), visible[3])
 
     marker_cols = color_hits(arr, hr_geo, RED, "col")
     guide_cols = color_hits(arr, v_strip, CYAN, "col")

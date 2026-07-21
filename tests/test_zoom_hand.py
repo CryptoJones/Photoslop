@@ -57,8 +57,7 @@ def test_zoom_tool_click_and_alt_click(qapp):
 
     tool.press(editor.doc, canvas, QPointF(100, 100), _Ev())
     assert canvas.zoom > start
-    tool.press(editor.doc, canvas, QPointF(100, 100),
-               _Ev(mods=Qt.KeyboardModifier.AltModifier))
+    tool.press(editor.doc, canvas, QPointF(100, 100), _Ev(mods=Qt.KeyboardModifier.AltModifier))
     assert canvas.zoom == start  # one step up, one step down
 
 

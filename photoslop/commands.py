@@ -60,6 +60,15 @@ class TileRecorder:
             return None
         return TileCommand(self.doc, self.layer, tiles, text)
 
+    def restore(self) -> None:
+        """Restore every captured tile when an in-progress gesture is cancelled."""
+        dirty = QRect()
+        for tile_rect, before in self.before.values():
+            _blit(self.layer.image, tile_rect.topLeft(), before)
+            dirty = dirty.united(tile_rect)
+        if not dirty.isEmpty():
+            self.doc.notify_pixels(dirty.translated(self.layer.offset))
+
 
 class TileCommand(QUndoCommand):
     """Before/after pixel tiles for one paint gesture. Pixels were already
@@ -139,7 +148,8 @@ class RemoveLayerCommand(QUndoCommand):
         self.layer = self.doc.take_layer(self.index)
 
     def undo(self) -> None:
-        assert self.layer is not None
+        if self.layer is None:
+            raise RuntimeError("cannot undo layer removal before it was applied")
         self.doc.insert_layer(self.index, self.layer)
 
 
@@ -189,6 +199,56 @@ class SetLayerOffsetCommand(QUndoCommand):
         self._apply(self.old)
 
 
+class SetLayerPropertyCommand(QUndoCommand):
+    """Undo one layer property edit; consecutive opacity edits merge."""
+
+    _TEXT = {
+        "name": "Rename Layer",
+        "visible": "Layer Visibility",
+        "opacity": "Layer Opacity",
+        "blend_mode": "Layer Blend Mode",
+    }
+    _VISUAL = frozenset({"visible", "opacity", "blend_mode"})
+
+    def __init__(self, doc: Document, layer: Layer, prop: str, value) -> None:
+        if prop not in self._TEXT:
+            raise ValueError(f"Unsupported layer property: {prop}")
+        super().__init__(self._TEXT[prop])
+        self.doc = doc
+        self.layer = layer
+        self.prop = prop
+        self.old = getattr(layer, prop)
+        self.new = value
+
+    def _apply(self, value) -> None:
+        if not any(candidate is self.layer for candidate in self.doc.layers):
+            return
+        setattr(self.layer, self.prop, value)
+        if self.prop in self._VISUAL:
+            self.doc.notify_pixels(self.layer.bounds())
+        self.doc.notify_structure()
+
+    def redo(self) -> None:
+        self._apply(self.new)
+
+    def undo(self) -> None:
+        self._apply(self.old)
+
+    def id(self) -> int:
+        return 0x4F504143 if self.prop == "opacity" else -1  # "OPAC"
+
+    def mergeWith(self, other) -> bool:
+        if (
+            not isinstance(other, SetLayerPropertyCommand)
+            or other.doc is not self.doc
+            or other.layer is not self.layer
+            or other.prop != self.prop
+        ):
+            return False
+        self.new = other.new
+        return True
+
+
 class MergeDownCommand(QUndoCommand):
     def __init__(self, doc: Document, index: int):
         super().__init__("Merge Down")
@@ -222,7 +282,8 @@ class MergeDownCommand(QUndoCommand):
 
     def undo(self) -> None:
         doc = self.doc
-        assert self.upper is not None and self.old_lower is not None
+        if self.upper is None or self.old_lower is None:
+            raise RuntimeError("cannot undo merge before it was applied")
         lower = doc.layers[self.index - 1]
         dirty = lower.bounds()
         lower.image, lower.offset, lower.opacity = self.old_lower
@@ -233,8 +294,15 @@ class MergeDownCommand(QUndoCommand):
 class SetLayerStyleCommand(QUndoCommand):
     """Swap a layer's live effects list and/or fill opacity."""
 
-    def __init__(self, doc, layer, effects: list, fill_opacity: float,
-                 text: str = "Layer Style", merge_key=None) -> None:
+    def __init__(
+        self,
+        doc,
+        layer,
+        effects: list,
+        fill_opacity: float,
+        text: str = "Layer Style",
+        merge_key=None,
+    ) -> None:
         super().__init__(text)
         self._doc = doc
         self._layer = layer
@@ -261,9 +329,12 @@ class SetLayerStyleCommand(QUndoCommand):
         return 0xA550 if self._merge_key is not None else -1
 
     def mergeWith(self, other) -> bool:
-        if (not isinstance(other, SetLayerStyleCommand)
-                or self._doc is not other._doc or self._layer is not other._layer
-                or self._merge_key != other._merge_key):
+        if (
+            not isinstance(other, SetLayerStyleCommand)
+            or self._doc is not other._doc
+            or self._layer is not other._layer
+            or self._merge_key != other._merge_key
+        ):
             return False
         self._new = deepcopy(other._new)
         return True
@@ -272,15 +343,18 @@ class SetLayerStyleCommand(QUndoCommand):
 class EditVectorLayerCommand(QUndoCommand):
     """Replace a vector layer's rendered content and geometry — one step."""
 
-    def __init__(self, doc: Document, layer: Layer, rendered: Layer,
-                 text: str = "Edit Shape") -> None:
+    def __init__(
+        self, doc: Document, layer: Layer, rendered: Layer, text: str = "Edit Shape"
+    ) -> None:
         super().__init__(text)
         self._doc = doc
         self._layer = layer
-        self._old = (QImage(layer.image), QPoint(layer.offset),
-                     deepcopy(layer.vector_data or {}))
-        self._new = (QImage(rendered.image), QPoint(rendered.offset),
-                     deepcopy(rendered.vector_data or {}))
+        self._old = (QImage(layer.image), QPoint(layer.offset), deepcopy(layer.vector_data or {}))
+        self._new = (
+            QImage(rendered.image),
+            QPoint(rendered.offset),
+            deepcopy(rendered.vector_data or {}),
+        )
 
     def _apply(self, state) -> None:
         image, offset, data = state
@@ -301,17 +375,28 @@ class EditVectorLayerCommand(QUndoCommand):
 class EditTextLayerCommand(QUndoCommand):
     """Replace a text layer's rendered content and remembered text data."""
 
-    def __init__(self, doc: Document, layer: Layer, rendered: Layer,
-                 text: str = "Edit Text") -> None:
+    def __init__(
+        self, doc: Document, layer: Layer, rendered: Layer, text: str = "Edit Text"
+    ) -> None:
         super().__init__(text)
         self._doc = doc
         self._layer = layer
-        self._old = (QImage(layer.image), QPoint(layer.offset), layer.name,
-                     dict(layer.text_data or {}), deepcopy(layer.effects),
-                     layer.fill_opacity)
-        self._new = (QImage(rendered.image), QPoint(rendered.offset),
-                     rendered.name, dict(rendered.text_data or {}),
-                     deepcopy(rendered.effects), rendered.fill_opacity)
+        self._old = (
+            QImage(layer.image),
+            QPoint(layer.offset),
+            layer.name,
+            dict(layer.text_data or {}),
+            deepcopy(layer.effects),
+            layer.fill_opacity,
+        )
+        self._new = (
+            QImage(rendered.image),
+            QPoint(rendered.offset),
+            rendered.name,
+            dict(rendered.text_data or {}),
+            deepcopy(rendered.effects),
+            rendered.fill_opacity,
+        )
 
     def _apply(self, state) -> None:
         image, offset, name, data, effects, fill_opacity = state
@@ -335,8 +420,9 @@ class EditTextLayerCommand(QUndoCommand):
 class SetLayerMaskCommand(QUndoCommand):
     """Add, replace, or delete a layer mask (new_mask=None deletes)."""
 
-    def __init__(self, doc: Document, layer: Layer, new_mask: QImage | None,
-                 text: str = "Layer Mask"):
+    def __init__(
+        self, doc: Document, layer: Layer, new_mask: QImage | None, text: str = "Layer Mask"
+    ):
         super().__init__(text)
         self.doc, self.layer = doc, layer
         self.old_mask = QImage(layer.mask) if layer.mask is not None else None
@@ -490,8 +576,9 @@ class ArbitraryRotateCommand(QUndoCommand):
         self.angle = float(angle_deg)
         self.old_size = QSize(doc.size)
         self.old_guides = (list(doc.guides_h), list(doc.guides_v))
-        self.old_layers = [(layer, QImage(layer.image), QPoint(layer.offset))
-                           for layer in doc.layers]
+        self.old_layers = [
+            (layer, QImage(layer.image), QPoint(layer.offset)) for layer in doc.layers
+        ]
         self.new_state: tuple | None = None
 
     def redo(self) -> None:
@@ -508,13 +595,15 @@ class ArbitraryRotateCommand(QUndoCommand):
             new_c = QPointF(new_size.width() / 2.0, new_size.height() / 2.0)
             entries = []
             for layer, old_img, old_offset in self.old_layers:
-                new_img = old_img.transformed(
-                    t, Qt.TransformationMode.SmoothTransformation)
-                centre = QPointF(old_offset.x() + old_img.width() / 2.0,
-                                 old_offset.y() + old_img.height() / 2.0)
+                new_img = old_img.transformed(t, Qt.TransformationMode.SmoothTransformation)
+                centre = QPointF(
+                    old_offset.x() + old_img.width() / 2.0, old_offset.y() + old_img.height() / 2.0
+                )
                 rotated = t.map(centre - old_c) + new_c
-                new_offset = QPoint(round(rotated.x() - new_img.width() / 2.0),
-                                    round(rotated.y() - new_img.height() / 2.0))
+                new_offset = QPoint(
+                    round(rotated.x() - new_img.width() / 2.0),
+                    round(rotated.y() - new_img.height() / 2.0),
+                )
                 entries.append((layer, new_img, new_offset))
             self.new_state = (new_size, entries)
         new_size, entries = self.new_state
@@ -558,8 +647,7 @@ class MergeVisibleCommand(QUndoCommand):
     def redo(self) -> None:
         doc = self.doc
         if self.merged is None:
-            self.removed = [(i, layer) for i, layer in enumerate(doc.layers)
-                            if layer.visible]
+            self.removed = [(i, layer) for i, layer in enumerate(doc.layers) if layer.visible]
             union = QRect()
             for _, layer in self.removed:
                 union = union.united(layer.bounds())
@@ -594,14 +682,27 @@ class ResizeImageCommand(QUndoCommand):
     objects; redo recomputes the scaled versions (CPU is cheaper than holding
     both resolutions in RAM)."""
 
-    def __init__(self, doc: Document, new_size: QSize):
+    def __init__(self, doc: Document, new_size: QSize, *, allow_large: bool = False):
         super().__init__("Resize Image")
+        from photoslop.resources import validate_dimensions
+
+        validate_dimensions(
+            new_size.width(),
+            new_size.height(),
+            operation="resize image",
+            buffers=2,
+            allow_large=allow_large,
+        )
         self.doc = doc
         self.old_size = QSize(doc.size)
         self.new_size = QSize(new_size)
         self.old_layers = [
-            (layer, QImage(layer.image), QPoint(layer.offset),
-             deepcopy(layer.vector_data) if layer.vector_data else None)
+            (
+                layer,
+                QImage(layer.image),
+                QPoint(layer.offset),
+                deepcopy(layer.vector_data) if layer.vector_data else None,
+            )
             for layer in doc.layers
         ]
 
@@ -614,12 +715,14 @@ class ResizeImageCommand(QUndoCommand):
         canvas = QRect(QPoint(0, 0), QSize(self.new_size))
         for layer, old_img, old_off, old_vec in self.old_layers:
             if old_vec is not None and vector.rerender_into(
-                    layer, vector.scale_vector(old_vec, sx, sy), canvas):
+                layer, vector.scale_vector(old_vec, sx, sy), canvas
+            ):
                 continue  # crisp re-render from parameters, not resampling
             w = max(1, round(old_img.width() * sx))
             h = max(1, round(old_img.height() * sy))
             layer.image = old_img.scaled(
-                w, h,
+                w,
+                h,
                 Qt.AspectRatioMode.IgnoreAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
@@ -652,8 +755,7 @@ def _rotate_doc(doc: Document, deg: int) -> None:
     transform = QTransform().rotate(deg)
     for layer in doc.layers:
         if layer.vector_data is not None:
-            layer.vector_data = vector.rotate_vector(
-                layer.vector_data, deg, old_w, old_h)
+            layer.vector_data = vector.rotate_vector(layer.vector_data, deg, old_w, old_h)
         lw, lh = layer.image.width(), layer.image.height()
         x0, y0 = layer.offset.x(), layer.offset.y()
         layer.image = layer.image.transformed(transform)
@@ -688,15 +790,12 @@ def _flip_doc(doc: Document, horizontal: bool) -> None:
     axis = Qt.Orientation.Horizontal if horizontal else Qt.Orientation.Vertical
     for layer in doc.layers:
         if layer.vector_data is not None:
-            layer.vector_data = vector.flip_vector(
-                layer.vector_data, horizontal, w, h)
+            layer.vector_data = vector.flip_vector(layer.vector_data, horizontal, w, h)
         layer.image = layer.image.flipped(axis)
         if horizontal:
-            layer.offset = QPoint(w - (layer.offset.x() + layer.image.width()),
-                                  layer.offset.y())
+            layer.offset = QPoint(w - (layer.offset.x() + layer.image.width()), layer.offset.y())
         else:
-            layer.offset = QPoint(layer.offset.x(),
-                                  h - (layer.offset.y() + layer.image.height()))
+            layer.offset = QPoint(layer.offset.x(), h - (layer.offset.y() + layer.image.height()))
     if horizontal:
         doc.guides_v = [w - g for g in doc.guides_v]
     else:
@@ -740,20 +839,21 @@ class RotateLayerCommand(QUndoCommand):
         self.doc, self.layer = doc, layer
         self.degrees = degrees % 360
         self.old_offset = QPoint(layer.offset)
-        self.old_vector = (deepcopy(layer.vector_data)
-                           if layer.vector_data else None)
+        self.old_vector = deepcopy(layer.vector_data) if layer.vector_data else None
 
     def _apply(self, deg: int) -> None:
         layer = self.layer
         # layer-local rotation invalidates doc-space geometry: drop to raster
-        layer.vector_data = None if deg == self.degrees else \
-            (dict(self.old_vector) if self.old_vector else None)
+        layer.vector_data = (
+            None if deg == self.degrees else (dict(self.old_vector) if self.old_vector else None)
+        )
         dirty = layer.bounds()
         cx = layer.offset.x() + layer.image.width() / 2.0
         cy = layer.offset.y() + layer.image.height() / 2.0
         layer.image = layer.image.transformed(QTransform().rotate(deg))
-        layer.offset = QPoint(round(cx - layer.image.width() / 2.0),
-                              round(cy - layer.image.height() / 2.0))
+        layer.offset = QPoint(
+            round(cx - layer.image.width() / 2.0), round(cy - layer.image.height() / 2.0)
+        )
         self.doc.notify_pixels(dirty.united(layer.bounds()))
 
     def redo(self) -> None:
@@ -775,12 +875,10 @@ class FlipLayerCommand(QUndoCommand):
         from photoslop import vector
 
         layer = self.layer
-        axis = (Qt.Orientation.Horizontal if self.horizontal
-                else Qt.Orientation.Vertical)
+        axis = Qt.Orientation.Horizontal if self.horizontal else Qt.Orientation.Vertical
         layer.image = layer.image.flipped(axis)
         if layer.vector_data is not None:  # self-inverse, like the flip
-            layer.vector_data = vector.flip_vector_local(
-                layer.vector_data, self.horizontal)
+            layer.vector_data = vector.flip_vector_local(layer.vector_data, self.horizontal)
         self.doc.notify_pixels(layer.bounds())
 
     undo = redo
@@ -790,8 +888,25 @@ class ResizeCanvasCommand(QUndoCommand):
     """Change canvas size and shift layers; no pixels are copied or dropped,
     which also makes crop instant and fully undoable."""
 
-    def __init__(self, doc: Document, new_size: QSize, delta: QPoint, text: str = "Canvas Size"):
+    def __init__(
+        self,
+        doc: Document,
+        new_size: QSize,
+        delta: QPoint,
+        text: str = "Canvas Size",
+        *,
+        allow_large: bool = False,
+    ):
         super().__init__(text)
+        from photoslop.resources import validate_dimensions
+
+        validate_dimensions(
+            new_size.width(),
+            new_size.height(),
+            operation=text.lower(),
+            buffers=2,
+            allow_large=allow_large,
+        )
         self.doc = doc
         self.old_size = QSize(doc.size)
         self.new_size = QSize(new_size)

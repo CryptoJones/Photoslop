@@ -33,12 +33,26 @@ class CursorIntent:
 
 
 _PAINT_TOOLS = {
-    "brush", "pencil", "eraser", "clone-stamp", "heal", "spot-heal",
-    "smudge", "dodge", "burn", "liquify", "quick-select",
+    "brush",
+    "pencil",
+    "eraser",
+    "clone-stamp",
+    "heal",
+    "spot-heal",
+    "smudge",
+    "dodge",
+    "burn",
+    "liquify",
+    "quick-select",
 }
 _SELECTION_TOOLS = {
-    "rect-select", "ellipse-select", "lasso", "poly-lasso",
-    "magnetic-lasso", "wand", "quick-select",
+    "rect-select",
+    "ellipse-select",
+    "lasso",
+    "poly-lasso",
+    "magnetic-lasso",
+    "wand",
+    "quick-select",
 }
 
 
@@ -120,13 +134,25 @@ class CursorRenderer:
 
         def stroke_path(path: QPainterPath, width: float = 1.4) -> None:
             p.setBrush(Qt.BrushStyle.NoBrush)
-            p.setPen(QPen(QColor(255, 255, 255, 245), width + 2.2,
-                          Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
-                          Qt.PenJoinStyle.RoundJoin))
+            p.setPen(
+                QPen(
+                    QColor(255, 255, 255, 245),
+                    width + 2.2,
+                    Qt.PenStyle.SolidLine,
+                    Qt.PenCapStyle.RoundCap,
+                    Qt.PenJoinStyle.RoundJoin,
+                )
+            )
             p.drawPath(path)
-            p.setPen(QPen(QColor(15, 15, 15, 245), width,
-                          Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
-                          Qt.PenJoinStyle.RoundJoin))
+            p.setPen(
+                QPen(
+                    QColor(15, 15, 15, 245),
+                    width,
+                    Qt.PenStyle.SolidLine,
+                    Qt.PenCapStyle.RoundCap,
+                    Qt.PenJoinStyle.RoundJoin,
+                )
+            )
             p.drawPath(path)
 
         path = self._glyph(intent.kind, c, diameter)

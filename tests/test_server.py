@@ -2,11 +2,18 @@
 """The MCP server surface. The tool functions are plain Python and tested
 directly; the FastMCP wiring is exercised only when the optional ``mcp`` extra
 is installed."""
+
 import pytest
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor, QImage
 
 from photoslop import cli, server
+from photoslop.errors import ErrorCode, ToolError
+
+
+@pytest.fixture(autouse=True)
+def _confine_server_to_test_directory(tmp_path):
+    server.configure(root=tmp_path)
 
 
 def make_png(tmp_path, name="pic.png", size=(600, 400)):
@@ -20,9 +27,12 @@ def make_png(tmp_path, name="pic.png", size=(600, 400)):
 def test_list_operations_mirrors_cli_ops():
     catalog = server.list_operations()
     ops = catalog["operations"]
-    assert catalog["count"] == len(cli.OPS)
-    # exactly the CLI's op table — the parity promise, verbatim
-    assert [o["name"] for o in ops] == list(cli.OPS)
+    assert catalog["count"] == len(cli.OPS) - 4
+    assert [o["name"] for o in ops] == [
+        name
+        for name in cli.OPS
+        if name not in {"model-url", "select-subject", "generative-fill", "denoise-model"}
+    ]
     by_name = {o["name"]: o for o in ops}
     assert by_name["resize"]["args"] == "WxH"
     assert by_name["auto-levels"]["args"] is None  # a no-argument flag op
@@ -80,13 +90,29 @@ def test_edit_image_rejects_input_and_new_together(tmp_path):
 
 def test_edit_image_unknown_op():
     with pytest.raises(ValueError, match="unknown operation"):
-        server.edit_image([{"op": "no-such-op", "value": ""}], new="10x10",
-                          info=True)
+        server.edit_image([{"op": "no-such-op", "value": ""}], new="10x10", info=True)
 
 
 def test_edit_image_malformed_operation_entry():
     with pytest.raises(ValueError, match="must be an object"):
         server.edit_image(["resize 10x10"], new="10x10", info=True)
+
+
+def test_mcp_errors_expose_stable_automation_codes(tmp_path):
+    with pytest.raises(ToolError) as blocked:
+        server.edit_image(
+            [{"op": "generative-fill", "value": "prompt"}],
+            new="8x8",
+            output="out.png",
+        )
+    assert blocked.value.code is ErrorCode.UNSUPPORTED_CAPABILITY
+    assert str(blocked.value).startswith("[unsupported_capability]")
+
+    existing = tmp_path / "existing.png"
+    existing.write_bytes(b"not an image")
+    with pytest.raises(ToolError) as overwrite:
+        server.edit_image([], new="8x8", output="existing.png")
+    assert overwrite.value.code is ErrorCode.UNSAFE_OPERATION
 
 
 def test_document_info_is_read_only(qapp, tmp_path):
@@ -96,9 +122,9 @@ def test_document_info_is_read_only(qapp, tmp_path):
     assert len(info["layers"]) == 1
 
 
-def test_build_server_registers_the_three_tools():
+def test_build_server_registers_the_three_tools(tmp_path):
     pytest.importorskip("mcp")
-    srv = server.build_server()
+    srv = server.build_server(root=tmp_path)
     assert srv.name == "photoslop"
     import asyncio
 

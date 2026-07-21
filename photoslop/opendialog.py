@@ -7,7 +7,6 @@ embedded thumbnail — no layer decoding."""
 from __future__ import annotations
 
 import os
-import xml.etree.ElementTree as ET
 import zipfile
 
 from PySide6.QtCore import QRect, Qt
@@ -23,6 +22,13 @@ from PySide6.QtWidgets import (
 )
 
 from photoslop import io_formats
+from photoslop.resources import (
+    DESKTOP_BUDGET,
+    parse_xml_limited,
+    read_archive_member,
+    validate_archive_members,
+    validate_dimensions,
+)
 from photoslop.tasks import TaskService
 
 OPEN_FILTER = (
@@ -48,14 +54,33 @@ def preview_info(path: str, max_dim: int = _PREVIEW_DIM) -> tuple[QImage | None,
 
     if path.lower().endswith(".ora"):
         try:
+            if os.path.getsize(path) > DESKTOP_BUDGET.max_file_bytes:
+                raise ValueError("archive too large")
             with zipfile.ZipFile(path) as zf:
-                names = set(zf.namelist())
-                src = ("Thumbnails/thumbnail.png"
-                       if "Thumbnails/thumbnail.png" in names else "mergedimage.png")
-                img = QImage.fromData(zf.read(src))
-                root = ET.fromstring(zf.read("stack.xml"))
+                members = validate_archive_members(zf.infolist(), operation="OpenRaster preview")
+                src = (
+                    "Thumbnails/thumbnail.png"
+                    if "Thumbnails/thumbnail.png" in members
+                    else "mergedimage.png"
+                )
+                if src not in members or "stack.xml" not in members:
+                    raise ValueError("missing preview members")
+                img = QImage.fromData(
+                    read_archive_member(zf, members[src], operation="OpenRaster preview image")
+                )
+                root = parse_xml_limited(
+                    read_archive_member(
+                        zf, members["stack.xml"], operation="OpenRaster preview stack"
+                    ),
+                    operation="OpenRaster preview",
+                )
                 w, h = root.get("w", "?"), root.get("h", "?")
                 layers = len(root.findall(".//layer"))
+                validate_dimensions(
+                    int(w), int(h), operation="OpenRaster preview", allow_large=True
+                )
+                if layers > DESKTOP_BUDGET.max_layers:
+                    raise ValueError("too many layers")
             if img.isNull():
                 return None, f"OpenRaster · {human}"
             return img, f"{w}×{h} · {layers} layers · OpenRaster · {human}"
@@ -69,8 +94,12 @@ def preview_info(path: str, max_dim: int = _PREVIEW_DIM) -> tuple[QImage | None,
             return None, f"No preview ({why}) · {human}"
         w, h = img.width(), img.height()
         if max(w, h) > max_dim:
-            img = img.scaled(max_dim, max_dim, Qt.AspectRatioMode.KeepAspectRatio,
-                             Qt.TransformationMode.SmoothTransformation)
+            img = img.scaled(
+                max_dim,
+                max_dim,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
         fmt = path.rsplit(".", 1)[-1].upper()
         return img, f"{w}×{h} · {fmt} · {human}"
 
@@ -78,6 +107,13 @@ def preview_info(path: str, max_dim: int = _PREVIEW_DIM) -> tuple[QImage | None,
     reader.setAutoTransform(True)
     fmt = bytes(reader.format()).decode() or "?"
     size = reader.size()
+    if size.isValid():
+        try:
+            validate_dimensions(
+                size.width(), size.height(), operation="image preview", allow_large=True
+            )
+        except ValueError:
+            return None, f"Preview exceeds safety limits · {human}"
     if size.isValid() and max(size.width(), size.height()) > max_dim:
         reader.setScaledSize(size.scaled(max_dim, max_dim, Qt.AspectRatioMode.KeepAspectRatio))
     img = reader.read()
@@ -117,8 +153,9 @@ class OpenImageDialog(QFileDialog):
         if isinstance(grid, QGridLayout):
             grid.addWidget(panel, 1, grid.columnCount(), grid.rowCount() - 1, 1)
         self.currentChanged.connect(self._update_preview)
-        self._preview_tasks = TaskService(max_workers=1, memory_budget=128 * 1024 * 1024,
-                                          parent=self)
+        self._preview_tasks = TaskService(
+            max_workers=1, memory_budget=128 * 1024 * 1024, parent=self
+        )
         self._preview_generation = 0
 
         # Open filling the parent's central "workable image area" rather than
@@ -161,11 +198,12 @@ class OpenImageDialog(QFileDialog):
         self._image_label.setPixmap(QPixmap())
         self._info_label.setText("")
         handle = self._preview_tasks.submit(
-            "preview.decode", "Decode preview",
+            "preview.decode",
+            "Decode preview",
             lambda context: self._decode_preview(context, path),
-            32 * 1024 * 1024)
-        handle.succeeded.connect(
-            lambda result, g=generation: self._install_preview(g, *result))
+            32 * 1024 * 1024,
+        )
+        handle.succeeded.connect(lambda result, g=generation: self._install_preview(g, *result))
 
     @staticmethod
     def _decode_preview(context, path: str):
@@ -182,7 +220,8 @@ class OpenImageDialog(QFileDialog):
             self._image_label.setPixmap(QPixmap())
         else:
             pm = QPixmap.fromImage(img).scaled(
-                _PREVIEW_DIM, _PREVIEW_DIM,
+                _PREVIEW_DIM,
+                _PREVIEW_DIM,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )

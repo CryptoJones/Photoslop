@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from photoslop.commands import SetLayerPropertyCommand
 from photoslop.layer import BLEND_MODES
 
 
@@ -27,6 +28,7 @@ class PropertiesPanel(QWidget):
         self.name = QLineEdit()
         self.name.setAccessibleName("Layer name")
         self.visible = QCheckBox("Visible")
+        self.visible.setAccessibleName("Layer visibility")
         self.opacity = QSpinBox()
         self.opacity.setRange(0, 100)
         self.opacity.setSuffix(" %")
@@ -85,8 +87,12 @@ class PropertiesPanel(QWidget):
         if self._updating or self.doc is None or self.doc.active_layer is None:
             return
         layer = self.doc.active_layer
-        layer.name = self.name.text().strip() or layer.name
-        layer.visible = self.visible.isChecked()
-        layer.opacity = self.opacity.value() / 100.0
-        layer.blend_mode = self.blend.currentText()
-        self.doc.notify_structure()
+        desired = (
+            ("name", self.name.text().strip() or layer.name),
+            ("visible", self.visible.isChecked()),
+            ("opacity", self.opacity.value() / 100.0),
+            ("blend_mode", self.blend.currentText()),
+        )
+        for prop, value in desired:
+            if getattr(layer, prop) != value:
+                self.doc.undo_stack.push(SetLayerPropertyCommand(self.doc, layer, prop, value))

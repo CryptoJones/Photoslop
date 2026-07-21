@@ -25,12 +25,15 @@ def test_icon_cursor_visual_matrix_has_correct_scale_contrast_and_alpha(qapp, dp
     pixmap = svg_icon("brush").pixmap(QSize(logical, logical), dpr)
     image = pixmap.toImage()
     assert not image.isNull() and pixmap.devicePixelRatio() == dpr
-    assert any(image.pixelColor(x, y).alpha() for y in range(image.height())
-               for x in range(image.width()))
+    assert any(
+        image.pixelColor(x, y).alpha() for y in range(image.height()) for x in range(image.width())
+    )
 
-    for intent in (CursorIntent("brush", diameter=24),
-                   CursorIntent("zoom-in", badge="+"),
-                   CursorIntent("clone", badge="!", valid=False)):
+    for intent in (
+        CursorIntent("brush", diameter=24),
+        CursorIntent("zoom-in", badge="+"),
+        CursorIntent("clone", badge="!", valid=False),
+    ):
         cursor = CursorRenderer().cursor(intent, dpr)
         assert not cursor.pixmap().isNull()
         assert cursor.pixmap().devicePixelRatio() == dpr

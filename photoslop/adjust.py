@@ -23,8 +23,16 @@ class AdjustSettings:
     everything else [-100, 100]."""
 
     FIELDS = (
-        "temperature", "tint", "exposure", "contrast", "highlights",
-        "shadows", "whites", "blacks", "vibrance", "saturation",
+        "temperature",
+        "tint",
+        "exposure",
+        "contrast",
+        "highlights",
+        "shadows",
+        "whites",
+        "blacks",
+        "vibrance",
+        "saturation",
     )
 
     def __init__(self, **kwargs: float) -> None:
@@ -51,7 +59,7 @@ def build_luts(s: AdjustSettings) -> np.ndarray:
     luts = np.empty((3, 256), dtype=np.uint8)
     for channel, gain in enumerate(gains):
         v = x * gain
-        v = v * (2.0 ** s.exposure)
+        v = v * (2.0**s.exposure)
         k = np.tan(np.pi / 4.0 * (1.0 + 0.6 * s.contrast / 100.0))
         v = (v - 0.5) * k + 0.5
         v = v + 0.3 * (s.highlights / 100.0) * _smooth01((v - 0.35) / 0.65)
@@ -64,8 +72,9 @@ def build_luts(s: AdjustSettings) -> np.ndarray:
     return luts
 
 
-def levels_lut(in_black: int, in_white: int, gamma: float,
-               out_black: int = 0, out_white: int = 255) -> np.ndarray:
+def levels_lut(
+    in_black: int, in_white: int, gamma: float, out_black: int = 0, out_white: int = 255
+) -> np.ndarray:
     """Classic Levels mapping as a single 256-entry LUT (same for R/G/B)."""
     x = np.arange(256, dtype=np.float64)
     span = max(in_white - in_black, 1)
@@ -128,8 +137,10 @@ def curve_lut(points: list[tuple[float, float]]) -> np.ndarray:
         inner = np.zeros(len(xs) - 2)
         same_sign = delta[:-1] * delta[1:] > 0
         with np.errstate(divide="ignore", invalid="ignore"):
-            harmonic = 2.0 / (1.0 / np.where(delta[:-1] == 0, 1, delta[:-1])
-                              + 1.0 / np.where(delta[1:] == 0, 1, delta[1:]))
+            harmonic = 2.0 / (
+                1.0 / np.where(delta[:-1] == 0, 1, delta[:-1])
+                + 1.0 / np.where(delta[1:] == 0, 1, delta[1:])
+            )
         inner[same_sign] = harmonic[same_sign]
         m[1:-1] = inner
 
@@ -141,8 +152,7 @@ def curve_lut(points: list[tuple[float, float]]) -> np.ndarray:
     h10 = t * (1 - t) ** 2
     h01 = t * t * (3 - 2 * t)
     h11 = t * t * (t - 1)
-    y = (h00 * ys[seg] + h10 * h[seg] * m[seg]
-         + h01 * ys[seg + 1] + h11 * h[seg] * m[seg + 1])
+    y = h00 * ys[seg] + h10 * h[seg] * m[seg] + h01 * ys[seg + 1] + h11 * h[seg] * m[seg + 1]
     y[x <= xs[0]] = ys[0]
     y[x >= xs[-1]] = ys[-1]
     y = np.clip(y, 0.0, 255.0)
@@ -189,8 +199,7 @@ def color_balance_luts(values: dict[str, tuple[float, float, float]]) -> np.ndar
     return luts
 
 
-def apply_hsl(img: QImage, hue_deg: float, saturation: float,
-              lightness: float) -> None:
+def apply_hsl(img: QImage, hue_deg: float, saturation: float, lightness: float) -> None:
     """Hue rotation (luminance-preserving RGB matrix), saturation mix toward
     luma, and lightness toward black/white — in place, in row bands."""
     if hue_deg == 0 and saturation == 0 and lightness == 0:
@@ -199,17 +208,26 @@ def apply_hsl(img: QImage, hue_deg: float, saturation: float,
     cos_a, sin_a = np.cos(theta), np.sin(theta)
     # standard luminance-preserving hue-rotate matrix (as used by SVG/CSS)
     lr, lg, lb = 0.213, 0.715, 0.072
-    m = np.array([
-        [lr + cos_a * (1 - lr) + sin_a * (-lr),
-         lg + cos_a * (-lg) + sin_a * (-lg),
-         lb + cos_a * (-lb) + sin_a * (1 - lb)],
-        [lr + cos_a * (-lr) + sin_a * 0.143,
-         lg + cos_a * (1 - lg) + sin_a * 0.140,
-         lb + cos_a * (-lb) + sin_a * (-0.283)],
-        [lr + cos_a * (-lr) + sin_a * (-(1 - lr)),
-         lg + cos_a * (-lg) + sin_a * lg,
-         lb + cos_a * (1 - lb) + sin_a * lb],
-    ], dtype=np.float32)
+    m = np.array(
+        [
+            [
+                lr + cos_a * (1 - lr) + sin_a * (-lr),
+                lg + cos_a * (-lg) + sin_a * (-lg),
+                lb + cos_a * (-lb) + sin_a * (1 - lb),
+            ],
+            [
+                lr + cos_a * (-lr) + sin_a * 0.143,
+                lg + cos_a * (1 - lg) + sin_a * 0.140,
+                lb + cos_a * (-lb) + sin_a * (-0.283),
+            ],
+            [
+                lr + cos_a * (-lr) + sin_a * (-(1 - lr)),
+                lg + cos_a * (-lg) + sin_a * lg,
+                lb + cos_a * (1 - lb) + sin_a * lb,
+            ],
+        ],
+        dtype=np.float32,
+    )
     sat_factor = 1.0 + saturation / 100.0
 
     arr = view_u32(img)
@@ -232,9 +250,11 @@ def apply_hsl(img: QImage, hue_deg: float, saturation: float,
         gf = g.astype(np.float32)
         bf = b.astype(np.float32)
         if hue_deg != 0:
-            rf, gf, bf = (m[0, 0] * rf + m[0, 1] * gf + m[0, 2] * bf,
-                          m[1, 0] * rf + m[1, 1] * gf + m[1, 2] * bf,
-                          m[2, 0] * rf + m[2, 1] * gf + m[2, 2] * bf)
+            rf, gf, bf = (
+                m[0, 0] * rf + m[0, 1] * gf + m[0, 2] * bf,
+                m[1, 0] * rf + m[1, 1] * gf + m[1, 2] * bf,
+                m[2, 0] * rf + m[2, 1] * gf + m[2, 2] * bf,
+            )
         if saturation != 0:
             luma = 0.299 * rf + 0.587 * gf + 0.114 * bf
             rf = luma + (rf - luma) * sat_factor
@@ -300,8 +320,9 @@ def apply_settings(img: QImage, s: AdjustSettings) -> None:
             gf = g.astype(np.float32)
             bf = b.astype(np.float32)
             luma = 0.299 * rf + 0.587 * gf + 0.114 * bf
-            spread = (np.maximum(np.maximum(rf, gf), bf)
-                      - np.minimum(np.minimum(rf, gf), bf)) / 255.0
+            spread = (
+                np.maximum(np.maximum(rf, gf), bf) - np.minimum(np.minimum(rf, gf), bf)
+            ) / 255.0
             factor = 1.0 + sat_factor + vib_factor * (1.0 - spread)
             rf = np.clip(luma + (rf - luma) * factor, 0.0, 255.0)
             gf = np.clip(luma + (gf - luma) * factor, 0.0, 255.0)
@@ -327,9 +348,15 @@ def apply_settings(img: QImage, s: AdjustSettings) -> None:
         )
 
 
-def apply_point_color(img: QImage, hue_deg: float, hue_range: float,
-                      d_hue: float, d_sat: float, d_light: float,
-                      uniformity: float = 0.0) -> None:
+def apply_point_color(
+    img: QImage,
+    hue_deg: float,
+    hue_range: float,
+    d_hue: float,
+    d_sat: float,
+    d_light: float,
+    uniformity: float = 0.0,
+) -> None:
     """Targeted HSL: pixels whose hue lies within `hue_range` degrees of
     `hue_deg` shift by d_hue/d_sat/d_light under a smooth cosine falloff;
     `uniformity` (0..100) additionally pulls hues toward the band centre
@@ -379,11 +406,10 @@ def apply_point_color(img: QImage, hue_deg: float, hue_range: float,
 
         # circular distance to the target hue, cosine falloff, gray guard
         dist = np.abs((h - hue_deg + 180.0) % 360.0 - 180.0)
-        w = np.where(dist < hue_range,
-                     np.cos((dist / hue_range) * (np.pi / 2.0)) ** 2, 0.0)
+        w = np.where(dist < hue_range, np.cos((dist / hue_range) * (np.pi / 2.0)) ** 2, 0.0)
         w = (w * np.clip(s / 0.25, 0.0, 1.0)).astype(np.float32)
 
-        centre_pull = ((hue_deg - h + 180.0) % 360.0 - 180.0)
+        centre_pull = (hue_deg - h + 180.0) % 360.0 - 180.0
         h = (h + w * (d_hue + centre_pull * (uniformity / 100.0))) % 360.0
         s = np.clip(s * (1.0 + w * (d_sat / 100.0)), 0.0, 1.0)
         if d_light > 0:
@@ -411,7 +437,9 @@ def apply_point_color(img: QImage, hue_deg: float, hue_range: float,
             g = g * a // 255
             b = b * a // 255
 
-        chunk[...] = ((a.astype(np.uint32) << np.uint32(24))
-                      | (r.astype(np.uint32) << np.uint32(16))
-                      | (g.astype(np.uint32) << np.uint32(8))
-                      | b.astype(np.uint32))
+        chunk[...] = (
+            (a.astype(np.uint32) << np.uint32(24))
+            | (r.astype(np.uint32) << np.uint32(16))
+            | (g.astype(np.uint32) << np.uint32(8))
+            | b.astype(np.uint32)
+        )

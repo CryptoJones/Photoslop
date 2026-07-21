@@ -8,12 +8,26 @@ cached flattened composite — views composite the visible region on demand.
 
 from __future__ import annotations
 
+import uuid
+from dataclasses import dataclass
+
 from PySide6.QtCore import QObject, QPoint, QRect, QSize, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QUndoStack
 
 from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
+from photoslop.resources import validate_dimensions, validate_dpi
 
 UNDO_LIMIT = 64
+
+
+@dataclass(frozen=True)
+class DocumentRevision:
+    """Immutable generation token for background work."""
+
+    document_id: str
+    pixels: int
+    structure: int
+    selection: int
 
 
 def clip_base_for(doc: Document, layer: Layer) -> Layer | None:
@@ -26,8 +40,7 @@ def clip_base_for(doc: Document, layer: Layer) -> Layer | None:
     return None
 
 
-def render_region(doc: Document, region: QRect,
-                  exclude: Layer | None = None) -> QImage:
+def render_region(doc: Document, region: QRect, exclude: Layer | None = None) -> QImage:
     """Composite every visible layer's contribution to a canvas-space region
     into a region-sized image — the offscreen path used when adjustment
     layers exist (they post-process the accumulated composite below them)."""
@@ -67,8 +80,7 @@ def render_region(doc: Document, region: QRect,
                 draw_layer(gp, doc, member, region)
             gp.end()
             p.setOpacity(props.get("opacity", 1.0))
-            p.setCompositionMode(
-                BLEND_MODES[props.get("blend_mode", "normal")])
+            p.setCompositionMode(BLEND_MODES[props.get("blend_mode", "normal")])
             p.drawImage(region.topLeft(), group_buf)
             index = j
             continue
@@ -100,8 +112,7 @@ def _effect_images(layer: Layer) -> list:
     return out
 
 
-def _draw_effects(p: QPainter, appearance, region: QRect, under: bool,
-                  origin: QPoint) -> None:
+def _draw_effects(p: QPainter, appearance, region: QRect, under: bool, origin: QPoint) -> None:
     from photoslop.layer import BLEND_MODES
 
     base_opacity = p.opacity()
@@ -136,8 +147,7 @@ def draw_layer(p: QPainter, doc: Document, layer: Layer, region: QRect) -> None:
             fill_offset = layer.offset + appearance.fill_offset
             area = region.intersected(QRect(fill_offset, appearance.fill_image.size()))
             if not area.isEmpty():
-                p.drawImage(area.topLeft(), appearance.fill_image,
-                            area.translated(-fill_offset))
+                p.drawImage(area.topLeft(), appearance.fill_image, area.translated(-fill_offset))
         p.setOpacity(base)
         _draw_effects(p, appearance, region, under=False, origin=layer.offset)
         return
@@ -167,8 +177,10 @@ def _draw_fill(p: QPainter, doc: Document, layer: Layer, region: QRect) -> None:
     base_area = area.intersected(base.bounds())
     if not base_area.isEmpty():
         bp = QPainter(base_alpha)
-        bp.drawImage(base_area.topLeft() - area.topLeft(),
-                     base.paint_image(base_area.translated(-base.offset)))
+        bp.drawImage(
+            base_area.topLeft() - area.topLeft(),
+            base.paint_image(base_area.translated(-base.offset)),
+        )
         bp.end()
     cp = QPainter(content)
     cp.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
@@ -187,10 +199,17 @@ class Document(QObject):
 
     def __init__(self, size: QSize, dpi: float = 72.0, name: str | None = None) -> None:
         super().__init__()
+        validate_dimensions(size.width(), size.height(), operation="document", allow_large=True)
+        validate_dpi(dpi)
         if name is None:
             Document._untitled_count += 1
             name = f"Untitled-{Document._untitled_count}"
         self.name = name
+        self.document_id = uuid.uuid4().hex
+        self._pixel_revision = 0
+        self._structure_revision = 0
+        self._selection_revision = 0
+        self._closed = False
         self.size = QSize(size)
         self.dpi = float(dpi)
         self.layers: list[Layer] = []  # index 0 = bottom
@@ -217,8 +236,7 @@ class Document(QObject):
         return None
 
     def has_adjustments(self) -> bool:
-        return any(layer.visible and layer.adjustment is not None
-                   for layer in self.layers)
+        return any(layer.visible and layer.adjustment is not None for layer in self.layers)
 
     def needs_offscreen(self) -> bool:
         """True when compositing needs the buffered path: adjustment layers
@@ -231,23 +249,23 @@ class Document(QObject):
     def insert_layer(self, index: int, layer: Layer) -> None:
         self.layers.insert(index, layer)
         self.active_index = index
-        self.structureChanged.emit()
-        self.pixelsChanged.emit(layer.bounds())
+        self.notify_structure()
+        self.notify_pixels(layer.bounds())
 
     def take_layer(self, index: int) -> Layer:
         layer = self.layers.pop(index)
         if self.active_index >= len(self.layers):
             self.active_index = len(self.layers) - 1
-        self.structureChanged.emit()
-        self.pixelsChanged.emit(layer.bounds())
+        self.notify_structure()
+        self.notify_pixels(layer.bounds())
         return layer
 
     def move_layer(self, src: int, dst: int) -> None:
         layer = self.layers.pop(src)
         self.layers.insert(dst, layer)
         self.active_index = dst
-        self.structureChanged.emit()
-        self.pixelsChanged.emit(layer.bounds())
+        self.notify_structure()
+        self.notify_pixels(layer.bounds())
 
     def notify_pixels(self, rect: QRect) -> None:
         # live effects (shadows, strokes) reach beyond layer bounds — pad the
@@ -256,21 +274,45 @@ class Document(QObject):
         for layer in self.layers:
             if layer.effects and layer.visible:
                 margin = _effects_margin(layer.effects)
-                if rect.adjusted(-margin, -margin, margin, margin).intersects(
-                        layer.bounds()):
+                if rect.adjusted(-margin, -margin, margin, margin).intersects(layer.bounds()):
                     pad = max(pad, margin)
         if pad:
             rect = rect.adjusted(-pad, -pad, pad, pad)
+        self._pixel_revision += 1
         self.pixelsChanged.emit(rect)
 
     def notify_structure(self) -> None:
+        self._structure_revision += 1
         self.structureChanged.emit()
+
+    def capture_revision(self) -> DocumentRevision:
+        return DocumentRevision(
+            self.document_id,
+            self._pixel_revision,
+            self._structure_revision,
+            self._selection_revision,
+        )
+
+    def accepts_revision(
+        self,
+        revision: DocumentRevision,
+        layer: Layer | None = None,
+    ) -> bool:
+        """Return whether a task may still commit to this document/layer."""
+        if self._closed or revision != self.capture_revision():
+            return False
+        return layer is None or any(candidate is layer for candidate in self.layers)
+
+    def close(self) -> None:
+        """Permanently reject completion callbacks captured for this document."""
+        self._closed = True
 
     # ----- selection ------------------------------------------------------
 
     def set_selection(self, path: QPainterPath | None) -> None:
         self.selection = path if path is not None and not path.isEmpty() else None
         self.selection_feather = 0.0  # feather belongs to one selection
+        self._selection_revision += 1
         self.selectionChanged.emit()
 
     def selection_bounds(self) -> QRect | None:
@@ -333,6 +375,10 @@ class Document(QObject):
 
     def is_dirty(self) -> bool:
         return not self.undo_stack.isClean()
+
+    @property
+    def is_closed(self) -> bool:
+        return self._closed
 
     # ----- constructors ----------------------------------------------------
 

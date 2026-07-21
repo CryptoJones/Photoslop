@@ -56,8 +56,7 @@ def test_registry_and_select_subject_flow(qapp):
     assert create_adapter("nope", {}) is None
 
     win = MainWindow()
-    win.add_document(Document.new(QSize(40, 30), 72.0, "ms",
-                                  QColor(255, 255, 255)))
+    win.add_document(Document.new(QSize(40, 30), 72.0, "ms", QColor(255, 255, 255)))
     doc = win.current_doc()
 
     win.action_select_subject()  # unconfigured: clean refusal

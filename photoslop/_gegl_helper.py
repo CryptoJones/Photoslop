@@ -39,8 +39,7 @@ def apply_gegl(src: str, dst: str, operation: str, props: dict) -> None:
 
 def main() -> int:
     if len(sys.argv) != 5:
-        print("usage: _gegl_helper.py IN OUT OPERATION PROPS_JSON",
-              file=sys.stderr)
+        print("usage: _gegl_helper.py IN OUT OPERATION PROPS_JSON", file=sys.stderr)
         return 2
     src, dst, operation, props_json = sys.argv[1:]
     try:

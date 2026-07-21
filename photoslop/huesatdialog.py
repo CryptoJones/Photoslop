@@ -29,9 +29,11 @@ class HueSatDialog(ScopedAdjustMixin, QDialog):
         self._sliders: dict[str, QSlider] = {}
         self._labels: dict[str, QLabel] = {}
         form = QFormLayout(self)
-        for key, label, extent in (("hue", "Hue", 180),
-                                   ("saturation", "Saturation", 100),
-                                   ("lightness", "Lightness", 100)):
+        for key, label, extent in (
+            ("hue", "Hue", 180),
+            ("saturation", "Saturation", 100),
+            ("lightness", "Lightness", 100),
+        ):
             slider = QSlider(Qt.Orientation.Horizontal)
             slider.setRange(-extent, extent)
             slider.setValue(0)
@@ -58,9 +60,11 @@ class HueSatDialog(ScopedAdjustMixin, QDialog):
         self._debounce.timeout.connect(self._preview)
 
     def values(self) -> tuple[int, int, int]:
-        return (self._sliders["hue"].value(),
-                self._sliders["saturation"].value(),
-                self._sliders["lightness"].value())
+        return (
+            self._sliders["hue"].value(),
+            self._sliders["saturation"].value(),
+            self._sliders["lightness"].value(),
+        )
 
     def _changed(self) -> None:
         for key, slider in self._sliders.items():

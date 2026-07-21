@@ -25,9 +25,11 @@ class ScopedAdjustMixin:
 
     def targets(self) -> list:
         if self.scope_all.isChecked():
-            return [layer for layer in self._doc.layers
-                    if layer.visible and layer.adjustment is None
-                    and not layer.image.isNull()]
+            return [
+                layer
+                for layer in self._doc.layers
+                if layer.visible and layer.adjustment is None and not layer.image.isNull()
+            ]
         return [self._layer]
 
     def _pristine_for(self, layer) -> QImage:
@@ -54,14 +56,25 @@ class ScopedAdjustMixin:
 
     def accept_scope(self, text: str) -> None:
         self.preview_scope()
-        changed = [(layer, pristine) for layer, pristine in self._pristines.items()
-                   if layer.image != pristine]
+        changed = [
+            (layer, pristine)
+            for layer, pristine in self._pristines.items()
+            if layer.image != pristine
+        ]
         if changed:
             self._doc.undo_stack.beginMacro(text)
             for layer, pristine in changed:
-                self._doc.undo_stack.push(LayerRegionCommand(
-                    self._doc, layer, layer.image.rect(),
-                    QImage(pristine), QImage(layer.image), text, applied=True))
+                self._doc.undo_stack.push(
+                    LayerRegionCommand(
+                        self._doc,
+                        layer,
+                        layer.image.rect(),
+                        QImage(pristine),
+                        QImage(layer.image),
+                        text,
+                        applied=True,
+                    )
+                )
             self._doc.undo_stack.endMacro()
 
     def reject_scope(self) -> None:

@@ -18,9 +18,11 @@ from PySide6.QtGui import (
     QPainter,
     QPainterPath,
     QPixmap,
+    QUndoCommand,
     QUndoGroup,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -41,6 +43,7 @@ from photoslop import __version__, io_formats, units
 from photoslop.accessibility import AccessibilityController
 from photoslop.actionregistry import ActionRegistry
 from photoslop.appearancepanel import AppearancePanel
+from photoslop.atomicio import SupersededWriteError, write_coordinator
 from photoslop.canvas import EditorView
 from photoslop.commands import (
     FlipImageCommand,
@@ -52,6 +55,7 @@ from photoslop.commands import (
     RotateImageCommand,
     RotateLayerCommand,
 )
+from photoslop.diagnostics import DiagnosticsDialog, DiagnosticStore
 from photoslop.dialogs import CanvasSizeDialog, NewDocumentDialog, ResizeImageDialog
 from photoslop.document import Document
 from photoslop.exportdialog import ExportDialog
@@ -59,16 +63,19 @@ from photoslop.io_raw import is_raw_path, load_raw
 from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
 from photoslop.opendialog import OpenImageDialog
 from photoslop.propertiespanel import PropertiesPanel
+from photoslop.recovery import RecoveryService
 from photoslop.services import (
     ExportRequest,
     ExportService,
     FileService,
     FilterService,
     ModelService,
+    export_artboards,
     opaque_export_base,
 )
 from photoslop.svgicons import svg_icon
-from photoslop.tasks import TaskService, snapshot_document
+from photoslop.taskdialog import TaskMonitorDialog
+from photoslop.tasks import CancelledError, TaskPriority, TaskService, snapshot_document
 from photoslop.toolregistry import TOOL_GROUPS, TOOL_SPEC_BY_ID, TOOL_SPECS
 from photoslop.tools import (
     BrushTool,
@@ -115,12 +122,21 @@ LAST_DIRECTORY_KEY = "files/last-directory"
 
 
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, *, recovery_enabled: bool | None = None) -> None:
         super().__init__()
         self.setWindowTitle(f"Photoslop {__version__}")
         self.settings = QSettings("CryptoJones", "Photoslop")
+        self.diagnostics = DiagnosticStore(parent=self)
         self.action_registry = ActionRegistry(self)
         self.task_service = TaskService(parent=self)
+        self.recovery_service = RecoveryService()
+        self._recovery_enabled = (
+            QApplication.applicationName() == "Photoslop"
+            if recovery_enabled is None
+            else recovery_enabled
+        )
+        self._recovery_timers: dict[str, QTimer] = {}
+        self._recovery_offered = False
         unit = str(self.settings.value("units", "px"))
         self.unit = unit if unit in units.UNITS else "px"
         self.show_grid = self.settings.value("grid", "false") == "true"
@@ -299,22 +315,22 @@ class MainWindow(QMainWindow):
         density.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         density_menu = QMenu(density)
         density_group = QActionGroup(density_menu)
-        for density_id, label in (("compact", "Compact icons"),
-                                  ("comfortable", "Comfortable icons"),
-                                  ("labels", "Icons and labels")):
+        for density_id, label in (
+            ("compact", "Compact icons"),
+            ("comfortable", "Comfortable icons"),
+            ("labels", "Icons and labels"),
+        ):
             action = density_menu.addAction(label)
             action.setCheckable(True)
             action.setData(density_id)
-            action.triggered.connect(
-                lambda _=False, d=density_id: self._set_toolbox_density(d))
+            action.triggered.connect(lambda _=False, d=density_id: self._set_toolbox_density(d))
             density_group.addAction(action)
             if density_id == self.settings.value("toolbox/density", "comfortable"):
                 action.setChecked(True)
         density.setMenu(density_menu)
         bar.addWidget(density)
         self._tools_bar = bar
-        self._set_toolbox_density(str(self.settings.value(
-            "toolbox/density", "comfortable")))
+        self._set_toolbox_density(str(self.settings.value("toolbox/density", "comfortable")))
         self._tool_actions["brush"].setChecked(True)
 
         from PySide6.QtGui import QShortcut
@@ -330,8 +346,11 @@ class MainWindow(QMainWindow):
         self.settings.setValue("toolbox/density", density)
         sizes = {"compact": 20, "comfortable": 28, "labels": 24}
         self._tools_bar.setIconSize(QSize(sizes[density], sizes[density]))
-        style = (Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-                 if density == "labels" else Qt.ToolButtonStyle.ToolButtonIconOnly)
+        style = (
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+            if density == "labels"
+            else Qt.ToolButtonStyle.ToolButtonIconOnly
+        )
         for button in self._tool_group_buttons.values():
             button.setToolButtonStyle(style)
 
@@ -363,6 +382,7 @@ class MainWindow(QMainWindow):
         for i in range(self.tabs.count()):
             editor = self.tabs.widget(i)
             editor.canvas.refresh_cursor()
+            editor.canvas.accessibility_context_changed()
             editor.canvas.update()
 
     def _build_options_bar(self) -> None:
@@ -453,8 +473,7 @@ class MainWindow(QMainWindow):
         shape.addItems(["linear", "radial"])
         shape.setToolTip("Gradient shape")
         shape.setAccessibleName("Gradient shape")
-        shape.currentTextChanged.connect(
-            lambda v: setattr(self.options, "gradient_shape", v))
+        shape.currentTextChanged.connect(lambda v: setattr(self.options, "gradient_shape", v))
         shape_act = bar.addWidget(shape)
 
         flow = QSpinBox()
@@ -486,25 +505,30 @@ class MainWindow(QMainWindow):
 
         fill_source = QComboBox()
         fill_source.addItems(["color", "pattern"])
-        fill_source.setToolTip("Bucket fills with the foreground colour or "
-                               "the defined pattern")
-        fill_source.currentTextChanged.connect(
-            lambda v: setattr(self.options, "fill_source", v))
+        fill_source.setToolTip("Bucket fills with the foreground colour or the defined pattern")
+        fill_source.currentTextChanged.connect(lambda v: setattr(self.options, "fill_source", v))
         fill_source_act = bar.addWidget(fill_source)
 
         contiguous = QCheckBox("Contiguous")
         contiguous.setChecked(self.options.contiguous)
-        contiguous.setToolTip("Off: select every pixel in colour range, "
-                              "connected or not")
+        contiguous.setToolTip("Off: select every pixel in colour range, connected or not")
         contiguous.toggled.connect(lambda v: setattr(self.options, "contiguous", v))
         contig_act = bar.addWidget(contiguous)
 
         self._option_actions = {
-            "brush": [color_act, bg_act, size_act, hard_act, opacity_act,
-                      eraser_act, flow_act, spacing_act, scatter_act],
+            "brush": [
+                color_act,
+                bg_act,
+                size_act,
+                hard_act,
+                opacity_act,
+                eraser_act,
+                flow_act,
+                spacing_act,
+                scatter_act,
+            ],
             "pencil": [color_act, bg_act, size_act, opacity_act, eraser_act],
-            "eraser": [size_act, hard_act, opacity_act, flow_act, spacing_act,
-                       scatter_act],
+            "eraser": [size_act, hard_act, opacity_act, flow_act, spacing_act, scatter_act],
             "bucket": [color_act, bg_act, opacity_act, tol_act, fill_source_act],
             "gradient": [color_act, bg_act, opacity_act, shape_act],
             "eyedropper": [color_act, bg_act],
@@ -535,15 +559,32 @@ class MainWindow(QMainWindow):
             "transform": [],
         }
         self._all_option_actions = [
-            color_act, bg_act, size_act, hard_act, opacity_act, eraser_act,
-            tol_act, shape_act, contig_act, fill_source_act, flow_act,
-            spacing_act, scatter_act,
+            color_act,
+            bg_act,
+            size_act,
+            hard_act,
+            opacity_act,
+            eraser_act,
+            tol_act,
+            shape_act,
+            contig_act,
+            fill_source_act,
+            flow_act,
+            spacing_act,
+            scatter_act,
         ]
         self._option_widgets = {
-            "size": size, "hardness": hardness, "opacity": opacity,
-            "tolerance": tolerance, "gradient_shape": shape, "flow": flow,
-            "scatter": scatter, "spacing": spacing, "fill_source": fill_source,
-            "contiguous": contiguous, "eraser": eraser,
+            "size": size,
+            "hardness": hardness,
+            "opacity": opacity,
+            "tolerance": tolerance,
+            "gradient_shape": shape,
+            "flow": flow,
+            "scatter": scatter,
+            "spacing": spacing,
+            "fill_source": fill_source,
+            "contiguous": contiguous,
+            "eraser": eraser,
         }
 
         # PS-style bracket shortcuts; window-level, invisible in menus
@@ -639,18 +680,25 @@ class MainWindow(QMainWindow):
         m_file.addSeparator()
         m_file.addAction(self._act("&Save", "Ctrl+S", self.action_save))
         m_file.addAction(self._act("Save &As…", "Ctrl+Shift+S", self.action_save_as))
-        m_file.addAction(self._act("&Export…", "Ctrl+E", self.action_export))
+        m_file.addAction(self._act("&Export…", "Ctrl+Alt+Shift+S", self.action_export))
         m_file.addSeparator()
         m_file.addAction(self._act("&Close Tab", "Ctrl+W", self.action_close_tab))
-        m_file.addAction(self._act("&Quit", "Ctrl+Q", self.close,
-                                   role=QAction.MenuRole.QuitRole))
+        m_file.addAction(self._act("&Quit", "Ctrl+Q", self.close, role=QAction.MenuRole.QuitRole))
 
         m_edit = menu.addMenu("&Edit")
-        m_edit.addAction(self._act("Command &Palette…", "Ctrl+Shift+P",
-                                   self.action_command_palette,
-                                   prerequisite="always"))
-        m_edit.addAction(self._act("Cancel Background Task", "Esc",
-                                   self.action_cancel_tasks, prerequisite="task"))
+        m_edit.addAction(
+            self._act(
+                "Command &Palette…",
+                "Ctrl+Shift+P",
+                self.action_command_palette,
+                prerequisite="always",
+            )
+        )
+        m_edit.addAction(
+            self._act(
+                "Cancel Background Task", "Ctrl+Esc", self.action_cancel_tasks, prerequisite="task"
+            )
+        )
         undo = self.undo_group.createUndoAction(self, "&Undo ")
         undo.setShortcut(QKeySequence.StandardKey.Undo)
         redo = self.undo_group.createRedoAction(self, "&Redo ")
@@ -663,30 +711,34 @@ class MainWindow(QMainWindow):
         m_edit.addAction(self._act("&Paste as New Layer", "Ctrl+V", self.action_paste))
         m_edit.addAction(self._act("&Delete Selection", "Del", self.action_delete_selection))
         m_edit.addSeparator()
-        m_edit.addAction(self._act("Generative &Fill… (Model)", None,
-                                   self.action_generative_fill))
+        m_edit.addAction(self._act("Generative &Fill… (Model)", None, self.action_generative_fill))
         m_action = m_edit.addMenu("Actio&ns")
         m_action.addAction(self._act("Start &Recording", None, self.action_record_start))
         m_action.addAction(self._act("Sto&p Recording", None, self.action_record_stop))
         m_action.addAction(self._act("&Play Action", "F9", self.action_play))
         m_edit.addSeparator()
-        m_edit.addAction(self._act("&Fill Layer", "Alt+Backspace",
-                                   self.action_fill_layer))
-        m_edit.addAction(self._act("Fill Selection (Content-&Aware)", "Shift+F5",
-                                   self.action_content_aware_fill))
-        m_edit.addAction(self._act("Define &Pattern from Selection", None,
-                                   self.action_define_pattern))
+        m_edit.addAction(self._act("&Fill Layer", "Alt+Backspace", self.action_fill_layer))
+        m_edit.addAction(
+            self._act("Fill Selection (Content-&Aware)", "Shift+F5", self.action_content_aware_fill)
+        )
+        m_edit.addAction(
+            self._act("Define &Pattern from Selection", None, self.action_define_pattern)
+        )
         m_edit.addSeparator()
         m_edit.addAction(self._act("Free &Transform", "Ctrl+T", self.action_free_transform))
         m_edit.addAction(self._act("&Warp…", "Ctrl+Shift+T", self.action_warp))
-        m_edit.addAction(self._act("Rotate &90° CW", None,
-                                   lambda: self._layer_cmd(RotateLayerCommand, 90)))
-        m_edit.addAction(self._act("Rotate 9&0° CCW", None,
-                                   lambda: self._layer_cmd(RotateLayerCommand, 270)))
-        m_edit.addAction(self._act("Flip &Horizontal", None,
-                                   lambda: self._layer_cmd(FlipLayerCommand, True)))
-        m_edit.addAction(self._act("Flip &Vertical", None,
-                                   lambda: self._layer_cmd(FlipLayerCommand, False)))
+        m_edit.addAction(
+            self._act("Rotate &90° CW", None, lambda: self._layer_cmd(RotateLayerCommand, 90))
+        )
+        m_edit.addAction(
+            self._act("Rotate 9&0° CCW", None, lambda: self._layer_cmd(RotateLayerCommand, 270))
+        )
+        m_edit.addAction(
+            self._act("Flip &Horizontal", None, lambda: self._layer_cmd(FlipLayerCommand, True))
+        )
+        m_edit.addAction(
+            self._act("Flip &Vertical", None, lambda: self._layer_cmd(FlipLayerCommand, False))
+        )
         m_edit.addSeparator()
         m_edit.addAction(self._act("S&wap Colours", "X", self.action_swap_colors))
         m_edit.addAction(self._act("Rese&t Colours", "D", self.action_reset_colors))
@@ -695,151 +747,168 @@ class MainWindow(QMainWindow):
         self._rulers_menu = self._options_menu.addMenu("&Rulers")  # unit actions added below
         # PreferencesRole → native Photoslop → Preferences… (Cmd+,) on macOS;
         # Edit → Preferences… on Windows/Linux (the role only relocates on Mac).
-        m_edit.addAction(self._act("&Preferences…", "Ctrl+,",
-                                   self.action_preferences,
-                                   role=QAction.MenuRole.PreferencesRole))
+        m_edit.addAction(
+            self._act(
+                "&Preferences…",
+                "Ctrl+,",
+                self.action_preferences,
+                role=QAction.MenuRole.PreferencesRole,
+            )
+        )
 
         m_select = menu.addMenu("&Select")
         m_select.addAction(self._act("&All", "Ctrl+A", self.action_select_all))
         m_select.addAction(self._act("&Deselect", "Ctrl+D", self.action_deselect))
         m_select.addSeparator()
-        m_select.addAction(self._act("Su&bject (Model)", None,
-                                     self.action_select_subject))
+        m_select.addAction(self._act("Su&bject (Model)", None, self.action_select_subject))
         m_select.addSeparator()
-        m_select.addAction(self._act("Feat&her…", "Ctrl+Alt+D",
-                                     self.action_feather_selection))
-        m_select.addAction(self._act("&Refine…", "Ctrl+Alt+R",
-                                     self.action_refine_selection))
+        m_select.addAction(self._act("Feat&her…", "Ctrl+Alt+D", self.action_feather_selection))
+        m_select.addAction(self._act("&Refine…", "Ctrl+Alt+R", self.action_refine_selection))
 
         m_image = menu.addMenu("&Image")
         m_image.addAction(self._act("&Image Size…", "Ctrl+Alt+I", self.action_image_size))
         m_image.addAction(self._act("&Canvas Size…", "Ctrl+Alt+S", self.action_canvas_size))
-        m_image.addAction(self._act("Content-A&ware Scale…", None,
-                                    self.action_content_aware_scale))
+        m_image.addAction(self._act("Content-A&ware Scale…", None, self.action_content_aware_scale))
         m_image.addAction(self._act("C&rop to Selection", "Ctrl+Alt+C", self.action_crop))
         m_image.addSeparator()
         m_boards = m_image.addMenu("Art&boards")
-        m_boards.addAction(self._act("&Add Artboard from Selection", None,
-                                     self.action_add_artboard))
-        m_boards.addAction(self._act("&Clear Artboards", None,
-                                     self.action_clear_artboards))
-        m_boards.addAction(self._act("&Export Artboards…", None,
-                                     self.action_export_artboards))
+        m_boards.addAction(
+            self._act("&Add Artboard from Selection", None, self.action_add_artboard)
+        )
+        m_boards.addAction(self._act("&Clear Artboards", None, self.action_clear_artboards))
+        m_boards.addAction(self._act("&Export Artboards…", None, self.action_export_artboards))
         m_image.addSeparator()
         m_adjustments = m_image.addMenu("&Adjustments")
         m_adjustments.addAction(self._act("&Levels…", "Ctrl+L", self.action_levels))
-        m_adjustments.addAction(self._act("&Hue/Saturation…", "Ctrl+U",
-                                          self.action_hue_saturation))
-        m_adjustments.addAction(self._act("&Point Color…", "Ctrl+Shift+U",
-                                          self.action_point_color))
-        m_adjustments.addAction(self._act("Color &Balance…", "Ctrl+B",
-                                          self.action_color_balance))
+        m_adjustments.addAction(self._act("&Hue/Saturation…", "Ctrl+U", self.action_hue_saturation))
+        m_adjustments.addAction(self._act("&Point Color…", "Ctrl+Shift+U", self.action_point_color))
+        m_adjustments.addAction(self._act("Color &Balance…", "Ctrl+B", self.action_color_balance))
         m_adjustments.addAction(self._act("Cur&ves…", "Ctrl+M", self.action_curves))
         m_image.addSeparator()
-        m_image.addAction(self._act("Assign &Profile…", None,
-                                    self.action_assign_profile))
-        m_image.addAction(self._act("Convert to Profi&le…", None,
-                                    self.action_convert_profile))
+        m_image.addAction(self._act("Assign &Profile…", None, self.action_assign_profile))
+        m_image.addAction(self._act("Convert to Profi&le…", None, self.action_convert_profile))
         m_image.addSeparator()
         m_rotate = m_image.addMenu("Image &Rotation")
-        m_rotate.addAction(self._act("Rotate 90° &CW", None,
-                                     lambda: self._image_cmd(RotateImageCommand, 90)))
-        m_rotate.addAction(self._act("Rotate 90° CC&W", None,
-                                     lambda: self._image_cmd(RotateImageCommand, 270)))
+        m_rotate.addAction(
+            self._act("Rotate 90° &CW", None, lambda: self._image_cmd(RotateImageCommand, 90))
+        )
+        m_rotate.addAction(
+            self._act("Rotate 90° CC&W", None, lambda: self._image_cmd(RotateImageCommand, 270))
+        )
         m_rotate.addAction(self._act("&Arbitrary…", None, self.action_rotate_arbitrary))
-        m_rotate.addAction(self._act("Rotate &180°", None,
-                                     lambda: self._image_cmd(RotateImageCommand, 180)))
+        m_rotate.addAction(
+            self._act("Rotate &180°", None, lambda: self._image_cmd(RotateImageCommand, 180))
+        )
         m_rotate.addSeparator()
-        m_rotate.addAction(self._act("Flip Canvas &Horizontal", None,
-                                     lambda: self._image_cmd(FlipImageCommand, True)))
-        m_rotate.addAction(self._act("Flip Canvas &Vertical", None,
-                                     lambda: self._image_cmd(FlipImageCommand, False)))
+        m_rotate.addAction(
+            self._act(
+                "Flip Canvas &Horizontal", None, lambda: self._image_cmd(FlipImageCommand, True)
+            )
+        )
+        m_rotate.addAction(
+            self._act(
+                "Flip Canvas &Vertical", None, lambda: self._image_cmd(FlipImageCommand, False)
+            )
+        )
 
         m_layer = menu.addMenu("&Layer")
-        m_layer.addAction(self._act("&New Layer", "Ctrl+Shift+N",
-                                    lambda: self.layer_panel.add_layer()))
-        m_layer.addAction(self._act("&Duplicate Layer", "Ctrl+J",
-                                    lambda: self.layer_panel.duplicate_layer()))
-        m_layer.addAction(self._act("Delete La&yer", None,
-                                    lambda: self.layer_panel.delete_layer()))
-        m_layer.addAction(self._act("Merge Do&wn", "Ctrl+E",
-                                    lambda: self.layer_panel.merge_down()))
-        m_layer.addAction(self._act("Merge &Visible", "Ctrl+Shift+E",
-                                    self.action_merge_visible))
-        m_layer.addAction(self._act("S&tamp Visible", "Ctrl+Shift+Alt+E",
-                                    self.action_stamp_visible))
+        m_layer.addAction(
+            self._act("&New Layer", "Ctrl+Shift+N", lambda: self.layer_panel.add_layer())
+        )
+        m_layer.addAction(
+            self._act("&Duplicate Layer", "Ctrl+J", lambda: self.layer_panel.duplicate_layer())
+        )
+        m_layer.addAction(self._act("Delete La&yer", None, lambda: self.layer_panel.delete_layer()))
+        m_layer.addAction(self._act("Merge Do&wn", "Ctrl+E", lambda: self.layer_panel.merge_down()))
+        m_layer.addAction(self._act("Merge &Visible", "Ctrl+Shift+E", self.action_merge_visible))
+        m_layer.addAction(
+            self._act("S&tamp Visible", "Ctrl+Shift+Alt+E", self.action_stamp_visible)
+        )
         m_layer.addSeparator()
-        m_layer.addAction(self._act("Add Layer Mask (Reveal All)", None,
-                                    lambda: self.action_add_mask(False)))
-        m_layer.addAction(self._act("Add Layer Mask (From Selection)", None,
-                                    lambda: self.action_add_mask(True)))
+        m_layer.addAction(
+            self._act("Add Layer Mask (Reveal All)", None, lambda: self.action_add_mask(False))
+        )
+        m_layer.addAction(
+            self._act("Add Layer Mask (From Selection)", None, lambda: self.action_add_mask(True))
+        )
         m_layer.addAction(self._act("Apply Layer Mask", None, self.action_apply_mask))
         m_layer.addAction(self._act("Delete Layer Mask", None, self.action_delete_mask))
-        m_layer.addAction(self._act("Clip to Layer Belo&w (toggle)", "Ctrl+Alt+G",
-                                    self.action_toggle_clip))
+        m_layer.addAction(
+            self._act("Clip to Layer Belo&w (toggle)", "Ctrl+Alt+G", self.action_toggle_clip)
+        )
         m_layer.addSeparator()
-        m_layer.addAction(self._act("New Adjustment Layer: Le&vels…", None,
-                                    self.action_adjustment_levels))
+        m_layer.addAction(
+            self._act("New Adjustment Layer: Le&vels…", None, self.action_adjustment_levels)
+        )
         m_layer.addSeparator()
-        m_layer.addAction(self._act("Layer Style: Drop &Shadow…", None,
-                                    self.action_drop_shadow))
-        m_layer.addAction(self._act("Layer Style: Outer G&low…", None,
-                                    self.action_outer_glow))
-        m_layer.addAction(self._act("Layer Style: Strok&e…", None,
-                                    self.action_stroke_style))
-        m_layer.addAction(self._act("Layer Style: &Fill Opacity…", None,
-                                    self.action_fill_opacity))
-        m_layer.addAction(self._act("Layer Style: Clea&r", None,
-                                    self.action_clear_style))
+        m_layer.addAction(self._act("Layer Style: Drop &Shadow…", None, self.action_drop_shadow))
+        m_layer.addAction(self._act("Layer Style: Outer G&low…", None, self.action_outer_glow))
+        m_layer.addAction(self._act("Layer Style: Strok&e…", None, self.action_stroke_style))
+        m_layer.addAction(self._act("Layer Style: &Fill Opacity…", None, self.action_fill_opacity))
+        m_layer.addAction(self._act("Layer Style: Clea&r", None, self.action_clear_style))
         m_layer.addSeparator()
-        m_layer.addAction(self._act("&Group with Layer Below", "Ctrl+G",
-                                    self.action_group_layer))
-        m_layer.addAction(self._act("U&ngroup Layer", "Ctrl+Shift+G",
-                                    self.action_ungroup_layer))
-        m_layer.addAction(self._act("Group &Opacity/Blend…", None,
-                                    self.action_group_props))
+        m_layer.addAction(self._act("&Group with Layer Below", "Ctrl+G", self.action_group_layer))
+        m_layer.addAction(self._act("U&ngroup Layer", "Ctrl+Shift+G", self.action_ungroup_layer))
+        m_layer.addAction(self._act("Group &Opacity/Blend…", None, self.action_group_props))
         m_layer.addSeparator()
-        m_layer.addAction(self._act("Convert to Smart Ob&ject", None,
-                                    self.action_convert_smart))
-        m_layer.addAction(self._act("Restore Smart Object Or&iginal", None,
-                                    self.action_restore_smart))
-        m_layer.addAction(self._act("Re-apply Smart &Filters", None,
-                                    self.action_reapply_smart_filters))
+        m_layer.addAction(self._act("Convert to Smart Ob&ject", None, self.action_convert_smart))
+        m_layer.addAction(
+            self._act("Restore Smart Object Or&iginal", None, self.action_restore_smart)
+        )
+        m_layer.addAction(
+            self._act("Re-apply Smart &Filters", None, self.action_reapply_smart_filters)
+        )
         m_layer.addSeparator()
         m_layer.addAction(self._act("&Copy Layer", "Ctrl+Shift+C", self.action_copy_layer))
         m_layer.addAction(self._act("&Paste Layer", "Ctrl+Shift+V", self.action_paste_layer))
         m_layer.addSeparator()
-        m_layer.addAction(self._act("Raise Layer", "Ctrl+]",
-                                    lambda: self.layer_panel.shift_layer(+1)))
-        m_layer.addAction(self._act("Lower Layer", "Ctrl+[",
-                                    lambda: self.layer_panel.shift_layer(-1)))
+        m_layer.addAction(
+            self._act("Raise Layer", "Ctrl+]", lambda: self.layer_panel.shift_layer(+1))
+        )
+        m_layer.addAction(
+            self._act("Lower Layer", "Ctrl+[", lambda: self.layer_panel.shift_layer(-1))
+        )
         m_layer.addSeparator()
-        m_layer.addAction(self._act("Rotate Layer 90° CW", None,
-                                    lambda: self._layer_cmd(RotateLayerCommand, 90)))
-        m_layer.addAction(self._act("Rotate Layer 90° CCW", None,
-                                    lambda: self._layer_cmd(RotateLayerCommand, 270)))
-        m_layer.addAction(self._act("Rotate Layer 180°", None,
-                                    lambda: self._layer_cmd(RotateLayerCommand, 180)))
-        m_layer.addAction(self._act("Flip Layer Horizontal", None,
-                                    lambda: self._layer_cmd(FlipLayerCommand, True)))
-        m_layer.addAction(self._act("Flip Layer Vertical", None,
-                                    lambda: self._layer_cmd(FlipLayerCommand, False)))
+        m_layer.addAction(
+            self._act("Rotate Layer 90° CW", None, lambda: self._layer_cmd(RotateLayerCommand, 90))
+        )
+        m_layer.addAction(
+            self._act(
+                "Rotate Layer 90° CCW", None, lambda: self._layer_cmd(RotateLayerCommand, 270)
+            )
+        )
+        m_layer.addAction(
+            self._act("Rotate Layer 180°", None, lambda: self._layer_cmd(RotateLayerCommand, 180))
+        )
+        m_layer.addAction(
+            self._act(
+                "Flip Layer Horizontal", None, lambda: self._layer_cmd(FlipLayerCommand, True)
+            )
+        )
+        m_layer.addAction(
+            self._act("Flip Layer Vertical", None, lambda: self._layer_cmd(FlipLayerCommand, False))
+        )
 
         m_view = menu.addMenu("&View")
-        self.action_soft_proof = self._act("Soft &Proof", "Ctrl+Y",
-                                           self._toggle_soft_proof)
+        self.action_soft_proof = self._act("Soft &Proof", "Ctrl+Alt+Y", self._toggle_soft_proof)
         self.action_soft_proof.setCheckable(True)
         m_view.addAction(self.action_soft_proof)
         m_view.addAction(self._appearance_dock.toggleViewAction())
+        m_view.addAction(
+            self._act("Background &Tasks…", None, self.action_task_monitor, prerequisite="always")
+        )
+        m_view.addAction(
+            self._act("Describe &Canvas", "Ctrl+Alt+Shift+D", self.action_describe_canvas)
+        )
         m_view.addSeparator()
         zoom_in = self._act("Zoom &In", "Ctrl++", lambda: self._zoom(+1))
         # a US keyboard's plus key is "=" unshifted — bind every physical form
-        zoom_in.setShortcuts([QKeySequence("Ctrl++"), QKeySequence("Ctrl+="),
-                              QKeySequence("Ctrl+Shift+=")])
+        zoom_in.setShortcuts(
+            [QKeySequence("Ctrl++"), QKeySequence("Ctrl+="), QKeySequence("Ctrl+Shift+=")]
+        )
         m_view.addAction(zoom_in)
         zoom_out = self._act("Zoom &Out", "Ctrl+-", lambda: self._zoom(-1))
-        zoom_out.setShortcuts([QKeySequence("Ctrl+-"),
-                               QKeySequence("Ctrl+Shift+-")])
+        zoom_out.setShortcuts([QKeySequence("Ctrl+-"), QKeySequence("Ctrl+Shift+-")])
         m_view.addAction(zoom_out)
         m_view.addAction(self._act("Zoom &100%", "Ctrl+1", lambda: self._zoom_to(1.0)))
         m_view.addAction(self._act("Zoom to &Fit", "Ctrl+0", self._zoom_fit))
@@ -869,18 +938,29 @@ class MainWindow(QMainWindow):
         self._snap_action.setShortcut(QKeySequence("Ctrl+Shift+;"))
         self._snap_action.toggled.connect(self._toggle_snap)
         m_view.addAction(self._snap_action)
-        m_view.addAction(self._act("Add Horizontal Guide at Center", "Alt+Shift+H",
-                                   lambda: self.action_add_center_guide("h")))
-        m_view.addAction(self._act("Add Vertical Guide at Center", "Alt+Shift+V",
-                                   lambda: self.action_add_center_guide("v")))
+        m_view.addAction(
+            self._act(
+                "Add Horizontal Guide at Center",
+                "Alt+Shift+H",
+                lambda: self.action_add_center_guide("h"),
+            )
+        )
+        m_view.addAction(
+            self._act(
+                "Add Vertical Guide at Center",
+                "Alt+Shift+V",
+                lambda: self.action_add_center_guide("v"),
+            )
+        )
         m_view.addAction(self._act("Clear &Guides", None, self.action_clear_guides))
         m_view.addSeparator()
-        m_view.addAction(self._act("Rotate Vie&w 90\u00b0 CW", "R",
-                                   lambda: self.action_rotate_view(90)))
-        m_view.addAction(self._act("Rotate View 90\u00b0 CC&W", "Shift+R",
-                                   lambda: self.action_rotate_view(-90)))
-        m_view.addAction(self._act("Reset View Rotation", None,
-                                   self.action_reset_view_rotation))
+        m_view.addAction(
+            self._act("Rotate Vie&w 90\u00b0 CW", "R", lambda: self.action_rotate_view(90))
+        )
+        m_view.addAction(
+            self._act("Rotate View 90\u00b0 CC&W", "Shift+R", lambda: self.action_rotate_view(-90))
+        )
+        m_view.addAction(self._act("Reset View Rotation", None, self.action_reset_view_rotation))
         m_view.addSeparator()
         m_workspace = m_view.addMenu("&Workspace")
         m_workspace.addAction(self._act("&Save Workspace", None, self.save_workspace))
@@ -891,28 +971,42 @@ class MainWindow(QMainWindow):
         m_filter.addAction(self._act("Gaussian &Blur…", None, self.action_gaussian_blur))
         m_filter.addAction(self._act("&Unsharp Mask…", None, self.action_unsharp_mask))
         m_filter.addAction(self._act("&Tilt-Shift…", None, self.action_tilt_shift))
-        m_filter.addAction(self._act("&Lens Correction (EXIF)…", None,
-                                     self.action_lens_correct))
-        m_filter.addAction(self._act("Denoise (&Model)…", None,
-                                     self.action_denoise_model))
+        m_filter.addAction(self._act("&Lens Correction (EXIF)…", None, self.action_lens_correct))
+        m_filter.addAction(self._act("Denoise (&Model)…", None, self.action_denoise_model))
         from photoslop.filters import available_filters
 
-        plugins = available_filters()
+        plugins = available_filters(
+            allow_unsafe=str(self.settings.value("security/allow_unsafe_plugins", "false")).lower()
+            == "true"
+        )
         if plugins:
             m_filter.addSeparator()
             for fname in sorted(plugins):
                 cls = plugins[fname]
-                m_filter.addAction(self._act(
-                    f"{cls.label}…", None,
-                    lambda checked=False, c=cls: self.action_plugin_filter(c)))
+                m_filter.addAction(
+                    self._act(
+                        f"{cls.label}…",
+                        None,
+                        lambda checked=False, c=cls: self.action_plugin_filter(c),
+                    )
+                )
 
         m_help = menu.addMenu("&Help")
-        m_help.addAction(self._act("&About Photoslop", None, self.action_about,
-                                   role=QAction.MenuRole.AboutRole))
+        m_help.addAction(
+            self._act("&Diagnostics…", None, self.action_diagnostics, prerequisite="always")
+        )
+        m_help.addAction(
+            self._act("&About Photoslop", None, self.action_about, role=QAction.MenuRole.AboutRole)
+        )
 
-    def _act(self, text: str, shortcut: str | None, slot,
-             role: QAction.MenuRole | None = None,
-             prerequisite: str | None = None) -> QAction:
+    def _act(
+        self,
+        text: str,
+        shortcut: str | None,
+        slot,
+        role: QAction.MenuRole | None = None,
+        prerequisite: str | None = None,
+    ) -> QAction:
         act = QAction(text, self)
         if shortcut:
             act.setShortcut(QKeySequence(shortcut))
@@ -935,15 +1029,24 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"{handle.label}…")
         handle.progressChanged.connect(
             lambda percent, message, h=handle: self.statusBar().showMessage(
-                f"{h.label}: {percent}%{(' — ' + message) if message else ''}"))
-        handle.failed.connect(
-            lambda error, h=handle: self.statusBar().showMessage(
-                f"{h.label} failed: {error.splitlines()[-1]}", 8000))
+                f"{h.label}: {percent}%{(' — ' + message) if message else ''}"
+            )
+        )
+        handle.failed.connect(lambda error, h=handle: self._record_task_failure(h, error))
         handle.cancelled.connect(
-            lambda h=handle: self.statusBar().showMessage(f"{h.label} cancelled", 4000))
+            lambda h=handle: self.statusBar().showMessage(f"{h.label} cancelled", 4000)
+        )
         self.action_registry.update()
 
+    def _record_task_failure(self, handle, error: str) -> None:
+        record = self.diagnostics.record_task_failure(handle, error)
+        self.statusBar().showMessage(
+            f"{handle.label} failed — Diagnostics {record.identifier}", 10_000
+        )
+
     def _on_task_finished(self, handle) -> None:
+        if handle.state.value != "failed":
+            self.diagnostics.record_task_result(handle)
         if not self.task_service.active and handle.state.value == "succeeded":
             self.statusBar().showMessage(f"{handle.label} complete", 3000)
         self.action_registry.update()
@@ -1000,11 +1103,83 @@ class MainWindow(QMainWindow):
         index = self.tabs.addTab(editor, doc.name)
         self.undo_group.addStack(doc.undo_stack)
         doc.undo_stack.cleanChanged.connect(lambda _clean, d=doc: self._refresh_tab(d))
+        doc.undo_stack.cleanChanged.connect(
+            lambda clean, d=doc: self._on_document_clean_changed(d, clean)
+        )
+        doc.undo_stack.indexChanged.connect(lambda _index, d=doc: self._schedule_recovery(d))
         self.tabs.setCurrentIndex(index)
         doc.selectionChanged.connect(self.action_registry.update)
         doc.structureChanged.connect(self.action_registry.update)
         self.action_registry.update()
         self.accessibility.apply()
+
+    def _on_document_clean_changed(self, doc: Document, clean: bool) -> None:
+        if clean:
+            timer = self._recovery_timers.pop(doc.document_id, None)
+            if timer is not None:
+                timer.stop()
+            self.recovery_service.clear(doc.document_id)
+            return
+        self._schedule_recovery(doc)
+
+    def _schedule_recovery(self, doc: Document) -> None:
+        if not self._recovery_enabled or doc.is_closed or not doc.is_dirty():
+            return
+        timer = self._recovery_timers.get(doc.document_id)
+        if timer is None:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.setInterval(2000)
+            timer.timeout.connect(lambda d=doc: self._save_recovery(d))
+            self._recovery_timers[doc.document_id] = timer
+        timer.start()
+
+    def _save_recovery(self, doc: Document) -> None:
+        if doc.is_closed or not doc.is_dirty():
+            return
+        snapshot = snapshot_document(doc)
+        path = self.recovery_service.path_for(doc.document_id)
+        ticket = write_coordinator.reserve(path)
+
+        def operation(context):
+            try:
+                return self.recovery_service.write(
+                    snapshot, ticket=ticket, before_commit=context.check_cancelled
+                )
+            except SupersededWriteError as exc:
+                raise CancelledError(str(exc)) from exc
+
+        self.task_service.submit(
+            "recovery.save",
+            f"Autosave {doc.name}",
+            operation,
+            max(1, doc.memory_bytes() * 2),
+            doc.document_id,
+            TaskPriority.WRITE,
+        )
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._recovery_enabled and not self._recovery_offered:
+            self._recovery_offered = True
+            QTimer.singleShot(0, self._offer_recovery)
+
+    def _offer_recovery(self) -> None:
+        recovered = self.recovery_service.available()
+        if not recovered:
+            return
+        answer = QMessageBox.question(
+            self,
+            "Recover autosaved documents",
+            f"Recover {len(recovered)} autosaved document(s)?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            self.recovery_service.clear_all()
+            return
+        for doc in recovered:
+            doc.undo_stack.push(QUndoCommand("Recovered autosave"))
+            self.add_document(doc)
 
     def _editor_for(self, doc: Document) -> EditorView | None:
         for i in range(self.tabs.count()):
@@ -1052,7 +1227,8 @@ class MainWindow(QMainWindow):
         if doc.is_dirty():
             self.tabs.setCurrentIndex(index)
             answer = QMessageBox.question(
-                self, "Unsaved changes",
+                self,
+                "Unsaved changes",
                 f"Save changes to {doc.name} before closing?",
                 QMessageBox.StandardButton.Save
                 | QMessageBox.StandardButton.Discard
@@ -1063,6 +1239,9 @@ class MainWindow(QMainWindow):
             if answer == QMessageBox.StandardButton.Save and not self._save_doc(doc):
                 return
         self.undo_group.removeStack(doc.undo_stack)
+        self.task_service.cancel_scope(doc.document_id)
+        self.recovery_service.clear(doc.document_id)
+        doc.close()
         self.layer_panel.set_document(None)
         self.adjust_panel.set_document(None)
         self.appearance_panel.set_document(None)
@@ -1075,7 +1254,8 @@ class MainWindow(QMainWindow):
             if isinstance(editor, EditorView) and editor.doc.is_dirty():
                 self.tabs.setCurrentIndex(i)
                 answer = QMessageBox.question(
-                    self, "Unsaved changes",
+                    self,
+                    "Unsaved changes",
                     f"Save changes to {editor.doc.name} before quitting?",
                     QMessageBox.StandardButton.Save
                     | QMessageBox.StandardButton.Discard
@@ -1088,6 +1268,12 @@ class MainWindow(QMainWindow):
                     ev.ignore()
                     return
         self.settings.setValue("workspace/geometry", self.saveGeometry())
+        self.task_service.cancel_all()
+        for i in range(self.tabs.count()):
+            editor = self.tabs.widget(i)
+            if isinstance(editor, EditorView):
+                self.recovery_service.clear(editor.doc.document_id)
+                editor.doc.close()
         ev.accept()
 
     # ------------------------------------------------------------------ file actions
@@ -1100,14 +1286,29 @@ class MainWindow(QMainWindow):
         img = QGuiApplication.clipboard().image()
         return img.size() if not img.isNull() else None
 
+    def _allow_large_documents(self) -> bool:
+        return str(self.settings.value("security/allow_large_documents", "false")).lower() == "true"
+
     def action_new(self) -> None:
         dialog = NewDocumentDialog(self, initial_size=self._clip_size_hint())
         if dialog.exec():
             name, size, dpi, background = dialog.values()
-            self.add_document(Document.new(size, dpi, name, background))
+            from photoslop.resources import validate_dimensions
+
+            try:
+                validate_dimensions(
+                    size.width(),
+                    size.height(),
+                    operation="new document",
+                    allow_large=self._allow_large_documents(),
+                )
+                self.add_document(Document.new(size, dpi, name, background))
+            except ValueError as exc:
+                self.statusBar().showMessage(str(exc), 8000)
 
     def action_open(self) -> None:
         gui_thread = self.thread()
+        allow_large = self._allow_large_documents()
         for path in OpenImageDialog.get_paths(self, self._last_directory()):
             if is_raw_path(path):
                 from photoslop.rawdialog import RawDevelopDialog
@@ -1117,30 +1318,36 @@ class MainWindow(QMainWindow):
 
                 def develop(context, source=path, params=values):
                     context.progress(5, "Decoding RAW")
-                    doc = FileService.load(source, params)
+                    doc = FileService.load(source, params, allow_large=allow_large)
                     doc.moveToThread(gui_thread)
                     context.progress(100, "Developed")
                     return doc
 
                 handle = self.task_service.submit(
-                    "file.raw-develop", f"Develop {os.path.basename(path)}", develop,
-                    512 * 1024 * 1024)
-                handle.succeeded.connect(
-                    lambda doc, source=path: self._finish_open(doc, source))
+                    "file.raw-develop",
+                    f"Develop {os.path.basename(path)}",
+                    develop,
+                    512 * 1024 * 1024,
+                    priority=TaskPriority.INTERACTIVE,
+                )
+                handle.succeeded.connect(lambda doc, source=path: self._finish_open(doc, source))
                 continue
 
-            def operation(context, source=path):
+            def operation(context, source=path, permit=allow_large):
                 context.progress(5, "Reading")
-                doc = FileService.load(source)
+                doc = FileService.load(source, allow_large=permit)
                 doc.moveToThread(gui_thread)
                 context.progress(100, "Decoded")
                 return doc
 
             handle = self.task_service.submit(
-                "file.open", f"Open {os.path.basename(path)}", operation,
-                256 * 1024 * 1024)
-            handle.succeeded.connect(
-                lambda doc, source=path: self._finish_open(doc, source))
+                "file.open",
+                f"Open {os.path.basename(path)}",
+                operation,
+                256 * 1024 * 1024,
+                priority=TaskPriority.INTERACTIVE,
+            )
+            handle.succeeded.connect(lambda doc, source=path: self._finish_open(doc, source))
 
     def _recent_paths(self) -> list[str]:
         value = self.settings.value(RECENT_FILES_KEY, [])
@@ -1185,15 +1392,12 @@ class MainWindow(QMainWindow):
             action.setData(path)
             action.setStatusTip(path)
             action.setToolTip(path)
-            action.triggered.connect(
-                lambda _checked=False, source=path: self._open_recent(source))
+            action.triggered.connect(lambda _checked=False, source=path: self._open_recent(source))
 
     def _open_recent(self, path: str) -> None:
         if not os.path.isfile(path):
-            self._set_recent_paths(
-                [item for item in self._recent_paths() if item != path])
-            self.statusBar().showMessage(
-                f"Recent document no longer exists: {path}", 8000)
+            self._set_recent_paths([item for item in self._recent_paths() if item != path])
+            self.statusBar().showMessage(f"Recent document no longer exists: {path}", 8000)
             return
         self.open_path(path)
 
@@ -1206,8 +1410,7 @@ class MainWindow(QMainWindow):
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
         dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
         dialog.setFileMode(QFileDialog.FileMode.AnyFile)
-        dialog.setNameFilters([
-            "OpenRaster (*.ora)", "Scalable Vector Graphics (*.svg)"])
+        dialog.setNameFilters(["OpenRaster (*.ora)", "Scalable Vector Graphics (*.svg)"])
         dialog.setDirectory(self._last_directory())
         dialog.selectFile(suggested_name)
         if not dialog.exec():
@@ -1216,9 +1419,10 @@ class MainWindow(QMainWindow):
         return (paths[0] if paths else "", dialog.selectedNameFilter())
 
     def open_path(self, path: str) -> bool:
+        allow_large = self._allow_large_documents()
         try:
             if path.lower().endswith((".ora", ".svg")):
-                doc = FileService.load(path)
+                doc = FileService.load(path, allow_large=allow_large)
             elif is_raw_path(path):
                 from photoslop.io_raw import probe_raw
                 from photoslop.rawdialog import RawDevelopDialog
@@ -1226,26 +1430,28 @@ class MainWindow(QMainWindow):
                 probe_raw(path)  # junk raises -> graceful failure below
                 dialog = RawDevelopDialog(path, self)
                 # cancelled = camera defaults
-                img = (dialog.developed() if dialog.exec()
-                       else load_raw(path))
+                img = dialog.developed() if dialog.exec() else load_raw(path)
+                from photoslop.resources import validate_dimensions
+
+                validate_dimensions(
+                    img.width(),
+                    img.height(),
+                    operation="RAW decode",
+                    buffers=2,
+                    allow_large=allow_large,
+                )
                 doc = Document.from_image(img, os.path.basename(path), 72.0)
             elif io_formats.is_extra_path(path):
                 if not io_formats.available(path):
                     self.statusBar().showMessage(io_formats.missing_hint(path), 8000)
                     return False
-                img = io_formats.load_extra(path)
+                img = io_formats.load_extra(path, allow_large=allow_large)
                 if img is None or img.isNull():
                     self.statusBar().showMessage(f"Could not open {path}", 5000)
                     return False
                 doc = Document.from_image(img, os.path.basename(path), 72.0)
             else:
-                img = QImage(path)
-                if img.isNull():
-                    self.statusBar().showMessage(f"Could not open {path}", 5000)
-                    return False
-                dpm = img.dotsPerMeterX()
-                dpi = round(dpm * 0.0254) if dpm > 0 else 72
-                doc = Document.from_image(img, os.path.basename(path), float(dpi))
+                doc = FileService.load(path, allow_large=allow_large)
         except Exception as exc:  # zip/XML errors from damaged files
             self.statusBar().showMessage(f"Could not open {path}: {exc}", 8000)
             return False
@@ -1266,17 +1472,31 @@ class MainWindow(QMainWindow):
             snapshot = snapshot_document(doc)
             undo_index = doc.undo_stack.index()
             estimated = max(doc.memory_bytes() * 2, 1)
+            ticket = write_coordinator.reserve(path)
 
             def operation(context):
                 context.progress(5, "Encoding layers")
-                FileService.save(snapshot, path)
+                try:
+                    FileService.save(
+                        snapshot, path, ticket=ticket, before_commit=context.check_cancelled
+                    )
+                except SupersededWriteError as exc:
+                    raise CancelledError(str(exc)) from exc
                 context.progress(100, "Written")
                 return path
 
-            handle = self.task_service.submit("file.save", f"Save {os.path.basename(path)}",
-                                              operation, estimated)
+            handle = self.task_service.submit(
+                "file.save",
+                f"Save {os.path.basename(path)}",
+                operation,
+                estimated,
+                doc.document_id,
+                TaskPriority.WRITE,
+            )
 
             def installed(saved_path):
+                if doc.is_closed:
+                    return
                 doc.path = saved_path
                 doc.name = os.path.basename(saved_path)
                 if doc.undo_stack.index() == undo_index:
@@ -1319,8 +1539,7 @@ class MainWindow(QMainWindow):
         fmt = dialog.chosen_format()
         suffix = dialog.suggested_suffix()
         suggested = os.path.splitext(doc.name)[0] + suffix
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export As", suggested, f"{fmt} (*{suffix})")
+        path, _ = QFileDialog.getSaveFileName(self, "Export As", suggested, f"{fmt} (*{suffix})")
         if not path:
             return
         if not path.lower().endswith(suffix):
@@ -1330,17 +1549,28 @@ class MainWindow(QMainWindow):
         quality = dialog.chosen_quality()
         snapshot = snapshot_document(doc)
         request = ExportRequest(path, fmt, quality, size, doc.dpi)
+        ticket = write_coordinator.reserve(path)
 
         def operation(context):
             context.progress(10, "Scaling")
             context.progress(60, "Encoding")
-            ExportService.write(base, snapshot, request)
+            try:
+                ExportService.write(
+                    base, snapshot, request, ticket=ticket, before_commit=context.check_cancelled
+                )
+            except SupersededWriteError as exc:
+                raise CancelledError(str(exc)) from exc
             context.progress(100, "Written")
             return path
 
         self.task_service.submit(
-            "file.export", f"Export {os.path.basename(path)}", operation,
-            max(1, base.sizeInBytes() * 3))
+            "file.export",
+            f"Export {os.path.basename(path)}",
+            operation,
+            max(1, base.sizeInBytes() * 3),
+            doc.document_id,
+            TaskPriority.BULK,
+        )
 
     def action_close_tab(self) -> None:
         if self.tabs.count():
@@ -1404,9 +1634,7 @@ class MainWindow(QMainWindow):
         if not QRect(origin, img.size()).intersects(doc.canvas_rect()):
             origin = QPoint(0, 0)
         layer = Layer("Pasted", img.convertToFormat(FORMAT), origin)
-        doc.undo_stack.push(
-            InsertLayerCommand(doc, doc.active_index + 1, layer, "Paste")
-        )
+        doc.undo_stack.push(InsertLayerCommand(doc, doc.active_index + 1, layer, "Paste"))
 
     def action_delete_selection(self) -> None:
         doc = self.current_doc()
@@ -1440,9 +1668,13 @@ class MainWindow(QMainWindow):
         """Filters applied to a smart-object layer stack up for re-apply."""
         doc = self.current_doc()
         layer = doc.active_layer if doc else None
-        if (layer is not None and layer.source is not None
-                and not getattr(self, "_replaying_smart", False)):
+        if (
+            layer is not None
+            and layer.source is not None
+            and not getattr(self, "_replaying_smart", False)
+        ):
             layer.smart_filters.append(tag)
+            layer.smart_filters_trusted = True
 
     def action_reapply_smart_filters(self) -> None:
         doc = self.current_doc()
@@ -1450,11 +1682,25 @@ class MainWindow(QMainWindow):
         if layer is None or layer.source is None:
             if doc is not None:
                 self.statusBar().showMessage(
-                    "Not a smart object — Convert to Smart Object first", 4000)
+                    "Not a smart object — Convert to Smart Object first", 4000
+                )
             return
         if not layer.smart_filters:
             self.statusBar().showMessage("No smart filters recorded", 4000)
             return
+        if not layer.smart_filters_trusted:
+            answer = QMessageBox.warning(
+                self,
+                "Trust imported smart filters?",
+                "This recipe came from an imported file and may invoke enabled "
+                "native or third-party plugins. Re-apply it only if you trust "
+                "the file's source.",
+                QMessageBox.StandardButton.Apply | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if answer != QMessageBox.StandardButton.Apply:
+                return
+            layer.smart_filters_trusted = True
         doc.undo_stack.beginMacro("Re-apply Smart Filters")
         self._replaying_smart = True
         try:
@@ -1472,25 +1718,24 @@ class MainWindow(QMainWindow):
         finally:
             self._replaying_smart = False
             doc.undo_stack.endMacro()
-        self.statusBar().showMessage(
-            f"Smart filters re-applied ({len(layer.smart_filters)})", 4000)
+        self.statusBar().showMessage(f"Smart filters re-applied ({len(layer.smart_filters)})", 4000)
 
     def action_gaussian_blur_direct(self, radius: int) -> None:
         from photoslop import npimage
 
-        self._run_filter("Gaussian Blur",
-                         lambda img, m: npimage.gaussian_blur(img, radius, m))
-        self._record_step(f"Gaussian Blur {radius}px",
-                          lambda w: w.action_gaussian_blur_direct(radius))
+        self._run_filter("Gaussian Blur", lambda img, m: npimage.gaussian_blur(img, radius, m))
+        self._record_step(
+            f"Gaussian Blur {radius}px", lambda w: w.action_gaussian_blur_direct(radius)
+        )
         self._record_smart_filter(("gaussian", radius))
 
     def action_unsharp_direct(self, amount: int) -> None:
         from photoslop import npimage
 
-        self._run_filter("Unsharp Mask",
-                         lambda img, m: npimage.unsharp_mask(img, 4, amount / 100.0, m))
-        self._record_step(f"Unsharp Mask {amount}%",
-                          lambda w: w.action_unsharp_direct(amount))
+        self._run_filter(
+            "Unsharp Mask", lambda img, m: npimage.unsharp_mask(img, 4, amount / 100.0, m)
+        )
+        self._record_step(f"Unsharp Mask {amount}%", lambda w: w.action_unsharp_direct(amount))
         self._record_smart_filter(("unsharp", amount))
 
     def action_plugin_filter(self, cls) -> None:
@@ -1508,20 +1753,22 @@ class MainWindow(QMainWindow):
         """Run a registered filter plugin through the shared plumbing."""
         from photoslop.filters import available_filters
 
-        cls = available_filters().get(name)
+        cls = available_filters(
+            allow_unsafe=str(self.settings.value("security/allow_unsafe_plugins", "false")).lower()
+            == "true"
+        ).get(name)
         if cls is None:
             self.statusBar().showMessage(f"Filter not installed: {name}", 5000)
             return
-        self._run_filter(cls.label,
-                         lambda img, m: cls().apply(img, params))
-        self._record_step(f"{cls.label} {params}",
-                          lambda w: w.apply_plugin_filter(name, params))
+        self._run_filter(cls.label, lambda img, m: cls().apply(img, params))
+        self._record_step(f"{cls.label} {params}", lambda w: w.apply_plugin_filter(name, params))
         self._record_smart_filter(("filter", name, tuple(sorted(params.items()))))
 
     def action_record_start(self) -> None:
         self.action_recording = []
         self.statusBar().showMessage(
-            "Recording action — apply filters/adjustments, then Stop", 5000)
+            "Recording action — apply filters/adjustments, then Stop", 5000
+        )
 
     def action_record_stop(self) -> None:
         if self.action_recording is None:
@@ -1530,7 +1777,8 @@ class MainWindow(QMainWindow):
         self.action_recording = None
         names = ", ".join(label for label, _fn in self.recorded_action) or "empty"
         self.statusBar().showMessage(
-            f"Action recorded ({len(self.recorded_action)} steps): {names}", 6000)
+            f"Action recorded ({len(self.recorded_action)} steps): {names}", 6000
+        )
 
     def action_play(self) -> None:
         doc = self.current_doc()
@@ -1544,8 +1792,7 @@ class MainWindow(QMainWindow):
                 replay(self)
         finally:
             doc.undo_stack.endMacro()
-        self.statusBar().showMessage(
-            f"Action played ({len(self.recorded_action)} steps)", 4000)
+        self.statusBar().showMessage(f"Action played ({len(self.recorded_action)} steps)", 4000)
 
     def _run_filter(self, title: str, apply, force_sync: bool = False) -> None:
         """Shared filter plumbing: selection-aware, full undo step."""
@@ -1560,11 +1807,10 @@ class MainWindow(QMainWindow):
         if doc.selection is not None:
             if doc.selection_feather > 0:
                 weights = npimage.feathered_weights(
-                    doc.selection, layer.image.size(), layer.offset,
-                    doc.selection_feather)
+                    doc.selection, layer.image.size(), layer.offset, doc.selection_feather
+                )
             else:
-                mask = npimage.selection_mask(doc.selection, layer.image.size(),
-                                              layer.offset)
+                mask = npimage.selection_mask(doc.selection, layer.image.size(), layer.offset)
                 if not mask.any():
                     mask = None
         before = QImage(layer.image)
@@ -1573,7 +1819,7 @@ class MainWindow(QMainWindow):
         # camera-sized documents.
         estimated = max(1, before.sizeInBytes() * 3)
         if not force_sync and before.width() * before.height() >= 1_000_000:
-            source_key = layer.image.cacheKey()
+            revision = doc.capture_revision()
 
             def operation(context):
                 context.progress(5, "Preparing snapshot")
@@ -1582,18 +1828,27 @@ class MainWindow(QMainWindow):
                 return image
 
             handle = self.task_service.submit(
-                f"filter.{title.lower().replace(' ', '-')}", title, operation, estimated)
+                f"filter.{title.lower().replace(' ', '-')}",
+                title,
+                operation,
+                estimated,
+                doc.document_id,
+                TaskPriority.INTERACTIVE,
+            )
 
             def install(image):
-                if layer.image.cacheKey() != source_key:
+                if not doc.accepts_revision(revision, layer):
                     self.statusBar().showMessage(
-                        f"{title} result discarded because the layer changed", 6000)
+                        f"{title} result discarded because the document changed", 6000
+                    )
                     return
                 rect = image.rect()
                 layer.image = image
-                doc.undo_stack.push(LayerRegionCommand(
-                    doc, layer, rect, before.copy(rect), image.copy(rect),
-                    title, applied=True))
+                doc.undo_stack.push(
+                    LayerRegionCommand(
+                        doc, layer, rect, before.copy(rect), image.copy(rect), title, applied=True
+                    )
+                )
                 doc.notify_pixels(layer.bounds())
 
             handle.succeeded.connect(install)
@@ -1603,9 +1858,11 @@ class MainWindow(QMainWindow):
         if weights is not None:
             npimage.blend_by_weights(layer.image, before, weights)
         rect = layer.image.rect()
-        doc.undo_stack.push(LayerRegionCommand(
-            doc, layer, rect, before.copy(rect), layer.image.copy(rect),
-            title, applied=True))
+        doc.undo_stack.push(
+            LayerRegionCommand(
+                doc, layer, rect, before.copy(rect), layer.image.copy(rect), title, applied=True
+            )
+        )
         doc.notify_pixels(layer.bounds())
 
     def action_lens_correct(self) -> None:
@@ -1614,8 +1871,9 @@ class MainWindow(QMainWindow):
             return
         if not doc.path:
             self.statusBar().showMessage(
-                "Lens correction reads EXIF from the opened file — "
-                "save/open a camera file first", 6000)
+                "Lens correction reads EXIF from the opened file — save/open a camera file first",
+                6000,
+            )
             return
         from photoslop import lens
 
@@ -1624,8 +1882,7 @@ class MainWindow(QMainWindow):
         except ValueError as exc:
             self.statusBar().showMessage(f"Lens correction: {exc}", 8000)
             return
-        self._run_filter("Lens Correction", lambda img, m: (
-            None, img.swap(corrected))[0])
+        self._run_filter("Lens Correction", lambda img, m: (None, img.swap(corrected))[0])
 
     def action_denoise_model(self) -> None:
         from PySide6.QtWidgets import QInputDialog
@@ -1636,15 +1893,15 @@ class MainWindow(QMainWindow):
         adapter = self._model_adapter()
         if adapter is None:
             self.statusBar().showMessage(
-                "Set a backend first: Edit → Options → Model Backend", 6000)
+                "Set a backend first: Edit → Options → Model Backend", 6000
+            )
             return
-        strength, ok = QInputDialog.getInt(self, "Denoise (Model)",
-                                           "Strength (1–100):", 40, 1, 100)
+        strength, ok = QInputDialog.getInt(self, "Denoise (Model)", "Strength (1–100):", 40, 1, 100)
         if not ok:
             return
         layer = doc.active_layer
         snapshot = QImage(layer.image)
-        source_key = layer.image.cacheKey()
+        revision = doc.capture_revision()
 
         def operation(context):
             context.progress(10, "Sending to backend")
@@ -1653,44 +1910,49 @@ class MainWindow(QMainWindow):
             return result
 
         handle = self.task_service.submit(
-            "model.denoise", "Denoise (Model)", operation, snapshot.sizeInBytes() * 3)
+            "model.denoise",
+            "Denoise (Model)",
+            operation,
+            snapshot.sizeInBytes() * 3,
+            doc.document_id,
+            TaskPriority.REMOTE,
+        )
 
         def install(result):
-            if layer.image.cacheKey() != source_key:
-                self.statusBar().showMessage("Denoise result discarded after layer edit", 6000)
+            if not doc.accepts_revision(revision, layer):
+                self.statusBar().showMessage("Denoise result discarded after document edit", 6000)
                 return
-            self._run_filter("Denoise (Model)",
-                             lambda img, _mask: (None, img.swap(result))[0], True)
+            self._run_filter(
+                "Denoise (Model)", lambda img, _mask: (None, img.swap(result))[0], True
+            )
 
         handle.succeeded.connect(install)
 
     def action_gaussian_blur(self) -> None:
         from PySide6.QtWidgets import QInputDialog
 
-        radius, ok = QInputDialog.getInt(self, "Gaussian Blur", "Radius (px):",
-                                         8, 1, 100)
+        radius, ok = QInputDialog.getInt(self, "Gaussian Blur", "Radius (px):", 8, 1, 100)
         if not ok:
             return
         from photoslop import npimage
 
-        self._run_filter("Gaussian Blur",
-                         lambda img, m: npimage.gaussian_blur(img, radius, m))
-        self._record_step(f"Gaussian Blur {radius}px",
-                          lambda w: w.action_gaussian_blur_direct(radius))
+        self._run_filter("Gaussian Blur", lambda img, m: npimage.gaussian_blur(img, radius, m))
+        self._record_step(
+            f"Gaussian Blur {radius}px", lambda w: w.action_gaussian_blur_direct(radius)
+        )
 
     def action_unsharp_mask(self) -> None:
         from PySide6.QtWidgets import QInputDialog
 
-        amount, ok = QInputDialog.getInt(self, "Unsharp Mask", "Amount (%):",
-                                         80, 10, 500)
+        amount, ok = QInputDialog.getInt(self, "Unsharp Mask", "Amount (%):", 80, 10, 500)
         if not ok:
             return
         from photoslop import npimage
 
-        self._run_filter("Unsharp Mask",
-                         lambda img, m: npimage.unsharp_mask(img, 4, amount / 100.0, m))
-        self._record_step(f"Unsharp Mask {amount}%",
-                          lambda w: w.action_unsharp_direct(amount))
+        self._run_filter(
+            "Unsharp Mask", lambda img, m: npimage.unsharp_mask(img, 4, amount / 100.0, m)
+        )
+        self._record_step(f"Unsharp Mask {amount}%", lambda w: w.action_unsharp_direct(amount))
 
     def action_tilt_shift(self) -> None:
         doc = self.current_doc()
@@ -1705,10 +1967,11 @@ class MainWindow(QMainWindow):
         spins = {}
         h = layer.image.height()
         for key, lo, hi, default, suffix in (
-                ("centre", 0, h, h // 2, " px"),
-                ("band", 4, h, max(8, h // 4), " px sharp"),
-                ("transition", 2, h, max(8, h // 6), " px"),
-                ("radius", 2, 60, 12, " px blur")):
+            ("centre", 0, h, h // 2, " px"),
+            ("band", 4, h, max(8, h // 4), " px sharp"),
+            ("transition", 2, h, max(8, h // 6), " px"),
+            ("radius", 2, 60, 12, " px blur"),
+        ):
             spin = QSpinBox()
             spin.setRange(lo, hi)
             spin.setValue(default)
@@ -1716,18 +1979,25 @@ class MainWindow(QMainWindow):
             form.addRow(key.capitalize(), spin)
             spins[key] = spin
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
         if not dialog.exec():
             return
-        self.apply_tilt_shift(doc, layer, spins["centre"].value(),
-                              spins["band"].value(), spins["transition"].value(),
-                              spins["radius"].value())
+        self.apply_tilt_shift(
+            doc,
+            layer,
+            spins["centre"].value(),
+            spins["band"].value(),
+            spins["transition"].value(),
+            spins["radius"].value(),
+        )
 
-    def apply_tilt_shift(self, doc, layer, centre: int, band: int,
-                         transition: int, radius: int) -> None:
+    def apply_tilt_shift(
+        self, doc, layer, centre: int, band: int, transition: int, radius: int
+    ) -> None:
         import numpy as np
 
         from photoslop import npimage
@@ -1744,19 +2014,21 @@ class MainWindow(QMainWindow):
 
         layer.image = blurred
         rect = layer.image.rect()
-        doc.undo_stack.push(LayerRegionCommand(
-            doc, layer, rect, before.copy(rect), blurred.copy(rect),
-            "Tilt-Shift", applied=True))
+        doc.undo_stack.push(
+            LayerRegionCommand(
+                doc, layer, rect, before.copy(rect), blurred.copy(rect), "Tilt-Shift", applied=True
+            )
+        )
         doc.notify_pixels(layer.bounds())
         self._record_step(
             f"Tilt-Shift {radius}px",
-            lambda w: w.apply_tilt_shift(w.current_doc(),
-                                         w.current_doc().active_layer,
-                                         centre, band, transition, radius))
-        if (layer.source is not None
-                and not getattr(self, "_replaying_smart", False)):
-            layer.smart_filters.append(
-                ("tilt-shift", centre, band, transition, radius))
+            lambda w: w.apply_tilt_shift(
+                w.current_doc(), w.current_doc().active_layer, centre, band, transition, radius
+            ),
+        )
+        if layer.source is not None and not getattr(self, "_replaying_smart", False):
+            layer.smart_filters.append(("tilt-shift", centre, band, transition, radius))
+            layer.smart_filters_trusted = True
 
     def action_content_aware_fill(self) -> None:
         doc = self.current_doc()
@@ -1768,15 +2040,22 @@ class MainWindow(QMainWindow):
         from photoslop import npimage
 
         layer = doc.active_layer
-        mask = npimage.selection_mask(doc.selection, layer.image.size(),
-                                      layer.offset)
+        mask = npimage.selection_mask(doc.selection, layer.image.size(), layer.offset)
         if not mask.any():
             return
         before = QImage(layer.image)  # COW; first write below detaches
         dirty = npimage.inpaint_diffuse(layer.image, mask)
-        doc.undo_stack.push(LayerRegionCommand(
-            doc, layer, dirty, before.copy(dirty), layer.image.copy(dirty),
-            "Content-Aware Fill", applied=True))
+        doc.undo_stack.push(
+            LayerRegionCommand(
+                doc,
+                layer,
+                dirty,
+                before.copy(dirty),
+                layer.image.copy(dirty),
+                "Content-Aware Fill",
+                applied=True,
+            )
+        )
         doc.notify_pixels(dirty.translated(layer.offset))
 
     def action_define_pattern(self) -> None:
@@ -1789,7 +2068,16 @@ class MainWindow(QMainWindow):
             return
         self.options.pattern = doc.flatten().copy(region)
         self.statusBar().showMessage(
-            f"Pattern defined: {region.width()}\u00d7{region.height()} px", 4000)
+            f"Pattern defined: {region.width()}\u00d7{region.height()} px", 4000
+        )
+
+    def action_describe_canvas(self) -> None:
+        """Focus the canvas and announce its current editable state."""
+        editor = self.current_editor()
+        if editor is None:
+            return
+        editor.canvas.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.statusBar().showMessage(editor.canvas.accessible_summary(), 10_000)
 
     def action_free_transform(self) -> None:
         doc = self.current_doc()
@@ -1805,7 +2093,9 @@ class MainWindow(QMainWindow):
         self._set_tool("transform")
         self.statusBar().showMessage(
             "Free Transform: drag inside to move, handles to scale, outside "
-            "to rotate — Enter/double-click commits, Esc cancels", 6000)
+            "to rotate — Enter/double-click commits, Esc cancels",
+            6000,
+        )
 
     def action_warp(self) -> None:
         doc = self.current_doc()
@@ -1820,7 +2110,8 @@ class MainWindow(QMainWindow):
         tool.session.enter_warp()
         self._set_tool("transform")
         self.statusBar().showMessage(
-            "Warp: drag the 3\u00d73 grid points — Enter commits, Esc cancels", 6000)
+            "Warp: drag the 3\u00d73 grid points — Enter commits, Esc cancels", 6000
+        )
 
     def end_transform(self) -> None:
         """Called after a transform commit/cancel: restore the prior tool."""
@@ -1839,14 +2130,19 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QInputDialog
 
         radius, ok = QInputDialog.getInt(
-            self, "Feather Selection", "Feather radius (px):",
-            max(1, int(doc.selection_feather)) or 8, 0, 100)
+            self,
+            "Feather Selection",
+            "Feather radius (px):",
+            max(1, int(doc.selection_feather)) or 8,
+            0,
+            100,
+        )
         if not ok:
             return
         doc.selection_feather = float(radius)
         self.statusBar().showMessage(
-            f"Selection feathered {radius} px — filters and fills blend softly",
-            5000)
+            f"Selection feathered {radius} px — filters and fills blend softly", 5000
+        )
 
     def action_refine_selection(self) -> None:
         doc = self.current_doc()
@@ -1888,9 +2184,7 @@ class MainWindow(QMainWindow):
         layer = self.layer_clip.clone()
         if not layer.bounds().intersects(doc.canvas_rect()):
             layer.offset = QPoint(0, 0)
-        doc.undo_stack.push(
-            InsertLayerCommand(doc, doc.active_index + 1, layer, "Paste Layer")
-        )
+        doc.undo_stack.push(InsertLayerCommand(doc, doc.active_index + 1, layer, "Paste Layer"))
 
     def action_add_mask(self, from_selection: bool) -> None:
         doc = self.current_doc()
@@ -1898,16 +2192,16 @@ class MainWindow(QMainWindow):
             return
         layer = doc.active_layer
         if from_selection and doc.selection is None:
-            self.statusBar().showMessage("Add Mask From Selection needs a selection",
-                                         4000)
+            self.statusBar().showMessage("Add Mask From Selection needs a selection", 4000)
             return
         mask = QImage(layer.image.size(), QImage.Format.Format_Grayscale8)
         if from_selection:
             mask.fill(0)
             p = QPainter(mask)
-            p.fillPath(doc.selection.translated(-layer.offset.x(),
-                                                -layer.offset.y()),
-                       QColor(255, 255, 255))
+            p.fillPath(
+                doc.selection.translated(-layer.offset.x(), -layer.offset.y()),
+                QColor(255, 255, 255),
+            )
             p.end()
         else:
             mask.fill(255)
@@ -1929,8 +2223,7 @@ class MainWindow(QMainWindow):
             return
         from photoslop.commands import SetLayerMaskCommand
 
-        doc.undo_stack.push(SetLayerMaskCommand(doc, doc.active_layer, None,
-                                                "Delete Layer Mask"))
+        doc.undo_stack.push(SetLayerMaskCommand(doc, doc.active_layer, None, "Delete Layer Mask"))
 
     def action_adjustment_levels(self) -> None:
         doc = self.current_doc()
@@ -1943,16 +2236,21 @@ class MainWindow(QMainWindow):
 
         layer = Layer("Levels adjustment", blank_image(QSize(1, 1)))
         layer.adjustment = np.tile(np.arange(256, dtype=np.uint8), (3, 1))
-        doc.undo_stack.push(InsertLayerCommand(
-            doc, doc.active_index + 1, layer, "New Adjustment Layer"))
+        doc.undo_stack.push(
+            InsertLayerCommand(doc, doc.active_index + 1, layer, "New Adjustment Layer")
+        )
 
         dialog = QDialog(self)
         dialog.setWindowTitle("Levels (adjustment layer)")
         form = QFormLayout(dialog)
         spins = {}
-        for key, lo, hi, default in (("in_black", 0, 253, 0), ("in_white", 2, 255, 255),
-                                     ("gamma_x100", 10, 999, 100),
-                                     ("out_black", 0, 255, 0), ("out_white", 0, 255, 255)):
+        for key, lo, hi, default in (
+            ("in_black", 0, 253, 0),
+            ("in_white", 2, 255, 255),
+            ("gamma_x100", 10, 999, 100),
+            ("out_black", 0, 255, 0),
+            ("out_white", 0, 255, 255),
+        ):
             spin = QSpinBox()
             spin.setRange(lo, hi)
             spin.setValue(default)
@@ -1960,19 +2258,21 @@ class MainWindow(QMainWindow):
             spins[key] = spin
 
         def refresh() -> None:
-            lut = levels_lut(spins["in_black"].value(),
-                             max(spins["in_white"].value(),
-                                 spins["in_black"].value() + 2),
-                             spins["gamma_x100"].value() / 100.0,
-                             spins["out_black"].value(),
-                             spins["out_white"].value())
+            lut = levels_lut(
+                spins["in_black"].value(),
+                max(spins["in_white"].value(), spins["in_black"].value() + 2),
+                spins["gamma_x100"].value() / 100.0,
+                spins["out_black"].value(),
+                spins["out_white"].value(),
+            )
             layer.adjustment = np.tile(lut, (3, 1))
             doc.notify_pixels(doc.canvas_rect())
 
         for spin in spins.values():
             spin.valueChanged.connect(lambda _v: refresh())
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
@@ -1992,8 +2292,11 @@ class MainWindow(QMainWindow):
         form = QFormLayout(dialog)
         spins = {}
         for key, lo, hi, default, suffix in (
-                ("offset_x", -50, 50, 6, " px"), ("offset_y", -50, 50, 6, " px"),
-                ("blur", 0, 50, 8, " px"), ("opacity", 1, 100, 60, " %")):
+            ("offset_x", -50, 50, 6, " px"),
+            ("offset_y", -50, 50, 6, " px"),
+            ("blur", 0, 50, 8, " px"),
+            ("opacity", 1, 100, 60, " %"),
+        ):
             spin = QSpinBox()
             spin.setRange(lo, hi)
             spin.setValue(default)
@@ -2001,7 +2304,8 @@ class MainWindow(QMainWindow):
             form.addRow(key.replace("_", " ").capitalize(), spin)
             spins[key] = spin
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
@@ -2011,22 +2315,27 @@ class MainWindow(QMainWindow):
         from photoslop.commands import SetLayerStyleCommand
 
         effect = new_effect(
-            "drop-shadow", offset_x=spins["offset_x"].value(),
-            offset_y=spins["offset_y"].value(), blur=spins["blur"].value(),
-            color=[0, 0, 0, round(spins["opacity"].value() * 2.55)])
-        doc.undo_stack.push(SetLayerStyleCommand(
-            doc, layer, [*layer.effects, effect], layer.fill_opacity,
-            "Drop Shadow"))
+            "drop-shadow",
+            offset_x=spins["offset_x"].value(),
+            offset_y=spins["offset_y"].value(),
+            blur=spins["blur"].value(),
+            color=[0, 0, 0, round(spins["opacity"].value() * 2.55)],
+        )
+        doc.undo_stack.push(
+            SetLayerStyleCommand(
+                doc, layer, [*layer.effects, effect], layer.fill_opacity, "Drop Shadow"
+            )
+        )
 
-    def apply_drop_shadow(self, doc, layer, dx: int, dy: int, blur: int,
-                          opacity: int) -> None:
+    def apply_drop_shadow(self, doc, layer, dx: int, dy: int, blur: int, opacity: int) -> None:
         from photoslop import npimage
 
         color = QColor(0, 0, 0, round(opacity * 2.55))
         shadow_img = npimage.drop_shadow_image(layer.image, color, blur)
         pad = max(0, blur)
-        shadow = Layer(f"{layer.name} shadow", shadow_img,
-                       layer.offset + QPoint(dx - pad, dy - pad))
+        shadow = Layer(
+            f"{layer.name} shadow", shadow_img, layer.offset + QPoint(dx - pad, dy - pad)
+        )
         index = doc.layers.index(layer)
         doc.undo_stack.push(InsertLayerCommand(doc, index, shadow, "Drop Shadow"))
 
@@ -2037,8 +2346,7 @@ class MainWindow(QMainWindow):
         layer = doc.active_layer
         from PySide6.QtWidgets import QColorDialog, QInputDialog
 
-        size, ok = QInputDialog.getInt(self, "Outer Glow", "Glow size (px):",
-                                       10, 1, 50)
+        size, ok = QInputDialog.getInt(self, "Outer Glow", "Glow size (px):", 10, 1, 50)
         if not ok:
             return
         color = QColorDialog.getColor(QColor(255, 220, 120), self, "Glow colour")
@@ -2049,12 +2357,14 @@ class MainWindow(QMainWindow):
         from photoslop.appearance import new_effect
         from photoslop.commands import SetLayerStyleCommand
 
-        effect = new_effect("outer-glow", size=size,
-                            color=[color.red(), color.green(), color.blue(),
-                                   color.alpha()])
-        doc.undo_stack.push(SetLayerStyleCommand(
-            doc, layer, [*layer.effects, effect], layer.fill_opacity,
-            "Outer Glow"))
+        effect = new_effect(
+            "outer-glow", size=size, color=[color.red(), color.green(), color.blue(), color.alpha()]
+        )
+        doc.undo_stack.push(
+            SetLayerStyleCommand(
+                doc, layer, [*layer.effects, effect], layer.fill_opacity, "Outer Glow"
+            )
+        )
 
     def action_stroke_style(self) -> None:
         doc = self.current_doc()
@@ -2063,8 +2373,7 @@ class MainWindow(QMainWindow):
         layer = doc.active_layer
         from PySide6.QtWidgets import QColorDialog, QInputDialog
 
-        width, ok = QInputDialog.getInt(self, "Stroke", "Stroke width (px):",
-                                        3, 1, 30)
+        width, ok = QInputDialog.getInt(self, "Stroke", "Stroke width (px):", 3, 1, 30)
         if not ok:
             return
         color = QColorDialog.getColor(self.options.foreground, self, "Stroke colour")
@@ -2073,20 +2382,19 @@ class MainWindow(QMainWindow):
         from photoslop.appearance import new_effect
         from photoslop.commands import SetLayerStyleCommand
 
-        effect = new_effect("outline", width=width,
-                            color=[color.red(), color.green(), color.blue(),
-                                   color.alpha()])
-        doc.undo_stack.push(SetLayerStyleCommand(
-            doc, layer, [*layer.effects, effect], layer.fill_opacity,
-            "Stroke"))
+        effect = new_effect(
+            "outline", width=width, color=[color.red(), color.green(), color.blue(), color.alpha()]
+        )
+        doc.undo_stack.push(
+            SetLayerStyleCommand(doc, layer, [*layer.effects, effect], layer.fill_opacity, "Stroke")
+        )
 
     def apply_stroke_style(self, doc, layer, width: int, color) -> None:
         from photoslop import npimage
 
         outline = npimage.stroke_outline_image(layer.image, color, width)
         pad = max(1, width)
-        stroke = Layer(f"{layer.name} stroke", outline,
-                       layer.offset - QPoint(pad, pad))
+        stroke = Layer(f"{layer.name} stroke", outline, layer.offset - QPoint(pad, pad))
         index = doc.layers.index(layer)
         doc.undo_stack.push(InsertLayerCommand(doc, index, stroke, "Stroke"))
 
@@ -2123,15 +2431,14 @@ class MainWindow(QMainWindow):
             return
         bounds = doc.selection_bounds()
         if bounds is None or bounds.isEmpty():
-            self.statusBar().showMessage(
-                "Make a selection first — it becomes the artboard", 4000)
+            self.statusBar().showMessage("Make a selection first — it becomes the artboard", 4000)
             return
         name = f"Artboard {len(doc.artboards) + 1}"
         doc.artboards.append((name, QRect(bounds)))
         doc.set_selection(None)
         self.statusBar().showMessage(
-            f"{name}: {bounds.width()}×{bounds.height()} at "
-            f"({bounds.x()}, {bounds.y()})", 4000)
+            f"{name}: {bounds.width()}×{bounds.height()} at ({bounds.x()}, {bounds.y()})", 4000
+        )
         editor = self.current_editor()
         if editor is not None:
             editor.canvas.update()
@@ -2155,23 +2462,15 @@ class MainWindow(QMainWindow):
         if directory is None:
             from PySide6.QtWidgets import QFileDialog
 
-            directory = QFileDialog.getExistingDirectory(
-                self, "Export Artboards to Folder")
+            directory = QFileDialog.getExistingDirectory(self, "Export Artboards to Folder")
             if not directory:
                 return []
-        flat = doc.flatten()
-        written = []
-        for name, rect in doc.artboards:
-            region = rect.intersected(doc.canvas_rect())
-            if region.isEmpty():
-                continue
-            safe = "".join(c if c.isalnum() or c in "-_ " else "_"
-                           for c in name).strip() or "artboard"
-            out = f"{directory}/{safe}.png"
-            flat.copy(region).save(out, "PNG")
-            written.append(out)
-        self.statusBar().showMessage(
-            f"Exported {len(written)} artboard(s) to {directory}", 5000)
+        try:
+            written = export_artboards(doc, directory)
+        except (OSError, ValueError) as exc:
+            self.statusBar().showMessage(f"Artboard export failed: {exc}", 8000)
+            return []
+        self.statusBar().showMessage(f"Exported {len(written)} artboard(s) to {directory}", 5000)
         return written
 
     def _model_adapter(self):
@@ -2183,7 +2482,18 @@ class MainWindow(QMainWindow):
         name = s.value("model/adapter", "")
         if not name:
             return None
-        return create_adapter(name, {"url": s.value("model/http_url", "")})
+        return create_adapter(
+            name,
+            {
+                "url": s.value("model/http_url", ""),
+                "allow_insecure_http": str(s.value("model/allow_insecure_http", "false")).lower()
+                == "true",
+                "allow_unsafe_plugins": str(
+                    s.value("security/allow_unsafe_plugins", "false")
+                ).lower()
+                == "true",
+            },
+        )
 
     def action_preferences(self) -> None:
         from photoslop.preferences import PreferencesDialog
@@ -2201,23 +2511,25 @@ class MainWindow(QMainWindow):
         if doc is None or doc.active_layer is None:
             return
         if doc.selection is None:
-            self.statusBar().showMessage(
-                "Make a selection — it becomes the fill region", 5000)
+            self.statusBar().showMessage("Make a selection — it becomes the fill region", 5000)
             return
         adapter = self._model_adapter()
         if adapter is None:
             self.statusBar().showMessage(
-                "No model backend configured — Edit → Options → Model Backend…", 5000)
+                "No model backend configured — Edit → Options → Model Backend…", 5000
+            )
             return
         if GENERATIVE_FILL not in adapter.capabilities():
             self.statusBar().showMessage(
-                f"“{adapter.label}” does not support Generative Fill", 5000)
+                f"“{adapter.label}” does not support Generative Fill", 5000
+            )
             return
         if prompt is None:
             from PySide6.QtWidgets import QInputDialog
 
             prompt, ok = QInputDialog.getText(
-                self, "Generative Fill", "Prompt (what should appear?):")
+                self, "Generative Fill", "Prompt (what should appear?):"
+            )
             if not ok:
                 return
         import numpy as np
@@ -2228,45 +2540,61 @@ class MainWindow(QMainWindow):
         sel = npimage.selection_mask(doc.selection, doc.size, QPoint(0, 0))
         mask_img = QImage(doc.size, QImage.Format.Format_Grayscale8)
         mask_img.fill(0)
-        buf = np.frombuffer(mask_img.bits(), np.uint8,
-                            count=doc.size.height() * mask_img.bytesPerLine())
+        buf = np.frombuffer(
+            mask_img.bits(), np.uint8, count=doc.size.height() * mask_img.bytesPerLine()
+        )
         view = buf.reshape(doc.size.height(), mask_img.bytesPerLine())
         view[:, : doc.size.width()][sel] = 255
         layer = doc.active_layer
         offset = QPoint(layer.offset)
-        source_key = layer.image.cacheKey()
+        before = QImage(layer.image)
+        local_selection = npimage.selection_mask(doc.selection, layer.image.size(), offset)
+        revision = doc.capture_revision()
 
         def operation(context):
             context.progress(10, "Sending image and mask")
-            result = ModelService.generative_fill(
-                adapter, flat, mask_img, prompt, doc.size)
+            result = ModelService.generative_fill(adapter, flat, mask_img, prompt, doc.size)
             context.progress(100, "Received")
             return result
 
         handle = self.task_service.submit(
-            "model.generative-fill", "Generative Fill", operation,
-            max(1, flat.sizeInBytes() * 4))
+            "model.generative-fill",
+            "Generative Fill",
+            operation,
+            max(1, flat.sizeInBytes() * 4),
+            doc.document_id,
+            TaskPriority.REMOTE,
+        )
 
         def install(result):
-            if layer.image.cacheKey() != source_key:
+            if not doc.accepts_revision(revision, layer):
                 self.statusBar().showMessage(
-                    "Generative Fill result discarded after layer edit", 6000)
+                    "Generative Fill result discarded after document edit", 6000
+                )
                 return
-
-            def paste(img: QImage, mask) -> None:
-                aligned = QImage(img.size(), QImage.Format.Format_ARGB32_Premultiplied)
-                aligned.fill(0)
-                p = QPainter(aligned)
-                p.drawImage(-offset, result)
-                p.end()
-                src = npimage.view_u32(aligned)
-                dst = npimage.view_u32(img)
-                if mask is None:
-                    dst[:] = src
-                else:
-                    dst[mask] = src[mask]
-
-            self._run_filter("Generative Fill", paste, True)
+            after = QImage(before)
+            aligned = QImage(after.size(), QImage.Format.Format_ARGB32_Premultiplied)
+            aligned.fill(0)
+            painter = QPainter(aligned)
+            painter.drawImage(-offset, result)
+            painter.end()
+            source = npimage.view_u32(aligned)
+            target = npimage.view_u32(after)
+            target[local_selection] = source[local_selection]
+            layer.image = after
+            rect = after.rect()
+            doc.undo_stack.push(
+                LayerRegionCommand(
+                    doc,
+                    layer,
+                    rect,
+                    before.copy(rect),
+                    after.copy(rect),
+                    "Generative Fill",
+                    applied=True,
+                )
+            )
+            doc.notify_pixels(layer.bounds())
 
         handle.succeeded.connect(install)
 
@@ -2279,14 +2607,14 @@ class MainWindow(QMainWindow):
         adapter = self._model_adapter()
         if adapter is None:
             self.statusBar().showMessage(
-                "No model backend configured — Edit → Options → Model Backend…", 5000)
+                "No model backend configured — Edit → Options → Model Backend…", 5000
+            )
             return
         if SELECT_SUBJECT not in adapter.capabilities():
-            self.statusBar().showMessage(
-                f"“{adapter.label}” does not support Select Subject", 5000)
+            self.statusBar().showMessage(f"“{adapter.label}” does not support Select Subject", 5000)
             return
         snapshot = doc.flatten()
-        generation = tuple(layer.image.cacheKey() for layer in doc.layers)
+        revision = doc.capture_revision()
 
         def operation(context):
             context.progress(10, "Sending composite")
@@ -2295,13 +2623,19 @@ class MainWindow(QMainWindow):
             return result
 
         handle = self.task_service.submit(
-            "model.select-subject", "Select Subject", operation,
-            max(1, snapshot.sizeInBytes() * 3))
+            "model.select-subject",
+            "Select Subject",
+            operation,
+            max(1, snapshot.sizeInBytes() * 3),
+            doc.document_id,
+            TaskPriority.REMOTE,
+        )
 
         def install(mask_img):
-            if generation != tuple(layer.image.cacheKey() for layer in doc.layers):
+            if not doc.accepts_revision(revision):
                 self.statusBar().showMessage(
-                    "Select Subject result discarded after document edit", 6000)
+                    "Select Subject result discarded after document edit", 6000
+                )
                 return
             self._install_subject_mask(doc, mask_img)
 
@@ -2314,8 +2648,7 @@ class MainWindow(QMainWindow):
 
         gray = mask_img.convertToFormat(QImage.Format.Format_Grayscale8)
         h, w = gray.height(), gray.width()
-        buf = np.frombuffer(gray.constBits(), np.uint8,
-                            count=h * gray.bytesPerLine())
+        buf = np.frombuffer(gray.constBits(), np.uint8, count=h * gray.bytesPerLine())
         mask = buf.reshape(h, gray.bytesPerLine())[:, :w] > 127
         if not mask.any():
             self.statusBar().showMessage("Backend found no subject", 5000)
@@ -2333,12 +2666,18 @@ class MainWindow(QMainWindow):
 
         layer = doc.active_layer
         value, ok = QInputDialog.getInt(
-            self, "Fill Opacity", "Fill opacity (%) — effects keep full "
-            "strength:", round(layer.fill_opacity * 100), 0, 100)
+            self,
+            "Fill Opacity",
+            "Fill opacity (%) — effects keep full strength:",
+            round(layer.fill_opacity * 100),
+            0,
+            100,
+        )
         if not ok:
             return
-        doc.undo_stack.push(SetLayerStyleCommand(
-            doc, layer, layer.effects, value / 100.0, "Fill Opacity"))
+        doc.undo_stack.push(
+            SetLayerStyleCommand(doc, layer, layer.effects, value / 100.0, "Fill Opacity")
+        )
 
     def action_clear_style(self) -> None:
         doc = self.current_doc()
@@ -2349,8 +2688,7 @@ class MainWindow(QMainWindow):
             return
         from photoslop.commands import SetLayerStyleCommand
 
-        doc.undo_stack.push(SetLayerStyleCommand(
-            doc, layer, [], 1.0, "Clear Layer Style"))
+        doc.undo_stack.push(SetLayerStyleCommand(doc, layer, [], 1.0, "Clear Layer Style"))
 
     def action_convert_smart(self) -> None:
         doc = self.current_doc()
@@ -2361,7 +2699,9 @@ class MainWindow(QMainWindow):
         doc.notify_structure()
         self.statusBar().showMessage(
             f"“{layer.name}” is now a smart object — its current pixels are "
-            "the restorable original", 5000)
+            "the restorable original",
+            5000,
+        )
 
     def action_restore_smart(self) -> None:
         doc = self.current_doc()
@@ -2369,14 +2709,18 @@ class MainWindow(QMainWindow):
             return
         layer = doc.active_layer
         if layer.source is None:
-            self.statusBar().showMessage(
-                "Not a smart object — Convert to Smart Object first", 4000)
+            self.statusBar().showMessage("Not a smart object — Convert to Smart Object first", 4000)
             return
         from photoslop.transform import TransformLayerCommand
 
         command = TransformLayerCommand(
-            doc, layer, QImage(layer.image), QPoint(layer.offset),
-            QImage(layer.source), QPoint(layer.offset))
+            doc,
+            layer,
+            QImage(layer.image),
+            QPoint(layer.offset),
+            QImage(layer.source),
+            QPoint(layer.offset),
+        )
         command.setText("Restore Smart Object")
         layer.image = QImage(layer.source)
         doc.undo_stack.push(command)
@@ -2387,7 +2731,8 @@ class MainWindow(QMainWindow):
         if doc is None or doc.active_layer is None or not doc.active_layer.group:
             if doc is not None:
                 self.statusBar().showMessage(
-                    "Group Opacity/Blend needs a grouped layer (Ctrl+G)", 4000)
+                    "Group Opacity/Blend needs a grouped layer (Ctrl+G)", 4000
+                )
             return
         group = doc.active_layer.group
         current = doc.group_props.get(group, {})
@@ -2406,7 +2751,8 @@ class MainWindow(QMainWindow):
         form.addRow("Group opacity", opacity)
         form.addRow("Group blend", blend)
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
@@ -2414,8 +2760,7 @@ class MainWindow(QMainWindow):
             return
         from photoslop.commands import SetGroupPropsCommand
 
-        props = {"opacity": opacity.value() / 100.0,
-                 "blend_mode": blend.currentText()}
+        props = {"opacity": opacity.value() / 100.0, "blend_mode": blend.currentText()}
         if props == {"opacity": 1.0, "blend_mode": "normal"}:
             props = None  # defaults: back to the pass-through fast path
         doc.undo_stack.push(SetGroupPropsCommand(doc, group, props))
@@ -2446,8 +2791,7 @@ class MainWindow(QMainWindow):
         if doc is None:
             return
         layer = Layer("Stamp", doc.flatten())
-        doc.undo_stack.push(
-            InsertLayerCommand(doc, len(doc.layers), layer, "Stamp Visible"))
+        doc.undo_stack.push(InsertLayerCommand(doc, len(doc.layers), layer, "Stamp Visible"))
 
     # ------------------------------------------------------------------ image actions
 
@@ -2468,8 +2812,14 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QInputDialog
 
         angle, ok = QInputDialog.getDouble(
-            self, "Rotate Canvas", "Angle (\u00b0 clockwise, negative = CCW):",
-            0.0, -359.99, 359.99, 2)
+            self,
+            "Rotate Canvas",
+            "Angle (\u00b0 clockwise, negative = CCW):",
+            0.0,
+            -359.99,
+            359.99,
+            2,
+        )
         if not ok or angle == 0.0:
             return
         from photoslop.commands import ArbitraryRotateCommand
@@ -2484,9 +2834,7 @@ class MainWindow(QMainWindow):
         if region is None:
             self.statusBar().showMessage("Crop needs a selection", 4000)
             return
-        doc.undo_stack.push(
-            ResizeCanvasCommand(doc, region.size(), -region.topLeft(), "Crop")
-        )
+        doc.undo_stack.push(ResizeCanvasCommand(doc, region.size(), -region.topLeft(), "Crop"))
 
     def action_levels(self) -> None:
         doc = self.current_doc()
@@ -2517,9 +2865,7 @@ class MainWindow(QMainWindow):
 
         color.settings["proof_on"] = self.action_soft_proof.isChecked()
         if color.settings["proof_on"] and color.settings["proof"] is None:
-            self.statusBar().showMessage(
-                "Set a proof profile first: Preferences → Color",
-                5000)
+            self.statusBar().showMessage("Set a proof profile first: Preferences → Color", 5000)
         editor = self.current_editor()
         if editor is not None:
             editor.canvas.update()
@@ -2537,8 +2883,7 @@ class MainWindow(QMainWindow):
         from photoslop import color
         from photoslop.colordialog import ProfilePickerDialog
 
-        dialog = ProfilePickerDialog(
-            "Assign Profile" if assign else "Convert to Profile", self)
+        dialog = ProfilePickerDialog("Assign Profile" if assign else "Convert to Profile", self)
         if not dialog.exec():
             return
         space = dialog.space()
@@ -2548,8 +2893,7 @@ class MainWindow(QMainWindow):
             color.assign_profile(doc, space)
         else:
             color.convert_profile(doc, space)
-        self.statusBar().showMessage(
-            f"Document profile: {color.describe(doc.icc_space)}", 4000)
+        self.statusBar().showMessage(f"Document profile: {color.describe(doc.icc_space)}", 4000)
 
     def action_curves(self) -> None:
         doc = self.current_doc()
@@ -2588,7 +2932,8 @@ class MainWindow(QMainWindow):
         form.addRow("Target width", w_spin)
         form.addRow("Target height", h_spin)
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
@@ -2599,8 +2944,7 @@ class MainWindow(QMainWindow):
             return
         self.apply_content_aware_scale(doc, layer, target_w, target_h)
 
-    def apply_content_aware_scale(self, doc, layer, target_w: int,
-                                  target_h: int) -> None:
+    def apply_content_aware_scale(self, doc, layer, target_w: int, target_h: int) -> None:
         from photoslop import npimage
         from photoslop.transform import TransformLayerCommand
 
@@ -2609,7 +2953,8 @@ class MainWindow(QMainWindow):
         dirty = layer.bounds()
         layer.image = carved
         cmd = TransformLayerCommand(
-            doc, layer, old_image, layer.offset, QImage(carved), layer.offset)
+            doc, layer, old_image, layer.offset, QImage(carved), layer.offset
+        )
         cmd.setText("Content-Aware Scale")
         doc.undo_stack.push(cmd)
         doc.notify_pixels(dirty)
@@ -2620,7 +2965,14 @@ class MainWindow(QMainWindow):
             return
         dialog = ResizeImageDialog(doc.size, self)
         if dialog.exec() and dialog.value() != doc.size:
-            doc.undo_stack.push(ResizeImageCommand(doc, dialog.value()))
+            try:
+                doc.undo_stack.push(
+                    ResizeImageCommand(
+                        doc, dialog.value(), allow_large=self._allow_large_documents()
+                    )
+                )
+            except ValueError as exc:
+                self.statusBar().showMessage(str(exc), 8000)
 
     def action_canvas_size(self) -> None:
         doc = self.current_doc()
@@ -2630,7 +2982,14 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             new_size, delta = dialog.value()
             if new_size != doc.size:
-                doc.undo_stack.push(ResizeCanvasCommand(doc, new_size, delta))
+                try:
+                    doc.undo_stack.push(
+                        ResizeCanvasCommand(
+                            doc, new_size, delta, allow_large=self._allow_large_documents()
+                        )
+                    )
+                except ValueError as exc:
+                    self.statusBar().showMessage(str(exc), 8000)
 
     # ------------------------------------------------------------------ view actions
 
@@ -2678,7 +3037,9 @@ class MainWindow(QMainWindow):
         rotation = editor.canvas.view_rotation
         self.statusBar().showMessage(
             f"View rotated {rotation}\u00b0 (display only \u2014 pixels untouched; "
-            "rulers show unrotated space)", 4000)
+            "rulers show unrotated space)",
+            4000,
+        )
 
     def action_reset_view_rotation(self) -> None:
         editor = self.current_editor()
@@ -2720,14 +3081,15 @@ class MainWindow(QMainWindow):
             return
         layer = doc.active_layer
         before = QImage(layer.image)
-        filled = QImage(layer.image.size(),
-                        QImage.Format.Format_ARGB32_Premultiplied)
+        filled = QImage(layer.image.size(), QImage.Format.Format_ARGB32_Premultiplied)
         filled.fill(self.options.foreground)
         layer.image = filled
         rect = layer.image.rect()
-        doc.undo_stack.push(LayerRegionCommand(
-            doc, layer, rect, before.copy(rect), filled.copy(rect),
-            "Fill Layer", applied=True))
+        doc.undo_stack.push(
+            LayerRegionCommand(
+                doc, layer, rect, before.copy(rect), filled.copy(rect), "Fill Layer", applied=True
+            )
+        )
         doc.notify_pixels(layer.bounds())
 
     def _build_about(self) -> QMessageBox:
@@ -2743,10 +3105,10 @@ class MainWindow(QMainWindow):
             "<p>A memory-frugal, multiplatform, layered raster image editor.</p>"
             "<p>Apache-2.0 · <a href='https://github.com/CryptoJones/Photoslop'>"
             "github.com/CryptoJones/Photoslop</a></p>"
-            "<p>Proudly Made in Nebraska. Go Big Red! 🌽</p>")
+            "<p>Proudly Made in Nebraska. Go Big Red! 🌽</p>"
+        )
         ok = box.addButton(QMessageBox.StandardButton.Ok)
-        credits = box.addButton("&Credits",
-                                QMessageBox.ButtonRole.ActionRole)
+        credits = box.addButton("&Credits", QMessageBox.ButtonRole.ActionRole)
         credits.clicked.connect(self.action_credits)
         # place Credits immediately left of OK regardless of platform style
         from PySide6.QtWidgets import QDialogButtonBox
@@ -2757,6 +3119,23 @@ class MainWindow(QMainWindow):
         row.addWidget(credits)
         row.addWidget(ok)
         return box
+
+    def action_diagnostics(self) -> None:
+        from photoslop.filters import plugin_failures as filter_failures
+        from photoslop.modeladapter import plugin_failures as model_failures
+
+        for failure in (*filter_failures(), *model_failures()):
+            self.diagnostics.record(
+                f"plugin.load.{failure.group}",
+                f"Plugin {failure.name} could not be loaded",
+                details=failure.details,
+                guidance="Disable or update this optional plugin, then restart Photoslop.",
+                context={"entry_point_group": failure.group},
+            )
+        DiagnosticsDialog(self.diagnostics, self).exec()
+
+    def action_task_monitor(self) -> None:
+        TaskMonitorDialog(self.task_service, self).exec()
 
     def action_about(self) -> None:
         self._build_about().exec()

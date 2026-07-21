@@ -1,7 +1,7 @@
 # Photoslop v1 Documentation
 
 The authoritative reference for every Photoslop feature — desktop app and
-command line — as of **v1.29.0**.
+command line — as of **v1.30.0**.
 
 | Guide | Covers |
 |---|---|
@@ -17,6 +17,9 @@ command line — as of **v1.29.0**.
 | [Filters](filters.md) | Gaussian Blur, Unsharp Mask, Tilt-Shift |
 | [Actions](actions.md) | macro recording and replay |
 | [Accessibility](accessibility.md) | keyboard workflows, low-vision settings, screen-reader smoke scripts |
+| [Coverage](coverage.md) | measured branch-coverage floors for failure-prone modules |
+| [Recovery and Diagnostics](recovery.md) | autosave retention, recovery decisions, background task control, durable diagnostics |
+| [Distribution](distribution.md) | locked portable builds, signing, SBOM/provenance, release checklist |
 | [Performance](performance.md) | standardized 4K/12K benchmarks, latency/RSS budgets, bounded caches |
 | [Verification](verification.md) | automated/manual release matrix and evidence record |
 | [Artboards](artboards.md) | named export regions and batch export |
@@ -25,6 +28,7 @@ command line — as of **v1.29.0**.
 | [Filter Plugins](filter-plugins.md) | write a filter class + one entry point → menu, CLI, selections, smart replay |
 | [Command Line](cli.md) | the full `photoslop-cli` reference — every operation, exit codes, recipes |
 | [MCP Server](mcp.md) | drive the engine from an LLM/agent over the Model Context Protocol |
+| [Security](security.md) | parser/resource limits, plugin trust, model networking, and MCP confinement |
 | [Feature Parity](feature-parity.md) | Photoslop vs Photoshop, GIMP, Paint.NET, Lightroom Classic, darktable, Capture One — researched July 2026 |
 | [Architecture](architecture.md) | the memory-frugality design |
 

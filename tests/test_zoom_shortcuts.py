@@ -36,8 +36,9 @@ def test_zoom_actions_carry_all_bindings_and_buttons_work(qapp):
     editor = win.current_editor()
     editor.set_zoom(1.0)
 
-    zoom_in = next(a for a in win.findChildren(type(win.zoom_in_button))
-                   if a.text().startswith("Zoom &In"))
+    zoom_in = next(
+        a for a in win.findChildren(type(win.zoom_in_button)) if a.text().startswith("Zoom &In")
+    )
     bindings = {seq.toString() for seq in zoom_in.shortcuts()}
     assert {"Ctrl++", "Ctrl+="} <= bindings
 

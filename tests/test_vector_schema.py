@@ -10,8 +10,15 @@ from photoslop.vector import SCHEMA_VERSION, migrate_vector, render_vector
 
 
 def legacy_rect(**extra):
-    return {"kind": "rect", "x1": 10, "y1": 10, "x2": 50, "y2": 40,
-            "color": [220, 20, 30, 255], **extra}
+    return {
+        "kind": "rect",
+        "x1": 10,
+        "y1": 10,
+        "x2": 50,
+        "y2": 40,
+        "color": [220, 20, 30, 255],
+        **extra,
+    }
 
 
 def test_legacy_migration_adds_stable_model_and_preserves_unknown_fields(qapp):
@@ -27,10 +34,16 @@ def test_legacy_migration_adds_stable_model_and_preserves_unknown_fields(qapp):
 
 
 def test_catmull_legacy_path_migrates_to_explicit_cubic_handles(qapp):
-    migrated = migrate_vector({
-        "kind": "path", "points": [[10, 10], [40, 20], [60, 50]],
-        "close": False, "fill": False, "width": 4, "color": [0, 0, 0, 255],
-    })
+    migrated = migrate_vector(
+        {
+            "kind": "path",
+            "points": [[10, 10], [40, 20], [60, 50]],
+            "close": False,
+            "fill": False,
+            "width": 4,
+            "color": [0, 0, 0, 255],
+        }
+    )
     commands = migrated["geometry"]["commands"]
     assert commands[0]["op"] == "M"
     assert all(command["op"] == "C" for command in commands[1:])

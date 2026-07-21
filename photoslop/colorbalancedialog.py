@@ -41,8 +41,7 @@ class ColorBalanceDialog(ScopedAdjustMixin, QDialog):
         for band in _BANDS:
             radio = QRadioButton(band.capitalize())
             radio.setChecked(band == self._band)
-            radio.toggled.connect(
-                lambda on, b=band: self._switch_band(b) if on else None)
+            radio.toggled.connect(lambda on, b=band: self._switch_band(b) if on else None)
             band_row.addWidget(radio)
             self._radios[band] = radio
         form.addRow(band_row)

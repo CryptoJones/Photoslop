@@ -18,8 +18,7 @@ CANVAS = QRect(0, 0, 200, 160)
 
 
 def _rect_data(**over):
-    data = {"kind": "rect", "x1": 20, "y1": 10, "x2": 80, "y2": 50,
-            "color": [200, 30, 30, 255]}
+    data = {"kind": "rect", "x1": 20, "y1": 10, "x2": 80, "y2": 50, "color": [200, 30, 30, 255]}
     data.update(over)
     return data
 
@@ -34,14 +33,22 @@ def test_render_vector_rect_and_bounds(qapp):
 
 
 def test_render_vector_path_and_degenerate(qapp):
-    data = {"kind": "path", "points": [[10, 10], [60, 20], [40, 60]],
-            "close": True, "fill": True, "width": 3,
-            "color": [30, 60, 200, 255]}
+    data = {
+        "kind": "path",
+        "points": [[10, 10], [60, 20], [40, 60]],
+        "close": True,
+        "fill": True,
+        "width": 3,
+        "color": [30, 60, 200, 255],
+    }
     layer = vector.render_vector(data, "P", CANVAS)
     assert layer is not None
-    assert vector.render_vector({"kind": "path", "points": [[1, 1]],
-                                 "fill": True, "color": [0, 0, 0]},
-                                "x", CANVAS) is None
+    assert (
+        vector.render_vector(
+            {"kind": "path", "points": [[1, 1]], "fill": True, "color": [0, 0, 0]}, "x", CANVAS
+        )
+        is None
+    )
 
 
 def test_resize_rerenders_crisp_and_undoes(qapp):
@@ -52,7 +59,7 @@ def test_resize_rerenders_crisp_and_undoes(qapp):
     cmd.redo()
     assert layer.vector_data["x2"] == 160  # params scaled 2x
     flat = doc.flatten()
-    assert flat.pixelColor(100, 60).red() == 200   # inside scaled rect
+    assert flat.pixelColor(100, 60).red() == 200  # inside scaled rect
     # crisp edge: hard transition within ~2px of the doubled boundary
     assert flat.pixelColor(163, 60).red() == 255
     cmd.undo()
@@ -73,8 +80,15 @@ def test_rotate_and_flip_document_keep_parametric(qapp):
 
 def test_flip_layer_is_parametric_and_self_inverse(qapp):
     doc = Document.new(QSize(200, 160), 72.0, "v", QColor(255, 255, 255))
-    data = {"kind": "line", "x1": 20, "y1": 10, "x2": 80, "y2": 50,
-            "width": 4, "color": [10, 10, 200, 255]}
+    data = {
+        "kind": "line",
+        "x1": 20,
+        "y1": 10,
+        "x2": 80,
+        "y2": 50,
+        "width": 4,
+        "color": [10, 10, 200, 255],
+    }
     layer = vector.render_vector(data, "L", CANVAS)
     doc.layers.append(layer)
     cmd = FlipLayerCommand(doc, layer, horizontal=True)
@@ -113,8 +127,9 @@ def test_shape_tool_edit_in_place(qapp):
 
         def update(self):
             pass
+
     fake = _FakeCanvas()
-    tool.press(doc, fake, QPointF(80, 50), None)   # grab corner c22
+    tool.press(doc, fake, QPointF(80, 50), None)  # grab corner c22
     assert tool._edit is not None
     tool.move(doc, fake, QPointF(120, 90), None)
     tool.release(doc, fake, QPointF(120, 90), None)
@@ -125,9 +140,14 @@ def test_pen_tool_anchor_edit(qapp):
     from photoslop.tools import PenTool, ToolOptions
 
     doc = Document.new(QSize(200, 160), 72.0, "v", QColor(255, 255, 255))
-    data = {"kind": "path", "points": [[20, 20], [90, 30], [60, 90]],
-            "close": False, "fill": False, "width": 3,
-            "color": [10, 120, 10, 255]}
+    data = {
+        "kind": "path",
+        "points": [[20, 20], [90, 30], [60, 90]],
+        "close": False,
+        "fill": False,
+        "width": 3,
+        "color": [10, 120, 10, 255],
+    }
     layer = vector.render_vector(data, "P", CANVAS)
     doc.layers.append(layer)
     doc.active_index = len(doc.layers) - 1
@@ -140,9 +160,10 @@ def test_pen_tool_anchor_edit(qapp):
 
         def update(self):
             pass
+
     fake = _FakeCanvas(doc)
     tool = PenTool(ToolOptions())
-    tool.press(doc, fake, QPointF(90, 30), None)   # grab anchor 1
+    tool.press(doc, fake, QPointF(90, 30), None)  # grab anchor 1
     assert tool._edit_layer is layer and tool._drag_idx == 1
     tool.move(doc, fake, QPointF(130, 40), None)
     tool.release(doc, fake, QPointF(130, 40), None)
@@ -170,9 +191,23 @@ def test_ora_round_trip_preserves_vector_data(qapp, tmp_path):
 
 def test_cli_shape_stamps_and_resize_rerenders(qapp, tmp_path):
     out = str(tmp_path / "crisp.png")
-    assert cli.main(["--new", "100x80", "--fill", "255,255,255",
-                     "--shape", "rect,10,10,40,30,200,30,30",
-                     "--resize", "300x240", "--output", out]) == 0
+    assert (
+        cli.main(
+            [
+                "--new",
+                "100x80",
+                "--fill",
+                "255,255,255",
+                "--shape",
+                "rect,10,10,40,30,200,30,30",
+                "--resize",
+                "300x240",
+                "--output",
+                out,
+            ]
+        )
+        == 0
+    )
     img = QImage(out)
     # scaled rect now spans x 30..150: crisp inside and outside
     assert img.pixelColor(90, 60).red() == 200

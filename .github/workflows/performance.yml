@@ -1,0 +1,34 @@
+name: full-scale-performance
+
+on:
+  schedule:
+    - cron: "17 4 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install Linux Qt runtime libraries
+        run: scripts/install-ci-qt-linux.sh
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra dev --locked
+      - name: Full-resolution latency, memory, output, and cancellation gates
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          mkdir -p reports
+          uv run python -m photoslop.benchmarks 4k-10 \
+            --samples 5 --enforce > reports/full-4k-10.json
+          uv run python -m photoslop.benchmarks 12mp-4 \
+            --samples 5 --enforce > reports/full-12mp-4.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: full-scale-performance-${{ github.sha }}
+          path: reports/

@@ -27,8 +27,9 @@ def test_drop_shadow_is_live_and_non_destructive(qapp):
     doc = win.current_doc()
     chip = doc.layers[1]
 
-    doc.undo_stack.push(SetLayerStyleCommand(
-        doc, chip, [("drop-shadow", 6, 6, 2, [0, 0, 0, 255])], 1.0))
+    doc.undo_stack.push(
+        SetLayerStyleCommand(doc, chip, [("drop-shadow", 6, 6, 2, [0, 0, 0, 255])], 1.0)
+    )
     flat = doc.flatten()
     shadow_px = flat.pixelColor(54, 54)  # right+below the chip
     assert shadow_px.red() < 200  # darkened by the shadow
@@ -44,8 +45,9 @@ def test_fill_opacity_hides_fill_but_keeps_stroke(qapp):
     doc = win.current_doc()
     chip = doc.layers[1]
 
-    doc.undo_stack.push(SetLayerStyleCommand(
-        doc, chip, [("stroke", 3, [0, 0, 255, 255])], 0.0, "Fill Opacity"))
+    doc.undo_stack.push(
+        SetLayerStyleCommand(doc, chip, [("stroke", 3, [0, 0, 255, 255])], 0.0, "Fill Opacity")
+    )
     flat = doc.flatten()
     assert flat.pixelColor(40, 40) == QColor(255, 255, 255)  # fill gone
     ring = flat.pixelColor(28, 40)  # just outside the chip edge
@@ -60,8 +62,7 @@ def test_effects_round_trip_and_clone(qapp, tmp_path):
     win = make_window(qapp)
     doc = win.current_doc()
     chip = doc.layers[1]
-    chip.effects = [("glow", 4, [255, 220, 120, 200]),
-                    ("stroke", 2, [0, 0, 0, 255])]
+    chip.effects = [("glow", 4, [255, 220, 120, 200]), ("stroke", 2, [0, 0, 0, 255])]
     chip.fill_opacity = 0.25
 
     path = str(tmp_path / "fx.ora")
@@ -70,7 +71,8 @@ def test_effects_round_trip_and_clone(qapp, tmp_path):
     top = loaded.layers[1]
     migrated = normalize_effects(chip.effects)
     assert [(effect["type"], effect["parameters"]) for effect in top.effects] == [
-        (effect["type"], effect["parameters"]) for effect in migrated]
+        (effect["type"], effect["parameters"]) for effect in migrated
+    ]
     assert abs(top.fill_opacity - 0.25) < 1e-6
     assert top.clone().effects == top.effects
 

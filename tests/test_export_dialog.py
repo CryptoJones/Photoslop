@@ -58,8 +58,7 @@ def test_export_roundtrip_file(qapp, tmp_path):
     dialog.scale.setValue(50)
     dialog.format_box.setCurrentText("PNG")
     path = str(tmp_path / "out.png")
-    assert dialog.export_image().save(path, dialog.chosen_format(),
-                                      dialog.chosen_quality())
+    assert dialog.export_image().save(path, dialog.chosen_format(), dialog.chosen_quality())
     loaded = QImage(path)
     assert loaded.size() == QSize(100, 50)
     assert loaded.pixelColor(50, 25) == QColor(30, 60, 200)

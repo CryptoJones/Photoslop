@@ -42,15 +42,19 @@ def _find_worker() -> str | None:
     if importlib.util.find_spec("gi") is not None:
         candidates.append(sys.executable)
     # a venv shadows PATH with its own python3 — probe the system ones too
-    for exe in ("/usr/bin/python3", "/usr/local/bin/python3",
-                shutil.which("python3"), shutil.which("python")):
-        if exe and os.path.exists(exe) and exe not in candidates \
-                and not exe.startswith(sys.prefix):
+    for exe in (
+        "/usr/bin/python3",
+        "/usr/local/bin/python3",
+        shutil.which("python3"),
+        shutil.which("python"),
+    ):
+        if exe and os.path.exists(exe) and exe not in candidates and not exe.startswith(sys.prefix):
             candidates.append(exe)
     for exe in candidates:
         try:
-            ok = subprocess.run([exe, "-c", _PROBE], capture_output=True,
-                                timeout=30).returncode == 0
+            ok = (
+                subprocess.run([exe, "-c", _PROBE], capture_output=True, timeout=30).returncode == 0
+            )
         except (OSError, subprocess.TimeoutExpired):
             ok = False
         if ok:
@@ -68,22 +72,23 @@ def run_gegl(image: QImage, operation: str, props: dict) -> None:
     """Apply one GEGL operation to a QImage in place (worker process)."""
     exe = _find_worker()
     if exe is None:
-        raise ValueError("GEGL not available — apt install python3-gi "
-                         "gir1.2-gegl-0.4 (Linux)")
+        raise ValueError("GEGL not available — apt install python3-gi gir1.2-gegl-0.4 (Linux)")
     with tempfile.TemporaryDirectory(prefix="photoslop-gegl-") as tmp:
         src = os.path.join(tmp, "in.png")
         dst = os.path.join(tmp, "out.png")
         image.save(src)
         proc = subprocess.run(
             [exe, _HELPER, src, dst, operation, json.dumps(props)],
-            capture_output=True, text=True, timeout=120)
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
         if proc.returncode != 0 or not os.path.exists(dst):
             raise ValueError(f"GEGL: {proc.stderr.strip()[:200]}")
         out = QImage(dst)
         if out.isNull():
             raise ValueError("GEGL: worker produced an unreadable PNG")
-    out = out.scaled(image.width(), image.height()) \
-        if out.size() != image.size() else out
+    out = out.scaled(image.width(), image.height()) if out.size() != image.size() else out
     out = out.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
     from photoslop.npimage import view_u32
 
@@ -92,6 +97,7 @@ def run_gegl(image: QImage, operation: str, props: dict) -> None:
 
 class _GeglFilter(Filter):
     operation = ""
+    unsafe = True
 
     def apply(self, image: QImage, params: dict) -> None:
         run_gegl(image, self.operation, dict(params))
@@ -101,24 +107,30 @@ class GeglVignette(_GeglFilter):
     name = "gegl-vignette"
     label = "GEGL Vignette"
     operation = "gegl:vignette"
-    params = (ParamSpec("radius", "Radius", "float", 0.0, 3.0, 1.2),
-              ParamSpec("softness", "Softness", "float", 0.0, 2.0, 0.8))
+    params = (
+        ParamSpec("radius", "Radius", "float", 0.0, 3.0, 1.2),
+        ParamSpec("softness", "Softness", "float", 0.0, 2.0, 0.8),
+    )
 
 
 class GeglBloom(_GeglFilter):
     name = "gegl-bloom"
     label = "GEGL Bloom"
     operation = "gegl:bloom"
-    params = (ParamSpec("strength", "Strength", "float", 0.0, 100.0, 50.0),
-              ParamSpec("radius", "Radius", "float", 0.0, 100.0, 10.0))
+    params = (
+        ParamSpec("strength", "Strength", "float", 0.0, 100.0, 50.0),
+        ParamSpec("radius", "Radius", "float", 0.0, 100.0, 10.0),
+    )
 
 
 class GeglPixelize(_GeglFilter):
     name = "gegl-pixelize"
     label = "GEGL Pixelize"
     operation = "gegl:pixelize"
-    params = (ParamSpec("size-x", "Block width", "int", 1, 128, 16),
-              ParamSpec("size-y", "Block height", "int", 1, 128, 16))
+    params = (
+        ParamSpec("size-x", "Block width", "int", 1, 128, 16),
+        ParamSpec("size-y", "Block height", "int", 1, 128, 16),
+    )
 
 
 class GeglNewsprint(_GeglFilter):
@@ -139,8 +151,10 @@ class GeglMotionBlur(_GeglFilter):
     name = "gegl-motion-blur"
     label = "GEGL Motion Blur"
     operation = "gegl:motion-blur-linear"
-    params = (ParamSpec("length", "Length", "float", 0.0, 300.0, 20.0),
-              ParamSpec("angle", "Angle", "float", -180.0, 180.0, 0.0))
+    params = (
+        ParamSpec("length", "Length", "float", 0.0, 300.0, 20.0),
+        ParamSpec("angle", "Angle", "float", -180.0, 180.0, 0.0),
+    )
 
 
 class GeglEdgeSobel(_GeglFilter):
@@ -153,8 +167,9 @@ class GeglEdgeSobel(_GeglFilter):
 class GeglRaw(_GeglFilter):
     name = "gegl"
     label = "GEGL Operation"
-    params = (ParamSpec("operation", "Operation + props", "str", 0, 0,
-                        "gegl:pixelize size-x=8,size-y=8"),)
+    params = (
+        ParamSpec("operation", "Operation + props", "str", 0, 0, "gegl:pixelize size-x=8,size-y=8"),
+    )
 
     def apply(self, image: QImage, params: dict) -> None:
         text = str(params.get("operation", "")).strip()
@@ -174,14 +189,19 @@ class GeglRaw(_GeglFilter):
                     except ValueError:
                         props[key.strip()] = val
         if not op:
-            raise ValueError("gegl: operation name required, "
-                             'e.g. "gegl:vignette radius=1.2"')
+            raise ValueError('gegl: operation name required, e.g. "gegl:vignette radius=1.2"')
         run_gegl(image, op, props)
 
 
 CURATED: tuple[type[Filter], ...] = (
-    GeglVignette, GeglBloom, GeglPixelize, GeglNewsprint,
-    GeglPosterize, GeglMotionBlur, GeglEdgeSobel, GeglRaw,
+    GeglVignette,
+    GeglBloom,
+    GeglPixelize,
+    GeglNewsprint,
+    GeglPosterize,
+    GeglMotionBlur,
+    GeglEdgeSobel,
+    GeglRaw,
 )
 
 

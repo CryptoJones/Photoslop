@@ -23,6 +23,7 @@ from photoslop.commands import (
     MergeDownCommand,
     MoveLayerStackCommand,
     RemoveLayerCommand,
+    SetLayerPropertyCommand,
 )
 from photoslop.document import Document
 from photoslop.layer import BLEND_MODES, Layer
@@ -41,16 +42,23 @@ class LayerPanel(QWidget):
         self._thumb_cache: dict[int, tuple[int, QIcon]] = {}
 
         self.list = QListWidget()
+        self.list.setAccessibleName("Layer stack")
+        self.list.setAccessibleDescription(
+            "Layers in top-to-bottom reading order. Space toggles visibility; "
+            "F2 renames; arrow keys change the active layer."
+        )
         self.list.setIconSize(QSize(_THUMB, _THUMB))
         self.list.currentRowChanged.connect(self._on_row)
         self.list.itemChanged.connect(self._on_item_changed)
         self.list.itemDoubleClicked.connect(self._on_double_click)
 
         self.blend = QComboBox()
+        self.blend.setAccessibleName("Active layer blend mode")
         self.blend.addItems(list(BLEND_MODES))
         self.blend.activated.connect(self._on_blend)
 
         self.opacity = QSlider(Qt.Orientation.Horizontal)
+        self.opacity.setAccessibleName("Active layer opacity")
         self.opacity.setRange(0, 100)
         self.opacity.setValue(100)
         self.opacity.valueChanged.connect(self._on_opacity)
@@ -111,7 +119,8 @@ class LayerPanel(QWidget):
         self.rebuild()
 
     def _row_to_index(self, row: int) -> int:
-        assert self.doc is not None
+        if self.doc is None:
+            raise RuntimeError("layer row requested without an active document")
         return len(self.doc.layers) - 1 - row
 
     def _thumb(self, layer: Layer) -> QIcon:
@@ -120,7 +129,9 @@ class LayerPanel(QWidget):
         if cached is not None and cached[0] == key:
             return cached[1]
         img = layer.image.scaled(
-            _THUMB, _THUMB, Qt.AspectRatioMode.KeepAspectRatio,
+            _THUMB,
+            _THUMB,
+            Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.FastTransformation,
         )
         pixmap = QPixmap.fromImage(img)
@@ -148,13 +159,13 @@ class LayerPanel(QWidget):
         if self.doc is not None:
             live = {id(layer) for layer in self.doc.layers}
             self._thumb_cache = {
-                key: value for key, value in self._thumb_cache.items() if key in live}
-            for layer in reversed(self.doc.layers):
+                key: value for key, value in self._thumb_cache.items() if key in live
+            }
+            total = len(self.doc.layers)
+            for position, layer in enumerate(reversed(self.doc.layers), start=1):
                 item = QListWidgetItem(self._thumb(layer), layer.name)
                 item.setFlags(
-                    item.flags()
-                    | Qt.ItemFlag.ItemIsUserCheckable
-                    | Qt.ItemFlag.ItemIsEditable
+                    item.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable
                 )
                 if layer.clipped:
                     font = item.font()
@@ -168,6 +179,26 @@ class LayerPanel(QWidget):
                     item.setToolTip("Adjustment layer (non-destructive)")
                 item.setCheckState(
                     Qt.CheckState.Checked if layer.visible else Qt.CheckState.Unchecked
+                )
+                state = "visible" if layer.visible else "hidden"
+                kind = (
+                    "adjustment"
+                    if layer.adjustment is not None
+                    else "text"
+                    if layer.text_data
+                    else "vector"
+                    if layer.vector_data is not None
+                    else "raster"
+                )
+                item.setData(
+                    Qt.ItemDataRole.AccessibleTextRole,
+                    f"{layer.name}, {kind} layer, {state}, "
+                    f"{round(layer.opacity * 100)} percent opacity, "
+                    f"position {position} of {total}",
+                )
+                item.setData(
+                    Qt.ItemDataRole.AccessibleDescriptionRole,
+                    "Checked means visible. Press F2 to rename or Space to toggle visibility.",
                 )
                 self.list.addItem(item)
             if self.doc.active_index >= 0:
@@ -214,10 +245,11 @@ class LayerPanel(QWidget):
         visible = item.checkState() == Qt.CheckState.Checked
         name = item.text().strip() or layer.name
         if visible != layer.visible:
-            layer.visible = visible
-            self.doc.notify_pixels(layer.bounds())
+            self.doc.undo_stack.push(SetLayerPropertyCommand(self.doc, layer, "visible", visible))
         if name != layer.name:
-            layer.name = name
+            self.doc.undo_stack.push(SetLayerPropertyCommand(self.doc, layer, "name", name))
+        elif not item.text().strip():
+            self.rebuild()
 
     def _on_double_click(self, item: QListWidgetItem) -> None:
         if self.doc is None:
@@ -231,17 +263,23 @@ class LayerPanel(QWidget):
             return
         layer = self.doc.active_layer
         if layer is not None:
-            layer.blend_mode = self.blend.currentText()
-            self.doc.notify_pixels(layer.bounds())
+            value = self.blend.currentText()
+            if value != layer.blend_mode:
+                self.doc.undo_stack.push(
+                    SetLayerPropertyCommand(self.doc, layer, "blend_mode", value)
+                )
 
     def _on_opacity(self, value: int) -> None:
         if self.doc is None or self._updating:
             return
         layer = self.doc.active_layer
         if layer is not None:
-            layer.opacity = value / 100.0
             self.opacity_label.setText(f"{value}%")
-            self.doc.notify_pixels(layer.bounds())
+            opacity = value / 100.0
+            if opacity != layer.opacity:
+                self.doc.undo_stack.push(
+                    SetLayerPropertyCommand(self.doc, layer, "opacity", opacity)
+                )
 
     # -- stack ops --
 
@@ -257,9 +295,7 @@ class LayerPanel(QWidget):
         if doc is None or doc.active_layer is None:
             return
         clone = doc.active_layer.clone(doc.active_layer.name + " copy")
-        doc.undo_stack.push(
-            InsertLayerCommand(doc, doc.active_index + 1, clone, "Duplicate Layer")
-        )
+        doc.undo_stack.push(InsertLayerCommand(doc, doc.active_index + 1, clone, "Duplicate Layer"))
 
     def delete_layer(self) -> None:
         doc = self.doc

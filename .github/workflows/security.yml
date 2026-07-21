@@ -1,0 +1,44 @@
+name: security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "41 5 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+        with:
+          python-version: "3.12"
+      - name: Sync exact audited toolchain
+        run: uv sync --extra security --locked
+      - name: Audit locked dependencies
+        run: |
+          uv export --locked --all-extras --no-dev --no-emit-project --no-hashes \
+            --output-file locked-audit-requirements.txt
+          uv run pip-audit --no-deps -r locked-audit-requirements.txt
+      - name: Reject unreviewed medium/high static findings
+        run: uv run bandit -q -r photoslop -ll -ii
+      - name: Reject new secrets
+        run: git ls-files -z | xargs -0 uv run detect-secrets-hook --baseline .secrets.baseline
+      - name: Generate dependency inventory and CycloneDX SBOM
+        run: uv run python scripts/generate-bundle-metadata.py --output-dir reports
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: security-inventory-${{ github.sha }}
+          path: |
+            reports/photoslop.cdx.json
+            reports/BUILD-IDENTITY.json
+            reports/THIRD_PARTY_NOTICES.md
+            locked-audit-requirements.txt

@@ -37,8 +37,7 @@ def test_cli_output_and_input(qapp, tmp_path, ext, have):
     if not have:
         pytest.skip(f"{ext} codec not installed")
     out = str(tmp_path / f"cli{ext}")
-    assert cli.main(["--new", "50x40", "--fill", "10,200,40",
-                     "--output", out]) == 0
+    assert cli.main(["--new", "50x40", "--fill", "10,200,40", "--output", out]) == 0
     # and back in as an input
     png = str(tmp_path / "back.png")
     assert cli.main([out, "--output", png]) == 0
@@ -58,8 +57,7 @@ def test_quality_changes_avif_size(qapp, tmp_path):
     img = QImage(160, 120, QImage.Format.Format_ARGB32_Premultiplied)
     for x in range(160):
         for y in range(120):
-            img.setPixelColor(x, y, QColor((x * 7 + y * 13) % 256,
-                                           (x * 31) % 256, (y * 17) % 256))
+            img.setPixelColor(x, y, QColor((x * 7 + y * 13) % 256, (x * 31) % 256, (y * 17) % 256))
     lo = io_formats.encode_extra(img, ".avif", quality=15)
     hi = io_formats.encode_extra(img, ".avif", quality=95)
     assert lo is not None and hi is not None and len(lo) < len(hi)
@@ -73,6 +71,7 @@ def test_missing_codec_is_a_clean_usage_error(qapp, tmp_path, monkeypatch):
         cli.main(["--new", "20x20", "--output", out])
     assert exc.value.code == 2
     import os
+
     assert not os.path.exists(out)
 
 

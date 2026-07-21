@@ -343,8 +343,7 @@ def dodge_icon() -> QIcon:
         p.drawEllipse(QPointF(11, 11), 4.0, 4.0)  # sun disc
         p.setPen(QPen(_INK, 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
-            p.drawLine(QPointF(11 + dx * 6, 11 + dy * 6),
-                       QPointF(11 + dx * 8.5, 11 + dy * 8.5))
+            p.drawLine(QPointF(11 + dx * 6, 11 + dy * 6), QPointF(11 + dx * 8.5, 11 + dy * 8.5))
 
     return _make(draw)
 
@@ -364,9 +363,9 @@ def crop_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawLine(QPointF(7, 3), QPointF(7, 15))   # left crop mark
+        p.drawLine(QPointF(7, 3), QPointF(7, 15))  # left crop mark
         p.drawLine(QPointF(7, 15), QPointF(19, 15))
-        p.drawLine(QPointF(3, 7), QPointF(15, 7))   # top crop mark
+        p.drawLine(QPointF(3, 7), QPointF(15, 7))  # top crop mark
         p.drawLine(QPointF(15, 7), QPointF(15, 19))
 
     return _make(draw)
@@ -423,8 +422,7 @@ def pen_icon() -> QIcon:
     def draw(p: QPainter) -> None:
         p.setPen(QPen(_INK, 1.4))
         p.setBrush(Qt.BrushStyle.NoBrush)
-        nib = QPolygonF([QPointF(10.5, 3), QPointF(15, 12), QPointF(10.5, 17),
-                         QPointF(6, 12)])
+        nib = QPolygonF([QPointF(10.5, 3), QPointF(15, 12), QPointF(10.5, 17), QPointF(6, 12)])
         p.drawPolygon(nib)
         p.drawLine(QPointF(10.5, 8), QPointF(10.5, 13))  # slit
         p.drawEllipse(QPointF(10.5, 13), 1.2, 1.2)  # breather hole

@@ -14,8 +14,17 @@ def _document():
     doc = Document(QSize(120, 100), 72, "vectors")
     for index, x in enumerate((10, 45, 80)):
         layer = vector.render_vector(
-            {"kind": "rect", "x1": x, "y1": 10, "x2": x + 20, "y2": 30,
-             "color": [220, 20, 30, 255]}, f"R{index}", doc.canvas_rect())
+            {
+                "kind": "rect",
+                "x1": x,
+                "y1": 10,
+                "x2": x + 20,
+                "y2": 30,
+                "color": [220, 20, 30, 255],
+            },
+            f"R{index}",
+            doc.canvas_rect(),
+        )
         doc.layers.append(layer)
     doc.active_index = 0
     return doc
@@ -41,10 +50,13 @@ def test_selection_transform_group_and_undo(qapp):
 def test_appearance_align_distribute_boolean_and_nodes(qapp):
     doc = _document()
     ids = _ids(doc)
-    gradient = {"type": "linear-gradient", "start": [10, 10], "end": [30, 10],
-                "stops": [[0, [0, 0, 0, 255]], [1, [255, 255, 255, 255]]]}
-    vectorops.set_appearance(doc, [ids[0]], fill=gradient, stroke_width=3,
-                             dash=[2, 1])
+    gradient = {
+        "type": "linear-gradient",
+        "start": [10, 10],
+        "end": [30, 10],
+        "stops": [[0, [0, 0, 0, 255]], [1, [255, 255, 255, 255]]],
+    }
+    vectorops.set_appearance(doc, [ids[0]], fill=gradient, stroke_width=3, dash=[2, 1])
     assert doc.layers[0].image.pixelColor(12, 20) != QColor(220, 20, 30, 255)
     vectorops.align(doc, ids[:2], "top")
     vectorops.distribute(doc, ids, "horizontal")
@@ -66,6 +78,9 @@ def test_snapping_and_cli_mcp_parity(qapp, tmp_path):
         operations=[
             ("shape", "rect,10,10,20,20,255,0,0"),
             ("vector-op", json.dumps({"op": "transform", "ids": [], "dx": 4})),
-        ], output=output, info=True)
+        ],
+        output=output,
+        info=True,
+    )
     assert result["info"]["layers"][-1]["vector_id"]
     assert result["info"]["layers"][-1]["vector_type"] == "shape"

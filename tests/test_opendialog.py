@@ -96,5 +96,4 @@ def test_dialog_shows_all_columns_untruncated(qapp):
     assert not header.stretchLastSection()
     # every column sizes to its contents -> nothing gets clipped on first open
     for col in range(header.count()):
-        assert (header.sectionResizeMode(col)
-                == QHeaderView.ResizeMode.ResizeToContents)
+        assert header.sectionResizeMode(col) == QHeaderView.ResizeMode.ResizeToContents

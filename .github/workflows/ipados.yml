@@ -11,18 +11,28 @@ on:
       - "v*"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: macos-15
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Verify release versions
+        run: python3 scripts/check-version.py
       - name: Install XcodeGen
-        run: brew install xcodegen
-      - name: Generate Xcode project
-        working-directory: ipados
-        run: xcodegen generate
+        run: |
+          archive="$RUNNER_TEMP/xcodegen.zip"
+          curl --fail --location --silent --show-error \
+            https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip \
+            --output "$archive"
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $archive" \
+            | shasum -a 256 -c -
+          mkdir "$RUNNER_TEMP/xcodegen-release"
+          ditto -x -k "$archive" "$RUNNER_TEMP/xcodegen-release"
+          echo "XCODEGEN=$RUNNER_TEMP/xcodegen-release/xcodegen/bin/xcodegen" \
+            >> "$GITHUB_ENV"
       - name: Build iPadOS app
         run: scripts/build-ipados.sh
       - name: Select iPad simulator
@@ -42,12 +52,7 @@ jobs:
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}' \
             CODE_SIGNING_ALLOWED=NO \
             test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Photoslop-iPadOS-unsigned
+          name: Photoslop-iPadOS-unsigned-validation-only
           path: ipados/dist/Photoslop-iPadOS-unsigned.zip
-      - name: Attach developer build to release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" ipados/dist/Photoslop-iPadOS-unsigned.zip --clobber

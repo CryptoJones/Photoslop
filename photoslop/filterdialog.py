@@ -44,5 +44,7 @@ class FilterParamsDialog(QDialog):
         form.addRow(buttons)
 
     def values(self) -> dict:
-        return {key: (box.text() if isinstance(box, QLineEdit) else box.value())
-                for key, box in self._boxes.items()}
+        return {
+            key: (box.text() if isinstance(box, QLineEdit) else box.value())
+            for key, box in self._boxes.items()
+        }

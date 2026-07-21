@@ -8,6 +8,8 @@ side is painted on.
 
 from __future__ import annotations
 
+import uuid
+
 from PySide6.QtCore import QPoint, QRect, QSize
 from PySide6.QtGui import QImage, QPainter, Qt
 
@@ -31,8 +33,10 @@ BLEND_MODES: dict[str, QPainter.CompositionMode] = {
 }
 
 # OpenRaster composite-op names (GIMP/Krita-interoperable)
-ORA_OPS = {name: f"svg:{'src-over' if name == 'normal' else 'plus' if name == 'addition' else name}"
-           for name in BLEND_MODES}
+ORA_OPS = {
+    name: f"svg:{'src-over' if name == 'normal' else 'plus' if name == 'addition' else name}"
+    for name in BLEND_MODES
+}
 ORA_OPS_REVERSE = {v: k for k, v in ORA_OPS.items()}
 
 
@@ -45,16 +49,38 @@ def blank_image(size: QSize) -> QImage:
 def mask_to_alpha(mask: QImage) -> QImage:
     """Reinterpret a Grayscale8 mask's bytes as Alpha8 (convertToFormat would
     route through ARGB and produce opaque alpha everywhere)."""
-    alpha = QImage(mask.constBits(), mask.width(), mask.height(),
-                   mask.bytesPerLine(), QImage.Format.Format_Alpha8)
+    alpha = QImage(
+        mask.constBits(),
+        mask.width(),
+        mask.height(),
+        mask.bytesPerLine(),
+        QImage.Format.Format_Alpha8,
+    )
     return alpha.copy()  # detach from the mask's buffer
 
 
 class Layer:
-    __slots__ = ("adjustment", "blend_mode", "clipped", "effects",
-                 "fill_opacity", "fx_cache", "group", "image", "mask", "name",
-                 "offset", "opacity", "smart_filters", "source", "text_data",
-                 "vector_data", "visible")
+    __slots__ = (
+        "adjustment",
+        "blend_mode",
+        "clipped",
+        "effects",
+        "fill_opacity",
+        "fx_cache",
+        "group",
+        "image",
+        "mask",
+        "name",
+        "offset",
+        "opacity",
+        "smart_filters",
+        "source",
+        "text_data",
+        "id",
+        "smart_filters_trusted",
+        "vector_data",
+        "visible",
+    )
 
     def __init__(
         self,
@@ -64,7 +90,9 @@ class Layer:
         visible: bool = True,
         opacity: float = 1.0,
         blend_mode: str = "normal",
+        layer_id: str | None = None,
     ) -> None:
+        self.id = layer_id or uuid.uuid4().hex
         self.name = name
         self.image = image if image.format() == FORMAT else image.convertToFormat(FORMAT)
         self.offset = QPoint(offset) if offset is not None else QPoint(0, 0)
@@ -77,6 +105,7 @@ class Layer:
         self.adjustment = None  # (3, 256) uint8 LUTs: applies to composite below
         self.source: QImage | None = None  # smart-object pristine snapshot
         self.smart_filters: list = []  # (kind, *params) applied to a smart object
+        self.smart_filters_trusted = True  # imported recipes require explicit trust
         self.effects: list = []  # versioned live appearance-effect objects
         self.fill_opacity = 1.0  # scales the fill only, never the effects
         self.fx_cache = None  # (key, rendered effect images) — derived
@@ -87,7 +116,7 @@ class Layer:
     def blank(cls, name: str, size: QSize, offset: QPoint | None = None) -> Layer:
         return cls(name, blank_image(size), offset)
 
-    def clone(self, name: str | None = None) -> Layer:
+    def clone(self, name: str | None = None, *, preserve_id: bool = False) -> Layer:
         # QImage(...) copy construction shares pixel data (copy-on-write).
         layer = Layer(
             name if name is not None else self.name,
@@ -96,6 +125,7 @@ class Layer:
             self.visible,
             self.opacity,
             self.blend_mode,
+            self.id if preserve_id else None,
         )
         if self.mask is not None:
             layer.mask = QImage(self.mask)
@@ -106,6 +136,7 @@ class Layer:
         if self.source is not None:
             layer.source = QImage(self.source)
         layer.smart_filters = [tuple(f) for f in self.smart_filters]
+        layer.smart_filters_trusted = self.smart_filters_trusted
         from copy import deepcopy
 
         layer.effects = deepcopy(self.effects)

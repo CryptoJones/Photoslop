@@ -19,8 +19,13 @@ PAPER_SIZES = (
     ("Legal", 215.9, 355.6, "216×356 mm", "8.5×14″"),
 )
 
-_LABELS = {"px": "pixels", "in": "freedom units", "mm": "millimetres",
-           "cm": "centimetres", "pc": "picas"}
+_LABELS = {
+    "px": "pixels",
+    "in": "freedom units",
+    "mm": "millimetres",
+    "cm": "centimetres",
+    "pc": "picas",
+}
 
 
 def unit_label(unit: str) -> str:
@@ -66,8 +71,25 @@ def format_value_precise(px: float, unit: str, dpi: float) -> str:
 # Candidate tick steps, in display units. Sub-unit steps let inch/pica rulers
 # subdivide when zoomed in.
 _STEPS = (
-    0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100,
-    250, 500, 1000, 2500, 5000, 10000, 25000, 50000,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1,
+    2,
+    5,
+    10,
+    25,
+    50,
+    100,
+    250,
+    500,
+    1000,
+    2500,
+    5000,
+    10000,
+    25000,
+    50000,
 )
 
 

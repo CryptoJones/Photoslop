@@ -127,8 +127,11 @@ class AppearancePanel(QWidget):
             raw = json.loads(str(self._settings.value("appearance/presets/v1", "{}")))
             if not isinstance(raw, dict):
                 return {}
-            return {str(name): normalize_effects(stack) for name, stack in raw.items()
-                    if isinstance(stack, list)}
+            return {
+                str(name): normalize_effects(stack)
+                for name, stack in raw.items()
+                if isinstance(stack, list)
+            }
         except (TypeError, ValueError, json.JSONDecodeError):
             return {}
 
@@ -160,8 +163,14 @@ class AppearancePanel(QWidget):
         self._updating = True
         self.effects.clear()
         enabled = layer is not None
-        for widget in (self.effects, self.add_btn, self.effect_kind, self.fill_opacity,
-                       self.apply_preset_btn, self.save_preset_btn):
+        for widget in (
+            self.effects,
+            self.add_btn,
+            self.effect_kind,
+            self.fill_opacity,
+            self.apply_preset_btn,
+            self.save_preset_btn,
+        ):
             widget.setEnabled(enabled)
         if layer is None:
             self.status.setText("No active layer")
@@ -172,16 +181,24 @@ class AppearancePanel(QWidget):
             for effect in layer.effects:
                 item = QListWidgetItem(EFFECT_LABELS[effect["type"]])
                 item.setData(Qt.ItemDataRole.UserRole, effect["id"])
-                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable
-                              | Qt.ItemFlag.ItemIsDragEnabled)
-                item.setCheckState(Qt.CheckState.Checked if effect["enabled"]
-                                   else Qt.CheckState.Unchecked)
+                item.setFlags(
+                    item.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsDragEnabled
+                )
+                item.setCheckState(
+                    Qt.CheckState.Checked if effect["enabled"] else Qt.CheckState.Unchecked
+                )
                 self.effects.addItem(item)
             self.fill_opacity.setValue(layer.fill_opacity * 100)
         self._updating = False
         wanted = selected_id or self._selected_id
-        row = next((row for row in range(self.effects.count())
-                    if self.effects.item(row).data(Qt.ItemDataRole.UserRole) == wanted), 0)
+        row = next(
+            (
+                row
+                for row in range(self.effects.count())
+                if self.effects.item(row).data(Qt.ItemDataRole.UserRole) == wanted
+            ),
+            0,
+        )
         if self.effects.count():
             self.effects.setCurrentRow(row)
         else:
@@ -191,24 +208,37 @@ class AppearancePanel(QWidget):
         layer = self._layer()
         return copy.deepcopy(normalize_effects(layer.effects if layer else []))
 
-    def _commit(self, stack: list[dict], text: str, selected_id=None,
-                fill_opacity=None, *, refresh=True, merge_key=None) -> None:
+    def _commit(
+        self,
+        stack: list[dict],
+        text: str,
+        selected_id=None,
+        fill_opacity=None,
+        *,
+        refresh=True,
+        merge_key=None,
+    ) -> None:
         layer = self._layer()
         if layer is None:
             return
         from photoslop.commands import SetLayerStyleCommand
 
-        self.doc.undo_stack.push(SetLayerStyleCommand(
-            self.doc, layer, stack,
-            layer.fill_opacity if fill_opacity is None else fill_opacity, text,
-            merge_key=merge_key))
+        self.doc.undo_stack.push(
+            SetLayerStyleCommand(
+                self.doc,
+                layer,
+                stack,
+                layer.fill_opacity if fill_opacity is None else fill_opacity,
+                text,
+                merge_key=merge_key,
+            )
+        )
         if refresh:
             self.refresh(selected_id)
 
     def add_effect(self) -> None:
         effect = new_effect(str(self.effect_kind.currentData()))
-        self._commit([*self._stack(), effect], f"Add {EFFECT_LABELS[effect['type']]}",
-                     effect["id"])
+        self._commit([*self._stack(), effect], f"Add {EFFECT_LABELS[effect['type']]}", effect["id"])
 
     def _selected_index(self) -> int:
         return self.effects.currentRow()
@@ -242,12 +272,14 @@ class AppearancePanel(QWidget):
         if self._updating:
             return
         by_id = {effect["id"]: effect for effect in self._stack()}
-        stack = [by_id[self.effects.item(row).data(Qt.ItemDataRole.UserRole)]
-                 for row in range(self.effects.count())]
+        stack = [
+            by_id[self.effects.item(row).data(Qt.ItemDataRole.UserRole)]
+            for row in range(self.effects.count())
+        ]
         self._commit(stack, "Reorder Effects", self._selected_id)
 
     def _selection_changed(self, current, _previous) -> None:
-        self._selected_id = (current.data(Qt.ItemDataRole.UserRole) if current else None)
+        self._selected_id = current.data(Qt.ItemDataRole.UserRole) if current else None
         stack = self._stack()
         effect = next((item for item in stack if item["id"] == self._selected_id), None)
         self._build_form(effect)
@@ -276,14 +308,16 @@ class AppearancePanel(QWidget):
         blend.addItems(BLEND_MODES)
         blend.setCurrentText(effect["blend_mode"])
         blend.currentTextChanged.connect(
-            lambda value: self._set_common(effect["id"], "blend_mode", value))
+            lambda value: self._set_common(effect["id"], "blend_mode", value)
+        )
         self.form.addRow("Blend", blend)
         opacity = QDoubleSpinBox()
         opacity.setRange(0, 100)
         opacity.setSuffix(" %")
         opacity.setValue(effect["opacity"] * 100)
         opacity.valueChanged.connect(
-            lambda value: self._set_common(effect["id"], "opacity", value / 100))
+            lambda value: self._set_common(effect["id"], "opacity", value / 100)
+        )
         self.form.addRow("Opacity", opacity)
         for key, value in effect["parameters"].items():
             label = key.replace("_", " ").title()
@@ -291,33 +325,41 @@ class AppearancePanel(QWidget):
                 button = QPushButton(QColor(*value).name())
                 button.setStyleSheet(f"background-color:{QColor(*value).name()}")
                 button.clicked.connect(
-                    lambda _checked=False, eid=effect["id"], field=key,
-                    initial=value: self._pick_color(eid, field, initial))
+                    lambda _checked=False, eid=effect["id"], field=key, initial=value: (
+                        self._pick_color(eid, field, initial)
+                    )
+                )
                 self.form.addRow(label, button)
             elif key in _OPTIONS:
                 combo = QComboBox()
                 combo.addItems(_OPTIONS[key])
                 combo.setCurrentText(str(value))
                 combo.currentTextChanged.connect(
-                    lambda text, eid=effect["id"], field=key:
-                    self._set_parameter(eid, field, text))
+                    lambda text, eid=effect["id"], field=key: self._set_parameter(eid, field, text)
+                )
                 self.form.addRow(label, combo)
             elif isinstance(value, bool):
                 check = QCheckBox()
                 check.setChecked(value)
                 check.toggled.connect(
-                    lambda checked, eid=effect["id"], field=key:
-                    self._set_parameter(eid, field, checked))
+                    lambda checked, eid=effect["id"], field=key: self._set_parameter(
+                        eid, field, checked
+                    )
+                )
                 self.form.addRow(label, check)
             else:
                 spin = QDoubleSpinBox()
-                spin.setRange(-10000 if key.startswith("offset_") else 0,
-                              10000 if key.startswith("offset_") else 1000)
+                spin.setRange(
+                    -10000 if key.startswith("offset_") else 0,
+                    10000 if key.startswith("offset_") else 1000,
+                )
                 spin.setDecimals(1)
                 spin.setValue(float(value))
                 spin.valueChanged.connect(
-                    lambda number, eid=effect["id"], field=key:
-                    self._set_parameter(eid, field, number))
+                    lambda number, eid=effect["id"], field=key: self._set_parameter(
+                        eid, field, number
+                    )
+                )
                 self.form.addRow(label, spin)
 
     def _set_common(self, effect_id, key, value) -> None:
@@ -328,8 +370,13 @@ class AppearancePanel(QWidget):
             if effect["id"] == effect_id:
                 effect[key] = value
         kind = next(effect["type"] for effect in stack if effect["id"] == effect_id)
-        self._commit(stack, f"Edit {EFFECT_LABELS[kind]}", effect_id,
-                     refresh=False, merge_key=(effect_id, key))
+        self._commit(
+            stack,
+            f"Edit {EFFECT_LABELS[kind]}",
+            effect_id,
+            refresh=False,
+            merge_key=(effect_id, key),
+        )
 
     def _set_parameter(self, effect_id, key, value) -> None:
         if self._updating:
@@ -339,20 +386,27 @@ class AppearancePanel(QWidget):
             if effect["id"] == effect_id:
                 effect["parameters"][key] = value
         refresh = key.endswith("color") or key in {"color", "color1", "color2"}
-        self._commit(stack, "Edit Effect", effect_id, refresh=refresh,
-                     merge_key=(effect_id, key))
+        self._commit(stack, "Edit Effect", effect_id, refresh=refresh, merge_key=(effect_id, key))
 
     def _pick_color(self, effect_id, key, initial) -> None:
-        color = QColorDialog.getColor(QColor(*initial), self, "Effect Color",
-                                      QColorDialog.ColorDialogOption.ShowAlphaChannel)
+        color = QColorDialog.getColor(
+            QColor(*initial), self, "Effect Color", QColorDialog.ColorDialogOption.ShowAlphaChannel
+        )
         if color.isValid():
-            self._set_parameter(effect_id, key,
-                                [color.red(), color.green(), color.blue(), color.alpha()])
+            self._set_parameter(
+                effect_id, key, [color.red(), color.green(), color.blue(), color.alpha()]
+            )
 
     def _fill_changed(self, value: float) -> None:
         if not self._updating and self._layer() is not None:
-            self._commit(self._stack(), "Fill Opacity", self._selected_id, value / 100,
-                         refresh=False, merge_key="fill-opacity")
+            self._commit(
+                self._stack(),
+                "Fill Opacity",
+                self._selected_id,
+                value / 100,
+                refresh=False,
+                merge_key="fill-opacity",
+            )
 
     def apply_preset(self) -> None:
         data = self.presets.currentData()
@@ -376,8 +430,7 @@ class AppearancePanel(QWidget):
             return
         custom = self._custom_presets()
         custom[name] = self._stack()
-        self._settings.setValue("appearance/presets/v1",
-                                json.dumps(custom, separators=(",", ":")))
+        self._settings.setValue("appearance/presets/v1", json.dumps(custom, separators=(",", ":")))
         self._load_presets()
         self.presets.setCurrentText(name)
 
@@ -387,6 +440,5 @@ class AppearancePanel(QWidget):
             return
         custom = self._custom_presets()
         custom.pop(data[1], None)
-        self._settings.setValue("appearance/presets/v1",
-                                json.dumps(custom, separators=(",", ":")))
+        self._settings.setValue("appearance/presets/v1", json.dumps(custom, separators=(",", ":")))
         self._load_presets()

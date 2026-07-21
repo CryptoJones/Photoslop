@@ -8,8 +8,7 @@ from photoslop.mainwindow import MainWindow
 
 def make_window(qapp) -> MainWindow:
     win = MainWindow()
-    win.add_document(Document.new(QSize(100, 80), 72.0, "sh",
-                                  QColor(255, 255, 255)))
+    win.add_document(Document.new(QSize(100, 80), 72.0, "sh", QColor(255, 255, 255)))
     win.options.foreground = QColor(200, 30, 30)
     win.options.size = 6
     return win

@@ -3,9 +3,8 @@
 
 The same headless engine as ``photoslop-cli``, exposed over MCP so an LLM/agent
 can drive the editor: load an image (or start blank), run an ordered pipeline of
-operations, and write the result. Every operation is the CLI's ``OPS`` table
-verbatim, so the MCP surface has exactly the CLI's feature parity — nothing to
-keep in sync by hand.
+operations, and write the result. Safe operations are derived from the CLI's
+``OPS`` table; network-model operations and unsafe plugins stay local-only.
 
 Run it (stdio transport, the MCP default)::
 
@@ -19,11 +18,102 @@ so it is an optional dependency (``photoslop[mcp]``).
 
 from __future__ import annotations
 
+import argparse
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
 from photoslop import __version__, cli
+from photoslop.errors import ErrorCode, StructuredError, ToolError, classify_error
 
 # A tool value the model can pass for a flag-style op (e.g. auto-levels),
 # which take no argument.
 _FLAG = ""
+_BLOCKED_OPS = frozenset(
+    {
+        "model-url",
+        "select-subject",
+        "generative-fill",
+        "denoise-model",
+    }
+)
+_PATH_VALUE_OPS = frozenset(
+    {
+        "assign-profile",
+        "convert-profile",
+        "proof",
+        "cmyk-out",
+    }
+)
+
+
+@dataclass(frozen=True)
+class PathPolicy:
+    root: Path
+    allow_overwrite: bool = False
+
+    @classmethod
+    def create(cls, root: str | os.PathLike[str], *, allow_overwrite: bool = False) -> PathPolicy:
+        resolved = Path(root).expanduser().resolve(strict=True)
+        if not resolved.is_dir():
+            raise ToolError(f"MCP root is not a directory: {resolved}")
+        return cls(resolved, allow_overwrite)
+
+    def _resolve(self, value: str, *, purpose: str) -> Path:
+        candidate = Path(value).expanduser()
+        if not candidate.is_absolute():
+            candidate = self.root / candidate
+        resolved = candidate.resolve(strict=False)
+        try:
+            resolved.relative_to(self.root)
+        except ValueError as exc:
+            raise ToolError(
+                f"{purpose} must stay under MCP root {self.root}", ErrorCode.UNSAFE_OPERATION
+            ) from exc
+        return resolved
+
+    def input(self, value: str, *, purpose: str = "input") -> str:
+        resolved = self._resolve(value, purpose=purpose)
+        if not resolved.is_file():
+            raise ToolError(f"{purpose} is not a file: {resolved}")
+        return str(resolved)
+
+    def output(self, value: str, *, purpose: str = "output") -> str:
+        resolved = self._resolve(value, purpose=purpose)
+        parent = resolved.parent.resolve(strict=False)
+        try:
+            parent.relative_to(self.root)
+        except ValueError as exc:
+            raise ToolError(
+                f"{purpose} must stay under MCP root {self.root}", ErrorCode.UNSAFE_OPERATION
+            ) from exc
+        if resolved.exists() and not self.allow_overwrite:
+            raise ToolError(
+                f"{purpose} already exists; MCP overwrite is disabled: {resolved}",
+                ErrorCode.UNSAFE_OPERATION,
+            )
+        return str(resolved)
+
+    def directory(self, value: str, *, purpose: str) -> str:
+        resolved = self._resolve(value, purpose=purpose)
+        if resolved.exists() and not resolved.is_dir():
+            raise ToolError(f"{purpose} is not a directory: {resolved}")
+        if resolved.exists() and any(resolved.iterdir()) and not self.allow_overwrite:
+            raise ToolError(
+                f"{purpose} is not empty; MCP overwrite is disabled: {resolved}",
+                ErrorCode.UNSAFE_OPERATION,
+            )
+        return str(resolved)
+
+
+_POLICY = PathPolicy.create(os.getcwd())
+
+
+def configure(*, root: str | os.PathLike[str], allow_overwrite: bool = False) -> PathPolicy:
+    """Set the filesystem sandbox used by the exposed MCP tool functions."""
+    global _POLICY
+    _POLICY = PathPolicy.create(root, allow_overwrite=allow_overwrite)
+    return _POLICY
 
 
 def list_operations() -> dict:
@@ -32,11 +122,12 @@ def list_operations() -> dict:
     Returns ``{"count": N, "operations": [...]}`` where each entry has ``name``
     (pass as an operation's ``op``), ``args`` (the value format, or ``null`` for
     a no-argument flag op), and ``help``. Mirrors ``photoslop-cli --help``
-    exactly (same ``OPS`` table).
+    from the same ``OPS`` table, minus local-only network model operations.
     """
     operations = [
         {"name": name, "args": metavar, "help": help_text}
         for name, (metavar, help_text, _fn) in cli.OPS.items()
+        if name not in _BLOCKED_OPS
     ]
     return {"count": len(operations), "operations": operations}
 
@@ -47,10 +138,19 @@ def _normalise_ops(operations: list[dict] | None) -> list[tuple[str, str]]:
     pairs: list[tuple[str, str]] = []
     for i, entry in enumerate(operations or []):
         if not isinstance(entry, dict) or "op" not in entry:
-            raise ValueError(
+            raise ToolError(
                 f"operations[{i}] must be an object with an 'op' key, e.g. "
-                '{"op": "resize", "value": "800x600"}')
-        pairs.append((str(entry["op"]), str(entry.get("value", _FLAG))))
+                '{"op": "resize", "value": "800x600"}'
+            )
+        name = str(entry["op"])
+        if name in _BLOCKED_OPS:
+            raise ToolError(
+                f"operation {name!r} is not exposed through MCP", ErrorCode.UNSUPPORTED_CAPABILITY
+            )
+        value = str(entry.get("value", _FLAG))
+        if name in _PATH_VALUE_OPS and value.lower().endswith(".icc"):
+            value = _POLICY.input(value, purpose=f"{name} profile")
+        pairs.append((name, value))
     return pairs
 
 
@@ -81,15 +181,30 @@ def edit_image(
             {"op": "auto-levels", "value": ""},
         ])
     """
-    return cli.apply_pipeline(
-        input_path=input,
-        new=new,
-        dpi=dpi,
-        operations=_normalise_ops(operations),
-        output=output,
-        info=info,
-        export_artboards=export_artboards,
+    if input and new:
+        raise ToolError("give an input file or new, not both")
+    confined_input = _POLICY.input(input) if input else None
+    confined_output = _POLICY.output(output) if output else None
+    confined_artboards = (
+        _POLICY.directory(export_artboards, purpose="artboard export directory")
+        if export_artboards
+        else None
     )
+    try:
+        return cli.apply_pipeline(
+            input_path=confined_input,
+            new=new,
+            dpi=dpi,
+            operations=_normalise_ops(operations),
+            output=confined_output,
+            info=info,
+            export_artboards=confined_artboards,
+        )
+    except ToolError:
+        raise
+    except Exception as exc:
+        code = exc.code if isinstance(exc, StructuredError) else classify_error(exc)
+        raise ToolError(str(exc), code) from exc
 
 
 def document_info(input: str) -> dict:
@@ -97,10 +212,16 @@ def document_info(input: str) -> dict:
     (name, visibility, opacity, blend mode, offset, effects, smart-object,
     native vector ID/type) plus
     any artboards. Read-only — nothing is written."""
-    return cli.apply_pipeline(input_path=input, info=True)["info"]
+    try:
+        return cli.apply_pipeline(input_path=_POLICY.input(input), info=True)["info"]
+    except ToolError:
+        raise
+    except Exception as exc:
+        code = exc.code if isinstance(exc, StructuredError) else classify_error(exc)
+        raise ToolError(str(exc), code) from exc
 
 
-def build_server():
+def build_server(*, root: str | os.PathLike[str] | None = None, allow_overwrite: bool = False):
     """Construct the FastMCP server with the three tools registered.
 
     Needs the optional ``mcp`` dependency (``pip install 'photoslop[mcp]'``)."""
@@ -112,13 +233,17 @@ def build_server():
             "'pip install \"photoslop[mcp]\"' (or 'uv sync --extra mcp')."
         ) from exc
 
+    configure(root=root or os.getcwd(), allow_overwrite=allow_overwrite)
     server = FastMCP(
         "photoslop",
         instructions=(
             "Photoslop image editor as tools. Call list_operations to discover "
             "the pipeline op catalog, then edit_image to load/create an image, "
-            "apply an ordered pipeline, and write output. document_info inspects "
-            f"a file read-only. Engine version {__version__}."
+            "apply an ordered safe pipeline, and write output. All paths are "
+            f"confined to {_POLICY.root}; existing outputs are "
+            f"{'allowed' if _POLICY.allow_overwrite else 'protected'}. "
+            "Network model operations and unsafe plugins are unavailable. "
+            f"document_info inspects a file read-only. Engine version {__version__}."
         ),
     )
     server.tool()(list_operations)
@@ -129,7 +254,19 @@ def build_server():
 
 def main() -> None:
     """Console entry point: serve over stdio (the MCP default transport)."""
-    build_server().run()
+    parser = argparse.ArgumentParser(prog="photoslop-mcp")
+    parser.add_argument(
+        "--root",
+        default=os.getcwd(),
+        help="filesystem root visible to tools (default: current directory)",
+    )
+    parser.add_argument(
+        "--allow-overwrite",
+        action="store_true",
+        help="permit tools to replace existing outputs under --root",
+    )
+    args = parser.parse_args()
+    build_server(root=args.root, allow_overwrite=args.allow_overwrite).run()
 
 
 if __name__ == "__main__":

@@ -79,6 +79,27 @@ class Tool:
     def cancel(self, doc=None) -> None:
         """Escape pressed — abandon any in-progress gesture."""
 
+    def has_active_interaction(self) -> bool:
+        """Whether Escape should cancel this gesture before deselecting.
+
+        Tool state has a few established shapes; keeping the introspection here
+        gives every existing gesture the same two-stage Escape contract without
+        coupling the canvas to concrete tool classes.
+        """
+        for name in (
+            "session",
+            "_base",
+            "_start",
+            "_anchor",
+            "_recorder",
+            "_edit",
+            "_mask",
+            "rect",
+        ):
+            if getattr(self, name, None) is not None:
+                return True
+        return any(getattr(self, name, None) for name in ("_points", "pins"))
+
     def cursor_intent(
         self,
         doc,
@@ -147,6 +168,16 @@ class BrushTool(Tool):
         self._scratch = None
         self._orig = None
 
+    def cancel(self, doc=None) -> None:
+        if self._recorder is not None:
+            self._recorder.restore()
+        self._recorder = None
+        self._layer = None
+        self._last = None
+        self._clip = None
+        self._scratch = None
+        self._orig = None
+
     def _stroke_name(self) -> str:
         return "Eraser" if self.opts.eraser else "Brush Stroke"
 
@@ -154,7 +185,8 @@ class BrushTool(Tool):
 
     def _segment(self, doc, a: QPointF, b: QPointF, first: bool = False) -> None:
         layer = self._layer
-        assert layer is not None and self._recorder is not None
+        if layer is None or self._recorder is None:
+            raise RuntimeError("brush segment requested outside an active stroke")
         off = QPointF(layer.offset)
         la, lb = a - off, b - off
         radius = self.opts.size / 2.0
@@ -162,8 +194,7 @@ class BrushTool(Tool):
         rect = QRectF(la, lb).normalized().adjusted(-pad, -pad, pad, pad).toAlignedRect()
         self._recorder.will_change(rect)
 
-        fast = (self.opts.hardness >= 100 and self.opts.opacity >= 100
-                and self.opts.flow >= 100)
+        fast = self.opts.hardness >= 100 and self.opts.opacity >= 100 and self.opts.flow >= 100
         if not self.scratch_stroke or fast:
             p = QPainter(layer.image)
             p.setRenderHint(QPainter.RenderHint.Antialiasing, self.antialias)
@@ -179,8 +210,9 @@ class BrushTool(Tool):
             sp.setRenderHint(QPainter.RenderHint.Antialiasing, self.antialias)
             if self._clip is not None:
                 sp.setClipPath(self._clip)
-            self._stamp_segment(sp, la, lb, round(self.opts.flow * 2.55),
-                                first, self._stroke_color())
+            self._stamp_segment(
+                sp, la, lb, round(self.opts.flow * 2.55), first, self._stroke_color()
+            )
             sp.end()
             # rebuild the dirty rect: original pixels + stroke at opacity
             p = QPainter(layer.image)
@@ -189,7 +221,8 @@ class BrushTool(Tool):
             p.setCompositionMode(
                 QPainter.CompositionMode.CompositionMode_DestinationOut
                 if self._erases()
-                else QPainter.CompositionMode.CompositionMode_SourceOver)
+                else QPainter.CompositionMode.CompositionMode_SourceOver
+            )
             p.setOpacity(self.opts.opacity / 100.0)
             p.drawImage(rect.topLeft(), self._scratch, rect)
             p.end()
@@ -228,8 +261,15 @@ class BrushTool(Tool):
             p.setPen(pen)
             p.drawLine(a, b)
 
-    def _stamp_segment(self, p: QPainter, a: QPointF, b: QPointF, alpha: int,
-                       first: bool, color: QColor | None = None):
+    def _stamp_segment(
+        self,
+        p: QPainter,
+        a: QPointF,
+        b: QPointF,
+        alpha: int,
+        first: bool,
+        color: QColor | None = None,
+    ):
         radius = max(0.5, self.opts.size / 2.0)
         spacing = max(1.0, self.opts.size * self.opts.spacing / 100.0)
         delta = b - a
@@ -254,7 +294,8 @@ class BrushTool(Tool):
             if scatter:
                 center = QPointF(
                     center.x() + self._rng.uniform(-scatter, scatter),
-                    center.y() + self._rng.uniform(-scatter, scatter))
+                    center.y() + self._rng.uniform(-scatter, scatter),
+                )
             grad = QRadialGradient(center, radius)
             grad.setColorAt(0.0, base)
             grad.setColorAt(grad_stop, base)
@@ -357,8 +398,7 @@ class CropTool(Tool):
         if canvas is None or rect is None or rect.isEmpty():
             return
         doc = canvas.doc
-        doc.undo_stack.push(
-            ResizeCanvasCommand(doc, rect.size(), -rect.topLeft(), "Crop"))
+        doc.undo_stack.push(ResizeCanvasCommand(doc, rect.size(), -rect.topLeft(), "Crop"))
         self.rect = None
         canvas.update()
 
@@ -404,8 +444,7 @@ class EraserTool(BrushTool):
             p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
             self._pen_segment(p, la, lb, QColor(0, 0, 0), first)
         else:
-            p.setCompositionMode(
-                QPainter.CompositionMode.CompositionMode_DestinationOut)
+            p.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationOut)
             self._stamp_segment(p, la, lb, alpha, first, QColor(0, 0, 0))
 
 
@@ -444,18 +483,24 @@ class PatchTool(Tool):
             if canvas is not None:
                 canvas.update()
             return
-        mask = npimage.selection_mask(doc.selection, layer.image.size(),
-                                      layer.offset)
+        mask = npimage.selection_mask(doc.selection, layer.image.size(), layer.offset)
         if not mask.any():
             return
         before = QImage(layer.image)  # COW; patch_heal's write detaches
-        dirty = npimage.patch_heal(layer.image, mask,
-                                   round(delta.x()), round(delta.y()))
+        dirty = npimage.patch_heal(layer.image, mask, round(delta.x()), round(delta.y()))
         if dirty.isEmpty():
             return  # sample window out of bounds
-        doc.undo_stack.push(LayerRegionCommand(
-            doc, layer, dirty, before.copy(dirty), layer.image.copy(dirty),
-            "Patch", applied=True))
+        doc.undo_stack.push(
+            LayerRegionCommand(
+                doc,
+                layer,
+                dirty,
+                before.copy(dirty),
+                layer.image.copy(dirty),
+                "Patch",
+                applied=True,
+            )
+        )
         doc.notify_pixels(dirty.translated(layer.offset))
         if canvas is not None:
             canvas.update()
@@ -506,11 +551,11 @@ class LiquifyTool(Tool):
         radius = max(2.0, self.opts.size / 2.0)
         local = self._last - QPointF(layer.offset)
         pad = int(radius + delta.manhattanLength()) + 2
-        rect = QRect(int(local.x()) - pad, int(local.y()) - pad,
-                     2 * pad, 2 * pad)
+        rect = QRect(int(local.x()) - pad, int(local.y()) - pad, 2 * pad, 2 * pad)
         self._recorder.will_change(rect)
-        dirty = npimage.warp_push(layer.image, local.x(), local.y(), radius,
-                                  delta.x() * strength, delta.y() * strength)
+        dirty = npimage.warp_push(
+            layer.image, local.x(), local.y(), radius, delta.x() * strength, delta.y() * strength
+        )
         self._last = pos
         if not dirty.isEmpty():
             doc.notify_pixels(dirty.translated(layer.offset))
@@ -521,6 +566,13 @@ class LiquifyTool(Tool):
         cmd = self._recorder.finish("Liquify")
         if cmd is not None:
             doc.undo_stack.push(cmd)
+        self._recorder = None
+        self._layer = None
+        self._last = None
+
+    def cancel(self, doc=None) -> None:
+        if self._recorder is not None:
+            self._recorder.restore()
         self._recorder = None
         self._layer = None
         self._last = None
@@ -620,8 +672,7 @@ class PerspectiveTool(Tool):
         p.drawImage(QPointF(0, 0), self._base)
         p.end()
         layer.image = warped
-        layer.offset = self._base_offset + QPoint(round(bounds.left()),
-                                                  round(bounds.top()))
+        layer.offset = self._base_offset + QPoint(round(bounds.left()), round(bounds.top()))
         doc.notify_pixels(doc.canvas_rect())
 
     def commit(self, canvas) -> None:
@@ -632,8 +683,8 @@ class PerspectiveTool(Tool):
         layer, doc = self._layer, self._doc
         if layer.image != self._base or layer.offset != self._base_offset:
             command = TransformLayerCommand(
-                doc, layer, self._base, self._base_offset,
-                QImage(layer.image), QPoint(layer.offset))
+                doc, layer, self._base, self._base_offset, QImage(layer.image), QPoint(layer.offset)
+            )
             command.setText("Perspective Warp")
             doc.undo_stack.push(command)
         self._reset()
@@ -734,8 +785,7 @@ class PuppetTool(Tool):
 
     def _rewarp(self, doc) -> None:
         layer = self._layer
-        pin_pairs = [((p[0].x(), p[0].y()), (p[1].x(), p[1].y()))
-                     for p in self.pins]
+        pin_pairs = [((p[0].x(), p[0].y()), (p[1].x(), p[1].y())) for p in self.pins]
         layer.image = npimage.puppet_warp(self._base, pin_pairs)
         doc.notify_pixels(layer.bounds())
 
@@ -746,11 +796,12 @@ class PuppetTool(Tool):
 
         layer, doc = self._layer, self._doc
         if layer.image != self._base:
-            doc.undo_stack.push(TransformLayerCommand(
-                doc, layer, self._base, layer.offset,
-                QImage(layer.image), layer.offset))
-            doc.undo_stack.command(doc.undo_stack.count() - 1).setText(
-                "Puppet Warp")
+            doc.undo_stack.push(
+                TransformLayerCommand(
+                    doc, layer, self._base, layer.offset, QImage(layer.image), layer.offset
+                )
+            )
+            doc.undo_stack.command(doc.undo_stack.count() - 1).setText("Puppet Warp")
         self._reset()
         if canvas is not None:
             canvas.update()
@@ -776,8 +827,9 @@ class PuppetTool(Tool):
         painter.setPen(QPen(QColor(0, 0, 0, 220), 1))
         for i, (_src, tgt) in enumerate(self.pins):
             centre = QPointF((tgt.x() + off.x()) * z, (tgt.y() + off.y()) * z)
-            painter.setBrush(QColor(255, 210, 60, 230) if i != self._drag
-                             else QColor(255, 80, 80, 230))
+            painter.setBrush(
+                QColor(255, 210, 60, 230) if i != self._drag else QColor(255, 80, 80, 230)
+            )
             painter.drawEllipse(centre, 5, 5)
 
 
@@ -793,7 +845,7 @@ class PenTool(Tool):
         super().__init__(options)
         self._points: list[QPointF] = []
         self._hover: QPointF | None = None
-        self._edit_layer = None       # existing path layer being re-edited
+        self._edit_layer = None  # existing path layer being re-edited
         self._edit_style: dict = {}
         self._drag_idx: int | None = None
 
@@ -801,27 +853,31 @@ class PenTool(Tool):
         from photoslop import vector
 
         layer = doc.active_layer
-        if (not self._points and self._edit_layer is None
-                and layer is not None and layer.vector_data is not None
-                and layer.vector_data.get("kind") == "path"):
+        if (
+            not self._points
+            and self._edit_layer is None
+            and layer is not None
+            and layer.vector_data is not None
+            and layer.vector_data.get("kind") == "path"
+        ):
             grabbed = vector.grab(layer.vector_data, pos.x(), pos.y())
             if grabbed is not None:
                 data = layer.vector_data
                 self._edit_layer = layer
-                self._edit_style = {k: data[k] for k in
-                                    ("close", "fill", "width", "color")
-                                    if k in data}
-                self._points = [QPointF(float(x), float(y))
-                                for x, y in data["points"]]
-                self._drag_idx = (int(grabbed) if grabbed != "move"
-                                  else None)
+                self._edit_style = {
+                    k: data[k] for k in ("close", "fill", "width", "color") if k in data
+                }
+                self._points = [QPointF(float(x), float(y)) for x, y in data["points"]]
+                self._drag_idx = int(grabbed) if grabbed != "move" else None
                 canvas.update()
                 return
         if self._edit_layer is not None:
             # already editing: grab an anchor to drag, or click to append
             for i, pt in enumerate(self._points):
-                if (abs(pt.x() - pos.x()) <= vector.HANDLE_RADIUS
-                        and abs(pt.y() - pos.y()) <= vector.HANDLE_RADIUS):
+                if (
+                    abs(pt.x() - pos.x()) <= vector.HANDLE_RADIUS
+                    and abs(pt.y() - pos.y()) <= vector.HANDLE_RADIUS
+                ):
                     self._drag_idx = i
                     return
         self._points.append(pos)
@@ -862,8 +918,11 @@ class PenTool(Tool):
         pts = [QPointF(p.x() * z, p.y() * z) for p in self._points]
         painter.setPen(QPen(QColor(30, 144, 255), 1, Qt.PenStyle.DashLine))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        preview = pts if self._hover is None else [
-            *pts, QPointF(self._hover.x() * z, self._hover.y() * z)]
+        preview = (
+            pts
+            if self._hover is None
+            else [*pts, QPointF(self._hover.x() * z, self._hover.y() * z)]
+        )
         if len(preview) >= 2:
             painter.drawPath(self._smooth_path(preview, close=False))
         painter.setBrush(QColor(30, 144, 255))
@@ -889,28 +948,32 @@ class PenTool(Tool):
             data["points"] = [[p.x(), p.y()] for p in pts]
             if data == edit_layer.vector_data:
                 return
-            rendered = vector.render_vector(data, edit_layer.name,
-                                            doc.canvas_rect())
+            rendered = vector.render_vector(data, edit_layer.name, doc.canvas_rect())
             if rendered is not None:
-                doc.undo_stack.push(EditVectorLayerCommand(
-                    doc, edit_layer, rendered, "Edit Pen Path"))
+                doc.undo_stack.push(
+                    EditVectorLayerCommand(doc, edit_layer, rendered, "Edit Pen Path")
+                )
             return
-        fill = bool(QApplication.keyboardModifiers()
-                    & Qt.KeyboardModifier.ControlModifier)
+        fill = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier)
         if len(pts) < (3 if fill else 2):
             return
         fg = self.opts.foreground
-        data = {"kind": "path", "points": [[p.x(), p.y()] for p in pts],
-                "close": fill, "fill": fill,
-                "width": max(1, self.opts.size),
-                "color": [fg.red(), fg.green(), fg.blue(), fg.alpha()]}
-        layer = vector.render_vector(data, f"Pen {len(doc.layers)}",
-                                     doc.canvas_rect())
+        data = {
+            "kind": "path",
+            "points": [[p.x(), p.y()] for p in pts],
+            "close": fill,
+            "fill": fill,
+            "width": max(1, self.opts.size),
+            "color": [fg.red(), fg.green(), fg.blue(), fg.alpha()],
+        }
+        layer = vector.render_vector(data, f"Pen {len(doc.layers)}", doc.canvas_rect())
         if layer is None:
             return
-        doc.undo_stack.push(InsertLayerCommand(
-            doc, len(doc.layers), layer, "Add Pen Fill" if fill
-            else "Add Pen Stroke"))
+        doc.undo_stack.push(
+            InsertLayerCommand(
+                doc, len(doc.layers), layer, "Add Pen Fill" if fill else "Add Pen Stroke"
+            )
+        )
 
 
 class ShapeTool(Tool):
@@ -930,14 +993,19 @@ class ShapeTool(Tool):
         from photoslop import vector
 
         layer = doc.active_layer
-        if (layer is not None and layer.vector_data is not None
-                and layer.vector_data.get("kind") in ("rect", "ellipse",
-                                                      "line")):
+        if (
+            layer is not None
+            and layer.vector_data is not None
+            and layer.vector_data.get("kind") in ("rect", "ellipse", "line")
+        ):
             grabbed = vector.grab(layer.vector_data, pos.x(), pos.y())
             if grabbed is not None:
-                self._edit = {"layer": layer,
-                              "data": deepcopy(layer.vector_data),
-                              "grabbed": grabbed, "last": pos}
+                self._edit = {
+                    "layer": layer,
+                    "data": deepcopy(layer.vector_data),
+                    "grabbed": grabbed,
+                    "last": pos,
+                }
                 return
         self._start = pos
         self._end = pos
@@ -948,8 +1016,13 @@ class ShapeTool(Tool):
         if self._edit is not None:
             edit = self._edit
             edit["data"] = vector.drag(
-                edit["data"], edit["grabbed"], pos.x(), pos.y(),
-                pos.x() - edit["last"].x(), pos.y() - edit["last"].y())
+                edit["data"],
+                edit["grabbed"],
+                pos.x(),
+                pos.y(),
+                pos.x() - edit["last"].x(),
+                pos.y() - edit["last"].y(),
+            )
             edit["last"] = pos
             canvas.update()
             return
@@ -1013,20 +1086,20 @@ class ShapeTool(Tool):
         if raw.width() < 2 and raw.height() < 2:
             return  # a click, not a drag
         color = self.opts.foreground
-        data = {"kind": self.opts.shape if self.opts.shape in
-                ("ellipse", "line") else "rect",
-                "x1": start.x(), "y1": start.y(),
-                "x2": end.x(), "y2": end.y(),
-                "color": [color.red(), color.green(), color.blue(),
-                          color.alpha()]}
+        data = {
+            "kind": self.opts.shape if self.opts.shape in ("ellipse", "line") else "rect",
+            "x1": start.x(),
+            "y1": start.y(),
+            "x2": end.x(),
+            "y2": end.y(),
+            "color": [color.red(), color.green(), color.blue(), color.alpha()],
+        }
         if data["kind"] == "line":
             data["width"] = max(1, self.opts.size)
-        layer = vector.render_vector(data, f"Shape {len(doc.layers)}",
-                                     doc.canvas_rect())
+        layer = vector.render_vector(data, f"Shape {len(doc.layers)}", doc.canvas_rect())
         if layer is None:
             return
-        doc.undo_stack.push(InsertLayerCommand(
-            doc, len(doc.layers), layer, "Add Shape"))
+        doc.undo_stack.push(InsertLayerCommand(doc, len(doc.layers), layer, "Add Shape"))
 
     def _commit_edit(self, doc, edit) -> None:
         from photoslop import vector
@@ -1054,16 +1127,21 @@ class TextTool(Tool):
         from photoslop.textdialog import TextDialog
 
         target = doc.active_layer
-        if (target is not None and target.text_data
-                and target.bounds().contains(pos.toPoint())):
+        if target is not None and target.text_data and target.bounds().contains(pos.toPoint()):
             data = target.text_data
             font = QFont(data.get("family", ""))
             if data.get("size"):
                 font.setPointSize(max(1, int(data["size"])))
             color = QColor(*data["color"]) if data.get("color") else QColor(0, 0, 0)
-            dialog = TextDialog(color, canvas.window(), text=data.get("text", ""),
-                                font=font, html=data.get("html"), effects=target.effects,
-                                fill_opacity=target.fill_opacity)
+            dialog = TextDialog(
+                color,
+                canvas.window(),
+                text=data.get("text", ""),
+                font=font,
+                html=data.get("html"),
+                effects=target.effects,
+                fill_opacity=target.fill_opacity,
+            )
             if not dialog.exec():
                 return
             rendered = dialog.build_layer(QPoint(target.offset))
@@ -1078,8 +1156,7 @@ class TextTool(Tool):
         layer = dialog.build_layer(pos.toPoint())
         if layer is None:
             return
-        doc.undo_stack.push(InsertLayerCommand(
-            doc, len(doc.layers), layer, "Add Text"))
+        doc.undo_stack.push(InsertLayerCommand(doc, len(doc.layers), layer, "Add Text"))
 
 
 class SpotHealTool(Tool):
@@ -1099,8 +1176,7 @@ class SpotHealTool(Tool):
         if layer is None:
             return
         self._layer = layer
-        self._mask = np.zeros(
-            (layer.image.height(), layer.image.width()), dtype=bool)
+        self._mask = np.zeros((layer.image.height(), layer.image.width()), dtype=bool)
         self._trail = []
         self._stamp(pos)
         canvas.update()
@@ -1122,8 +1198,7 @@ class SpotHealTool(Tool):
         if y0 >= y1 or x0 >= x1:
             return
         yy, xx = np.ogrid[y0:y1, x0:x1]
-        self._mask[y0:y1, x0:x1] |= ((yy - cy) ** 2 + (xx - cx) ** 2
-                                     <= radius * radius)
+        self._mask[y0:y1, x0:x1] |= (yy - cy) ** 2 + (xx - cx) ** 2 <= radius * radius
         self._trail.append(QPointF(pos))
 
     def release(self, doc, canvas, pos, ev):
@@ -1136,9 +1211,12 @@ class SpotHealTool(Tool):
         recorder = TileRecorder(doc, layer)
         ys, xs = np.nonzero(mask)
         pad = 2
-        rect = QRect(int(xs.min()) - pad, int(ys.min()) - pad,
-                     int(xs.max() - xs.min()) + 1 + 2 * pad,
-                     int(ys.max() - ys.min()) + 1 + 2 * pad)
+        rect = QRect(
+            int(xs.min()) - pad,
+            int(ys.min()) - pad,
+            int(xs.max() - xs.min()) + 1 + 2 * pad,
+            int(ys.max() - ys.min()) + 1 + 2 * pad,
+        )
         recorder.will_change(rect)
         dirty = npimage.inpaint_diffuse(layer.image, mask)
         cmd = recorder.finish("Spot Heal")
@@ -1188,7 +1266,8 @@ class SmudgeTool(BrushTool):
 
     def _segment(self, doc, a: QPointF, b: QPointF, first: bool = False) -> None:
         layer = self._layer
-        assert layer is not None and self._recorder is not None
+        if layer is None or self._recorder is None:
+            raise RuntimeError("smudge segment requested outside an active stroke")
         off = QPointF(layer.offset)
         la, lb = a - off, b - off
         radius = max(1.0, self.opts.size / 2.0)
@@ -1200,8 +1279,7 @@ class SmudgeTool(BrushTool):
         side = int(radius) + 1
 
         def stamp(center: QPointF) -> None:
-            region = QRect(round(center.x()) - side, round(center.y()) - side,
-                           2 * side, 2 * side)
+            region = QRect(round(center.x()) - side, round(center.y()) - side, 2 * side, 2 * side)
             if self._pickup is not None:
                 p = QPainter(layer.image)
                 p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -1275,8 +1353,9 @@ class CloneStampTool(BrushTool):
             self._clone_offset = pos - self._source
         super().press(doc, canvas, pos, ev)
 
-    def cursor_intent(self, doc, canvas, pos, modifiers=Qt.KeyboardModifier.NoModifier,
-                      dragging=False):
+    def cursor_intent(
+        self, doc, canvas, pos, modifiers=Qt.KeyboardModifier.NoModifier, dragging=False
+    ):
         intent = super().cursor_intent(doc, canvas, pos, modifiers, dragging)
         if modifiers & Qt.KeyboardModifier.AltModifier:
             return CursorIntent(intent.kind, "S", intent.diameter)
@@ -1297,8 +1376,9 @@ class CloneStampTool(BrushTool):
 
         def stamp(center: QPointF) -> None:
             src_center = center - offset
-            src_rect = QRect(round(src_center.x()) - pad, round(src_center.y()) - pad,
-                             2 * pad, 2 * pad)
+            src_rect = QRect(
+                round(src_center.x()) - pad, round(src_center.y()) - pad, 2 * pad, 2 * pad
+            )
             chunk = layer.image.copy(src_rect)  # snapshot: source may overlap dest
             path = QPainterPath()
             path.addEllipse(center, radius, radius)
@@ -1351,10 +1431,10 @@ class HealBrushTool(CloneStampTool):
 
         def stamp(center: QPointF) -> None:
             src_center = center - offset
-            src_rect = QRect(round(src_center.x()) - pad, round(src_center.y()) - pad,
-                             2 * pad, 2 * pad)
-            dst_rect = QRect(round(center.x()) - pad, round(center.y()) - pad,
-                             2 * pad, 2 * pad)
+            src_rect = QRect(
+                round(src_center.x()) - pad, round(src_center.y()) - pad, 2 * pad, 2 * pad
+            )
+            dst_rect = QRect(round(center.x()) - pad, round(center.y()) - pad, 2 * pad, 2 * pad)
             src_chunk = layer.image.copy(src_rect)
             dst_chunk = layer.image.copy(dst_rect)
             healed = npimage.heal_patch(src_chunk, dst_chunk)
@@ -1407,15 +1487,18 @@ class BucketTool(Tool):
             p.end()
         else:
             c = self.opts.foreground
-            color = npimage.premultiplied_u32(c.red(), c.green(), c.blue(),
-                                              round(self.opts.opacity * 2.55))
-            dirty = npimage.flood_fill(img, lx, ly, color, self.opts.tolerance,
-                                       sel_mask)
+            color = npimage.premultiplied_u32(
+                c.red(), c.green(), c.blue(), round(self.opts.opacity * 2.55)
+            )
+            dirty = npimage.flood_fill(img, lx, ly, color, self.opts.tolerance, sel_mask)
             if dirty is None:
                 return
         cmd = LayerRegionCommand(
-            doc, layer, dirty,
-            before_full.copy(dirty), img.copy(dirty),
+            doc,
+            layer,
+            dirty,
+            before_full.copy(dirty),
+            img.copy(dirty),
             "Paint Bucket",
         )
         doc.undo_stack.push(cmd)
@@ -1481,9 +1564,11 @@ class RectSelectTool(Tool):
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
         self._anchor: QPointF | None = None
+        self._base_selection: QPainterPath | None = None
 
     def press(self, doc, canvas, pos, ev):
         self._anchor = pos
+        self._base_selection = QPainterPath(doc.selection) if doc.selection is not None else None
         doc.set_selection(None)
 
     def move(self, doc, canvas, pos, ev):
@@ -1500,6 +1585,13 @@ class RectSelectTool(Tool):
         if rect.width() < 2 and rect.height() < 2:
             doc.set_selection(None)
         self._anchor = None
+        self._base_selection = None
+
+    def cancel(self, doc=None) -> None:
+        self._anchor = None
+        if doc is not None:
+            doc.set_selection(self._base_selection)
+        self._base_selection = None
 
 
 class EllipseSelectTool(Tool):
@@ -1510,6 +1602,7 @@ class EllipseSelectTool(Tool):
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
         self._anchor: QPointF | None = None
+        self._base_selection: QPainterPath | None = None
 
     def _rect(self, pos: QPointF, ev) -> QRectF:
         dx = pos.x() - self._anchor.x()
@@ -1518,11 +1611,11 @@ class EllipseSelectTool(Tool):
             side = max(abs(dx), abs(dy))
             dx = side if dx >= 0 else -side
             dy = side if dy >= 0 else -side
-        return QRectF(self._anchor,
-                      self._anchor + QPointF(dx, dy)).normalized()
+        return QRectF(self._anchor, self._anchor + QPointF(dx, dy)).normalized()
 
     def press(self, doc, canvas, pos, ev):
         self._anchor = pos
+        self._base_selection = QPainterPath(doc.selection) if doc.selection is not None else None
         doc.set_selection(None)
 
     def move(self, doc, canvas, pos, ev):
@@ -1539,6 +1632,13 @@ class EllipseSelectTool(Tool):
         if rect.width() < 2 and rect.height() < 2:
             doc.set_selection(None)
         self._anchor = None
+        self._base_selection = None
+
+    def cancel(self, doc=None) -> None:
+        self._anchor = None
+        if doc is not None:
+            doc.set_selection(self._base_selection)
+        self._base_selection = None
 
 
 class LassoTool(Tool):
@@ -1547,9 +1647,11 @@ class LassoTool(Tool):
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
         self._points: list[QPointF] = []
+        self._base_selection: QPainterPath | None = None
 
     def press(self, doc, canvas, pos, ev):
         self._points = [pos]
+        self._base_selection = QPainterPath(doc.selection) if doc.selection is not None else None
         doc.set_selection(None)
 
     def move(self, doc, canvas, pos, ev):
@@ -1566,6 +1668,13 @@ class LassoTool(Tool):
         else:
             doc.set_selection(None)
         self._points = []
+        self._base_selection = None
+
+    def cancel(self, doc=None) -> None:
+        self._points = []
+        if doc is not None:
+            doc.set_selection(self._base_selection)
+        self._base_selection = None
 
     def _path(self, close: bool) -> QPainterPath:
         path = QPainterPath(self._points[0])
@@ -1637,14 +1746,12 @@ class GradientTool(Tool):
             p = QPainter(layer.image)
             p.setOpacity(self.opts.opacity / 100.0)
             if doc.selection is not None:
-                p.setClipPath(doc.selection.translated(-layer.offset.x(),
-                                                       -layer.offset.y()))
+                p.setClipPath(doc.selection.translated(-layer.offset.x(), -layer.offset.y()))
             p.fillRect(local, QBrush(grad))
             p.end()
 
             after = layer.image.copy(local)
-            doc.undo_stack.push(LayerRegionCommand(
-                doc, layer, local, before, after, "Gradient"))
+            doc.undo_stack.push(LayerRegionCommand(doc, layer, local, before, after, "Gradient"))
             doc.notify_pixels(region)
         finally:
             self.cancel()
@@ -1710,10 +1817,8 @@ class QuickSelectTool(Tool):
         if layer is None:
             return
         self._layer = layer
-        self._mask = np.zeros(
-            (layer.image.height(), layer.image.width()), dtype=bool)
-        self._subtract = ev is not None and bool(
-            ev.modifiers() & Qt.KeyboardModifier.AltModifier)
+        self._mask = np.zeros((layer.image.height(), layer.image.width()), dtype=bool)
+        self._subtract = ev is not None and bool(ev.modifiers() & Qt.KeyboardModifier.AltModifier)
         self._base_path = doc.selection
         self._last_seed = None
         self._seed(doc, pos)
@@ -1722,8 +1827,7 @@ class QuickSelectTool(Tool):
         if self._mask is None:
             return
         step = max(2.0, self.opts.size / 4.0)
-        if (self._last_seed is not None
-                and (pos - self._last_seed).manhattanLength() < step):
+        if self._last_seed is not None and (pos - self._last_seed).manhattanLength() < step:
             return
         self._seed(doc, pos)
 
@@ -1734,7 +1838,10 @@ class QuickSelectTool(Tool):
         self._last_seed = None
 
     def cancel(self, doc=None) -> None:
+        base = self._base_path
         self.release(doc, None, None, None)
+        if doc is not None:
+            doc.set_selection(base)
 
     def _seed(self, doc, pos: QPointF) -> None:
         layer = self._layer
@@ -1752,8 +1859,9 @@ class QuickSelectTool(Tool):
         self._mask |= result[0]
         path = npimage.mask_to_path(self._mask, layer.offset)
         if self._base_path is not None:
-            path = (self._base_path.subtracted(path) if self._subtract
-                    else self._base_path.united(path))
+            path = (
+                self._base_path.subtracted(path) if self._subtract else self._base_path.united(path)
+            )
         elif self._subtract:
             path = QPainterPath()
         doc.set_selection(path)
@@ -1781,9 +1889,13 @@ class PolyLassoTool(Tool):
         super().__init__(options)
         self._points: list[QPointF] = []
         self._hover: QPointF | None = None
+        self._base_selection: QPainterPath | None = None
 
     def press(self, doc, canvas, pos, ev):
         if not self._points:
+            self._base_selection = (
+                QPainterPath(doc.selection) if doc.selection is not None else None
+            )
             doc.set_selection(None)
             self._points = [pos]
             return
@@ -1816,6 +1928,9 @@ class PolyLassoTool(Tool):
     def cancel(self, doc=None) -> None:
         self._points = []
         self._hover = None
+        if doc is not None:
+            doc.set_selection(self._base_selection)
+        self._base_selection = None
 
     def _path(self) -> QPainterPath:
         path = QPainterPath(self._points[0])
@@ -1834,6 +1949,7 @@ class PolyLassoTool(Tool):
         self._hover = None
         doc.set_selection(self._path())
         self._points = []
+        self._base_selection = None
 
     def overlay(self, doc, painter, canvas):
         if not self._points:
@@ -1866,11 +1982,9 @@ class MagneticLassoTool(PolyLassoTool):
             return [b]
         off = layer.offset
         points = npimage.livewire_path(
-            layer.image,
-            (a.x() - off.x(), a.y() - off.y()),
-            (b.x() - off.x(), b.y() - off.y()))
-        return [QPointF(x + off.x() + 0.5, y + off.y() + 0.5)
-                for x, y in points[1:]]
+            layer.image, (a.x() - off.x(), a.y() - off.y()), (b.x() - off.x(), b.y() - off.y())
+        )
+        return [QPointF(x + off.x() + 0.5, y + off.y() + 0.5) for x, y in points[1:]]
 
     def _path(self) -> QPainterPath:
         path = QPainterPath(self._points[0])
@@ -1905,11 +2019,11 @@ class MoveTool(Tool):
                 return
         layer = doc.active_layer
         if layer is not None:
-            members = ([lyr for lyr in doc.layers if lyr.group == layer.group]
-                       if layer.group else [layer])
+            members = (
+                [lyr for lyr in doc.layers if lyr.group == layer.group] if layer.group else [layer]
+            )
             origins = [QPoint(lyr.offset) for lyr in members]
-            self._mode = ("layer", layer, QPoint(layer.offset), pos,
-                          members, origins)
+            self._mode = ("layer", layer, QPoint(layer.offset), pos, members, origins)
 
     def move(self, doc, canvas, pos, ev):
         if self._mode is None:
@@ -1929,7 +2043,8 @@ class MoveTool(Tool):
             _, layer, orig, start, members, origins = self._mode
             proposed = orig + (pos - start).toPoint()
             snapped = canvas.editor.snap_layer_offset(
-                layer, proposed, ev.modifiers() if ev else None)
+                layer, proposed, ev.modifiers() if ev else None
+            )
             delta = snapped - orig
             dirty = QRect()
             for member, member_orig in zip(members, origins, strict=True):
@@ -1961,8 +2076,7 @@ class MoveTool(Tool):
                     # command's skip-first-redo pattern records them as-is
                     doc.undo_stack.push(MoveGroupCommand(doc, members, delta))
                 else:
-                    doc.undo_stack.push(
-                        SetLayerOffsetCommand(doc, layer, orig, layer.offset))
+                    doc.undo_stack.push(SetLayerOffsetCommand(doc, layer, orig, layer.offset))
         self._mode = None
 
 
@@ -1978,12 +2092,21 @@ class VectorSelectTool(Tool):
     def press(self, doc, canvas, pos, ev):
         from photoslop import vector, vectorops
 
-        hit = next((layer for layer in reversed(doc.layers)
-                    if layer.vector_data is not None
-                    and vector.native_path(layer.vector_data).contains(pos)), None)
+        hit = next(
+            (
+                layer
+                for layer in reversed(doc.layers)
+                if layer.vector_data is not None
+                and vector.native_path(layer.vector_data).contains(pos)
+            ),
+            None,
+        )
         ids = [] if hit is None else [vector.migrate_vector(hit.vector_data)["id"]]
-        mode = ("add" if ev is not None and
-                ev.modifiers() & Qt.KeyboardModifier.ShiftModifier else "replace")
+        mode = (
+            "add"
+            if ev is not None and ev.modifiers() & Qt.KeyboardModifier.ShiftModifier
+            else "replace"
+        )
         vectorops.select(doc, ids, mode)
         self._start = QPointF(pos) if hit is not None else None
 
@@ -1993,8 +2116,7 @@ class VectorSelectTool(Tool):
 
             delta = pos - self._start
             if not delta.isNull():
-                vectorops.transform(doc, doc.vector_selection,
-                                    dx=delta.x(), dy=delta.y())
+                vectorops.transform(doc, doc.vector_selection, dx=delta.x(), dy=delta.y())
         self._start = None
 
 

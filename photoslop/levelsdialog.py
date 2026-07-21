@@ -46,8 +46,7 @@ class LevelsDialog(ScopedAdjustMixin, QDialog):
         self.out_white = QSpinBox()
         self.out_white.setRange(0, 255)
         self.out_white.setValue(255)
-        for w in (self.in_black, self.in_white, self.gamma,
-                  self.out_black, self.out_white):
+        for w in (self.in_black, self.in_white, self.gamma, self.out_black, self.out_white):
             w.valueChanged.connect(self._changed)
 
         auto = QPushButton("Auto")
@@ -76,9 +75,13 @@ class LevelsDialog(ScopedAdjustMixin, QDialog):
     # ----- machinery ---------------------------------------------------------
 
     def current_lut(self) -> np.ndarray:
-        lut = levels_lut(self.in_black.value(), self.in_white.value(),
-                         self.gamma.value(), self.out_black.value(),
-                         self.out_white.value())
+        lut = levels_lut(
+            self.in_black.value(),
+            self.in_white.value(),
+            self.gamma.value(),
+            self.out_black.value(),
+            self.out_white.value(),
+        )
         return np.stack([lut, lut, lut])
 
     def _changed(self) -> None:
@@ -96,8 +99,8 @@ class LevelsDialog(ScopedAdjustMixin, QDialog):
         """0.1% percentile black/white points from a downsampled luminance
         histogram — cheap at any layer size."""
         sample = self._pristine.scaled(
-            256, 256, Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.FastTransformation)
+            256, 256, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.FastTransformation
+        )
         arr = view_u32(sample)
         r = (arr >> np.uint32(16)) & 0xFF
         g = (arr >> np.uint32(8)) & 0xFF

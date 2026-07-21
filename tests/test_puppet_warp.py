@@ -27,9 +27,11 @@ def stripe_x(img, y) -> int:
 
 def test_puppet_warp_bends_around_anchors(qapp):
     img = stripe_image()
-    pins = [((40, 5), (40, 5)),  # anchor top
-            ((40, 75), (40, 75)),  # anchor bottom
-            ((40, 40), (55, 40))]  # middle pulled right
+    pins = [
+        ((40, 5), (40, 5)),  # anchor top
+        ((40, 75), (40, 75)),  # anchor bottom
+        ((40, 40), (55, 40)),
+    ]  # middle pulled right
     warped = npimage.puppet_warp(img, pins)
     assert stripe_x(warped, 40) > 46  # middle bent right
     assert abs(stripe_x(warped, 5) - 38) <= 3  # anchored ends stay put

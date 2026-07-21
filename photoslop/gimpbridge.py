@@ -34,8 +34,9 @@ def gimp_available() -> bool:
             _available = False
         else:
             try:
-                out = subprocess.run([exe, "--version"], capture_output=True,
-                                     text=True, timeout=30).stdout
+                out = subprocess.run(
+                    [exe, "--version"], capture_output=True, text=True, timeout=30
+                ).stdout
                 _available = "version 3" in out or "version 2.10" in out
             except (OSError, subprocess.TimeoutExpired):
                 _available = False
@@ -64,17 +65,28 @@ def run_gimp_script(image: QImage, body: str, timeout: int = 180) -> None:
             # the trailing quit batch is the safety terminator: if the body
             # errors, the harness quit never runs and GIMP would sit forever
             proc = subprocess.run(
-                ["gimp", "-i", "-n", "-f", "-d", "-s",
-                 "--batch-interpreter=plug-in-script-fu-eval",
-                 "-b", script, "-b", "(gimp-quit 1)"],
-                capture_output=True, text=True, timeout=timeout)
+                [
+                    "gimp",
+                    "-i",
+                    "-n",
+                    "-f",
+                    "-d",
+                    "-s",
+                    "--batch-interpreter=plug-in-script-fu-eval",
+                    "-b",
+                    script,
+                    "-b",
+                    "(gimp-quit 1)",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
         except subprocess.TimeoutExpired as exc:
-            raise ValueError(
-                f"GIMP bridge: timed out after {timeout}s") from exc
+            raise ValueError(f"GIMP bridge: timed out after {timeout}s") from exc
         if not os.path.exists(dst):
             err = (proc.stderr or proc.stdout).strip()
-            tail = [ln for ln in err.splitlines() if "rror" in ln][-1:] \
-                or err.splitlines()[-1:]
+            tail = [ln for ln in err.splitlines() if "rror" in ln][-1:] or err.splitlines()[-1:]
             raise ValueError(f"GIMP bridge: {' '.join(tail)[:200]}")
         out = QImage(dst)
     if out.isNull():
@@ -88,11 +100,14 @@ def run_gimp_script(image: QImage, body: str, timeout: int = 180) -> None:
 
 
 def _merge_op(operation: str) -> str:
-    return (f'(let ((f (car (gimp-drawable-filter-new drawable '
-            f'"{operation}" "")))) (gimp-drawable-merge-filter drawable f))')
+    return (
+        f"(let ((f (car (gimp-drawable-filter-new drawable "
+        f'"{operation}" "")))) (gimp-drawable-merge-filter drawable f))'
+    )
 
 
 class GimpOilify(Filter):
+    unsafe = True
     name = "gimp-oilify"
     label = "GIMP Oilify"
     params = ()
@@ -102,6 +117,7 @@ class GimpOilify(Filter):
 
 
 class GimpSoftglow(Filter):
+    unsafe = True
     name = "gimp-softglow"
     label = "GIMP Softglow"
     params = ()
@@ -111,6 +127,7 @@ class GimpSoftglow(Filter):
 
 
 class GimpCubism(Filter):
+    unsafe = True
     name = "gimp-cubism"
     label = "GIMP Cubism"
     params = ()
@@ -120,11 +137,19 @@ class GimpCubism(Filter):
 
 
 class GimpScript(Filter):
+    unsafe = True
     name = "gimp-script"
     label = "GIMP Script-Fu"
-    params = (ParamSpec(
-        "script", "Script-Fu body (image/drawable bound)", "str", 0, 0,
-        "(gimp-drawable-invert drawable FALSE)"),)
+    params = (
+        ParamSpec(
+            "script",
+            "Script-Fu body (image/drawable bound)",
+            "str",
+            0,
+            0,
+            "(gimp-drawable-invert drawable FALSE)",
+        ),
+    )
 
     def apply(self, image: QImage, params: dict) -> None:
         body = str(params.get("script", "")).strip()
@@ -134,7 +159,10 @@ class GimpScript(Filter):
 
 
 CURATED: tuple[type[Filter], ...] = (
-    GimpOilify, GimpSoftglow, GimpCubism, GimpScript,
+    GimpOilify,
+    GimpSoftglow,
+    GimpCubism,
+    GimpScript,
 )
 
 

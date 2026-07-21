@@ -11,8 +11,13 @@ Heavy GUI operations use a bounded `TaskService` rather than the Qt event
 thread. Every task declares an estimated peak-memory cost; the scheduler starts
 work only when both a worker slot and the memory budget are available. A handle
 reports lifecycle state and progress and supports cooperative cancellation.
-Edit → Cancel Background Task cancels queued work immediately and signals
-running network, subprocess, or filter work to stop or discard its late result.
+Four priority classes separate interactive previews, project writes, remote
+models, and bulk work. FIFO is stable within a class; a runnable small task may
+bypass a queue head that cannot fit the remaining memory budget. View →
+Background Tasks exposes queue state, progress, session history, and individual,
+scope, or global cancellation. Edit → Cancel Background Task is the direct
+global shortcut. A blocking backend that cannot stop is prevented from
+installing its late result.
 
 Workers receive QImage copy-on-write or metadata-deep document snapshots and
 never mutate the live document. GUI-thread completion checks layer/document
@@ -30,6 +35,9 @@ do not own a GUI event loop while sharing the same engine operations.
 - `WorkspaceController` owns saved dock state, geometry, defaults, and
   current-screen validation.
 - `TaskService` owns worker count/memory scheduling and task lifecycle.
+- `DiagnosticStore` owns redacted, bounded, durable operation results, failure
+  records, and retry guidance; Help → Diagnostics keeps evidence after a status
+  message expires.
 - `FileService`, `ExportService`, `FilterService`, and `ModelService` accept
   documents/images/data rather than widgets. GUI, CLI, MCP, plugins, and tests
   therefore share engine paths without importing MainWindow.

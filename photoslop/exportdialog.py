@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from photoslop import io_formats
+from photoslop.atomicio import atomic_write
 from photoslop.document import Document
 from photoslop.tasks import TaskService
 
@@ -36,8 +37,8 @@ class ExportDialog(QDialog):
         self._doc = doc
         self._flat = doc.flatten()  # transparent-backed master, flattened once
         self._proxy = self._flat.scaled(
-            512, 512, Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation)
+            512, 512, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+        )
         self._flat_white = None  # lazily built for opaque formats
 
         self.format_box = QComboBox()
@@ -84,8 +85,7 @@ class ExportDialog(QDialog):
         self._debounce.setSingleShot(True)
         self._debounce.setInterval(250)
         self._debounce.timeout.connect(self._update_size)
-        self._size_tasks = TaskService(max_workers=1, memory_budget=256 * 1024 * 1024,
-                                       parent=self)
+        self._size_tasks = TaskService(max_workers=1, memory_budget=256 * 1024 * 1024, parent=self)
         self._size_generation = 0
         self._changed()
 
@@ -99,8 +99,9 @@ class ExportDialog(QDialog):
 
     def export_size(self) -> QSize:
         factor = self.scale.value() / 100.0
-        return QSize(max(1, round(self._flat.width() * factor)),
-                     max(1, round(self._flat.height() * factor)))
+        return QSize(
+            max(1, round(self._flat.width() * factor)), max(1, round(self._flat.height() * factor))
+        )
 
     def export_image(self) -> QImage:
         fmt = self.chosen_format()
@@ -112,21 +113,39 @@ class ExportDialog(QDialog):
         size = self.export_size()
         if size == base.size():
             return base
-        return base.scaled(size, Qt.AspectRatioMode.IgnoreAspectRatio,
-                           Qt.TransformationMode.SmoothTransformation)
+        return base.scaled(
+            size, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation
+        )
 
     def suggested_suffix(self) -> str:
-        return {"PNG": ".png", "JPEG": ".jpg", "WebP": ".webp", "BMP": ".bmp",
-                "AVIF": ".avif", "JPEG XL": ".jxl"}[self.chosen_format()]
+        return {
+            "PNG": ".png",
+            "JPEG": ".jpg",
+            "WebP": ".webp",
+            "BMP": ".bmp",
+            "AVIF": ".avif",
+            "JPEG XL": ".jxl",
+        }[self.chosen_format()]
 
     def write_to(self, path: str, image: QImage | None = None) -> bool:
         """Encode the chosen export to `path`, routing extra formats through
         the io_formats codecs (Qt can't write AVIF/JXL itself)."""
         img = image if image is not None else self.export_image()
         fmt = self.chosen_format()
-        if fmt in _EXTRA:
-            return io_formats.save_extra(img, path, max(1, self.chosen_quality()))
-        return img.save(path, fmt, self.chosen_quality())
+
+        def writer(temporary: str) -> None:
+            if fmt in _EXTRA:
+                ok = io_formats.save_extra(img, temporary, max(1, self.chosen_quality()))
+            else:
+                ok = img.save(temporary, fmt, self.chosen_quality())
+            if not ok:
+                raise ValueError(f"Export failed: {path}")
+
+        try:
+            atomic_write(path, writer)
+        except (OSError, ValueError):
+            return False
+        return True
 
     # ----- live feedback -----------------------------------------------------
 
@@ -138,9 +157,14 @@ class ExportDialog(QDialog):
         size = self.export_size()
         self.dims_label.setText(f"{size.width()} × {size.height()} px")
 
-        pm = QPixmap.fromImage(self._proxy.scaled(
-            _PREVIEW, _PREVIEW, Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation))
+        pm = QPixmap.fromImage(
+            self._proxy.scaled(
+                _PREVIEW,
+                _PREVIEW,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
         self.preview.setPixmap(pm)
 
         self.size_label.setText("…")
@@ -161,9 +185,15 @@ class ExportDialog(QDialog):
 
         def encode(context):
             context.check_cancelled()
-            image = (base if size == base.size() else base.scaled(
-                size, Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation))
+            image = (
+                base
+                if size == base.size()
+                else base.scaled(
+                    size,
+                    Qt.AspectRatioMode.IgnoreAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
             if fmt in _EXTRA:
                 data = io_formats.encode_extra(image, _EXTRA[fmt], max(1, quality))
                 return len(data) if data else 0
@@ -175,13 +205,13 @@ class ExportDialog(QDialog):
             return count
 
         handle = self._size_tasks.submit(
-            "preview.export-size", "Estimate export size", encode,
-            max(1, base.sizeInBytes() * 2))
-        handle.succeeded.connect(
-            lambda count, g=generation: self._install_size(g, count))
+            "preview.export-size", "Estimate export size", encode, max(1, base.sizeInBytes() * 2)
+        )
+        handle.succeeded.connect(lambda count, g=generation: self._install_size(g, count))
 
     def _install_size(self, generation: int, n: int) -> None:
         if generation != self._size_generation:
             return
         self.size_label.setText(
-            f"{n / 1024:.0f} KB" if n < 1024 * 1024 else f"{n / 1048576:.2f} MB")
+            f"{n / 1024:.0f} KB" if n < 1024 * 1024 else f"{n / 1048576:.2f} MB"
+        )

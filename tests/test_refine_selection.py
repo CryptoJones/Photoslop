@@ -12,7 +12,7 @@ from photoslop.refinedialog import RefineSelectionDialog
 def rect_mask(w=60, h=40, rect=(20, 10, 20, 20)):
     mask = np.zeros((h, w), dtype=bool)
     x, y, rw, rh = rect
-    mask[y:y + rh, x:x + rw] = True
+    mask[y : y + rh, x : x + rw] = True
     return mask
 
 

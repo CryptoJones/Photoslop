@@ -46,8 +46,10 @@ def test_artboard_from_selection_and_export(qapp, tmp_path):
 def test_artboards_round_trip_and_clear(qapp, tmp_path):
     win = make_window(qapp)
     doc = win.current_doc()
-    doc.artboards = [("Cover", QRect(0, 0, 60, 90)),
-                     ("Spread/2", QRect(60, 0, 60, 90))]  # slash sanitised
+    doc.artboards = [
+        ("Cover", QRect(0, 0, 60, 90)),
+        ("Spread/2", QRect(60, 0, 60, 90)),
+    ]  # slash sanitised
     path = str(tmp_path / "boards.ora")
     save_ora(doc, path)
     loaded = load_ora(path)

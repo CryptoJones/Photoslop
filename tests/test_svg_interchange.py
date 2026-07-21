@@ -10,13 +10,15 @@ from photoslop.io_svg import load_svg, save_svg
 
 def test_svg_round_trip_preserves_vectors_gradients_transform_and_artboards(qapp, tmp_path):
     doc = Document(QSize(160, 120), 72, "svg")
-    data = vector.migrate_vector({"kind": "rect", "x1": 10, "y1": 20,
-                                  "x2": 70, "y2": 80,
-                                  "color": [255, 0, 0, 255]})
+    data = vector.migrate_vector(
+        {"kind": "rect", "x1": 10, "y1": 20, "x2": 70, "y2": 80, "color": [255, 0, 0, 255]}
+    )
     data["name"] = "Gradient box"
     data["transform"] = [1, 0, 0, 1, 5, 7]
     data["appearance"]["fill"] = {
-        "type": "linear-gradient", "start": [10, 20], "end": [70, 20],
+        "type": "linear-gradient",
+        "start": [10, 20],
+        "end": [70, 20],
         "stops": [[0, [255, 0, 0, 255]], [1, [0, 0, 255, 255]]],
     }
     doc.layers = [vector.render_vector(data, data["name"], doc.canvas_rect())]
@@ -37,11 +39,14 @@ def test_svg_round_trip_preserves_vectors_gradients_transform_and_artboards(qapp
 
 def test_svg_imports_paths_text_and_keeps_unsupported_raster_fallback(qapp, tmp_path):
     path = tmp_path / "mixed.svg"
-    path.write_text('''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 60">
+    path.write_text(
+        """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 60">
       <path id="curve" d="M 5 5 C 10 20 30 20 40 5 Z" fill="#ff0000"/>
       <text id="label" x="5" y="30" fill="#000">Nebraska 🌽</text>
       <polygon points="0,0 5,0 5,5" fill="#00f"/>
-    </svg>''', encoding="utf-8")
+    </svg>""",
+        encoding="utf-8",
+    )
     doc = load_svg(str(path))
     vectors = [layer for layer in doc.layers if layer.vector_data]
     assert [layer.vector_data["id"] for layer in vectors] == ["curve", "label"]

@@ -3,8 +3,8 @@
 Photoslop's headless engine exposed over the **[Model Context Protocol](https://modelcontextprotocol.io)**,
 so an LLM/agent (Claude Desktop, Claude Code, any MCP client) can drive the
 editor: load an image, apply an ordered pipeline of operations, and write the
-result — the same engine as [`photoslop-cli`](cli.md), same operations, same
-parity promise.
+result — the same engine as [`photoslop-cli`](cli.md), with local-only unsafe
+plugins and network-model operations deliberately removed from the agent surface.
 
 ## Install & run
 
@@ -12,7 +12,7 @@ The server needs the optional `mcp` extra:
 
 ```bash
 pip install "photoslop[mcp]"     # or: uv sync --extra mcp
-photoslop-mcp                    # serves over stdio (the MCP default)
+photoslop-mcp --root /path/to/images   # serves over stdio
 ```
 
 Equivalently `python -m photoslop.server`. It is headless-safe (forces Qt's
@@ -27,7 +27,8 @@ Claude Code, add it to the MCP servers config:
 {
   "mcpServers": {
     "photoslop": {
-      "command": "photoslop-mcp"
+      "command": "photoslop-mcp",
+      "args": ["--root", "/path/to/images"]
     }
   }
 }
@@ -40,7 +41,7 @@ photoslop-mcp`, if it is not on the client's `PATH`.)
 
 | Tool | What it does |
 |---|---|
-| `list_operations` | The full operation catalog — `{count, operations:[{name, args, help}]}`. Same table as `photoslop-cli --help`; call it first to discover ops. |
+| `list_operations` | The safe operation catalog — `{count, operations:[{name, args, help}]}`; call it first to discover ops. |
 | `edit_image` | Load an image (or start blank), apply an ordered pipeline, write output and/or return document info. |
 | `document_info` | Read-only inspect: size, dpi, per-layer/vector metadata, ordered artboards. Nothing is written. |
 
@@ -49,20 +50,20 @@ photoslop-mcp`, if it is not on the client's `PATH`.)
 | Param | Type | Notes |
 |---|---|---|
 | `operations` | list of `{op, value}` | ordered pipeline; composes left to right. `value: ""` for flag ops. |
-| `input` | string | source path (PNG/JPG/ORA/camera-raw). Mutually exclusive with `new`. |
+| `input` | string | source path under the configured server root. Mutually exclusive with `new`. |
 | `new` | string | `"WxH"` (e.g. `800x600`) or a paper preset (`A5`/`A4`/`A3`/`Letter`/`Legal`). |
 | `dpi` | int | resolution for `new` presets (default 72). `A4` @ 300 → 2480×3508. |
-| `output` | string | write path — `.ora` keeps layers; raster extensions flatten. |
+| `output` | string | write path under the server root — `.ora` keeps layers; raster extensions flatten. Existing files are protected by default. |
 | `info` | bool | also return the document JSON. |
 | `export_artboards` | string | directory; writes each artboard as `<name>.png`. |
 
 Give at least one of `output`, `info`, or `export_artboards` — otherwise there
 is nothing to return and the call errors (mirrors the CLI).
 
-Operations are the CLI's `OPS` table verbatim — `resize`, `crop`, `levels`,
-`curves`, `gaussian-blur`, `filter`, `select`/`feather`, `generative-fill`,
-`text`, `shape`, and the rest. See [Command Line](cli.md) for the full list and
-each op's value format, or call `list_operations`.
+Operations are derived from the CLI's `OPS` table — `resize`, `crop`, `levels`,
+`curves`, `gaussian-blur`, safe built-in `filter` values, `select`/`feather`,
+`text`, `shape`, and the rest. Call `list_operations` for the authoritative
+surface.
 
 ### Example (client call)
 
@@ -82,16 +83,21 @@ Resize a photo, auto-level it, then save a PNG:
 }
 ```
 
-Model-backed ops (`generative-fill`, `select-subject`, `denoise-model`) route
-through the same bring-your-own-model adapter as the app and CLI — set the
-backend with a `{"op": "model-url", "value": "http://…"}` step first. See
-[Model Backends](model-backends.md).
+The server confines resolved paths (including symlink targets) to `--root`,
+rejects existing outputs and non-empty export directories, and never exposes
+network model operations or native/third-party plugins. A trusted operator can
+add `--allow-overwrite`; hard resource and parser limits still apply.
+
+Tool failures begin with a stable bracketed code and also expose that code on
+the Python exception used by direct integrations: `invalid_input`,
+`unsupported_capability`, `unsafe_operation`, `cancelled`, `io_failure`, or
+`internal_error`. Clients should branch on the code and treat the following
+message as human guidance.
 
 ## Parity
 
-The MCP server is a thin surface over `photoslop.cli.apply_pipeline`, which
-reuses the exact `OPS` table the CLI exposes. There is nothing to keep in sync
-by hand: a new CLI operation is automatically an MCP operation. This is the same
-"every GUI engine feature is exposed headless" promise the CLI makes.
+The MCP server is a policy layer over `photoslop.cli.apply_pipeline`. It derives
+its catalog from the CLI table, then denies local-only capabilities before any
+document is opened.
 
 Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>

@@ -2,13 +2,20 @@
 
 Photoslop discovers filters from the **`photoslop.filters` entry-point
 group** — the same architecture as [model backends](model-backends.md). A
-pip-installed plugin appears in the **Filter menu** (with an auto-generated
+pip-installed plugin can appear in the **Filter menu** (with an auto-generated
 parameter dialog), works in the **CLI** as `--filter "name:key=val,..."`,
 respects **selections and feathering**, participates in **actions** and
 **smart-filter replay** — all from one class and one entry point.
 
 Two built-ins ship in the box and double as living documentation:
 **Sepia** (`sepia:amount=0..100`) and **Pixelate** (`pixelate:size=2..128`).
+
+Native packs and third-party Python entry points are disabled by default. Enable
+them locally under **Preferences → Security** (restart required), or pass
+`--allow-unsafe-plugins` to `photoslop-cli`. That opt-in permits arbitrary local
+code/process execution and is intentionally unavailable through MCP. Built-in
+Sepia and Pixelate remain available without it. Smart-filter recipes imported
+from ORA files prompt for trust before replay.
 
 ## The G'MIC pack (`photoslop[gmic]`)
 
@@ -74,7 +81,7 @@ gegl packages don't ship) and **GIMP Script-Fu** — a raw hatch that binds
 or PDB procedure GIMP has installed:
 
 ```bash
-photoslop-cli in.png \
+photoslop-cli --allow-unsafe-plugins in.png \
   --filter "gimp-script:script=(gimp-drawable-invert drawable FALSE)" \
   --output out.png
 ```

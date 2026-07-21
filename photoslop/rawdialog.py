@@ -33,12 +33,15 @@ class RawDevelopDialog(QDialog):
         form.addRow(self.preview)
 
         self._sliders: dict[str, QSlider] = {}
-        scale = {"exposure": 100.0, "temp": 1.0, "tint": 1.0,
-                 "highlights": 1.0, "shadows": 1.0}
+        scale = {"exposure": 100.0, "temp": 1.0, "tint": 1.0, "highlights": 1.0, "shadows": 1.0}
         self._scale = scale
-        labels = {"exposure": "Exposure (EV)", "temp": "Temp (K, 0=camera)",
-                  "tint": "Tint", "highlights": "Highlights",
-                  "shadows": "Shadows"}
+        labels = {
+            "exposure": "Exposure (EV)",
+            "temp": "Temp (K, 0=camera)",
+            "tint": "Tint",
+            "highlights": "Highlights",
+            "shadows": "Shadows",
+        }
         for key, (lo, hi, default) in DEVELOP_FIELDS.items():
             slider = QSlider(Qt.Orientation.Horizontal)
             slider.setRange(int(lo * scale[key]), int(hi * scale[key]))
@@ -67,8 +70,7 @@ class RawDevelopDialog(QDialog):
         self._debounce.start()
 
     def values(self) -> dict[str, float]:
-        return {key: slider.value() / self._scale[key]
-                for key, slider in self._sliders.items()}
+        return {key: slider.value() / self._scale[key] for key, slider in self._sliders.items()}
 
     def _reset(self) -> None:
         for key, (_lo, _hi, default) in DEVELOP_FIELDS.items():
@@ -83,9 +85,16 @@ class RawDevelopDialog(QDialog):
         except Exception as exc:  # unreadable raw: show why, keep dialog up
             self.preview.setText(str(exc)[:120])
             return
-        self.preview.setPixmap(QPixmap.fromImage(img.scaled(
-            _PREVIEW, _PREVIEW, Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation)))
+        self.preview.setPixmap(
+            QPixmap.fromImage(
+                img.scaled(
+                    _PREVIEW,
+                    _PREVIEW,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+        )
 
     def developed(self) -> QImage:
         """Full-resolution develop with the chosen values (on OK)."""

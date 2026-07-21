@@ -17,8 +17,11 @@ def _window(qapp):
 def test_registry_drives_document_prerequisites(qapp):
     win = MainWindow()
     win.action_registry.update()
-    document_actions = [action for spec, action in win.action_registry.entries.values()
-                        if spec.prerequisite == "document"]
+    document_actions = [
+        action
+        for spec, action in win.action_registry.entries.values()
+        if spec.prerequisite == "document"
+    ]
     assert document_actions and all(not action.isEnabled() for action in document_actions)
     win.add_document(Document.new(QSize(20, 20), 72, "doc", QColor("white")))
     assert all(action.isEnabled() for action in document_actions)
@@ -61,5 +64,18 @@ def test_workspace_geometry_recovery_uses_current_screen(qapp):
     win = MainWindow()
     win.setGeometry(QRect(100000, 100000, 400, 300))
     win._validate_workspace_geometry()
-    assert any(screen.availableGeometry().intersects(win.frameGeometry())
-               for screen in qapp.screens())
+    assert any(
+        screen.availableGeometry().intersects(win.frameGeometry()) for screen in qapp.screens()
+    )
+
+
+def test_registered_shortcuts_are_unique_and_keep_escape_for_canvas(qapp):
+    win = _window(qapp)
+    shortcuts: dict[str, list[str]] = {}
+    for spec, _action in win.action_registry.entries.values():
+        if spec.shortcut:
+            shortcuts.setdefault(spec.shortcut, []).append(spec.command_id)
+    assert {key: commands for key, commands in shortcuts.items() if len(commands) > 1} == {}
+    assert win.action_registry.entries["export"][0].shortcut == "Ctrl+Alt+Shift+S"
+    assert win.action_registry.entries["cancel.tasks"][0].shortcut == "Ctrl+Esc"
+    assert "Esc" not in shortcuts

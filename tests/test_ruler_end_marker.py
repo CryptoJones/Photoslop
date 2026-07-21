@@ -27,8 +27,7 @@ def test_end_marker_at_non_round_sizes(qapp):
     for w, h in ((8192, 5464), (11648, 8736)):  # Canon R5, Fuji GFX 100
         win = MainWindow()
         win.resize(1600, 1000)
-        win.add_document(Document.new(QSize(w, h), 72.0, "cam",
-                                      QColor(255, 255, 255)))
+        win.add_document(Document.new(QSize(w, h), 72.0, "cam", QColor(255, 255, 255)))
         win.show()
         assert end_tick_present(win, w), f"no end marker for {w}px image"
         win.close()
@@ -37,8 +36,7 @@ def test_end_marker_at_non_round_sizes(qapp):
 def test_end_marker_at_round_size_and_units_survive(qapp):
     win = MainWindow()
     win.resize(1600, 1000)
-    win.add_document(Document.new(QSize(2000, 1000), 72.0, "r",
-                                  QColor(255, 255, 255)))
+    win.add_document(Document.new(QSize(2000, 1000), 72.0, "r", QColor(255, 255, 255)))
     win.show()
     assert end_tick_present(win, 2000)
     for unit in ("in", "mm", "pc"):  # paint path holds in every unit

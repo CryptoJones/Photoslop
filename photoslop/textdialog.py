@@ -39,8 +39,7 @@ from PySide6.QtWidgets import (
 from photoslop.layer import Layer
 
 
-def render_text_layer(text: str, font: QFont, color: QColor,
-                      anchor: QPoint) -> Layer | None:
+def render_text_layer(text: str, font: QFont, color: QColor, anchor: QPoint) -> Layer | None:
     """Rasterise plain text into a tight layer whose top-left sits at `anchor`.
 
     The single-font/single-colour path used by the CLI `--text` op and by
@@ -55,18 +54,23 @@ def render_text_layer(text: str, font: QFont, color: QColor,
     width = max(metrics.horizontalAdvance(line) for line in lines)
     height = metrics.lineSpacing() * len(lines)
     pad = 2
-    layer = Layer.blank(lines[0][:24] or "Text",
-                        # ceil via int()+1 keeps antialiased edges inside
-                        _size(int(width) + 2 * pad + 1, int(height) + 2 * pad + 1),
-                        QPoint(anchor))
+    layer = Layer.blank(
+        lines[0][:24] or "Text",
+        # ceil via int()+1 keeps antialiased edges inside
+        _size(int(width) + 2 * pad + 1, int(height) + 2 * pad + 1),
+        QPoint(anchor),
+    )
     p = QPainter(layer.image)
     p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
     p.setFont(font)
     p.setPen(color)
     y = float(pad)
     for line in lines:
-        p.drawText(QRectF(pad, y, width + 1, metrics.lineSpacing()),
-                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, line)
+        p.drawText(
+            QRectF(pad, y, width + 1, metrics.lineSpacing()),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
+            line,
+        )
         y += metrics.lineSpacing()
     p.end()
     layer.text_data = {
@@ -78,8 +82,7 @@ def render_text_layer(text: str, font: QFont, color: QColor,
     return layer
 
 
-def render_text_document(document: QTextDocument, anchor: QPoint,
-                         pad: int = 2) -> Layer | None:
+def render_text_document(document: QTextDocument, anchor: QPoint, pad: int = 2) -> Layer | None:
     """Rasterise a rich QTextDocument (per-letter colour, mixed fonts, bold/
     italic) into a tight layer whose top-left sits at `anchor`.
 
@@ -96,8 +99,7 @@ def render_text_document(document: QTextDocument, anchor: QPoint,
     width = int(math.ceil(size.width())) + 1
     height = int(math.ceil(size.height())) + 1
     plain = document.toPlainText()
-    layer = Layer.blank(plain.split("\n")[0][:24] or "Text",
-                        _size(width, height), QPoint(anchor))
+    layer = Layer.blank(plain.split("\n")[0][:24] or "Text", _size(width, height), QPoint(anchor))
     p = QPainter(layer.image)
     p.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
     document.drawContents(p)
@@ -125,9 +127,16 @@ class TextDialog(QDialog):
     restore a previously styled block for editing.
     """
 
-    def __init__(self, color: QColor, parent=None, text: str = "",
-                 font: QFont | None = None, html: str | None = None,
-                 effects=None, fill_opacity: float = 1.0) -> None:
+    def __init__(
+        self,
+        color: QColor,
+        parent=None,
+        text: str = "",
+        font: QFont | None = None,
+        html: str | None = None,
+        effects=None,
+        fill_opacity: float = 1.0,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Edit Text" if (text or html) else "Add Text")
         self.color = QColor(color)
@@ -146,7 +155,8 @@ class TextDialog(QDialog):
             "#textToolbar { border: 1px solid palette(mid); border-radius: 6px; }"
             "#textToolbar QToolButton { border: none; padding: 4px 8px; }"
             "#textToolbar QToolButton:checked {"
-            " background: palette(highlight); border-radius: 4px; }")
+            " background: palette(highlight); border-radius: 4px; }"
+        )
         row = QHBoxLayout(bar)
         row.setContentsMargins(6, 4, 6, 4)
         row.setSpacing(6)
@@ -174,8 +184,9 @@ class TextDialog(QDialog):
         self.italic_btn.setFont(ifont)
 
         self.color_button = QPushButton()
-        self.color_button.setToolTip("Text colour — colours the selection, or "
-                                     "new typing if nothing is selected")
+        self.color_button.setToolTip(
+            "Text colour — colours the selection, or new typing if nothing is selected"
+        )
         self.color_button.setFixedSize(40, self.size.sizeHint().height())
         self.color_button.clicked.connect(self.pick_color)
 
@@ -195,8 +206,9 @@ class TextDialog(QDialog):
         for name in BUILTIN_PRESETS:
             self.appearance_preset.addItem(name, ("builtin", name))
         try:
-            custom = json.loads(str(QSettings("CryptoJones", "Photoslop").value(
-                "appearance/presets/v1", "{}")))
+            custom = json.loads(
+                str(QSettings("CryptoJones", "Photoslop").value("appearance/presets/v1", "{}"))
+            )
         except (TypeError, json.JSONDecodeError):
             custom = {}
         if not isinstance(custom, dict):
@@ -218,8 +230,7 @@ class TextDialog(QDialog):
         self.edit.setMinimumSize(360, 140)
         layout.addWidget(self.edit, 1)
 
-        hint = QLabel("Tip: select individual letters, then pick a colour to "
-                      "tint just those.")
+        hint = QLabel("Tip: select individual letters, then pick a colour to tint just those.")
         hint.setStyleSheet("color: palette(mid); font-size: 11px;")
         layout.addWidget(hint)
 
@@ -325,8 +336,8 @@ class TextDialog(QDialog):
 
     def pick_color(self) -> None:
         picked = QColorDialog.getColor(
-            self.color, self, "Text Colour",
-            QColorDialog.ColorDialogOption.ShowAlphaChannel)
+            self.color, self, "Text Colour", QColorDialog.ColorDialogOption.ShowAlphaChannel
+        )
         if picked.isValid():
             self.color = picked
             self._update_swatch()
@@ -336,7 +347,8 @@ class TextDialog(QDialog):
 
     def _update_swatch(self) -> None:
         self.color_button.setStyleSheet(
-            f"background-color: {self.color.name()}; border: 1px solid gray;")
+            f"background-color: {self.color.name()}; border: 1px solid gray;"
+        )
 
     # -- results -----------------------------------------------------------
     def chosen_font(self) -> QFont:
@@ -370,5 +382,6 @@ class TextDialog(QDialog):
         source, name = data
         stack = BUILTIN_PRESETS[name] if source == "builtin" else self._appearance_custom[name]
         normalized = normalize_effects(stack)
-        self.appearance_effects = [new_effect(
-            effect["type"], **effect["parameters"]) for effect in normalized]
+        self.appearance_effects = [
+            new_effect(effect["type"], **effect["parameters"]) for effect in normalized
+        ]

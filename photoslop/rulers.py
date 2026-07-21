@@ -40,6 +40,11 @@ class Ruler(QWidget):
         self.dpi = dpi
         self.unit = unit
         self.length = length
+        axis = "Horizontal" if self.orientation == Qt.Orientation.Horizontal else "Vertical"
+        self.setAccessibleDescription(
+            f"{axis} ruler, {length} pixels, units {units.unit_label(unit)}, "
+            "drag to create a guide; keyboard guide commands are available in View."
+        )
         self.update()
 
     def set_marker(self, canvas_pos: float | None) -> None:
@@ -116,14 +121,20 @@ class Ruler(QWidget):
                     continue
                 label = units.format_tick(value)
                 if horizontal:
-                    p.drawText(QRectF(w + 2, 0, 56, self.height() - 8),
-                               Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, label)
+                    p.drawText(
+                        QRectF(w + 2, 0, 56, self.height() - 8),
+                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
+                        label,
+                    )
                 else:
                     p.save()
                     p.translate(0, w - 2)
                     p.rotate(-90)
-                    p.drawText(QRectF(2, 0, 56, self.width() - 8),
-                               Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, label)
+                    p.drawText(
+                        QRectF(2, 0, 56, self.width() - 8),
+                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
+                        label,
+                    )
                     p.restore()
             value += step
 
@@ -135,16 +146,20 @@ class Ruler(QWidget):
             self._tick(p, end_w, edge, edge)
             label = units.format_tick(length_units)
             if horizontal:
-                p.drawText(QRectF(end_w - 58, 0, 56, self.height() - 8),
-                           Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop,
-                           label)
+                p.drawText(
+                    QRectF(end_w - 58, 0, 56, self.height() - 8),
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop,
+                    label,
+                )
             else:
                 p.save()
                 p.translate(0, end_w + 2)
                 p.rotate(-90)
-                p.drawText(QRectF(0, 0, 56, self.width() - 8),
-                           Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
-                           label)
+                p.drawText(
+                    QRectF(0, 0, 56, self.width() - 8),
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
+                    label,
+                )
                 p.restore()
 
         # cursor marker (round exactly like the canvas draws guides, so the

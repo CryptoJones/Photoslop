@@ -1,5 +1,11 @@
 # Photoslop for iPadOS
 
+The iPad-native editor uses SwiftUI `DocumentGroup` and a versioned
+`.photoslop` package document. It preserves layered raster images and PencilKit
+strokes, participates in iPadOS autosave/open-in-place, and supports
+document-wide undo/redo. Composite previews and PNG exports render off the main
+actor.
+
 The native iPadOS 17+ application is generated from `project.yml` with
 XcodeGen. Source lives in `Photoslop/`; XCTest coverage lives in
 `PhotoslopTests/`.

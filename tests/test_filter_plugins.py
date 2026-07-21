@@ -36,17 +36,17 @@ def test_parse_params_defaults_validation_and_errors(qapp):
     assert parse_params(cls, "") == {"amount": 80}
     assert parse_params(cls, "amount=25") == {"amount": 25}
     with pytest.raises(ValueError):
-        parse_params(cls, "amount=200")      # out of range
+        parse_params(cls, "amount=200")  # out of range
     with pytest.raises(ValueError):
-        parse_params(cls, "strength=5")      # unknown key
+        parse_params(cls, "strength=5")  # unknown key
 
 
 def test_sepia_desaturates_toward_brown(qapp):
     img = QImage(4, 4, QImage.Format.Format_ARGB32_Premultiplied)
-    img.fill(QColor(30, 90, 220))            # a blue
+    img.fill(QColor(30, 90, 220))  # a blue
     filters.SepiaFilter().apply(img, {"amount": 100})
     c = img.pixelColor(1, 1)
-    assert c.red() > c.blue()                 # warm tone
+    assert c.red() > c.blue()  # warm tone
 
 
 def test_pixelate_makes_blocks(qapp):
@@ -55,27 +55,54 @@ def test_pixelate_makes_blocks(qapp):
         for y in range(16):
             img.setPixelColor(x, y, QColor(x * 16, y * 16, 0))
     filters.PixelateFilter().apply(img, {"size": 8})
-    assert img.pixelColor(1, 1) == img.pixelColor(6, 6)   # same block
+    assert img.pixelColor(1, 1) == img.pixelColor(6, 6)  # same block
     assert img.pixelColor(1, 1) != img.pixelColor(14, 14)  # different block
 
 
 def test_cli_filter_op_and_unknown_name(qapp, tmp_path):
     out = str(tmp_path / "sepia.png")
-    assert cli.main(["--new", "20x20", "--fill", "30,90,220",
-                     "--filter", "sepia:amount=100", "--output", out]) == 0
+    assert (
+        cli.main(
+            [
+                "--new",
+                "20x20",
+                "--fill",
+                "30,90,220",
+                "--filter",
+                "sepia:amount=100",
+                "--output",
+                out,
+            ]
+        )
+        == 0
+    )
     c = QImage(out).pixelColor(10, 10)
     assert c.red() > c.blue()
     with pytest.raises(SystemExit) as exc:
-        cli.main(["--new", "8x8", "--filter", "nope", "--output",
-                  str(tmp_path / "x.png")])
+        cli.main(["--new", "8x8", "--filter", "nope", "--output", str(tmp_path / "x.png")])
     assert exc.value.code == 2
 
 
 def test_cli_filter_selection_aware(qapp, tmp_path):
     out = str(tmp_path / "half.png")
-    assert cli.main(["--new", "40x20", "--fill", "30,90,220",
-                     "--select", "0,0,20,20", "--filter", "sepia:amount=100",
-                     "--deselect", "--output", out]) == 0
+    assert (
+        cli.main(
+            [
+                "--new",
+                "40x20",
+                "--fill",
+                "30,90,220",
+                "--select",
+                "0,0,20,20",
+                "--filter",
+                "sepia:amount=100",
+                "--deselect",
+                "--output",
+                out,
+            ]
+        )
+        == 0
+    )
     img = QImage(out)
     left, right = img.pixelColor(5, 10), img.pixelColor(35, 10)
     assert left.red() > left.blue()
@@ -89,8 +116,7 @@ def test_filter_menu_autopopulates(qapp):
     # resolve texts while the wrappers are alive (shiboken GC trap)
     for act in win.menuBar().actions():
         if act.text() == "Fi&lter":
-            texts = [a.text().replace("&", "")
-                     for a in act.menu().actions() if a.text()]
+            texts = [a.text().replace("&", "") for a in act.menu().actions() if a.text()]
             break
     else:
         raise AssertionError("no Filter menu")
@@ -137,9 +163,21 @@ def test_third_party_registration_flows_everywhere(qapp, tmp_path):
     register_filter(Redshift)
     try:
         out = str(tmp_path / "red.png")
-        assert cli.main(["--new", "8x8", "--fill", "10,10,10",
-                         "--filter", "redshift-test:boost=90",
-                         "--output", out]) == 0
+        assert (
+            cli.main(
+                [
+                    "--new",
+                    "8x8",
+                    "--fill",
+                    "10,10,10",
+                    "--filter",
+                    "redshift-test:boost=90",
+                    "--output",
+                    out,
+                ]
+            )
+            == 0
+        )
         assert QImage(out).pixelColor(4, 4).red() == 100
     finally:
         filters._REGISTRY.pop("redshift-test", None)

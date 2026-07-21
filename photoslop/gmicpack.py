@@ -25,8 +25,7 @@ from photoslop.filters import Filter, ParamSpec, register_filter
 
 
 def gmic_available() -> bool:
-    return (importlib.util.find_spec("gmic") is not None
-            or shutil.which("gmic") is not None)
+    return importlib.util.find_spec("gmic") is not None or shutil.which("gmic") is not None
 
 
 def _to_rgba(image: QImage) -> np.ndarray:
@@ -44,10 +43,9 @@ def _write_back(image: QImage, rgba: np.ndarray) -> None:
     view_u32(image)[...] = view_u32(out)
 
 
-def _restore_shape(res: np.ndarray, alpha: np.ndarray,
-                   w: int, h: int) -> np.ndarray:
+def _restore_shape(res: np.ndarray, alpha: np.ndarray, w: int, h: int) -> np.ndarray:
     """gmic output (h', w', spectrum, depth) -> (h, w, 4) uint8."""
-    res = res[..., 0] if res.ndim == 4 else res          # drop depth
+    res = res[..., 0] if res.ndim == 4 else res  # drop depth
     if res.ndim == 2:
         res = res[..., None]
     spectrum = res.shape[2]
@@ -58,15 +56,20 @@ def _restore_shape(res: np.ndarray, alpha: np.ndarray,
         rgb, a = res, alpha
     else:
         rgb, a = res[..., :3], res[..., 3:4]
-    rgba = np.concatenate([rgb, a if a.shape[:2] == rgb.shape[:2]
-                           else np.full((*rgb.shape[:2], 1), 255.0)], axis=2)
+    rgba = np.concatenate(
+        [rgb, a if a.shape[:2] == rgb.shape[:2] else np.full((*rgb.shape[:2], 1), 255.0)], axis=2
+    )
     rgba = np.clip(rgba, 0, 255).astype(np.uint8)
     if rgba.shape[:2] != (h, w):  # a command that resized: scale back
-        img = QImage(rgba.tobytes(), rgba.shape[1], rgba.shape[0],
-                     rgba.shape[1] * 4, QImage.Format.Format_RGBA8888)
+        img = QImage(
+            rgba.tobytes(),
+            rgba.shape[1],
+            rgba.shape[0],
+            rgba.shape[1] * 4,
+            QImage.Format.Format_RGBA8888,
+        )
         img = img.scaled(w, h)
-        rgba = np.frombuffer(img.constBits(), dtype=np.uint8
-                             ).reshape(h, w, 4).copy()
+        rgba = np.frombuffer(img.constBits(), dtype=np.uint8).reshape(h, w, 4).copy()
     return rgba
 
 
@@ -82,8 +85,7 @@ def run_gmic(image: QImage, command: str) -> None:
         import gmic
 
         img = gmic.Image()
-        img.assign_ndarray(np.ascontiguousarray(
-            rgba[..., :3]).astype(np.float32))
+        img.assign_ndarray(np.ascontiguousarray(rgba[..., :3]).astype(np.float32))
         lst = gmic.ImageList([img])
         try:
             gmic.run(command, lst)
@@ -105,19 +107,21 @@ def _run_gmic_cli(rgba: np.ndarray, command: str) -> np.ndarray:
         src = os.path.join(tmp, "in.png")
         dst = os.path.join(tmp, "out.png")
         rgb = np.ascontiguousarray(rgba[..., :3])
-        img = QImage(rgb.tobytes(), w, h, w * 3,
-                     QImage.Format.Format_RGB888)
+        img = QImage(rgb.tobytes(), w, h, w * 3, QImage.Format.Format_RGB888)
         img.save(src)
-        proc = subprocess.run(["gmic", src, *command.split(),
-                               "output", dst],
-                              capture_output=True, text=True, timeout=120)
+        proc = subprocess.run(
+            ["gmic", src, *command.split(), "output", dst],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
         if proc.returncode != 0 or not os.path.exists(dst):
             raise ValueError(f"G'MIC CLI: {proc.stderr.strip()[:200]}")
         out = QImage(dst).convertToFormat(QImage.Format.Format_RGB888)
         oh, ow = out.height(), out.width()
         arr = np.frombuffer(out.constBits(), dtype=np.uint8)
         # RGB888 rows are 32-bit aligned: slice off the padding per row
-        arr = arr.reshape(oh, out.bytesPerLine())[:, :ow * 3]
+        arr = arr.reshape(oh, out.bytesPerLine())[:, : ow * 3]
         return arr.reshape(oh, ow, 3).copy()
 
 
@@ -125,6 +129,7 @@ class _GmicFilter(Filter):
     """Curated G'MIC filter: a command template formatted from params."""
 
     template = ""
+    unsafe = True
 
     def apply(self, image: QImage, params: dict) -> None:
         run_gmic(image, self.template.format(**params))
@@ -134,8 +139,10 @@ class GmicCartoon(_GmicFilter):
     name = "gmic-cartoon"
     label = "G'MIC Cartoon"
     template = "cartoon {smoothness},50,80,0.25,{colors},8"
-    params = (ParamSpec("smoothness", "Smoothness", "float", 0, 10, 3),
-              ParamSpec("colors", "Color richness", "float", 0.5, 3, 1.5))
+    params = (
+        ParamSpec("smoothness", "Smoothness", "float", 0, 10, 3),
+        ParamSpec("colors", "Color richness", "float", 0.5, 3, 1.5),
+    )
 
 
 class GmicOldPhoto(_GmicFilter):
@@ -156,16 +163,20 @@ class GmicStencil(_GmicFilter):
     name = "gmic-stencil"
     label = "G'MIC Stencil (B&W)"
     template = "stencilbw {radius},{smoothness}"
-    params = (ParamSpec("radius", "Radius", "float", 0.5, 10, 2),
-              ParamSpec("smoothness", "Smoothness", "int", 1, 30, 10))
+    params = (
+        ParamSpec("radius", "Radius", "float", 0.5, 10, 2),
+        ParamSpec("smoothness", "Smoothness", "int", 1, 30, 10),
+    )
 
 
 class GmicSpread(_GmicFilter):
     name = "gmic-spread"
     label = "G'MIC Spread"
     template = "spread {dx},{dy}"
-    params = (ParamSpec("dx", "Horizontal", "int", 0, 32, 3),
-              ParamSpec("dy", "Vertical", "int", 0, 32, 3))
+    params = (
+        ParamSpec("dx", "Horizontal", "int", 0, 32, 3),
+        ParamSpec("dy", "Vertical", "int", 0, 32, 3),
+    )
 
 
 class GmicSolarize(_GmicFilter):
@@ -192,8 +203,14 @@ class GmicRaw(_GmicFilter):
 
 
 CURATED: tuple[type[Filter], ...] = (
-    GmicCartoon, GmicOldPhoto, GmicDrawing, GmicStencil, GmicSpread,
-    GmicSolarize, GmicSmooth, GmicRaw,
+    GmicCartoon,
+    GmicOldPhoto,
+    GmicDrawing,
+    GmicStencil,
+    GmicSpread,
+    GmicSolarize,
+    GmicSmooth,
+    GmicRaw,
 )
 
 

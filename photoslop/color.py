@@ -21,6 +21,7 @@ def pathlib_read(path: str) -> bytes:
     with open(path, "rb") as fh:
         return fh.read()
 
+
 PRESETS = {
     "srgb": QColorSpace.NamedColorSpace.SRgb,
     "srgb-linear": QColorSpace.NamedColorSpace.SRgbLinear,
@@ -45,8 +46,8 @@ def load_space(spec: str) -> QColorSpace:
             return space
         raise ValueError(f"not a usable ICC profile: {spec}")
     raise ValueError(
-        f"unknown profile {spec!r}: use a preset ({', '.join(PRESETS)}) "
-        "or a path to an .icc file")
+        f"unknown profile {spec!r}: use a preset ({', '.join(PRESETS)}) or a path to an .icc file"
+    )
 
 
 def describe(space: QColorSpace | None) -> str:
@@ -57,8 +58,11 @@ def describe(space: QColorSpace | None) -> str:
 
 def doc_space(doc) -> QColorSpace:
     space = getattr(doc, "icc_space", None)
-    return space if space is not None and space.isValid() \
+    return (
+        space
+        if space is not None and space.isValid()
         else QColorSpace(QColorSpace.NamedColorSpace.SRgb)
+    )
 
 
 def assign_profile(doc, space: QColorSpace) -> None:
@@ -75,16 +79,16 @@ def convert_profile(doc, space: QColorSpace) -> None:
         img = layer.image.convertToFormat(QImage.Format.Format_ARGB32)
         img.setColorSpace(src)
         img = img.convertedToColorSpace(space)
-        layer.image = img.convertToFormat(
-            QImage.Format.Format_ARGB32_Premultiplied)
+        layer.image = img.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
         layer.fx_cache = None
     doc.icc_space = QColorSpace(space)
     doc.notify_pixels(doc.canvas_rect())
 
 
 def viewport_active() -> bool:
-    return (settings.get("display") is not None
-            or (settings.get("proof_on") and settings.get("proof") is not None))
+    return settings.get("display") is not None or (
+        settings.get("proof_on") and settings.get("proof") is not None
+    )
 
 
 def apply_viewport(image: QImage, doc) -> QImage:
@@ -121,15 +125,13 @@ def proof_simulate(image: QImage, doc, proof: QColorSpace) -> QImage:
     return out.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
 
 
-def cmyk_export(image: QImage, path: str, cmyk_icc: str,
-                quality: int = 90) -> None:
+def cmyk_export(image: QImage, path: str, cmyk_icc: str, quality: int = 90) -> None:
     """Write a CMYK JPEG/TIFF via Pillow + littlecms (DD-005: transient
     conversion only — no CMYK working mode)."""
     try:
         from PIL import Image, ImageCms
     except ImportError as exc:
-        raise ValueError(
-            "CMYK export needs Pillow — install photoslop[formats]") from exc
+        raise ValueError("CMYK export needs Pillow — install photoslop[formats]") from exc
     if not path.lower().endswith((".jpg", ".jpeg", ".tif", ".tiff")):
         raise ValueError("CMYK export writes JPEG or TIFF")
     src = image.convertToFormat(QImage.Format.Format_RGBA8888)
@@ -139,12 +141,15 @@ def cmyk_export(image: QImage, path: str, cmyk_icc: str,
     srgb = ImageCms.createProfile("sRGB")
     try:
         cmyk = ImageCms.getOpenProfile(cmyk_icc)
-        transform = ImageCms.buildTransform(srgb, cmyk, "RGB", "CMYK",
-                                            renderingIntent=0)
+        transform = ImageCms.buildTransform(srgb, cmyk, "RGB", "CMYK", renderingIntent=0)
     except (OSError, ImageCms.PyCMSError) as exc:
         raise ValueError(f"CMYK profile: {exc}") from exc
     out = ImageCms.applyTransform(im, transform)
-    save_kwargs = {"quality": quality} if path.lower().endswith(
-        (".jpg", ".jpeg")) else {}
+    save_kwargs = {"quality": quality} if path.lower().endswith((".jpg", ".jpeg")) else {}
     icc_bytes = pathlib_read(cmyk_icc)
-    out.save(path, icc_profile=icc_bytes, **save_kwargs)
+    from photoslop.atomicio import atomic_write
+
+    atomic_write(
+        path,
+        lambda temporary: out.save(temporary, icc_profile=icc_bytes, **save_kwargs),
+    )

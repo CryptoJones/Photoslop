@@ -53,3 +53,21 @@ def test_liquify_tool_stroke_and_undo(qapp):
     assert doc.undo_stack.command(0).text() == "Liquify"
     doc.undo_stack.undo()
     assert edge_x(img, 30) == 40  # exact restore
+
+
+def test_liquify_cancel_restores_tiles_without_undo_entry(qapp):
+    win = MainWindow()
+    doc = Document.new(QSize(80, 60), 72.0, "cancel", QColor(0, 0, 0))
+    doc.layers[0].image = edge_image()
+    win.add_document(doc)
+    tool = win.tools["liquify"]
+    win.options.size = 24
+    before = doc.active_layer.image.copy()
+
+    tool.press(doc, win.current_editor().canvas, QPointF(38, 30), None)
+    tool.move(doc, win.current_editor().canvas, QPointF(50, 30), None)
+    tool.cancel(doc)
+
+    assert doc.active_layer.image == before
+    assert doc.undo_stack.count() == 0
+    assert not tool.has_active_interaction()
