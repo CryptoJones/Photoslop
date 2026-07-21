@@ -24,6 +24,52 @@ final class EditorStoreTests: XCTestCase {
     XCTAssertNotNil(store.activeLayerID)
   }
 
+  func testLayerMutationSupportsUndoAndRedo() {
+    let store = EditorStore()
+    let undoManager = UndoManager()
+    store.undoManager = undoManager
+    store.addLayer()
+    XCTAssertEqual(store.layers.count, 2)
+    XCTAssertTrue(undoManager.canUndo)
+    undoManager.undo()
+    XCTAssertEqual(store.layers.count, 1)
+    XCTAssertTrue(undoManager.canRedo)
+    undoManager.redo()
+    XCTAssertEqual(store.layers.count, 2)
+  }
+
+  func testPhotoslopPackageRoundTripPreservesLayerMetadata() throws {
+    let store = EditorStore()
+    store.addLayer()
+    guard let id = store.activeLayerID else { return XCTFail("missing active layer") }
+    store.rename("Ink", for: id)
+    store.setOpacity(0.42, for: id)
+    store.setVisible(false, for: id)
+
+    let snapshot = try store.snapshot(contentType: .photoslopProject)
+    let wrapper = try ProjectArchive.encode(snapshot)
+    let restored = try ProjectArchive.decode(wrapper)
+    XCTAssertEqual(restored.canvasSize, store.canvasSize)
+    XCTAssertEqual(restored.layers.count, 2)
+    XCTAssertEqual(restored.activeLayerID, id)
+    XCTAssertEqual(restored.layers.last?.name, "Ink")
+    XCTAssertEqual(restored.layers.last?.opacity ?? 0, 0.42, accuracy: 0.001)
+    XCTAssertEqual(restored.layers.last?.isVisible, false)
+  }
+
+  func testProjectResourceCapsAreHard() {
+    XCTAssertTrue(ProjectArchive.isValidCanvas(CGSize(width: 4_000, height: 4_000)))
+    XCTAssertFalse(ProjectArchive.isValidCanvas(CGSize(width: 16_385, height: 1)))
+    XCTAssertFalse(ProjectArchive.isValidCanvas(CGSize(width: 10_001, height: 10_001)))
+  }
+
+  func testPNGExportRendersAsynchronously() async {
+    let store = EditorStore()
+    let data = await store.exportPNG()
+    XCTAssertNotNil(data)
+    XCTAssertNotNil(data.flatMap(UIImage.init(data:)))
+  }
+
   func testVisibilityAndOpacityAffectComposite() {
     let red = EditorStore.solidImage(size: CGSize(width: 2, height: 2), color: .red)
     let blue = EditorStore.solidImage(size: CGSize(width: 2, height: 2), color: .blue)

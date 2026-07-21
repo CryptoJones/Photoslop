@@ -8,6 +8,10 @@ follows [SemVer](https://semver.org).
 
 - Remediation release implementing the codebase audit's data-integrity,
   security, cross-platform project, accessibility, and delivery gates.
+- iPadOS now creates, opens, and autosaves versioned `.photoslop` package
+  documents, preserves PencilKit strokes and stable layer metadata, supports
+  document-wide undo/redo, enforces iPad resource limits, and renders
+  composites/PNG exports away from the main actor.
 
 ## [1.29.1] — 2026-07-17
 

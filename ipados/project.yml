@@ -38,6 +38,23 @@ targets:
         CFBundleDisplayName: Photoslop
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Photoslop Project
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            LSItemContentTypes:
+              - io.ronin48.photoslop.project
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: io.ronin48.photoslop.project
+            UTTypeDescription: Photoslop Project
+            UTTypeConformsTo:
+              - com.apple.package
+              - public.content
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - photoslop
+              public.mime-type:
+                - application/vnd.photoslop.project
         LSApplicationCategoryType: public.app-category.graphics-design
         LSSupportsOpeningDocumentsInPlace: true
         NSPhotoLibraryUsageDescription: Photoslop imports images you choose for editing.

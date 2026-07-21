@@ -16,11 +16,38 @@ path.
   reorder, merge down, clear, or delete raster layers.
 - Open an image from Files or Photos. Imports create a document at the image's
   native pixel dimensions.
+- Create, open, autosave, and reopen layered `.photoslop` package documents.
+  The package preserves canvas geometry, stable layer IDs/order, names,
+  visibility, opacity, raster PNGs, the active layer, and PencilKit strokes.
+- Undo and redo drawing, layer lifecycle/reordering, visibility, opacity,
+  renaming, clearing, imports, and document replacement with the toolbar or
+  `Command-Z` / `Shift-Command-Z`.
 - Export a flattened PNG through the iPadOS document picker. The exported image
   includes every visible raster layer and PencilKit drawing at its layer
   opacity.
-- `Command-N`, `Command-O`, and `Command-S` are available with a hardware
-  keyboard.
+- Standard document-browser New/Open/Save behavior is available with a hardware
+  keyboard; `Shift-Command-E` exports PNG.
+
+Compositing, merge rendering, and PNG export run outside the main actor. A
+generation check prevents an older background render from replacing a newer
+edit. iPad documents are capped at 16,384 px per side, 100 million pixels,
+2,048 layers, 256 MiB per layer payload, and 1 GiB per project package.
+
+## `.photoslop` package layout
+
+```text
+Example.photoslop/
+  manifest.json
+  layers/
+    <stable-layer-uuid>/
+      image.png
+      drawing.data
+```
+
+The versioned manifest is the source of layer order and metadata. Opening a
+package validates its schema, UUID uniqueness, dimensions, counts, payload
+sizes, layer image geometry, opacity, and PencilKit drawing data before the
+document is installed.
 
 ## Build an iPad device bundle
 
@@ -48,10 +75,11 @@ stored in this repository or in release artifacts.
 
 ## Initial-edition boundary
 
-The iPad edition currently covers layered raster painting, image import, and
-flattened PNG export. The desktop edition remains the authoritative home for
-OpenRaster round trips, selections, adjustments, filters, appearance effects,
-editable vectors/text, automation, CLI, and MCP. An unsigned GitHub artifact is
-a reproducible developer build, not an App Store-signed IPA.
+The iPad edition currently covers persistent layered raster/PencilKit painting,
+image import, document-wide undo, and flattened PNG export. The desktop edition
+remains the authoritative home for OpenRaster round trips, selections,
+adjustments, filters, appearance effects, editable vectors/text, automation,
+CLI, and MCP. An unsigned GitHub artifact is a reproducible developer build,
+not an App Store-signed IPA.
 
 Proudly Made in Nebraska. Go Big Red! 🌽 https://xkcd.com/2347/

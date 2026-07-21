@@ -105,10 +105,11 @@ missing, then starts the app. Any arguments pass straight through to
 
 Photoslop v1.30.0 includes a native iPad edition under [`ipados/`](ipados/). It is
 built with SwiftUI and PencilKit because Qt for Python does not support direct
-iOS deployment. The initial iPad edition provides Apple Pencil/finger drawing,
-touch pan and pinch zoom, a native layer stack, Photos/Files import, and PNG
-export. The broader PySide desktop toolset, OpenRaster editing, vector model,
-CLI, and MCP server remain desktop-only in this release.
+iOS deployment. The iPad edition provides Apple Pencil/finger drawing, touch
+pan and pinch zoom, a native layer stack, versioned `.photoslop` package
+documents with iPadOS autosave, document-wide undo/redo, Photos/Files import,
+and off-main PNG export. The broader PySide desktop toolset, OpenRaster editing,
+vector model, CLI, and MCP server remain desktop-only in this release.
 
 Build the unsigned arm64 developer bundle with:
 

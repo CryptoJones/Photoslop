@@ -5,7 +5,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct EditorView: View {
-  @StateObject private var store = EditorStore()
+  @ObservedObject var store: EditorStore
+  @Environment(\.undoManager) private var undoManager
   @State private var selectedPhoto: PhotosPickerItem?
   @State private var showFileImporter = false
   @State private var showExporter = false
@@ -79,6 +80,8 @@ struct EditorView: View {
     } message: {
       Text(errorMessage ?? "")
     }
+    .onAppear { store.undoManager = undoManager }
+    .onChange(of: undoManager) { _, manager in store.undoManager = manager }
   }
 
   private var layerSidebar: some View {
@@ -178,9 +181,8 @@ struct EditorView: View {
       Button {
         showFileImporter = true
       } label: {
-        Label("Open", systemImage: "folder")
+        Label("Import Image", systemImage: "photo.badge.plus")
       }
-      .keyboardShortcut("o", modifiers: .command)
 
       PhotosPicker(selection: $selectedPhoto, matching: .images) {
         Label("Photos", systemImage: "photo.on.rectangle")
@@ -188,8 +190,28 @@ struct EditorView: View {
     }
 
     ToolbarItem(placement: .topBarTrailing) {
-      Button(action: export) { Label("Export PNG", systemImage: "square.and.arrow.up") }
-        .keyboardShortcut("s", modifiers: .command)
+      HStack {
+        Button {
+          undoManager?.undo()
+        } label: {
+          Label("Undo", systemImage: "arrow.uturn.backward")
+        }
+        .disabled(undoManager?.canUndo != true)
+        .keyboardShortcut("z", modifiers: .command)
+
+        Button {
+          undoManager?.redo()
+        } label: {
+          Label("Redo", systemImage: "arrow.uturn.forward")
+        }
+        .disabled(undoManager?.canRedo != true)
+        .keyboardShortcut("z", modifiers: [.command, .shift])
+
+        Button(action: export) {
+          Label("Export PNG", systemImage: "square.and.arrow.up")
+        }
+        .keyboardShortcut("e", modifiers: [.command, .shift])
+      }
     }
   }
 
@@ -206,12 +228,14 @@ struct EditorView: View {
   }
 
   private func export() {
-    guard let data = store.exportPNG() else {
-      errorMessage = "The document could not be rendered as PNG."
-      return
+    Task {
+      guard let data = await store.exportPNG() else {
+        errorMessage = "The document could not be rendered as PNG."
+        return
+      }
+      exportDocument = PNGDocument(data: data)
+      showExporter = true
     }
-    exportDocument = PNGDocument(data: data)
-    showExporter = true
   }
 }
 
