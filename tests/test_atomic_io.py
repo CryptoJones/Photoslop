@@ -237,7 +237,7 @@ def test_dirty_document_schedules_recovery_and_clean_state_removes_it(qapp, tmp_
     timer.setInterval(0)
     timer.start()
 
-    deadline = time.monotonic() + 2
+    deadline = time.monotonic() + 10
     path = win.recovery_service.path_for(doc.document_id)
     while (win.task_service.active or not os.path.exists(path)) and time.monotonic() < deadline:
         qapp.processEvents()

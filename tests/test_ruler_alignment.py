@@ -29,6 +29,8 @@ def window_pixels(win) -> np.ndarray:
 
 def color_hits(arr, region, color, axis, tol=40):
     x0, y0, x1, y1 = region
+    x0, y0 = max(0, x0), max(0, y0)
+    x1, y1 = min(arr.shape[1], x1), min(arr.shape[0], y1)
     sub = arr[y0:y1, x0:x1].astype(int)
     mask = (np.abs(sub - np.array(color)) <= tol).all(axis=2)
     idx = np.flatnonzero(mask.any(axis=0 if axis == "col" else 1))

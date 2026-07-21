@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """New-document presets, recent files, menus, and About dialog polish."""
 
+from pathlib import Path
+
 from PySide6.QtCore import QPoint, QSettings, QSize
 from PySide6.QtGui import QColor, QGuiApplication, QImage
 from PySide6.QtWidgets import QDialog, QFileDialog
@@ -158,7 +160,9 @@ def test_file_dialog_directory_defaults_home_and_follows_successful_save(
     win.add_document(doc)
 
     assert win._save_doc(doc, background=False)
-    assert requested == [(str(previous), str(previous / "document.ora"), True)]
+    assert [
+        (Path(directory), Path(selected), native) for directory, selected, native in requested
+    ] == [(previous, previous / "document.ora", True)]
     assert win._last_directory() == str(destination.parent)
     assert destination.exists()
 
