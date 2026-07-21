@@ -101,6 +101,11 @@ def test_catalog_is_complete():
     )
 
 
+def test_help_builds_and_renders_literal_percent_signs():
+    help_text = cli.build_parser().format_help()
+    assert "0.1%-percentile auto levels" in help_text
+
+
 @pytest.mark.parametrize("op", sorted(CASES))
 def test_malformed_value_is_a_clean_usage_error(qapp, op, tmp_path):
     good, bad = CASES[op]

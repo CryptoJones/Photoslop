@@ -1005,7 +1005,7 @@ OPS: dict = {
     "rotate-layer": ("DEG", "rotate the target layer(s) about their centre", _op_rotate_layer),
     "content-aware-scale": ("WxH", "seam-carve the target layer(s)", _op_cas),
     "levels": ("B,W,GAMMA", "levels adjustment", _op_levels),
-    "auto-levels": (None, "0.1%-percentile auto levels", _op_auto_levels),
+    "auto-levels": (None, "0.1%%-percentile auto levels", _op_auto_levels),
     "hue-sat": ("H,S,L", "hue/saturation/lightness (-180..180,-100..100)", _op_hue_sat),
     "color-balance": ("9 INTS", "shadows,midtones,highlights r,g,b each", _op_color_balance),
     "curves": ("X:Y,...", "master curve points in 0..255", _op_curves),
