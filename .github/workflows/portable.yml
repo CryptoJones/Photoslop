@@ -6,6 +6,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 jobs:
   macos:
     runs-on: macos-15
@@ -14,17 +17,14 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           python-version: "3.12"
+      - name: Verify release versions
+        run: python scripts/check-version.py
       - name: Build portable macOS app
         run: ./scripts/build-portable-macos.sh
       - uses: actions/upload-artifact@v4
         with:
           name: Photoslop-macOS-portable
           path: dist/portable-macos/*.zip
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" dist/portable-macos/*.zip --clobber
 
   windows:
     runs-on: windows-latest
@@ -33,6 +33,8 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           python-version: "3.12"
+      - name: Verify release versions
+        run: python scripts/check-version.py
       - name: Build portable Windows app
         shell: pwsh
         run: ./scripts/build-portable-windows.ps1
@@ -40,9 +42,23 @@ jobs:
         with:
           name: Photoslop-Windows-portable
           path: dist/portable-windows/*.zip
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Photoslop-macOS-portable
+          path: dist/macos
+      - uses: actions/download-artifact@v4
+        with:
+          name: Photoslop-Windows-portable
+          path: dist/windows
+      - name: Attach portable builds to release
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: pwsh
-        run: gh release upload "${env:GITHUB_REF_NAME}" (Get-Item dist/portable-windows/*.zip) --clobber
+        run: gh release upload "${GITHUB_REF_NAME}" dist/macos/*.zip dist/windows/*.zip --clobber

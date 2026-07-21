@@ -25,7 +25,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Read the version straight out of pyproject.toml so the bundle never drifts.
-VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$REPO/pyproject.toml" | head -1)"
+VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$REPO/photoslop/__about__.py" | head -1)"
 VERSION="${VERSION:-0.0.0}"
 
 # --- where to install -------------------------------------------------------

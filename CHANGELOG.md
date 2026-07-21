@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [1.30.0] — Unreleased
+
+- Remediation release implementing the codebase audit's data-integrity,
+  security, cross-platform project, accessibility, and delivery gates.
+
 ## [1.29.1] — 2026-07-17
 
 ### Added

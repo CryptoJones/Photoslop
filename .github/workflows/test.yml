@@ -18,7 +18,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Sync dependencies
-        run: uv sync --extra dev
+        run: uv sync --extra dev --locked
+      - name: Verify release versions
+        run: uv run python scripts/check-version.py
       - name: Lint
         run: uv run ruff check .
       - name: Tests

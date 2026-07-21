@@ -16,7 +16,7 @@ $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path "$PSScriptRoot/..").Path
 Set-Location $Root
 
-$Version = (Select-String -Path "pyproject.toml" -Pattern '^version = "(.*)"' | Select-Object -First 1).Matches.Groups[1].Value
+$Version = (Select-String -Path "photoslop\__about__.py" -Pattern '^__version__ = "(.*)"' | Select-Object -First 1).Matches.Groups[1].Value
 if (-not $Version) { $Version = "0.0.0" }
 
 $OutDir = Join-Path $Root "dist\portable-windows"

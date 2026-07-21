@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v1.29.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v1.30.0-orange)]()
 
 ---
 
@@ -103,7 +103,7 @@ missing, then starts the app. Any arguments pass straight through to
 
 ### iPadOS
 
-Photoslop v1.29.0 adds a native iPad edition under [`ipados/`](ipados/). It is
+Photoslop v1.30.0 includes a native iPad edition under [`ipados/`](ipados/). It is
 built with SwiftUI and PencilKit because Qt for Python does not support direct
 iOS deployment. The initial iPad edition provides Apple Pencil/finger drawing,
 touch pan and pinch zoom, a native layer stack, Photos/Files import, and PNG

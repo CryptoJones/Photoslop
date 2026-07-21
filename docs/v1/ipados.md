@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v1.29.0 includes an iPad-native edition targeting iPadOS 17 and newer.
+Photoslop v1.30.0 includes an iPad-native edition targeting iPadOS 17 and newer.
 It lives in `ipados/` and uses SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
 iOS, but Qt for Python does not currently provide a supported iOS deployment

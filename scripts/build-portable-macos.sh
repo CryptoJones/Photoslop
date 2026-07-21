@@ -18,7 +18,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)"
+VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' photoslop/__about__.py | head -1)"
 VERSION="${VERSION:-0.0.0}"
 
 OUT_DIR="$ROOT/dist/portable-macos"
