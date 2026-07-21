@@ -63,3 +63,15 @@ def test_workspace_geometry_recovery_uses_current_screen(qapp):
     win._validate_workspace_geometry()
     assert any(screen.availableGeometry().intersects(win.frameGeometry())
                for screen in qapp.screens())
+
+
+def test_registered_shortcuts_are_unique_and_keep_escape_for_canvas(qapp):
+    win = _window(qapp)
+    shortcuts: dict[str, list[str]] = {}
+    for spec, _action in win.action_registry.entries.values():
+        if spec.shortcut:
+            shortcuts.setdefault(spec.shortcut, []).append(spec.command_id)
+    assert {key: commands for key, commands in shortcuts.items() if len(commands) > 1} == {}
+    assert win.action_registry.entries["export"][0].shortcut == "Ctrl+Alt+Shift+S"
+    assert win.action_registry.entries["cancel.tasks"][0].shortcut == "Ctrl+Esc"
+    assert "Esc" not in shortcuts

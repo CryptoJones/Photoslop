@@ -18,13 +18,25 @@ import os
 import sys
 from dataclasses import dataclass, field
 
+from photoslop.errors import ErrorCode, StructuredError, classify_error
 
-def _die(message: str) -> int:
-    print(f"photoslop-cli: {message}", file=sys.stderr)
-    return 1
+_EXIT_CODES = {
+    ErrorCode.INVALID_INPUT: 2,
+    ErrorCode.UNSUPPORTED_CAPABILITY: 3,
+    ErrorCode.UNSAFE_OPERATION: 4,
+    ErrorCode.CANCELLED: 5,
+    ErrorCode.IO_FAILURE: 6,
+    ErrorCode.INTERNAL: 1,
+}
 
 
-class _ValueError(ValueError):
+def _die(exc: BaseException) -> int:
+    code = classify_error(exc)
+    print(f"photoslop-cli: error [{code.value}]: {exc}", file=sys.stderr)
+    return _EXIT_CODES[code]
+
+
+class _ValueError(StructuredError):
     """A user-facing option-value problem (exit code 2)."""
 
 
@@ -748,10 +760,15 @@ def _op_generative_fill(ctx: Context, value: str) -> None:
 
 
 def _op_flip(ctx: Context, value: str) -> None:
+    from PySide6.QtGui import QTransform
+
     if value not in ("h", "v"):
         raise _ValueError("--flip expects h or v")
+    transform = QTransform()
+    transform.scale(-1 if value == "h" else 1,
+                    -1 if value == "v" else 1)
     for layer in _target_layers(ctx):
-        layer.image = layer.image.mirrored(value == "h", value == "v")
+        layer.image = layer.image.transformed(transform)
         layer.fx_cache = None
 
 
@@ -924,14 +941,12 @@ def _op_duplicate_layer(ctx: Context, value: str) -> None:
 
 
 def _op_flatten(ctx: Context, value: str) -> None:
-    from photoslop.document import Document
     from photoslop.layer import Layer
 
     doc = ctx.doc
     flat = doc.flatten()
     doc.layers[:] = [Layer("Background", flat)]
     doc.active_index = 0
-    assert isinstance(doc, Document)
 
 
 def _op_convert_smart(ctx: Context, value: str) -> None:
@@ -1364,9 +1379,10 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("nothing to do: give --output, --info, "
                          "or --export-artboards")
     except _ValueError as exc:
-        parser.exit(2, f"photoslop-cli: error: {exc}\n")
+        parser.exit(_EXIT_CODES[exc.code],
+                    f"photoslop-cli: error [{exc.code.value}]: {exc}\n")
     except Exception as exc:  # engine/backend/IO failures
-        return _die(str(exc))
+        return _die(exc)
     return 0
 
 

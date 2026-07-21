@@ -177,7 +177,8 @@ class BrushTool(Tool):
 
     def _segment(self, doc, a: QPointF, b: QPointF, first: bool = False) -> None:
         layer = self._layer
-        assert layer is not None and self._recorder is not None
+        if layer is None or self._recorder is None:
+            raise RuntimeError("brush segment requested outside an active stroke")
         off = QPointF(layer.offset)
         la, lb = a - off, b - off
         radius = self.opts.size / 2.0
@@ -1218,7 +1219,8 @@ class SmudgeTool(BrushTool):
 
     def _segment(self, doc, a: QPointF, b: QPointF, first: bool = False) -> None:
         layer = self._layer
-        assert layer is not None and self._recorder is not None
+        if layer is None or self._recorder is None:
+            raise RuntimeError("smudge segment requested outside an active stroke")
         off = QPointF(layer.offset)
         la, lb = a - off, b - off
         radius = max(1.0, self.opts.size / 2.0)

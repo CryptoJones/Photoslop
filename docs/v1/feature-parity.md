@@ -11,6 +11,21 @@ workflows; Photoslop overlaps them only at the edges (camera-raw import,
 tonal adjustments), so many of their rows are marked out-of-scope rather
 than "missing".
 
+## Photoslop surfaces
+
+Capabilities differ deliberately by surface; a check here does not imply every
+client exposes it.
+
+| Capability | Desktop Qt | iPadOS | CLI | MCP |
+|---|---:|---:|---:|---:|
+| Layered project persistence | ORA | `.photoslop` package | ORA read/write | ORA read/write under root policy |
+| Raster/Pencil drawing | ✅ | ✅ PencilKit | — | — |
+| Selections/filters/vectors/text | ✅ | — | ✅ shared safe engine operations | ✅ safe subset |
+| Native/third-party plugins | local opt-in | — | local opt-in | denied |
+| Network model operations | local configured endpoint | — | local configured endpoint | denied |
+| Accessibility automation | automated semantics + manual matrix required | native labels + manual matrix required | structured errors | structured tool errors |
+| Signed distributable | secret-gated macOS/Windows workflow | no public unsigned release | wheel/sdist CI smoke | installed with Python package |
+
 ## Versions compared
 
 | Product | Version (July 2026) | License / price | Platforms |

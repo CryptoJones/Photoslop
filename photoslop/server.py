@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from photoslop import __version__, cli
+from photoslop.errors import ErrorCode, StructuredError, ToolError, classify_error
 
 # A tool value the model can pass for a flag-style op (e.g. auto-levels),
 # which take no argument.
@@ -46,7 +47,7 @@ class PathPolicy:
                *, allow_overwrite: bool = False) -> PathPolicy:
         resolved = Path(root).expanduser().resolve(strict=True)
         if not resolved.is_dir():
-            raise ValueError(f"MCP root is not a directory: {resolved}")
+            raise ToolError(f"MCP root is not a directory: {resolved}")
         return cls(resolved, allow_overwrite)
 
     def _resolve(self, value: str, *, purpose: str) -> Path:
@@ -57,14 +58,15 @@ class PathPolicy:
         try:
             resolved.relative_to(self.root)
         except ValueError as exc:
-            raise ValueError(
-                f"{purpose} must stay under MCP root {self.root}") from exc
+            raise ToolError(
+                f"{purpose} must stay under MCP root {self.root}",
+                ErrorCode.UNSAFE_OPERATION) from exc
         return resolved
 
     def input(self, value: str, *, purpose: str = "input") -> str:
         resolved = self._resolve(value, purpose=purpose)
         if not resolved.is_file():
-            raise ValueError(f"{purpose} is not a file: {resolved}")
+            raise ToolError(f"{purpose} is not a file: {resolved}")
         return str(resolved)
 
     def output(self, value: str, *, purpose: str = "output") -> str:
@@ -73,21 +75,24 @@ class PathPolicy:
         try:
             parent.relative_to(self.root)
         except ValueError as exc:
-            raise ValueError(
-                f"{purpose} must stay under MCP root {self.root}") from exc
+            raise ToolError(
+                f"{purpose} must stay under MCP root {self.root}",
+                ErrorCode.UNSAFE_OPERATION) from exc
         if resolved.exists() and not self.allow_overwrite:
-            raise ValueError(
-                f"{purpose} already exists; MCP overwrite is disabled: {resolved}")
+            raise ToolError(
+                f"{purpose} already exists; MCP overwrite is disabled: {resolved}",
+                ErrorCode.UNSAFE_OPERATION)
         return str(resolved)
 
     def directory(self, value: str, *, purpose: str) -> str:
         resolved = self._resolve(value, purpose=purpose)
         if resolved.exists() and not resolved.is_dir():
-            raise ValueError(f"{purpose} is not a directory: {resolved}")
+            raise ToolError(f"{purpose} is not a directory: {resolved}")
         if (resolved.exists() and any(resolved.iterdir())
                 and not self.allow_overwrite):
-            raise ValueError(
-                f"{purpose} is not empty; MCP overwrite is disabled: {resolved}")
+            raise ToolError(
+                f"{purpose} is not empty; MCP overwrite is disabled: {resolved}",
+                ErrorCode.UNSAFE_OPERATION)
         return str(resolved)
 
 
@@ -124,12 +129,14 @@ def _normalise_ops(operations: list[dict] | None) -> list[tuple[str, str]]:
     pairs: list[tuple[str, str]] = []
     for i, entry in enumerate(operations or []):
         if not isinstance(entry, dict) or "op" not in entry:
-            raise ValueError(
+            raise ToolError(
                 f"operations[{i}] must be an object with an 'op' key, e.g. "
                 '{"op": "resize", "value": "800x600"}')
         name = str(entry["op"])
         if name in _BLOCKED_OPS:
-            raise ValueError(f"operation {name!r} is not exposed through MCP")
+            raise ToolError(
+                f"operation {name!r} is not exposed through MCP",
+                ErrorCode.UNSUPPORTED_CAPABILITY)
         value = str(entry.get("value", _FLAG))
         if name in _PATH_VALUE_OPS and value.lower().endswith(".icc"):
             value = _POLICY.input(value, purpose=f"{name} profile")
@@ -165,21 +172,27 @@ def edit_image(
         ])
     """
     if input and new:
-        raise ValueError("give an input file or new, not both")
+        raise ToolError("give an input file or new, not both")
     confined_input = _POLICY.input(input) if input else None
     confined_output = _POLICY.output(output) if output else None
     confined_artboards = (_POLICY.directory(
         export_artboards, purpose="artboard export directory")
         if export_artboards else None)
-    return cli.apply_pipeline(
-        input_path=confined_input,
-        new=new,
-        dpi=dpi,
-        operations=_normalise_ops(operations),
-        output=confined_output,
-        info=info,
-        export_artboards=confined_artboards,
-    )
+    try:
+        return cli.apply_pipeline(
+            input_path=confined_input,
+            new=new,
+            dpi=dpi,
+            operations=_normalise_ops(operations),
+            output=confined_output,
+            info=info,
+            export_artboards=confined_artboards,
+        )
+    except ToolError:
+        raise
+    except Exception as exc:
+        code = exc.code if isinstance(exc, StructuredError) else classify_error(exc)
+        raise ToolError(str(exc), code) from exc
 
 
 def document_info(input: str) -> dict:
@@ -187,8 +200,14 @@ def document_info(input: str) -> dict:
     (name, visibility, opacity, blend mode, offset, effects, smart-object,
     native vector ID/type) plus
     any artboards. Read-only — nothing is written."""
-    return cli.apply_pipeline(
-        input_path=_POLICY.input(input), info=True)["info"]
+    try:
+        return cli.apply_pipeline(
+            input_path=_POLICY.input(input), info=True)["info"]
+    except ToolError:
+        raise
+    except Exception as exc:
+        code = exc.code if isinstance(exc, StructuredError) else classify_error(exc)
+        raise ToolError(str(exc), code) from exc
 
 
 def build_server(*, root: str | os.PathLike[str] | None = None,

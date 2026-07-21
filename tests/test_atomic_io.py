@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Destination writes commit once and never damage the previous file."""
 
+import json
 import os
 import time
+from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QRect, QSize
@@ -106,6 +108,10 @@ def test_recovery_snapshot_round_trips_identity_and_stays_unsaved(qapp, tmp_path
     document_id = doc.document_id
 
     service.write(doc)
+    metadata = json.loads(
+        (tmp_path / "recovery" / f"{document_id}.recovery.json").read_text())
+    assert metadata["schema_version"] == RecoveryService.SCHEMA_VERSION
+    assert metadata["document_id"] == document_id
     recovered = service.available()
 
     assert len(recovered) == 1
@@ -115,6 +121,92 @@ def test_recovery_snapshot_round_trips_identity_and_stays_unsaved(qapp, tmp_path
     assert recovered[0].active_layer.image.pixelColor(1, 1) == QColor("blue")
     service.clear(document_id)
     assert service.available() == []
+
+
+def test_recovery_retention_prunes_old_and_excess_documents(qapp, tmp_path):
+    service = RecoveryService(
+        str(tmp_path / "bounded"), max_documents=2, max_age_days=30)
+    documents = [
+        Document.new(QSize(6, 6), 72, f"doc-{index}", QColor("white"))
+        for index in range(3)
+    ]
+    for document in documents:
+        service.write(document)
+        time.sleep(0.002)
+    assert len(service.available()) == 2
+    assert not os.path.exists(service.path_for(documents[0].document_id))
+
+    stale = documents[-1]
+    metadata_path = Path(service.metadata_path_for(stale.document_id))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["saved_at"] = "2000-01-01T00:00:00+00:00"
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    service.prune()
+    assert not os.path.exists(service.path_for(stale.document_id))
+
+
+def test_failed_recovery_write_preserves_last_complete_snapshot(
+        qapp, tmp_path, monkeypatch):
+    service = RecoveryService(str(tmp_path / "disk-full"))
+    doc = Document.new(QSize(8, 8), 72, "stable", QColor("blue"))
+    service.write(doc)
+    snapshot_path = Path(service.path_for(doc.document_id))
+    before = snapshot_path.read_bytes()
+
+    def fail(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("photoslop.recovery.save_ora", fail)
+    with pytest.raises(OSError, match="disk full"):
+        service.write(doc)
+    assert snapshot_path.read_bytes() == before
+    assert service.available()[0].active_layer.image.pixelColor(0, 0) == QColor("blue")
+
+
+def test_recovery_clear_all_is_scoped_and_handles_missing_root(tmp_path):
+    root = tmp_path / "clear-all"
+    service = RecoveryService(str(root))
+    service.clear_all()
+    root.mkdir()
+    (root / "one.ora").write_bytes(b"snapshot")
+    (root / "one.recovery.json").write_text("{}", encoding="utf-8")
+    (root / "keep.txt").write_text("keep", encoding="utf-8")
+
+    service.clear_all()
+
+    assert [path.name for path in root.iterdir()] == ["keep.txt"]
+
+
+def test_recovery_ignores_invalid_metadata_and_corrupt_snapshots(qapp, tmp_path):
+    root = tmp_path / "corrupt"
+    root.mkdir()
+    service = RecoveryService(str(root))
+    (root / "broken.ora").write_bytes(b"not an archive")
+    (root / "broken.recovery.json").write_text("{not-json", encoding="utf-8")
+    assert service._metadata("broken") == {}
+    assert service.available() == []
+
+    (root / "broken.recovery.json").write_text(
+        json.dumps({"schema_version": 999}), encoding="utf-8")
+    assert service._metadata("broken") == {}
+
+
+def test_recovery_legacy_snapshot_uses_file_time_and_missing_root_is_empty(
+        qapp, tmp_path):
+    root = tmp_path / "legacy"
+    service = RecoveryService(str(root))
+    assert service.available() == []
+    service.prune()
+
+    doc = Document.new(QSize(5, 5), 72, "legacy", QColor("green"))
+    service.write(doc)
+    os.unlink(service.metadata_path_for(doc.document_id))
+    service.prune()
+
+    recovered = service.available()
+    assert len(recovered) == 1
+    assert recovered[0].recovery_original_path is None
+    assert recovered[0].recovery_saved_at is None
 
 
 def test_dirty_document_schedules_recovery_and_clean_state_removes_it(

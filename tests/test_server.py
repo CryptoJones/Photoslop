@@ -7,6 +7,7 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor, QImage
 
 from photoslop import cli, server
+from photoslop.errors import ErrorCode, ToolError
 
 
 @pytest.fixture(autouse=True)
@@ -95,6 +96,22 @@ def test_edit_image_unknown_op():
 def test_edit_image_malformed_operation_entry():
     with pytest.raises(ValueError, match="must be an object"):
         server.edit_image(["resize 10x10"], new="10x10", info=True)
+
+
+def test_mcp_errors_expose_stable_automation_codes(tmp_path):
+    with pytest.raises(ToolError) as blocked:
+        server.edit_image(
+            [{"op": "generative-fill", "value": "prompt"}],
+            new="8x8", output="out.png",
+        )
+    assert blocked.value.code is ErrorCode.UNSUPPORTED_CAPABILITY
+    assert str(blocked.value).startswith("[unsupported_capability]")
+
+    existing = tmp_path / "existing.png"
+    existing.write_bytes(b"not an image")
+    with pytest.raises(ToolError) as overwrite:
+        server.edit_image([], new="8x8", output="existing.png")
+    assert overwrite.value.code is ErrorCode.UNSAFE_OPERATION
 
 
 def test_document_info_is_read_only(qapp, tmp_path):

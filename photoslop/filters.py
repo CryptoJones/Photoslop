@@ -16,6 +16,8 @@ per-layer copies (DD-001)."""
 
 from __future__ import annotations
 
+import traceback
+from dataclasses import dataclass
 from typing import NamedTuple
 
 import numpy as np
@@ -90,6 +92,16 @@ _REGISTRY: dict[str, type[Filter]] = {}
 _BUILT_INS: tuple[type[Filter], ...] = (SepiaFilter, PixelateFilter)
 
 
+@dataclass(frozen=True)
+class PluginFailure:
+    group: str
+    name: str
+    details: str
+
+
+_PLUGIN_FAILURES: dict[tuple[str, str], PluginFailure] = {}
+
+
 def register_filter(cls: type[Filter]) -> None:
     if not getattr(cls, "name", None) or cls.name == "abstract":
         raise ValueError("filter plugins need a unique kebab-case name")
@@ -116,9 +128,16 @@ def available_filters(*, allow_unsafe: bool = False) -> dict[str, type[Filter]]:
                 cls.unsafe = True
                 register_filter(cls)
             except Exception:  # a broken plugin must not break the app
+                key = ("photoslop.filters", ep.name)
+                _PLUGIN_FAILURES[key] = PluginFailure(
+                    key[0], key[1], traceback.format_exc())
                 continue
     return {name: cls for name, cls in _REGISTRY.items()
             if allow_unsafe or not getattr(cls, "unsafe", False)}
+
+
+def plugin_failures() -> tuple[PluginFailure, ...]:
+    return tuple(_PLUGIN_FAILURES.values())
 
 
 def parse_params(cls: type[Filter], text: str) -> dict:

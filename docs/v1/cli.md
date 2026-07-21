@@ -35,9 +35,19 @@ photoslop-cli shot.cr2 --resize 1600x1067 --auto-levels \
 - `--allow-insecure-model-http` permits plain HTTP to a non-loopback model host.
 
 ## Exit codes
-`0` success · `2` usage or option-value errors (nothing written) · `1`
-runtime failures (decode errors, unreachable backends) with a one-line
-message on stderr.
+
+Automation receives both a stable process status and a bracketed error code on
+stderr (`photoslop-cli: error [io_failure]: …`).
+
+| Exit | Error code | Meaning |
+|---:|---|---|
+| 0 | — | success |
+| 1 | `internal_error` | unexpected engine failure |
+| 2 | `invalid_input` | usage, option value, schema, or decode input error |
+| 3 | `unsupported_capability` | operation/backend is not supported |
+| 4 | `unsafe_operation` | trust, path, overwrite, or transport policy denied it |
+| 5 | `cancelled` | operation was cancelled |
+| 6 | `io_failure` | filesystem or endpoint I/O failed |
 
 ## Operations
 | `--resize` `WxH` | rescale the whole image |

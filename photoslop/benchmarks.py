@@ -7,15 +7,16 @@ import argparse
 import json
 import resource
 import statistics
-import threading
+import sys
 import time
 from dataclasses import dataclass
 
-from PySide6.QtCore import QRect, QSize
+from PySide6.QtCore import QCoreApplication, QRect, QSize
 from PySide6.QtGui import QColor
 
 from photoslop.document import Document, render_region
 from photoslop.layer import Layer
+from photoslop.tasks import TaskService, TaskState
 
 
 @dataclass(frozen=True)
@@ -24,11 +25,15 @@ class BenchmarkPreset:
     width: int
     height: int
     layers: int
+    target_frame_ms_p95: float
+    target_peak_rss_mb: int
 
 
 PRESETS = {
-    "4k-50": BenchmarkPreset("4K / 50 layers", 3840, 2160, 50),
-    "12k-20": BenchmarkPreset("12K / 20 layers", 12000, 8000, 20),
+    "4k-50": BenchmarkPreset("4K / 50 layers", 3840, 2160, 50, 33, 2048),
+    "12k-20": BenchmarkPreset("12K / 20 layers", 12000, 8000, 20, 33, 2048),
+    "4k-10": BenchmarkPreset("4K / 10 layers", 3840, 2160, 10, 1000, 2048),
+    "12mp-4": BenchmarkPreset("12 MP / 4 layers", 4000, 3000, 4, 750, 2048),
 }
 
 
@@ -45,10 +50,55 @@ def fixture(preset: BenchmarkPreset, scale: float = 1.0) -> Document:
     return doc
 
 
+def _peak_rss_kb() -> int:
+    value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return round(value / 1024) if sys.platform == "darwin" else value
+
+
+def _measure_render_cancellation(doc: Document) -> float:
+    """Cancel a real TaskService render loop and wait until work has stopped."""
+    app = QCoreApplication.instance() or QCoreApplication([])
+    service = TaskService(max_workers=1, memory_budget=max(1, doc.memory_bytes() * 2))
+    viewport = QRect(0, 0, min(doc.size.width(), 512), min(doc.size.height(), 512))
+
+    def render_until_cancelled(context):
+        while True:
+            context.check_cancelled()
+            rendered = render_region(doc, viewport)
+            if rendered.size() != viewport.size():
+                raise RuntimeError("cancel benchmark rendered the wrong region")
+
+    handle = service.submit(
+        "benchmark.render", "Benchmark render", render_until_cancelled,
+        max(1, viewport.width() * viewport.height() * 8))
+    deadline = time.monotonic() + 5
+    while handle.state is TaskState.QUEUED and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.001)
+    if handle.state is not TaskState.RUNNING:
+        raise RuntimeError("render cancellation benchmark did not start")
+    start = time.perf_counter()
+    handle.cancel()
+    while handle.state not in {TaskState.CANCELLED, TaskState.FAILED}:
+        if time.monotonic() >= deadline:
+            raise RuntimeError("render task did not stop after cancellation")
+        app.processEvents()
+        time.sleep(0.001)
+    if handle.state is TaskState.FAILED:
+        raise RuntimeError("render cancellation benchmark failed")
+    return (time.perf_counter() - start) * 1000
+
+
 def run(preset: BenchmarkPreset, scale: float = 1.0, samples: int = 20) -> dict:
+    if not 0 < scale <= 1:
+        raise ValueError("benchmark scale must be in (0, 1]")
+    if samples < 1:
+        raise ValueError("benchmark samples must be positive")
     doc = fixture(preset, scale)
     viewport = QRect(0, 0, min(doc.size.width(), 1920), min(doc.size.height(), 1080))
-    render_region(doc, viewport)  # exclude one-time Qt/font/cache initialization
+    warm = render_region(doc, viewport)  # exclude one-time Qt/cache initialization
+    if warm.size() != viewport.size() or warm.isNull():
+        raise RuntimeError("benchmark produced an invalid viewport")
     timings = []
     for _ in range(samples):
         start = time.perf_counter()
@@ -56,37 +106,47 @@ def run(preset: BenchmarkPreset, scale: float = 1.0, samples: int = 20) -> dict:
         timings.append((time.perf_counter() - start) * 1000)
     ordered = sorted(timings)
     p95_index = min(len(ordered) - 1, round(0.95 * (len(ordered) - 1)))
-    cancelled = threading.Event()
-    observed = threading.Event()
-
-    def cooperative_worker():
-        while not cancelled.is_set():
-            time.sleep(0.001)
-        observed.set()
-
-    worker = threading.Thread(target=cooperative_worker)
-    worker.start()
-    cancel_start = time.perf_counter()
-    cancelled.set()
-    worker.join(timeout=1)
-    cancellation_ms = (time.perf_counter() - cancel_start) * 1000
-    assert observed.is_set()
-    return {
+    cancellation_ms = _measure_render_cancellation(doc)
+    peak_rss_kb = _peak_rss_kb()
+    layer_bytes = sum(layer.image.sizeInBytes() for layer in doc.layers)
+    target_frame = preset.target_frame_ms_p95
+    target_cancellation = 250
+    target_peak_rss_kb = preset.target_peak_rss_mb * 1024
+    gates = {
+        "frame_p95": ordered[p95_index] <= target_frame,
+        "cancellation": cancellation_ms <= target_cancellation,
+        "peak_rss": peak_rss_kb <= target_peak_rss_kb,
+        "output": warm.size() == viewport.size() and not warm.isNull(),
+    }
+    report = {
         "preset": preset.name,
         "scale": scale,
         "samples": samples,
         "frame_ms_p50": statistics.median(ordered),
         "frame_ms_p95": ordered[p95_index],
         "document_bytes": doc.memory_bytes(),
-        "peak_rss_kb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+        "layer_surface_bytes": layer_bytes,
+        "rendered_viewport_bytes": warm.sizeInBytes(),
+        "peak_rss_kb": peak_rss_kb,
         "cancellation_ms": cancellation_ms,
-        "cache_budgets": {"thumbnail_entries": len(doc.layers),
-                          "open_preview_max_px": 256,
-                          "export_preview_max_px": 512},
-        "target_frame_ms_p95": 33,
+        "measured": {
+            "layers": len(doc.layers),
+            "viewport": [viewport.width(), viewport.height()],
+            "layer_surface_bytes": layer_bytes,
+            "rendered_viewport_bytes": warm.sizeInBytes(),
+        },
+        "configured_limits": {
+            "open_preview_max_px": 256,
+            "export_preview_max_px": 512,
+        },
+        "target_frame_ms_p95": target_frame,
         "target_gui_heartbeat_ms": 100,
-        "target_cancellation_ms": 100,
+        "target_cancellation_ms": target_cancellation,
+        "target_peak_rss_kb": target_peak_rss_kb,
+        "gates": gates,
     }
+    report["passed"] = all(gates.values())
+    return report
 
 
 def main(argv=None) -> int:
@@ -94,9 +154,12 @@ def main(argv=None) -> int:
     parser.add_argument("preset", choices=PRESETS)
     parser.add_argument("--scale", type=float, default=1.0)
     parser.add_argument("--samples", type=int, default=20)
+    parser.add_argument("--enforce", action="store_true",
+                        help="exit nonzero when a reviewed budget is exceeded")
     args = parser.parse_args(argv)
-    print(json.dumps(run(PRESETS[args.preset], args.scale, args.samples), indent=2))
-    return 0
+    report = run(PRESETS[args.preset], args.scale, args.samples)
+    print(json.dumps(report, indent=2))
+    return 1 if args.enforce and not report["passed"] else 0
 
 
 if __name__ == "__main__":

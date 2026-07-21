@@ -1,39 +1,157 @@
 name: ci
+
 on:
   pull_request:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Qt runtime libraries
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+        with:
+          python-version: "3.12"
+      - name: Sync locked development environment
+        run: uv sync --extra dev --locked
+      - name: Verify release versions and workflow policy
+        run: uv run python scripts/check-version.py
+      - name: Lint
+        run: uv run ruff check .
+      - name: Deprecations are errors in the cleared CLI surface
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: >-
+          uv run pytest -q tests/test_cli_options.py tests/test_cli_combinations.py
+          -W error::DeprecationWarning
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: "3.10"
+          - os: ubuntu-latest
+            python: "3.14"
+          - os: macos-15
+            python: "3.12"
+          - os: windows-latest
+            python: "3.12"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install Linux Qt runtime libraries
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libegl1 libgl1 libglib2.0-0 libxkbcommon0 libdbus-1-3 libfontconfig1
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Sync locked development environment
+        run: uv sync --extra dev --locked --python ${{ matrix.python }}
+      - name: Tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: uv run pytest -q --junitxml=reports/tests.xml
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tests-${{ runner.os }}-py${{ matrix.python }}-${{ github.sha }}
+          path: reports/
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
         with:
           python-version: "3.12"
-      - name: Sync dependencies
-        run: uv sync --extra dev --locked
-      - name: Verify release versions
-        run: uv run python scripts/check-version.py
-      - name: Lint
-        run: uv run ruff check .
-      - name: Tests
+      - name: Build wheel and source distribution
+        run: uv build
+      - name: Install wheel outside the source tree and smoke the CLI
+        run: |
+          uv venv --python 3.12 .artifact-wheel
+          uv pip install --python .artifact-wheel/bin/python dist/*.whl
+          smoke_dir="$(mktemp -d)"
+          cd "$smoke_dir"
+          "$GITHUB_WORKSPACE/.artifact-wheel/bin/photoslop-cli" --version
+          "$GITHUB_WORKSPACE/.artifact-wheel/bin/photoslop-cli" \
+            --new 8x8 --fill '#13579b' --output smoke.png
+          test -s smoke.png
+      - name: Install source distribution outside the source tree
+        run: |
+          uv venv --python 3.12 .artifact-sdist
+          uv pip install --python .artifact-sdist/bin/python dist/*.tar.gz
+          .artifact-sdist/bin/photoslop-cli --version
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: python-distributions-${{ github.sha }}
+          path: dist/
+
+  critical-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra dev --locked
+      - name: Measure failure-prone modules with branch coverage
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: |
           mkdir -p reports
-          QT_QPA_PLATFORM=offscreen uv run pytest -q --junitxml=reports/tests.xml
-      - name: Deterministic benchmark reports
-        run: |
-          QT_QPA_PLATFORM=offscreen uv run python -m photoslop.benchmarks 4k-50 --scale 0.01 --samples 5 > reports/benchmark-4k-50.json
-          QT_QPA_PLATFORM=offscreen uv run python -m photoslop.benchmarks 12k-20 --scale 0.01 --samples 5 > reports/benchmark-12k-20.json
-      - name: Publish verification reports
-        if: always()
-        uses: actions/upload-artifact@v4
+          uv run pytest -q \
+            tests/test_atomic_io.py tests/test_commands.py tests/test_document.py \
+            tests/test_document_integrity.py tests/test_filter_plugins.py \
+            tests/test_model_adapter.py tests/test_ora.py \
+            tests/test_security_boundaries.py tests/test_server.py \
+            tests/test_svg_interchange.py tests/test_tasks.py \
+            tests/test_version_gate.py \
+            --cov=photoslop.atomicio --cov=photoslop.commands \
+            --cov=photoslop.document --cov=photoslop.io_ora \
+            --cov=photoslop.io_svg --cov=photoslop.tasks \
+            --cov=photoslop.modeladapter --cov=photoslop.resources \
+            --cov=photoslop.server --cov=photoslop.recovery \
+            --cov=photoslop.services \
+            --cov-report=json:reports/critical-coverage.json
+          uv run python scripts/check-critical-coverage.py \
+            reports/critical-coverage.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: verification-${{ github.sha }}
+          name: critical-coverage-${{ github.sha }}
+          path: reports/critical-coverage.json
+
+  smoke-benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra dev --locked
+      - name: Scaled algorithm smoke reports (not full-scale evidence)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          mkdir -p reports
+          uv run python -m photoslop.benchmarks 4k-50 \
+            --scale 0.01 --samples 5 --enforce > reports/smoke-4k-50.json
+          uv run python -m photoslop.benchmarks 12k-20 \
+            --scale 0.01 --samples 5 --enforce > reports/smoke-12k-20.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: smoke-benchmarks-${{ github.sha }}
           path: reports/

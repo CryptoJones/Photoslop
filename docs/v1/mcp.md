@@ -88,6 +88,12 @@ rejects existing outputs and non-empty export directories, and never exposes
 network model operations or native/third-party plugins. A trusted operator can
 add `--allow-overwrite`; hard resource and parser limits still apply.
 
+Tool failures begin with a stable bracketed code and also expose that code on
+the Python exception used by direct integrations: `invalid_input`,
+`unsupported_capability`, `unsafe_operation`, `cancelled`, `io_failure`, or
+`internal_error`. Clients should branch on the code and treat the following
+message as human guidance.
+
 ## Parity
 
 The MCP server is a policy layer over `photoslop.cli.apply_pipeline`. It derives

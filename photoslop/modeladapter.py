@@ -14,7 +14,9 @@ import binascii
 import ipaddress
 import json
 import math
+import traceback
 import urllib.request
+from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 from PySide6.QtCore import QBuffer, QIODevice
@@ -131,7 +133,10 @@ class HttpModelAdapter(ModelAdapter):
             data=json.dumps(payload).encode(),
             headers={"Content-Type": "application/json"},
             method="POST")
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+        # Endpoint construction and every redirect target are scheme/host
+        # validated by __init__ and below before response data is accepted.
+        with urllib.request.urlopen(  # nosec B310
+                req, timeout=self.timeout) as resp:
             final_url = getattr(resp, "geturl", lambda: self.base_url)()
             _validate_endpoint(
                 final_url,
@@ -183,6 +188,16 @@ _REGISTRY: dict[str, type[ModelAdapter]] = {HttpModelAdapter.name: HttpModelAdap
 _plugins_loaded = False
 
 
+@dataclass(frozen=True)
+class PluginFailure:
+    group: str
+    name: str
+    details: str
+
+
+_PLUGIN_FAILURES: dict[tuple[str, str], PluginFailure] = {}
+
+
 def register_adapter(cls: type[ModelAdapter]) -> None:
     _REGISTRY[cls.name] = cls
 
@@ -200,9 +215,16 @@ def available_adapters(*, allow_unsafe: bool = False) -> dict[str, type[ModelAda
                 cls.unsafe = True
                 register_adapter(cls)
             except Exception:  # a broken plugin must not break the app
+                key = ("photoslop.model_adapters", ep.name)
+                _PLUGIN_FAILURES[key] = PluginFailure(
+                    key[0], key[1], traceback.format_exc())
                 continue
     return {name: cls for name, cls in _REGISTRY.items()
             if allow_unsafe or not getattr(cls, "unsafe", False)}
+
+
+def plugin_failures() -> tuple[PluginFailure, ...]:
+    return tuple(_PLUGIN_FAILURES.values())
 
 
 def create_adapter(name: str, settings: dict) -> ModelAdapter | None:

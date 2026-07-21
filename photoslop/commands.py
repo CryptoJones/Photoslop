@@ -148,7 +148,8 @@ class RemoveLayerCommand(QUndoCommand):
         self.layer = self.doc.take_layer(self.index)
 
     def undo(self) -> None:
-        assert self.layer is not None
+        if self.layer is None:
+            raise RuntimeError("cannot undo layer removal before it was applied")
         self.doc.insert_layer(self.index, self.layer)
 
 
@@ -278,7 +279,8 @@ class MergeDownCommand(QUndoCommand):
 
     def undo(self) -> None:
         doc = self.doc
-        assert self.upper is not None and self.old_lower is not None
+        if self.upper is None or self.old_lower is None:
+            raise RuntimeError("cannot undo merge before it was applied")
         lower = doc.layers[self.index - 1]
         dirty = lower.bounds()
         lower.image, lower.offset, lower.opacity = self.old_lower

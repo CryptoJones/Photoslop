@@ -118,7 +118,8 @@ class LayerPanel(QWidget):
         self.rebuild()
 
     def _row_to_index(self, row: int) -> int:
-        assert self.doc is not None
+        if self.doc is None:
+            raise RuntimeError("layer row requested without an active document")
         return len(self.doc.layers) - 1 - row
 
     def _thumb(self, layer: Layer) -> QIcon:

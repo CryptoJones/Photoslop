@@ -54,7 +54,9 @@ document is installed.
 Requirements:
 
 - macOS with Xcode 15 or newer and the iOS platform installed
-- XcodeGen (`brew install xcodegen`)
+- XcodeGen 2.46.0. CI downloads the reviewed release archive and verifies SHA-256
+  `4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806`;
+  local developers may install that version with their preferred package manager.
 
 From the repository root:
 

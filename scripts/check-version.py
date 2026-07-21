@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _match(path: str, pattern: str) -> str:
@@ -18,6 +19,38 @@ def _match(path: str, pattern: str) -> str:
     if match is None:
         raise SystemExit(f"{path}: version declaration not found")
     return match.group(1)
+
+
+def _check_release_inputs() -> None:
+    for workflow in sorted((ROOT / ".github/workflows").glob("*.yml")):
+        source = workflow.read_text(encoding="utf-8")
+        for action, ref in re.findall(r"\buses:\s*([^@\s]+)@([^\s#]+)", source):
+            if action.startswith("./"):
+                continue
+            if FULL_SHA.fullmatch(ref) is None:
+                raise SystemExit(
+                    f"{workflow.relative_to(ROOT)}: {action} must use a full commit SHA")
+
+    for relative in (
+        "scripts/build-portable-macos.sh",
+        "scripts/build-portable-windows.ps1",
+    ):
+        source = (ROOT / relative).read_text(encoding="utf-8")
+        required = (
+            "uv sync", "--extra build", "--locked", "--portable-smoke",
+            "photoslop.cdx.json", "BUILD-IDENTITY.json", "THIRD_PARTY_NOTICES.md",
+        )
+        missing = [token for token in required if token not in source]
+        if missing:
+            raise SystemExit(f"{relative}: missing release inputs: {', '.join(missing)}")
+        if "uv pip install" in source:
+            raise SystemExit(f"{relative}: portable build bypasses the locked environment")
+
+    ipados = (ROOT / ".github/workflows/ipados.yml").read_text(encoding="utf-8")
+    if "XcodeGen/releases/download/2.46.0/xcodegen.zip" not in ipados:
+        raise SystemExit("iPad workflow must use the reviewed XcodeGen version")
+    if not re.search(r"[0-9a-f]{64}\s+\$archive", ipados):
+        raise SystemExit("iPad workflow must verify the XcodeGen archive checksum")
 
 
 def main() -> int:
@@ -56,6 +89,8 @@ def main() -> int:
     if actual_build != expected_build:
         raise SystemExit(
             f"iPad build {actual_build} should be {expected_build} for {version}")
+
+    _check_release_inputs()
 
     tag = args.tag
     if tag is None and os.environ.get("GITHUB_REF_TYPE") == "tag":

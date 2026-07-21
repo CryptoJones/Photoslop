@@ -70,7 +70,7 @@ def test_export_artboards_flag(qapp, tmp_path):
     assert QImage(str(boards / "Cover.png")).size() == QSize(25, 20)
 
 
-def test_error_paths(qapp, tmp_path):
+def test_error_paths(qapp, tmp_path, capsys):
     out = str(tmp_path / "out.png")
     with pytest.raises(SystemExit) as exc:  # missing input
         cli.main(["nope.png", "--output", out])
@@ -91,9 +91,10 @@ def test_error_paths(qapp, tmp_path):
         cli.main([str(junk), "--output", out])
     assert exc.value.code == 2
 
-    # unreachable model backend is a runtime failure (1), not usage (2)
+    # unreachable model backend is a distinguishable I/O failure, not usage.
     assert cli.main([src, "--model-url", "http://127.0.0.1:1/x",
-                     "--select-subject", "--output", out]) == 1
+                     "--select-subject", "--output", out]) == 6
+    assert "[io_failure]" in capsys.readouterr().err
 
 
 def test_console_entry_point_end_to_end(qapp, tmp_path):
@@ -119,3 +120,4 @@ def test_console_entry_point_end_to_end(qapp, tmp_path):
         capture_output=True, text=True)
     assert proc.returncode == 2
     assert "WxH" in proc.stderr
+    assert "[invalid_input]" in proc.stderr

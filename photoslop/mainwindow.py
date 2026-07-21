@@ -55,6 +55,7 @@ from photoslop.commands import (
     RotateImageCommand,
     RotateLayerCommand,
 )
+from photoslop.diagnostics import DiagnosticsDialog, DiagnosticStore
 from photoslop.dialogs import CanvasSizeDialog, NewDocumentDialog, ResizeImageDialog
 from photoslop.document import Document
 from photoslop.exportdialog import ExportDialog
@@ -73,7 +74,8 @@ from photoslop.services import (
     opaque_export_base,
 )
 from photoslop.svgicons import svg_icon
-from photoslop.tasks import CancelledError, TaskService, snapshot_document
+from photoslop.taskdialog import TaskMonitorDialog
+from photoslop.tasks import CancelledError, TaskPriority, TaskService, snapshot_document
 from photoslop.toolregistry import TOOL_GROUPS, TOOL_SPEC_BY_ID, TOOL_SPECS
 from photoslop.tools import (
     BrushTool,
@@ -124,6 +126,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"Photoslop {__version__}")
         self.settings = QSettings("CryptoJones", "Photoslop")
+        self.diagnostics = DiagnosticStore(parent=self)
         self.action_registry = ActionRegistry(self)
         self.task_service = TaskService(parent=self)
         self.recovery_service = RecoveryService()
@@ -651,7 +654,8 @@ class MainWindow(QMainWindow):
         m_file.addSeparator()
         m_file.addAction(self._act("&Save", "Ctrl+S", self.action_save))
         m_file.addAction(self._act("Save &As…", "Ctrl+Shift+S", self.action_save_as))
-        m_file.addAction(self._act("&Export…", "Ctrl+E", self.action_export))
+        m_file.addAction(self._act(
+            "&Export…", "Ctrl+Alt+Shift+S", self.action_export))
         m_file.addSeparator()
         m_file.addAction(self._act("&Close Tab", "Ctrl+W", self.action_close_tab))
         m_file.addAction(self._act("&Quit", "Ctrl+Q", self.close,
@@ -661,7 +665,7 @@ class MainWindow(QMainWindow):
         m_edit.addAction(self._act("Command &Palette…", "Ctrl+Shift+P",
                                    self.action_command_palette,
                                    prerequisite="always"))
-        m_edit.addAction(self._act("Cancel Background Task", "Esc",
+        m_edit.addAction(self._act("Cancel Background Task", "Ctrl+Esc",
                                    self.action_cancel_tasks, prerequisite="task"))
         undo = self.undo_group.createUndoAction(self, "&Undo ")
         undo.setShortcut(QKeySequence.StandardKey.Undo)
@@ -838,11 +842,14 @@ class MainWindow(QMainWindow):
                                     lambda: self._layer_cmd(FlipLayerCommand, False)))
 
         m_view = menu.addMenu("&View")
-        self.action_soft_proof = self._act("Soft &Proof", "Ctrl+Y",
+        self.action_soft_proof = self._act("Soft &Proof", "Ctrl+Alt+Y",
                                            self._toggle_soft_proof)
         self.action_soft_proof.setCheckable(True)
         m_view.addAction(self.action_soft_proof)
         m_view.addAction(self._appearance_dock.toggleViewAction())
+        m_view.addAction(self._act(
+            "Background &Tasks…", None, self.action_task_monitor,
+            prerequisite="always"))
         m_view.addAction(self._act(
             "Describe &Canvas", "Ctrl+Alt+Shift+D", self.action_describe_canvas))
         m_view.addSeparator()
@@ -922,6 +929,8 @@ class MainWindow(QMainWindow):
                     lambda checked=False, c=cls: self.action_plugin_filter(c)))
 
         m_help = menu.addMenu("&Help")
+        m_help.addAction(self._act("&Diagnostics…", None, self.action_diagnostics,
+                                   prerequisite="always"))
         m_help.addAction(self._act("&About Photoslop", None, self.action_about,
                                    role=QAction.MenuRole.AboutRole))
 
@@ -952,13 +961,19 @@ class MainWindow(QMainWindow):
             lambda percent, message, h=handle: self.statusBar().showMessage(
                 f"{h.label}: {percent}%{(' — ' + message) if message else ''}"))
         handle.failed.connect(
-            lambda error, h=handle: self.statusBar().showMessage(
-                f"{h.label} failed: {error.splitlines()[-1]}", 8000))
+            lambda error, h=handle: self._record_task_failure(h, error))
         handle.cancelled.connect(
             lambda h=handle: self.statusBar().showMessage(f"{h.label} cancelled", 4000))
         self.action_registry.update()
 
+    def _record_task_failure(self, handle, error: str) -> None:
+        record = self.diagnostics.record_task_failure(handle, error)
+        self.statusBar().showMessage(
+            f"{handle.label} failed — Diagnostics {record.identifier}", 10_000)
+
     def _on_task_finished(self, handle) -> None:
+        if handle.state.value != "failed":
+            self.diagnostics.record_task_result(handle)
         if not self.task_service.active and handle.state.value == "succeeded":
             self.statusBar().showMessage(f"{handle.label} complete", 3000)
         self.action_registry.update()
@@ -1063,7 +1078,8 @@ class MainWindow(QMainWindow):
 
         self.task_service.submit(
             "recovery.save", f"Autosave {doc.name}", operation,
-            max(1, doc.memory_bytes() * 2), doc.document_id)
+            max(1, doc.memory_bytes() * 2), doc.document_id,
+            TaskPriority.WRITE)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -1081,6 +1097,7 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if answer != QMessageBox.StandardButton.Yes:
+            self.recovery_service.clear_all()
             return
         for doc in recovered:
             doc.undo_stack.push(QUndoCommand("Recovered autosave"))
@@ -1227,7 +1244,7 @@ class MainWindow(QMainWindow):
 
                 handle = self.task_service.submit(
                     "file.raw-develop", f"Develop {os.path.basename(path)}", develop,
-                    512 * 1024 * 1024)
+                    512 * 1024 * 1024, priority=TaskPriority.INTERACTIVE)
                 handle.succeeded.connect(
                     lambda doc, source=path: self._finish_open(doc, source))
                 continue
@@ -1241,7 +1258,7 @@ class MainWindow(QMainWindow):
 
             handle = self.task_service.submit(
                 "file.open", f"Open {os.path.basename(path)}", operation,
-                256 * 1024 * 1024)
+                256 * 1024 * 1024, priority=TaskPriority.INTERACTIVE)
             handle.succeeded.connect(
                 lambda doc, source=path: self._finish_open(doc, source))
 
@@ -1383,7 +1400,8 @@ class MainWindow(QMainWindow):
                 return path
 
             handle = self.task_service.submit("file.save", f"Save {os.path.basename(path)}",
-                                              operation, estimated, doc.document_id)
+                                              operation, estimated, doc.document_id,
+                                              TaskPriority.WRITE)
 
             def installed(saved_path):
                 if doc.is_closed:
@@ -1457,7 +1475,8 @@ class MainWindow(QMainWindow):
 
         self.task_service.submit(
             "file.export", f"Export {os.path.basename(path)}", operation,
-            max(1, base.sizeInBytes() * 3), doc.document_id)
+            max(1, base.sizeInBytes() * 3), doc.document_id,
+            TaskPriority.BULK)
 
     def action_close_tab(self) -> None:
         if self.tabs.count():
@@ -1716,7 +1735,7 @@ class MainWindow(QMainWindow):
 
             handle = self.task_service.submit(
                 f"filter.{title.lower().replace(' ', '-')}", title, operation, estimated,
-                doc.document_id)
+                doc.document_id, TaskPriority.INTERACTIVE)
 
             def install(image):
                 if not doc.accepts_revision(revision, layer):
@@ -1788,7 +1807,7 @@ class MainWindow(QMainWindow):
 
         handle = self.task_service.submit(
             "model.denoise", "Denoise (Model)", operation, snapshot.sizeInBytes() * 3,
-            doc.document_id)
+            doc.document_id, TaskPriority.REMOTE)
 
         def install(result):
             if not doc.accepts_revision(revision, layer):
@@ -2393,7 +2412,8 @@ class MainWindow(QMainWindow):
 
         handle = self.task_service.submit(
             "model.generative-fill", "Generative Fill", operation,
-            max(1, flat.sizeInBytes() * 4), doc.document_id)
+            max(1, flat.sizeInBytes() * 4), doc.document_id,
+            TaskPriority.REMOTE)
 
         def install(result):
             if not doc.accepts_revision(revision, layer):
@@ -2444,7 +2464,8 @@ class MainWindow(QMainWindow):
 
         handle = self.task_service.submit(
             "model.select-subject", "Select Subject", operation,
-            max(1, snapshot.sizeInBytes() * 3), doc.document_id)
+            max(1, snapshot.sizeInBytes() * 3), doc.document_id,
+            TaskPriority.REMOTE)
 
         def install(mask_img):
             if not doc.accepts_revision(revision):
@@ -2915,6 +2936,23 @@ class MainWindow(QMainWindow):
         row.addWidget(credits)
         row.addWidget(ok)
         return box
+
+    def action_diagnostics(self) -> None:
+        from photoslop.filters import plugin_failures as filter_failures
+        from photoslop.modeladapter import plugin_failures as model_failures
+
+        for failure in (*filter_failures(), *model_failures()):
+            self.diagnostics.record(
+                f"plugin.load.{failure.group}",
+                f"Plugin {failure.name} could not be loaded",
+                details=failure.details,
+                guidance="Disable or update this optional plugin, then restart Photoslop.",
+                context={"entry_point_group": failure.group},
+            )
+        DiagnosticsDialog(self.diagnostics, self).exec()
+
+    def action_task_monitor(self) -> None:
+        TaskMonitorDialog(self.task_service, self).exec()
 
     def action_about(self) -> None:
         self._build_about().exec()

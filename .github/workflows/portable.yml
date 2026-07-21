@@ -2,6 +2,16 @@ name: portable
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "photoslop/**"
+      - "scripts/build-portable-*"
+      - "scripts/generate-bundle-metadata.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/portable.yml"
+  schedule:
+    - cron: "23 6 * * 1"
   push:
     tags:
       - "v*"
@@ -12,36 +22,50 @@ permissions:
 jobs:
   macos:
     runs-on: macos-15
+    env:
+      PHOTOSLOP_REQUIRE_SIGNING: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+      PHOTOSLOP_MACOS_SIGN_IDENTITY: ${{ secrets.PHOTOSLOP_MACOS_SIGN_IDENTITY }}
+      PHOTOSLOP_APPLE_ID: ${{ secrets.PHOTOSLOP_APPLE_ID }}
+      PHOTOSLOP_APPLE_TEAM_ID: ${{ secrets.PHOTOSLOP_APPLE_TEAM_ID }}
+      PHOTOSLOP_APPLE_APP_PASSWORD: ${{ secrets.PHOTOSLOP_APPLE_APP_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
         with:
           python-version: "3.12"
-      - name: Verify release versions
-        run: python scripts/check-version.py
-      - name: Build portable macOS app
-        run: ./scripts/build-portable-macos.sh
-      - uses: actions/upload-artifact@v4
+      - run: python scripts/check-version.py
+      - run: ./scripts/build-portable-macos.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Photoslop-macOS-portable
-          path: dist/portable-macos/*.zip
+          path: |
+            dist/portable-macos/*.zip
+            dist/portable-macos/*.sha256
+            dist/portable-macos/*.json
+            dist/portable-macos/THIRD_PARTY_NOTICES.md
 
   windows:
     runs-on: windows-latest
+    env:
+      PHOTOSLOP_REQUIRE_SIGNING: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+      PHOTOSLOP_WINDOWS_CERT_BASE64: ${{ secrets.PHOTOSLOP_WINDOWS_CERT_BASE64 }}
+      PHOTOSLOP_WINDOWS_CERT_PASSWORD: ${{ secrets.PHOTOSLOP_WINDOWS_CERT_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
         with:
           python-version: "3.12"
-      - name: Verify release versions
-        run: python scripts/check-version.py
-      - name: Build portable Windows app
-        shell: pwsh
+      - run: python scripts/check-version.py
+      - shell: pwsh
         run: ./scripts/build-portable-windows.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Photoslop-Windows-portable
-          path: dist/portable-windows/*.zip
+          path: |
+            dist/portable-windows/*.zip
+            dist/portable-windows/*.sha256
+            dist/portable-windows/*.json
+            dist/portable-windows/THIRD_PARTY_NOTICES.md
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -49,16 +73,24 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: Photoslop-macOS-portable
           path: dist/macos
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: Photoslop-Windows-portable
           path: dist/windows
-      - name: Attach portable builds to release
+      - name: Attest signed portable archives
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: "dist/**/*.zip"
+      - name: Attach verified portable builds and metadata
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" dist/macos/*.zip dist/windows/*.zip --clobber
+        run: >-
+          gh release upload "${GITHUB_REF_NAME}"
+          dist/macos/* dist/windows/* --clobber

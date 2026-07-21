@@ -5,7 +5,9 @@ with GIMP and Krita. An .ora is a zip: mimetype, stack.xml, layer PNGs."""
 from __future__ import annotations
 
 import os
-import xml.etree.ElementTree as ET
+
+# The stdlib module is used only to construct output; input parsing is defused.
+import xml.etree.ElementTree as ET  # nosec B405
 import zipfile
 
 from PySide6.QtCore import QBuffer, QIODevice, QPoint, QRect, QSize, Qt
