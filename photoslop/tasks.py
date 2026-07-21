@@ -193,6 +193,7 @@ def snapshot_document(doc):
     from photoslop.document import Document
 
     snapshot = Document(doc.size, doc.dpi, doc.name)
+    snapshot.document_id = doc.document_id
     snapshot.layers = [layer.clone(preserve_id=True) for layer in doc.layers]
     snapshot.active_index = doc.active_index
     snapshot.selection = QPainterPath(doc.selection) if doc.selection is not None else None

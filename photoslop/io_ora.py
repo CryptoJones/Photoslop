@@ -10,6 +10,7 @@ import zipfile
 from PySide6.QtCore import QBuffer, QIODevice, QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QImage
 
+from photoslop.atomicio import WriteTicket, atomic_write
 from photoslop.document import Document
 from photoslop.layer import FORMAT, ORA_OPS, ORA_OPS_REVERSE, Layer
 
@@ -24,7 +25,18 @@ def _png_bytes(img: QImage) -> bytes:
     return bytes(buf.data())
 
 
-def save_ora(doc: Document, path: str) -> None:
+def save_ora(doc: Document, path: str, *, ticket: WriteTicket | None = None,
+             before_commit=None) -> None:
+    def writer(temporary: str) -> None:
+        _write_ora(doc, temporary)
+
+    if ticket is None:
+        atomic_write(path, writer, before_commit=before_commit, durable=True)
+    else:
+        ticket.write(writer, before_commit=before_commit, durable=True)
+
+
+def _write_ora(doc: Document, path: str) -> None:
     image = ET.Element(
         "image",
         w=str(doc.size.width()),
@@ -32,6 +44,10 @@ def save_ora(doc: Document, path: str) -> None:
         xres=str(int(round(doc.dpi))),
         yres=str(int(round(doc.dpi))),
         version="0.0.3",
+        attrib={
+            "photoslop-document-id": doc.document_id,
+            "photoslop-name": doc.name,
+        },
     )
     if doc.artboards:
         import json
@@ -202,6 +218,10 @@ def load_ora(path: str) -> Document:
 
     name = path.replace("\\", "/").rsplit("/", 1)[-1]
     doc = Document(QSize(w, h), dpi, name)
+    doc.embedded_name = root.get("photoslop-name") or name
+    document_id = root.get("photoslop-document-id", "")
+    if len(document_id) == 32 and all(char in "0123456789abcdef" for char in document_id):
+        doc.document_id = document_id
     doc.layers = list(reversed(top_first))  # internal order is bottom-first
     icc_b64 = root.get("photoslop-icc")
     if icc_b64:

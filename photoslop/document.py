@@ -375,6 +375,10 @@ class Document(QObject):
     def is_dirty(self) -> bool:
         return not self.undo_stack.isClean()
 
+    @property
+    def is_closed(self) -> bool:
+        return self._closed
+
     # ----- constructors ----------------------------------------------------
 
     @classmethod

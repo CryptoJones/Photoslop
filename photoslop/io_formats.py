@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from PySide6.QtGui import QImage
 
+from photoslop.atomicio import atomic_bytes
+
 EXTRA_EXTS = (".avif", ".jxl")
 
 _checked: dict[str, bool] = {}
@@ -94,8 +96,7 @@ def save_extra(image: QImage, path: str, quality: int = 90) -> bool:
     if data is None:
         return False
     try:
-        with open(path, "wb") as fh:
-            fh.write(data)
+        atomic_bytes(path, data)
     except OSError:
         return False
     return True

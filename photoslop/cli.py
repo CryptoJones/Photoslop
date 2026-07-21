@@ -1182,6 +1182,7 @@ RASTER_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff")
 def _write_output(doc, path: str, proof=None, cmyk_icc: str | None = None,
                   ) -> None:
     from photoslop import color, io_formats
+    from photoslop.atomicio import atomic_write
     from photoslop.io_ora import save_ora
 
     lower = path.lower()
@@ -1214,24 +1215,17 @@ def _write_output(doc, path: str, proof=None, cmyk_icc: str | None = None,
         return
     if not lower.endswith(RASTER_EXTS):
         raise _ValueError(f"unsupported output extension: {path}")
-    if not flat.save(path):
-        raise RuntimeError(f"could not write {path}")
+    def writer(temporary: str) -> None:
+        if not flat.save(temporary):
+            raise RuntimeError(f"could not write {path}")
+
+    atomic_write(path, writer)
 
 
 def _export_artboards(doc, directory: str) -> list[str]:
-    os.makedirs(directory, exist_ok=True)
-    flat = doc.flatten()
-    written = []
-    for name, rect in doc.artboards:
-        region = rect.intersected(doc.canvas_rect())
-        if region.isEmpty():
-            continue
-        safe = "".join(c if c.isalnum() or c in "-_ " else "_"
-                       for c in name).strip() or "artboard"
-        out = os.path.join(directory, f"{safe}.png")
-        flat.copy(region).save(out, "PNG")
-        written.append(out)
-    return written
+    from photoslop.services import export_artboards
+
+    return export_artboards(doc, directory)
 
 
 def _doc_info(doc) -> dict:

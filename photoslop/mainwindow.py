@@ -18,9 +18,11 @@ from PySide6.QtGui import (
     QPainter,
     QPainterPath,
     QPixmap,
+    QUndoCommand,
     QUndoGroup,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -41,6 +43,7 @@ from photoslop import __version__, io_formats, units
 from photoslop.accessibility import AccessibilityController
 from photoslop.actionregistry import ActionRegistry
 from photoslop.appearancepanel import AppearancePanel
+from photoslop.atomicio import SupersededWriteError, write_coordinator
 from photoslop.canvas import EditorView
 from photoslop.commands import (
     FlipImageCommand,
@@ -59,16 +62,18 @@ from photoslop.io_raw import is_raw_path, load_raw
 from photoslop.layer import BLEND_MODES, FORMAT, Layer, blank_image
 from photoslop.opendialog import OpenImageDialog
 from photoslop.propertiespanel import PropertiesPanel
+from photoslop.recovery import RecoveryService
 from photoslop.services import (
     ExportRequest,
     ExportService,
     FileService,
     FilterService,
     ModelService,
+    export_artboards,
     opaque_export_base,
 )
 from photoslop.svgicons import svg_icon
-from photoslop.tasks import TaskService, snapshot_document
+from photoslop.tasks import CancelledError, TaskService, snapshot_document
 from photoslop.toolregistry import TOOL_GROUPS, TOOL_SPEC_BY_ID, TOOL_SPECS
 from photoslop.tools import (
     BrushTool,
@@ -115,12 +120,18 @@ LAST_DIRECTORY_KEY = "files/last-directory"
 
 
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, *, recovery_enabled: bool | None = None) -> None:
         super().__init__()
         self.setWindowTitle(f"Photoslop {__version__}")
         self.settings = QSettings("CryptoJones", "Photoslop")
         self.action_registry = ActionRegistry(self)
         self.task_service = TaskService(parent=self)
+        self.recovery_service = RecoveryService()
+        self._recovery_enabled = (
+            QApplication.applicationName() == "Photoslop"
+            if recovery_enabled is None else recovery_enabled)
+        self._recovery_timers: dict[str, QTimer] = {}
+        self._recovery_offered = False
         unit = str(self.settings.value("units", "px"))
         self.unit = unit if unit in units.UNITS else "px"
         self.show_grid = self.settings.value("grid", "false") == "true"
@@ -1000,11 +1011,76 @@ class MainWindow(QMainWindow):
         index = self.tabs.addTab(editor, doc.name)
         self.undo_group.addStack(doc.undo_stack)
         doc.undo_stack.cleanChanged.connect(lambda _clean, d=doc: self._refresh_tab(d))
+        doc.undo_stack.cleanChanged.connect(
+            lambda clean, d=doc: self._on_document_clean_changed(d, clean))
+        doc.undo_stack.indexChanged.connect(
+            lambda _index, d=doc: self._schedule_recovery(d))
         self.tabs.setCurrentIndex(index)
         doc.selectionChanged.connect(self.action_registry.update)
         doc.structureChanged.connect(self.action_registry.update)
         self.action_registry.update()
         self.accessibility.apply()
+
+    def _on_document_clean_changed(self, doc: Document, clean: bool) -> None:
+        if clean:
+            timer = self._recovery_timers.pop(doc.document_id, None)
+            if timer is not None:
+                timer.stop()
+            self.recovery_service.clear(doc.document_id)
+            return
+        self._schedule_recovery(doc)
+
+    def _schedule_recovery(self, doc: Document) -> None:
+        if not self._recovery_enabled or doc.is_closed or not doc.is_dirty():
+            return
+        timer = self._recovery_timers.get(doc.document_id)
+        if timer is None:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.setInterval(2000)
+            timer.timeout.connect(lambda d=doc: self._save_recovery(d))
+            self._recovery_timers[doc.document_id] = timer
+        timer.start()
+
+    def _save_recovery(self, doc: Document) -> None:
+        if doc.is_closed or not doc.is_dirty():
+            return
+        snapshot = snapshot_document(doc)
+        path = self.recovery_service.path_for(doc.document_id)
+        ticket = write_coordinator.reserve(path)
+
+        def operation(context):
+            try:
+                return self.recovery_service.write(
+                    snapshot, ticket=ticket,
+                    before_commit=context.check_cancelled)
+            except SupersededWriteError as exc:
+                raise CancelledError(str(exc)) from exc
+
+        self.task_service.submit(
+            "recovery.save", f"Autosave {doc.name}", operation,
+            max(1, doc.memory_bytes() * 2), doc.document_id)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._recovery_enabled and not self._recovery_offered:
+            self._recovery_offered = True
+            QTimer.singleShot(0, self._offer_recovery)
+
+    def _offer_recovery(self) -> None:
+        recovered = self.recovery_service.available()
+        if not recovered:
+            return
+        answer = QMessageBox.question(
+            self, "Recover autosaved documents",
+            f"Recover {len(recovered)} autosaved document(s)?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        for doc in recovered:
+            doc.undo_stack.push(QUndoCommand("Recovered autosave"))
+            self.add_document(doc)
 
     def _editor_for(self, doc: Document) -> EditorView | None:
         for i in range(self.tabs.count()):
@@ -1064,6 +1140,7 @@ class MainWindow(QMainWindow):
                 return
         self.undo_group.removeStack(doc.undo_stack)
         self.task_service.cancel_scope(doc.document_id)
+        self.recovery_service.clear(doc.document_id)
         doc.close()
         self.layer_panel.set_document(None)
         self.adjust_panel.set_document(None)
@@ -1094,6 +1171,7 @@ class MainWindow(QMainWindow):
         for i in range(self.tabs.count()):
             editor = self.tabs.widget(i)
             if isinstance(editor, EditorView):
+                self.recovery_service.clear(editor.doc.document_id)
                 editor.doc.close()
         ev.accept()
 
@@ -1273,10 +1351,16 @@ class MainWindow(QMainWindow):
             snapshot = snapshot_document(doc)
             undo_index = doc.undo_stack.index()
             estimated = max(doc.memory_bytes() * 2, 1)
+            ticket = write_coordinator.reserve(path)
 
             def operation(context):
                 context.progress(5, "Encoding layers")
-                FileService.save(snapshot, path)
+                try:
+                    FileService.save(
+                        snapshot, path, ticket=ticket,
+                        before_commit=context.check_cancelled)
+                except SupersededWriteError as exc:
+                    raise CancelledError(str(exc)) from exc
                 context.progress(100, "Written")
                 return path
 
@@ -1284,6 +1368,8 @@ class MainWindow(QMainWindow):
                                               operation, estimated, doc.document_id)
 
             def installed(saved_path):
+                if doc.is_closed:
+                    return
                 doc.path = saved_path
                 doc.name = os.path.basename(saved_path)
                 if doc.undo_stack.index() == undo_index:
@@ -1337,11 +1423,17 @@ class MainWindow(QMainWindow):
         quality = dialog.chosen_quality()
         snapshot = snapshot_document(doc)
         request = ExportRequest(path, fmt, quality, size, doc.dpi)
+        ticket = write_coordinator.reserve(path)
 
         def operation(context):
             context.progress(10, "Scaling")
             context.progress(60, "Encoding")
-            ExportService.write(base, snapshot, request)
+            try:
+                ExportService.write(
+                    base, snapshot, request, ticket=ticket,
+                    before_commit=context.check_cancelled)
+            except SupersededWriteError as exc:
+                raise CancelledError(str(exc)) from exc
             context.progress(100, "Written")
             return path
 
@@ -2169,17 +2261,11 @@ class MainWindow(QMainWindow):
                 self, "Export Artboards to Folder")
             if not directory:
                 return []
-        flat = doc.flatten()
-        written = []
-        for name, rect in doc.artboards:
-            region = rect.intersected(doc.canvas_rect())
-            if region.isEmpty():
-                continue
-            safe = "".join(c if c.isalnum() or c in "-_ " else "_"
-                           for c in name).strip() or "artboard"
-            out = f"{directory}/{safe}.png"
-            flat.copy(region).save(out, "PNG")
-            written.append(out)
+        try:
+            written = export_artboards(doc, directory)
+        except (OSError, ValueError) as exc:
+            self.statusBar().showMessage(f"Artboard export failed: {exc}", 8000)
+            return []
         self.statusBar().showMessage(
             f"Exported {len(written)} artboard(s) to {directory}", 5000)
         return written

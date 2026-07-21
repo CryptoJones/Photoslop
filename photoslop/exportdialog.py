@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from photoslop import io_formats
+from photoslop.atomicio import atomic_write
 from photoslop.document import Document
 from photoslop.tasks import TaskService
 
@@ -124,9 +125,20 @@ class ExportDialog(QDialog):
         the io_formats codecs (Qt can't write AVIF/JXL itself)."""
         img = image if image is not None else self.export_image()
         fmt = self.chosen_format()
-        if fmt in _EXTRA:
-            return io_formats.save_extra(img, path, max(1, self.chosen_quality()))
-        return img.save(path, fmt, self.chosen_quality())
+        def writer(temporary: str) -> None:
+            if fmt in _EXTRA:
+                ok = io_formats.save_extra(
+                    img, temporary, max(1, self.chosen_quality()))
+            else:
+                ok = img.save(temporary, fmt, self.chosen_quality())
+            if not ok:
+                raise ValueError(f"Export failed: {path}")
+
+        try:
+            atomic_write(path, writer)
+        except (OSError, ValueError):
+            return False
+        return True
 
     # ----- live feedback -----------------------------------------------------
 

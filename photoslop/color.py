@@ -147,4 +147,10 @@ def cmyk_export(image: QImage, path: str, cmyk_icc: str,
     save_kwargs = {"quality": quality} if path.lower().endswith(
         (".jpg", ".jpeg")) else {}
     icc_bytes = pathlib_read(cmyk_icc)
-    out.save(path, icc_profile=icc_bytes, **save_kwargs)
+    from photoslop.atomicio import atomic_write
+
+    atomic_write(
+        path,
+        lambda temporary: out.save(
+            temporary, icc_profile=icc_bytes, **save_kwargs),
+    )

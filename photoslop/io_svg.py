@@ -16,6 +16,7 @@ from PySide6.QtGui import QColor, QImage, QPainter, QTextDocument
 from PySide6.QtSvg import QSvgRenderer
 
 from photoslop import vector
+from photoslop.atomicio import WriteTicket, atomic_write
 from photoslop.document import Document
 from photoslop.layer import Layer
 
@@ -446,7 +447,18 @@ def _text_spans(layer, object_id: str) -> str:
     return f'<text id="{object_id}" x="{x}" y="{y}">{"".join(pieces)}</text>'
 
 
-def save_svg(doc: Document, path: str) -> None:
+def save_svg(doc: Document, path: str, *, ticket: WriteTicket | None = None,
+             before_commit=None) -> None:
+    def writer(temporary: str) -> None:
+        _write_svg(doc, temporary)
+
+    if ticket is None:
+        atomic_write(path, writer, before_commit=before_commit, durable=True)
+    else:
+        ticket.write(writer, before_commit=before_commit, durable=True)
+
+
+def _write_svg(doc: Document, path: str) -> None:
     from photoslop.appearance import effect_margin, normalize_effects
 
     definitions, gradient_ids, objects = [], {}, []
