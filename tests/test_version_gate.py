@@ -40,6 +40,7 @@ def test_release_permissions_are_confined_to_tag_upload_jobs():
     ipados = (ROOT / ".github/workflows/ipados.yml").read_text()
     assert "permissions:\n  contents: read" in portable
     assert portable.count("contents: write") == 1
+    assert portable.count("actions/checkout@11d5960a326750d5838078e36cf38b85af677262") == 3
     assert "if: startsWith(github.ref, 'refs/tags/v')" in portable
     assert portable.count("PHOTOSLOP_REQUIRE_SIGNING") == 2
     assert portable.count("github.ref_name != 'v1.30.0'") == 2
