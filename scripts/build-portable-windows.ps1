@@ -18,6 +18,11 @@ Set-Location $Root
 
 $Version = (Select-String -Path "photoslop\__about__.py" -Pattern '^__version__ = "(.*)"' | Select-Object -First 1).Matches.Groups[1].Value
 if (-not $Version) { $Version = "0.0.0" }
+$Qualifier = $env:PHOTOSLOP_ARTIFACT_QUALIFIER
+if ($Qualifier -and $Qualifier -notmatch '^[A-Za-z0-9._-]+$') {
+    throw "build-portable-windows.ps1: invalid artifact qualifier: $Qualifier"
+}
+$QualifierSuffix = if ($Qualifier) { "-$Qualifier" } else { "" }
 
 $OutDir = Join-Path $Root "dist\portable-windows"
 Remove-Item -Recurse -Force $OutDir -ErrorAction SilentlyContinue
@@ -84,7 +89,7 @@ try {
     }
 }
 
-$Zip = Join-Path $OutDir "Photoslop-Windows-portable-v$Version.zip"
+$Zip = Join-Path $OutDir "Photoslop-Windows-portable$QualifierSuffix-v$Version.zip"
 Compress-Archive -Path $AppDir -DestinationPath $Zip -Force
 $Hash = (Get-FileHash -Algorithm SHA256 $Zip).Hash.ToLowerInvariant()
 "$Hash  $([IO.Path]::GetFileName($Zip))" | Set-Content -Encoding ascii "$Zip.sha256"

@@ -23,7 +23,10 @@ jobs:
   macos:
     runs-on: macos-15
     env:
-      PHOTOSLOP_REQUIRE_SIGNING: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+      # v1.30.0 is a maintainer-approved, explicitly unsigned exception.
+      # Every later tagged release remains fail-closed without signing secrets.
+      PHOTOSLOP_REQUIRE_SIGNING: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name != 'v1.30.0' && '1' || '0' }}
+      PHOTOSLOP_ARTIFACT_QUALIFIER: ${{ github.ref_name == 'v1.30.0' && 'UNSIGNED' || '' }}
       PHOTOSLOP_MACOS_SIGN_IDENTITY: ${{ secrets.PHOTOSLOP_MACOS_SIGN_IDENTITY }}
       PHOTOSLOP_APPLE_ID: ${{ secrets.PHOTOSLOP_APPLE_ID }}
       PHOTOSLOP_APPLE_TEAM_ID: ${{ secrets.PHOTOSLOP_APPLE_TEAM_ID }}
@@ -37,7 +40,7 @@ jobs:
       - run: ./scripts/build-portable-macos.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Photoslop-macOS-portable
+          name: Photoslop-macOS-portable${{ github.ref_name == 'v1.30.0' && '-UNSIGNED' || '' }}
           path: |
             dist/portable-macos/*.zip
             dist/portable-macos/*.sha256
@@ -47,7 +50,9 @@ jobs:
   windows:
     runs-on: windows-latest
     env:
-      PHOTOSLOP_REQUIRE_SIGNING: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+      # Keep this exception identical to the macOS policy above.
+      PHOTOSLOP_REQUIRE_SIGNING: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name != 'v1.30.0' && '1' || '0' }}
+      PHOTOSLOP_ARTIFACT_QUALIFIER: ${{ github.ref_name == 'v1.30.0' && 'UNSIGNED' || '' }}
       PHOTOSLOP_WINDOWS_CERT_BASE64: ${{ secrets.PHOTOSLOP_WINDOWS_CERT_BASE64 }}
       PHOTOSLOP_WINDOWS_CERT_PASSWORD: ${{ secrets.PHOTOSLOP_WINDOWS_CERT_PASSWORD }}
     steps:
@@ -60,7 +65,7 @@ jobs:
         run: ./scripts/build-portable-windows.ps1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Photoslop-Windows-portable
+          name: Photoslop-Windows-portable${{ github.ref_name == 'v1.30.0' && '-UNSIGNED' || '' }}
           path: |
             dist/portable-windows/*.zip
             dist/portable-windows/*.sha256
@@ -78,17 +83,25 @@ jobs:
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: Photoslop-macOS-portable
+          name: Photoslop-macOS-portable${{ github.ref_name == 'v1.30.0' && '-UNSIGNED' || '' }}
           path: dist/macos
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: Photoslop-Windows-portable
+          name: Photoslop-Windows-portable${{ github.ref_name == 'v1.30.0' && '-UNSIGNED' || '' }}
           path: dist/windows
-      - name: Attest signed portable archives
+      - name: Give platform metadata unique release names
+        run: |
+          mv dist/macos/photoslop.cdx.json dist/macos/Photoslop-macOS.cdx.json
+          mv dist/macos/BUILD-IDENTITY.json dist/macos/Photoslop-macOS-BUILD-IDENTITY.json
+          mv dist/macos/THIRD_PARTY_NOTICES.md dist/macos/Photoslop-macOS-THIRD_PARTY_NOTICES.md
+          mv dist/windows/photoslop.cdx.json dist/windows/Photoslop-Windows.cdx.json
+          mv dist/windows/BUILD-IDENTITY.json dist/windows/Photoslop-Windows-BUILD-IDENTITY.json
+          mv dist/windows/THIRD_PARTY_NOTICES.md dist/windows/Photoslop-Windows-THIRD_PARTY_NOTICES.md
+      - name: Attest portable archive provenance
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: "dist/**/*.zip"
-      - name: Attach verified portable builds and metadata
+      - name: Attach portable builds and metadata
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
