@@ -39,7 +39,9 @@ def atomic_write(
         writer(temporary)
         if not os.path.isfile(temporary):
             raise OSError(f"Writer did not produce a file: {destination}")
-        with open(temporary, "rb") as handle:
+        # Windows' _commit (used by os.fsync) rejects read-only descriptors.
+        # Reopen read/write so the same durable path works on every platform.
+        with open(temporary, "r+b") as handle:
             if durable:
                 os.fsync(handle.fileno())
         if before_commit is not None:

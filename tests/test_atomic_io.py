@@ -58,6 +58,26 @@ def test_cancellation_before_commit_preserves_destination(tmp_path):
     assert destination.read_bytes() == b"old"
 
 
+def test_durable_write_reopens_completed_file_writable(tmp_path, monkeypatch):
+    destination = tmp_path / "durable.bin"
+    opened_modes = []
+    real_open = open
+
+    def tracked_open(path, mode="r", *args, **kwargs):
+        opened_modes.append((os.fspath(path), mode))
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", tracked_open)
+    atomic_write(
+        str(destination),
+        lambda temporary: _write(temporary, b"durable"),
+        durable=True,
+    )
+
+    assert destination.read_bytes() == b"durable"
+    assert any(mode == "r+b" for _path, mode in opened_modes)
+
+
 def test_newer_write_ticket_prevents_older_snapshot_from_committing(tmp_path):
     destination = tmp_path / "ordered.svg"
     destination.write_bytes(b"initial")

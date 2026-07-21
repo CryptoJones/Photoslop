@@ -130,6 +130,7 @@ def test_file_dialog_directory_defaults_home_and_follows_successful_save(
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     win = MainWindow()
     assert win._last_directory() == str(home)
 

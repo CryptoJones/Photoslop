@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Durable redacted failures, task history, and plugin attribution."""
 
+import os
 import stat
 import time
 
@@ -35,7 +36,8 @@ def test_diagnostics_persist_redacted_bounded_records(qapp, tmp_path):
     assert "hunter2" not in record.details
     assert "alice:secret" not in record.details
     assert record.context["api_key"] == "[REDACTED]"
-    assert stat.S_IMODE((tmp_path / "operations.jsonl").stat().st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE((tmp_path / "operations.jsonl").stat().st_mode) == 0o600
     reloaded = DiagnosticStore(str(tmp_path))
     assert reloaded.records == (record,)
 

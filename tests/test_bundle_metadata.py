@@ -27,8 +27,8 @@ def test_bundle_metadata_is_valid_deterministic_and_complete(tmp_path):
     assert sbom["metadata"]["component"]["version"] == __version__
     component_names = {item["name"].casefold() for item in sbom["components"]}
     assert {"pyside6", "numpy", "defusedxml"} <= component_names
-    identity = json.loads((tmp_path / "BUILD-IDENTITY.json").read_text())
+    identity = json.loads((tmp_path / "BUILD-IDENTITY.json").read_text(encoding="utf-8"))
     assert identity["version"] == __version__
     assert len(identity["dependency_inventory_sha256"]) == 64
-    notices = (tmp_path / "THIRD_PARTY_NOTICES.md").read_text()
+    notices = (tmp_path / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
     assert "Tabler Icons" in notices and "Bundled Python packages" in notices

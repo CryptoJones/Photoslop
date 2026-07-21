@@ -17,7 +17,11 @@ CYAN = (0, 200, 255)
 
 
 def window_pixels(win) -> np.ndarray:
-    img = win.grab().toImage().convertToFormat(QImage.Format.Format_RGB888)
+    # Render into a DPR-1 image so logical widget coordinates remain pixel
+    # coordinates even when the host desktop uses display scaling.
+    img = QImage(win.size(), QImage.Format.Format_RGB888)
+    img.fill(QColor("black"))
+    win.render(img)
     w, h, bpl = img.width(), img.height(), img.bytesPerLine()
     arr = np.frombuffer(img.constBits(), np.uint8, count=h * bpl).reshape(h, bpl)
     return arr[:, : w * 3].reshape(h, w, 3).copy()
