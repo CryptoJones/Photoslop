@@ -98,7 +98,10 @@ else
   echo "Notarization credentials absent; archive will not be notarized."
 fi
 
-shasum -a 256 "$ZIP" > "$ZIP.sha256"
+(
+  cd "$OUT_DIR"
+  shasum -a 256 "$(basename "$ZIP")" > "$(basename "$ZIP").sha256"
+)
 cp "$METADATA_DIR/photoslop.cdx.json" "$OUT_DIR/"
 cp "$METADATA_DIR/BUILD-IDENTITY.json" "$OUT_DIR/"
 cp "$METADATA_DIR/THIRD_PARTY_NOTICES.md" "$OUT_DIR/"

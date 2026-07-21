@@ -95,6 +95,10 @@ def test_external_ipados_and_portable_build_inputs_are_locked():
         ):
             assert required in source
 
+    macos_source = (ROOT / "scripts/build-portable-macos.sh").read_text()
+    assert 'cd "$OUT_DIR"' in macos_source
+    assert 'shasum -a 256 "$(basename "$ZIP")"' in macos_source
+
 
 def test_every_linux_qt_workflow_installs_runtime_libraries():
     ci = (ROOT / ".github/workflows/test.yml").read_text()
