@@ -26,6 +26,54 @@ The recommended order is:
 4. Address accessibility, performance evidence, recovery, and architectural
    debt before expanding the feature surface.
 
+## Implementation record — 2026-07-21
+
+The implementation was delivered as a reviewable local branch stack based on
+the audited `github/main` commit. “Implemented” below means the code and local
+automated evidence exist; it does not substitute for OS-specific signing,
+assistive-technology, App Store, or hosted GitHub Actions evidence.
+
+| Recommendation | State | Implementation/evidence |
+|---|---|---|
+| P0.1, P0.3 | Implemented | `b2bf5dc`: typed property undo, document/layer identity and revisions, captured async inputs, stale completion rejection, close/task scopes, and regression tests. |
+| P0.2 | Implemented | `8002c14`: durable atomic replacement, per-path write coordination, checked encoders, collision-safe artboards, and failure/cancellation tests. |
+| P0.4 | Implemented; Xcode evidence pending | `bb3b865`: versioned `.photoslop` `FileDocument` package, atomic persistence/autosave, dirty prompts/restoration, unified undo, background rendering/export, and Swift tests. |
+| P0.5 | Implemented; disposable tag proof pending | `aad7006`: v1.30.0 source of truth, cross-surface version gate, and least-privilege tag-only release permission. |
+| P1.1–P1.5 | Implemented | `8b2cdf5`: shared adaptive resource budgets, hardened XML/archive/SVG/data/image/model validation, constrained MCP roots, and default-denied unsafe plugin/native operations. |
+| P1.6 | Implemented; device evidence pending | `bb3b865`: bounded off-main iPad render/import/export and package encoding with stale-result guards. |
+| P1.7 | Implemented; manual AT matrix pending | `815b587`: desktop/iPad semantics, keyboard canvas workflows, scalable UI/handles, focus/high contrast/reduced motion, reversible gesture cancellation, and the manual AT evidence matrix. |
+| P1.8 | Implemented; signed artifacts pending | `419d740`: locked PyInstaller builds, packaged pixel round-trip smoke, full generated notices, CycloneDX SBOM, build identity, checksums, fail-closed signing/notarization/Authenticode, and provenance attestation. |
+| P2.1–P2.4 | Implemented | `419d740`: Python 3.10/latest plus Linux/macOS/Windows CI, wheel/sdist smoke, honest removal of unusable mypy config, branch-coverage floors, and enforced real TaskService/RSS benchmarks. |
+| P2.5–P2.6 | Implemented | Atomic versioned recovery snapshots with metadata, retention/pruning/recovery/discard behavior, plus centralized version and surface-parity documentation. |
+| P2.7 | Increment delivered | Service boundaries now isolate file/export/filter/model operations, task scheduling/monitoring, diagnostics, structured errors, recovery, actions, tools, accessibility, and workspace state. Further monolith reduction remains incremental maintenance, not a rewrite gate. |
+| P2.8–P2.10 | Implemented | Durable redacted diagnostics/result history, attributable plugin failures, explicit invariant errors, zero CLI deprecations, structured CLI/MCP codes, scheduled security maintenance, and adversarial/state-transition coverage. |
+| P3.1 | Implemented | `4c3c7e8`: one repository-wide Ruff formatting baseline with lint and format CI gates. |
+| P3.2–P3.3 | Implemented | Priority/FIFO memory-aware scheduling, head-of-line bypass, visible task/session history, task/scope/global cancellation, durable outcomes, unique/platform-safe shortcuts, and command-palette/menu discovery. |
+
+Final local automated evidence on Linux, Python 3.12.13, PySide6 6.11.1:
+
+- full suite with loopback integrations: **3,122 passed, 13 skipped**;
+- critical branch-coverage suite: **82 passed**, all 11 measured module floors;
+- Ruff lint and formatting: **192 files pass**;
+- Bandit medium/high gate and complete tracked/untracked secret scan: pass;
+- `pip-audit` of the exact locked all-extras export: no known vulnerabilities;
+- v1.30.0 wheel and source distribution build, plus out-of-tree 8×8 exact-pixel
+  CLI round trip: pass;
+- enforced full-resolution 4K/10-layer and 12-MP/4-layer latency, RSS,
+  cancellation, and output gates: pass.
+
+The remaining release evidence is deliberately fail-closed and is not claimed
+from this Linux workspace:
+
+- macOS codesign/notarization and Windows Authenticode portable artifacts;
+- a disposable tag proving GitHub release upload and provenance end to end;
+- Xcode simulator/device execution of the iPad persistence/rendering tests;
+- VoiceOver, NVDA, Orca, high-contrast, 200%-text, and reduced-motion manual rows;
+- hosted matrix/security/portable/scheduled performance jobs on the final commit.
+
+Until those rows are recorded in the release-candidate checklist, the code is
+implemented but v1.30.0 is prepared rather than released.
+
 Priority meanings:
 
 - **P0 — release blocker:** credible data loss, corruption, stale mutation, or

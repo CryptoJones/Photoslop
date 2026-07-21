@@ -25,6 +25,23 @@ The JSON report includes viewport P50/P95, document/layer/rendered bytes,
 process peak RSS, actual `TaskService` render-cancellation latency, output
 validity, reviewed targets, and a pass/fail gate per measurement. `--enforce`
 exits nonzero when a budget is exceeded; `--samples N` controls repetitions.
+Run each evidence preset in a fresh process: peak RSS is a process-lifetime
+high-water mark and a shared functional-test process would include unrelated
+earlier allocations.
+
+## Observed full-resolution baseline
+
+On 2026-07-21, Linux 7.0.0 x86-64, Python 3.12.13, and PySide6 6.11.1,
+five-sample enforced runs produced:
+
+| Fixture | P50 | P95 | Peak RSS | Cancellation | Result |
+|---|---:|---:|---:|---:|---|
+| 4K / 10 layers | 8.39 ms | 10.97 ms | 397.3 MiB | 0.06 ms | pass |
+| 12 MP / 4 layers | 3.27 ms | 6.40 ms | 264.8 MiB | 0.55 ms | pass |
+
+These numbers are one machine's baseline, not a cross-platform performance
+claim. Scheduled reports remain the release evidence and must be compared using
+the complete environment record below.
 
 ## Interaction budgets
 

@@ -8,6 +8,7 @@ import json
 import resource
 import statistics
 import sys
+import threading
 import time
 from dataclasses import dataclass
 
@@ -61,13 +62,19 @@ def _measure_render_cancellation(doc: Document) -> float:
     app = QCoreApplication.instance() or QCoreApplication([])
     service = TaskService(max_workers=1, memory_budget=max(1, doc.memory_bytes() * 2))
     viewport = QRect(0, 0, min(doc.size.width(), 512), min(doc.size.height(), 512))
+    started = threading.Event()
+    stopped = threading.Event()
 
     def render_until_cancelled(context):
-        while True:
-            context.check_cancelled()
-            rendered = render_region(doc, viewport)
-            if rendered.size() != viewport.size():
-                raise RuntimeError("cancel benchmark rendered the wrong region")
+        started.set()
+        try:
+            while True:
+                context.check_cancelled()
+                rendered = render_region(doc, viewport)
+                if rendered.size() != viewport.size():
+                    raise RuntimeError("cancel benchmark rendered the wrong region")
+        finally:
+            stopped.set()
 
     handle = service.submit(
         "benchmark.render",
@@ -75,22 +82,29 @@ def _measure_render_cancellation(doc: Document) -> float:
         render_until_cancelled,
         max(1, viewport.width() * viewport.height() * 8),
     )
-    deadline = time.monotonic() + 5
-    while handle.state is TaskState.QUEUED and time.monotonic() < deadline:
+    start_deadline = time.monotonic() + 5
+    while handle.state is TaskState.QUEUED and time.monotonic() < start_deadline:
         app.processEvents()
         time.sleep(0.001)
     if handle.state is not TaskState.RUNNING:
         raise RuntimeError("render cancellation benchmark did not start")
+    if not started.wait(5):
+        raise RuntimeError("render cancellation benchmark worker did not start")
     start = time.perf_counter()
     handle.cancel()
+    if not stopped.wait(5):
+        raise RuntimeError("render side effects did not stop after cancellation")
+    cancellation_ms = (time.perf_counter() - start) * 1000
+    completion_deadline = time.monotonic() + 1
     while handle.state not in {TaskState.CANCELLED, TaskState.FAILED}:
-        if time.monotonic() >= deadline:
-            raise RuntimeError("render task did not stop after cancellation")
+        if time.monotonic() >= completion_deadline:
+            raise RuntimeError("render cancellation completion was not delivered")
         app.processEvents()
         time.sleep(0.001)
     if handle.state is TaskState.FAILED:
         raise RuntimeError("render cancellation benchmark failed")
-    return (time.perf_counter() - start) * 1000
+    service.pool.waitForDone()
+    return cancellation_ms
 
 
 def run(preset: BenchmarkPreset, scale: float = 1.0, samples: int = 20) -> dict:
