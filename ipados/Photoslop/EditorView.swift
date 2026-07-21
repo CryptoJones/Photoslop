@@ -287,6 +287,12 @@ private struct LayerRow: View {
     .contentShape(Rectangle())
     .onTapGesture(perform: onSelect)
     .accessibilityElement(children: .contain)
+    .accessibilityLabel("\(layer.name) layer")
+    .accessibilityValue(
+      "\(layer.isVisible ? "visible" : "hidden"), "
+        + "\(Int((layer.opacity * 100).rounded())) percent opacity"
+    )
+    .accessibilityHint("Double tap to make active; use the eye button to toggle visibility")
   }
 }
 

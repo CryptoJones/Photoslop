@@ -37,6 +37,18 @@ struct PencilCanvas: UIViewRepresentable {
       : PKInkingTool(.pen, color: inkColor, width: inkWidth)
     host.canvasView.drawingPolicy = drawsWithFinger ? .anyInput : .pencilOnly
     host.canvasView.alpha = drawingOpacity
+    host.canvasView.isAccessibilityElement = true
+    host.canvasView.accessibilityLabel = "Editable image canvas"
+    host.canvasView.accessibilityValue = (
+      "\(Int(canvasSize.width)) by \(Int(canvasSize.height)) pixels, "
+        + "\(isEraser ? "eraser" : "pen"), "
+        + "\(Int((drawingOpacity * 100).rounded())) percent layer opacity"
+    )
+    host.canvasView.accessibilityHint = (
+      "Draw with \(drawsWithFinger ? "Apple Pencil or one finger" : "Apple Pencil"). "
+        + "Use two fingers to pan or pinch to zoom. Layer controls and Undo are outside the canvas."
+    )
+    host.canvasView.accessibilityTraits.insert(.allowsDirectInteraction)
     host.scrollView.panGestureRecognizer.minimumNumberOfTouches = drawsWithFinger ? 2 : 1
     if host.canvasView.drawing.dataRepresentation() != drawing.dataRepresentation() {
       let delegate = host.canvasView.delegate
@@ -80,10 +92,13 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
     imageView.contentMode = .scaleToFill
     imageView.backgroundColor = .white
     imageView.isUserInteractionEnabled = false
+    imageView.isAccessibilityElement = false
     canvasView.backgroundColor = .clear
     canvasView.isOpaque = false
     canvasView.layer.backgroundColor = UIColor.clear.cgColor
     canvasView.isScrollEnabled = false
+    scrollView.accessibilityLabel = "Zoomable document canvas"
+    scrollView.accessibilityHint = "Pinch to zoom and swipe to pan"
 
     addSubview(scrollView)
     scrollView.addSubview(contentView)

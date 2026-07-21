@@ -111,12 +111,17 @@ class CommandPalette(QDialog):
             suffix = f"    {spec.shortcut}" if spec.shortcut else ""
             item = QListWidgetItem(spec.label + suffix)
             item.setData(Qt.ItemDataRole.UserRole, spec.command_id)
+            state = "available" if action.isEnabled() else f"requires {spec.prerequisite}"
+            item.setData(Qt.ItemDataRole.AccessibleTextRole,
+                         f"{spec.label}, {state}, shortcut {spec.shortcut or 'none'}")
+            item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, spec.help_text)
             if not action.isEnabled():
                 item.setForeground(self.palette().color(self.palette().ColorGroup.Disabled,
                                                         self.palette().ColorRole.Text))
             self.results.addItem(item)
         if self.results.count():
             self.results.setCurrentRow(0)
+        self.search.setFocus(Qt.FocusReason.ShortcutFocusReason)
 
     def _describe(self, item, _previous=None) -> None:
         if item is None:

@@ -28,6 +28,7 @@ class PropertiesPanel(QWidget):
         self.name = QLineEdit()
         self.name.setAccessibleName("Layer name")
         self.visible = QCheckBox("Visible")
+        self.visible.setAccessibleName("Layer visibility")
         self.opacity = QSpinBox()
         self.opacity.setRange(0, 100)
         self.opacity.setSuffix(" %")

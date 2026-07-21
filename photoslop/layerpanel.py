@@ -42,16 +42,22 @@ class LayerPanel(QWidget):
         self._thumb_cache: dict[int, tuple[int, QIcon]] = {}
 
         self.list = QListWidget()
+        self.list.setAccessibleName("Layer stack")
+        self.list.setAccessibleDescription(
+            "Layers in top-to-bottom reading order. Space toggles visibility; "
+            "F2 renames; arrow keys change the active layer.")
         self.list.setIconSize(QSize(_THUMB, _THUMB))
         self.list.currentRowChanged.connect(self._on_row)
         self.list.itemChanged.connect(self._on_item_changed)
         self.list.itemDoubleClicked.connect(self._on_double_click)
 
         self.blend = QComboBox()
+        self.blend.setAccessibleName("Active layer blend mode")
         self.blend.addItems(list(BLEND_MODES))
         self.blend.activated.connect(self._on_blend)
 
         self.opacity = QSlider(Qt.Orientation.Horizontal)
+        self.opacity.setAccessibleName("Active layer opacity")
         self.opacity.setRange(0, 100)
         self.opacity.setValue(100)
         self.opacity.valueChanged.connect(self._on_opacity)
@@ -150,7 +156,8 @@ class LayerPanel(QWidget):
             live = {id(layer) for layer in self.doc.layers}
             self._thumb_cache = {
                 key: value for key, value in self._thumb_cache.items() if key in live}
-            for layer in reversed(self.doc.layers):
+            total = len(self.doc.layers)
+            for position, layer in enumerate(reversed(self.doc.layers), start=1):
                 item = QListWidgetItem(self._thumb(layer), layer.name)
                 item.setFlags(
                     item.flags()
@@ -169,6 +176,20 @@ class LayerPanel(QWidget):
                     item.setToolTip("Adjustment layer (non-destructive)")
                 item.setCheckState(
                     Qt.CheckState.Checked if layer.visible else Qt.CheckState.Unchecked
+                )
+                state = "visible" if layer.visible else "hidden"
+                kind = ("adjustment" if layer.adjustment is not None else
+                        "text" if layer.text_data else
+                        "vector" if layer.vector_data is not None else "raster")
+                item.setData(
+                    Qt.ItemDataRole.AccessibleTextRole,
+                    f"{layer.name}, {kind} layer, {state}, "
+                    f"{round(layer.opacity * 100)} percent opacity, "
+                    f"position {position} of {total}",
+                )
+                item.setData(
+                    Qt.ItemDataRole.AccessibleDescriptionRole,
+                    "Checked means visible. Press F2 to rename or Space to toggle visibility.",
                 )
                 self.list.addItem(item)
             if self.doc.active_index >= 0:

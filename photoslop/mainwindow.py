@@ -374,6 +374,7 @@ class MainWindow(QMainWindow):
         for i in range(self.tabs.count()):
             editor = self.tabs.widget(i)
             editor.canvas.refresh_cursor()
+            editor.canvas.accessibility_context_changed()
             editor.canvas.update()
 
     def _build_options_bar(self) -> None:
@@ -842,6 +843,8 @@ class MainWindow(QMainWindow):
         self.action_soft_proof.setCheckable(True)
         m_view.addAction(self.action_soft_proof)
         m_view.addAction(self._appearance_dock.toggleViewAction())
+        m_view.addAction(self._act(
+            "Describe &Canvas", "Ctrl+Alt+Shift+D", self.action_describe_canvas))
         m_view.addSeparator()
         zoom_in = self._act("Zoom &In", "Ctrl++", lambda: self._zoom(+1))
         # a US keyboard's plus key is "=" unshifted — bind every physical form
@@ -1924,6 +1927,14 @@ class MainWindow(QMainWindow):
         self.options.pattern = doc.flatten().copy(region)
         self.statusBar().showMessage(
             f"Pattern defined: {region.width()}\u00d7{region.height()} px", 4000)
+
+    def action_describe_canvas(self) -> None:
+        """Focus the canvas and announce its current editable state."""
+        editor = self.current_editor()
+        if editor is None:
+            return
+        editor.canvas.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.statusBar().showMessage(editor.canvas.accessible_summary(), 10_000)
 
     def action_free_transform(self) -> None:
         doc = self.current_doc()

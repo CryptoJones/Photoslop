@@ -79,6 +79,19 @@ class Tool:
     def cancel(self, doc=None) -> None:
         """Escape pressed — abandon any in-progress gesture."""
 
+    def has_active_interaction(self) -> bool:
+        """Whether Escape should cancel this gesture before deselecting.
+
+        Tool state has a few established shapes; keeping the introspection here
+        gives every existing gesture the same two-stage Escape contract without
+        coupling the canvas to concrete tool classes.
+        """
+        for name in ("session", "_base", "_start", "_anchor", "_recorder",
+                     "_edit", "_mask", "rect"):
+            if getattr(self, name, None) is not None:
+                return True
+        return any(getattr(self, name, None) for name in ("_points", "pins"))
+
     def cursor_intent(
         self,
         doc,
@@ -144,6 +157,16 @@ class BrushTool(Tool):
         self._recorder = None
         self._layer = None
         self._last = None
+        self._scratch = None
+        self._orig = None
+
+    def cancel(self, doc=None) -> None:
+        if self._recorder is not None:
+            self._recorder.restore()
+        self._recorder = None
+        self._layer = None
+        self._last = None
+        self._clip = None
         self._scratch = None
         self._orig = None
 
@@ -521,6 +544,13 @@ class LiquifyTool(Tool):
         cmd = self._recorder.finish("Liquify")
         if cmd is not None:
             doc.undo_stack.push(cmd)
+        self._recorder = None
+        self._layer = None
+        self._last = None
+
+    def cancel(self, doc=None) -> None:
+        if self._recorder is not None:
+            self._recorder.restore()
         self._recorder = None
         self._layer = None
         self._last = None
@@ -1481,9 +1511,12 @@ class RectSelectTool(Tool):
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
         self._anchor: QPointF | None = None
+        self._base_selection: QPainterPath | None = None
 
     def press(self, doc, canvas, pos, ev):
         self._anchor = pos
+        self._base_selection = (QPainterPath(doc.selection)
+                                if doc.selection is not None else None)
         doc.set_selection(None)
 
     def move(self, doc, canvas, pos, ev):
@@ -1500,6 +1533,13 @@ class RectSelectTool(Tool):
         if rect.width() < 2 and rect.height() < 2:
             doc.set_selection(None)
         self._anchor = None
+        self._base_selection = None
+
+    def cancel(self, doc=None) -> None:
+        self._anchor = None
+        if doc is not None:
+            doc.set_selection(self._base_selection)
+        self._base_selection = None
 
 
 class EllipseSelectTool(Tool):
@@ -1510,6 +1550,7 @@ class EllipseSelectTool(Tool):
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
         self._anchor: QPointF | None = None
+        self._base_selection: QPainterPath | None = None
 
     def _rect(self, pos: QPointF, ev) -> QRectF:
         dx = pos.x() - self._anchor.x()
@@ -1523,6 +1564,8 @@ class EllipseSelectTool(Tool):
 
     def press(self, doc, canvas, pos, ev):
         self._anchor = pos
+        self._base_selection = (QPainterPath(doc.selection)
+                                if doc.selection is not None else None)
         doc.set_selection(None)
 
     def move(self, doc, canvas, pos, ev):
@@ -1539,6 +1582,13 @@ class EllipseSelectTool(Tool):
         if rect.width() < 2 and rect.height() < 2:
             doc.set_selection(None)
         self._anchor = None
+        self._base_selection = None
+
+    def cancel(self, doc=None) -> None:
+        self._anchor = None
+        if doc is not None:
+            doc.set_selection(self._base_selection)
+        self._base_selection = None
 
 
 class LassoTool(Tool):
@@ -1547,9 +1597,12 @@ class LassoTool(Tool):
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
         self._points: list[QPointF] = []
+        self._base_selection: QPainterPath | None = None
 
     def press(self, doc, canvas, pos, ev):
         self._points = [pos]
+        self._base_selection = (QPainterPath(doc.selection)
+                                if doc.selection is not None else None)
         doc.set_selection(None)
 
     def move(self, doc, canvas, pos, ev):
@@ -1566,6 +1619,13 @@ class LassoTool(Tool):
         else:
             doc.set_selection(None)
         self._points = []
+        self._base_selection = None
+
+    def cancel(self, doc=None) -> None:
+        self._points = []
+        if doc is not None:
+            doc.set_selection(self._base_selection)
+        self._base_selection = None
 
     def _path(self, close: bool) -> QPainterPath:
         path = QPainterPath(self._points[0])
@@ -1734,7 +1794,10 @@ class QuickSelectTool(Tool):
         self._last_seed = None
 
     def cancel(self, doc=None) -> None:
+        base = self._base_path
         self.release(doc, None, None, None)
+        if doc is not None:
+            doc.set_selection(base)
 
     def _seed(self, doc, pos: QPointF) -> None:
         layer = self._layer
@@ -1781,9 +1844,12 @@ class PolyLassoTool(Tool):
         super().__init__(options)
         self._points: list[QPointF] = []
         self._hover: QPointF | None = None
+        self._base_selection: QPainterPath | None = None
 
     def press(self, doc, canvas, pos, ev):
         if not self._points:
+            self._base_selection = (QPainterPath(doc.selection)
+                                    if doc.selection is not None else None)
             doc.set_selection(None)
             self._points = [pos]
             return
@@ -1816,6 +1882,9 @@ class PolyLassoTool(Tool):
     def cancel(self, doc=None) -> None:
         self._points = []
         self._hover = None
+        if doc is not None:
+            doc.set_selection(self._base_selection)
+        self._base_selection = None
 
     def _path(self) -> QPainterPath:
         path = QPainterPath(self._points[0])
@@ -1834,6 +1903,7 @@ class PolyLassoTool(Tool):
         self._hover = None
         doc.set_selection(self._path())
         self._points = []
+        self._base_selection = None
 
     def overlay(self, doc, painter, canvas):
         if not self._points:

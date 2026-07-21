@@ -68,3 +68,20 @@ def test_eraser_ceiling(qapp):
     scribble(win.tools["eraser"], doc, canvas, QPointF(30, 30))
     alpha = doc.active_layer.image.pixelColor(30, 30).alpha()
     assert 118 <= alpha <= 138  # one stroke erases to the 50% ceiling, no more
+
+
+def test_cancel_restores_an_in_progress_brush_stroke(qapp):
+    win = make_window(qapp)
+    doc = win.current_doc()
+    canvas = win.current_editor().canvas
+    tool = win.tools["brush"]
+    before = doc.active_layer.image.copy()
+
+    tool.press(doc, canvas, QPointF(20, 20), None)
+    tool.move(doc, canvas, QPointF(40, 20), None)
+    assert doc.active_layer.image != before
+    tool.cancel(doc)
+
+    assert doc.active_layer.image == before
+    assert doc.undo_stack.count() == 0
+    assert not tool.has_active_interaction()

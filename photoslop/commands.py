@@ -60,6 +60,15 @@ class TileRecorder:
             return None
         return TileCommand(self.doc, self.layer, tiles, text)
 
+    def restore(self) -> None:
+        """Restore every captured tile when an in-progress gesture is cancelled."""
+        dirty = QRect()
+        for tile_rect, before in self.before.values():
+            _blit(self.layer.image, tile_rect.topLeft(), before)
+            dirty = dirty.united(tile_rect)
+        if not dirty.isEmpty():
+            self.doc.notify_pixels(dirty.translated(self.layer.offset))
+
 
 class TileCommand(QUndoCommand):
     """Before/after pixel tiles for one paint gesture. Pixels were already

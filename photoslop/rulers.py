@@ -40,6 +40,11 @@ class Ruler(QWidget):
         self.dpi = dpi
         self.unit = unit
         self.length = length
+        axis = ("Horizontal" if self.orientation == Qt.Orientation.Horizontal
+                else "Vertical")
+        self.setAccessibleDescription(
+            f"{axis} ruler, {length} pixels, units {units.unit_label(unit)}, "
+            "drag to create a guide; keyboard guide commands are available in View.")
         self.update()
 
     def set_marker(self, canvas_pos: float | None) -> None:

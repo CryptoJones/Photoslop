@@ -11,7 +11,16 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QPixmap, QTransform
+from PySide6.QtGui import (
+    QAccessible,
+    QAccessibleEvent,
+    QBrush,
+    QColor,
+    QPainter,
+    QPen,
+    QPixmap,
+    QTransform,
+)
 from PySide6.QtWidgets import QGridLayout, QScrollArea, QToolButton, QWidget
 
 from photoslop import units
@@ -63,6 +72,9 @@ class CanvasView(QWidget):
         self._hover_dirty = QRect()
         self.cursor_controller = CursorController(self)
         self._ants_offset = 0.0
+        self._reduced_motion = False
+        self._high_contrast = False
+        self._control_scale = 100
         self._ants = QTimer(self)
         self._ants.setInterval(120)
         self._ants.timeout.connect(self._advance_ants)
@@ -71,8 +83,7 @@ class CanvasView(QWidget):
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName("Image canvas")
-        self.setAccessibleDescription(
-            "Editable document canvas. Arrow keys operate the active keyboard-capable tool.")
+        self.setAccessibleDescription(self.accessible_summary())
 
         doc.pixelsChanged.connect(self._on_pixels)
         doc.structureChanged.connect(self._on_structure)
@@ -114,6 +125,64 @@ class CanvasView(QWidget):
         self.update()
         self.editor.sync_rulers()
         self.refresh_cursor()
+        self.accessibility_context_changed()
+
+    def set_accessibility_preferences(
+        self, *, high_contrast: bool, reduced_motion: bool, scale: int,
+    ) -> None:
+        self._high_contrast = high_contrast
+        self._reduced_motion = reduced_motion
+        self._control_scale = scale
+        if reduced_motion:
+            self._ants.stop()
+        elif self.doc.selection is not None and not self._ants.isActive():
+            self._ants.start()
+        self.update()
+
+    def accessible_summary(self) -> str:
+        layer = self.doc.active_layer
+        active = "No active layer"
+        if layer is not None:
+            visibility = "visible" if layer.visible else "hidden"
+            active = (f"Active layer {layer.name}, {visibility}, "
+                      f"{round(layer.opacity * 100)} percent opacity")
+        bounds = self.doc.selection_bounds()
+        selection = "No selection"
+        if bounds is not None:
+            selection = (f"Selection x {bounds.x()}, y {bounds.y()}, width "
+                         f"{bounds.width()}, height {bounds.height()}")
+        tool = self.editor.active_tool()
+        tool_name = getattr(tool, "name", "none").replace("-", " ")
+        guides = len(self.doc.guides_h) + len(self.doc.guides_v)
+        pointer = self.accessible_value()
+        return (
+            f"Editable document canvas, {self.doc.size.width()} by "
+            f"{self.doc.size.height()} pixels at {self.doc.dpi:g} DPI, "
+            f"{len(self.doc.layers)} layers. {active}. {selection}. "
+            f"Zoom {round(self.zoom * 100)} percent. Active tool {tool_name}. "
+            f"{guides} guides. {pointer}. Arrow keys move compatible tools; Shift plus "
+            "Arrow moves ten pixels. Enter commits an active transform and "
+            "Escape first cancels an active interaction, then clears selection."
+        )
+
+    def accessible_value(self) -> str:
+        if self.hover_pos is None:
+            return "Pointer outside canvas"
+        x = min(max(0, round(self.hover_pos.x())), self.doc.size.width() - 1)
+        y = min(max(0, round(self.hover_pos.y())), self.doc.size.height() - 1)
+        return f"x {x}, y {y}"
+
+    def accessibility_context_changed(self) -> None:
+        self.setAccessibleDescription(self.accessible_summary())
+        if QAccessible.isActive():
+            QAccessible.updateAccessibility(QAccessibleEvent(
+                self, QAccessible.Event.DescriptionChanged))
+
+    def accessibility_cursor_changed(self) -> None:
+        self.setAccessibleDescription(self.accessible_summary())
+        if QAccessible.isActive():
+            QAccessible.updateAccessibility(QAccessibleEvent(
+                self, QAccessible.Event.DescriptionChanged))
 
     def refresh_cursor(self, dragging: bool = False) -> None:
         """Resolve the active tool's live cursor through the single controller."""
@@ -179,13 +248,15 @@ class CanvasView(QWidget):
         self._resize_to_zoom()
         self.update()
         self.editor.sync_rulers()
+        self.accessibility_context_changed()
 
     def _on_selection(self) -> None:
         if self.doc.selection is None:
             self._ants.stop()
-        elif not self._ants.isActive():
+        elif not self._reduced_motion and not self._ants.isActive():
             self._ants.start()
         self.update()
+        self.accessibility_context_changed()
 
     def _advance_ants(self) -> None:
         self._ants_offset = (self._ants_offset + 1.0) % 8.0
@@ -256,6 +327,15 @@ class CanvasView(QWidget):
         tool = self.editor.active_tool()
         if tool is not None:
             tool.overlay(self.doc, p, self)
+        if self.hasFocus():
+            focus = QColor("#ffff00") if self._high_contrast else self.palette().highlight().color()
+            width = max(2, round(2 * self._control_scale / 100))
+            pen = QPen(focus, width, Qt.PenStyle.SolidLine)
+            pen.setCosmetic(True)
+            p.setPen(pen)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            inset = max(1, width // 2)
+            p.drawRect(self.rect().adjusted(inset, inset, -inset, -inset))
         p.end()
 
     def _paint_artboards(self, p: QPainter) -> None:
@@ -441,17 +521,37 @@ class CanvasView(QWidget):
             tool.commit(self)
             return
         if key == Qt.Key.Key_Escape:
-            if tool is not None:
+            if tool is not None and tool.has_active_interaction():
                 tool.cancel(self.doc)
                 if tool.name == "transform":
                     self.editor.host.end_transform()
-            self.doc.set_selection(None)
+                self.editor.host.statusBar().showMessage(
+                    f"Cancelled {tool.name.replace('-', ' ')} interaction", 3000)
+            elif self.doc.selection is not None:
+                self.editor.host.action_deselect()
             return
         nudges = {
             Qt.Key.Key_Left: (-1, 0), Qt.Key.Key_Right: (1, 0),
             Qt.Key.Key_Up: (0, -1), Qt.Key.Key_Down: (0, 1),
         }
         tool = self.editor.active_tool()
+        if key in nudges and tool is not None and tool.name == "transform":
+            session = getattr(tool, "session", None)
+            if session is not None:
+                dx, dy = nudges[key]
+                if ev.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                    dx, dy = dx * 10, dy * 10
+                delta = QPointF(dx, dy)
+                if session.warp_grid is not None:
+                    session.warp_grid = [point + delta for point in session.warp_grid]
+                elif session.quad is not None:
+                    session.quad = [point + delta for point in session.quad]
+                else:
+                    session.translation += delta
+                self.update()
+                self.editor.host.statusBar().showMessage(
+                    f"Transform moved {dx}, {dy} pixels", 2000)
+            return
         if key in nudges and tool is not None and tool.name == "move":
             layer = self.doc.active_layer
             if layer is not None:
@@ -562,6 +662,7 @@ class EditorView(QWidget):
         self.hruler.set_marker(None if pos is None else pos.x())
         self.vruler.set_marker(None if pos is None else pos.y())
         self.host.show_mouse_pos(self.doc, pos)
+        self.canvas.accessibility_cursor_changed()
 
     def pan_by(self, dx: float, dy: float) -> None:
         hbar = self.scroll.horizontalScrollBar()
