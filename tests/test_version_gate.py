@@ -41,7 +41,22 @@ def test_release_permissions_are_confined_to_tag_upload_jobs():
     assert "permissions:\n  contents: read" in portable
     assert portable.count("contents: write") == 1
     assert "if: startsWith(github.ref, 'refs/tags/v')" in portable
-    assert "PHOTOSLOP_REQUIRE_SIGNING" in portable
+    assert portable.count("PHOTOSLOP_REQUIRE_SIGNING") == 2
+    assert portable.count("github.ref_name != 'v1.30.0'") == 2
+    assert portable.count("PHOTOSLOP_ARTIFACT_QUALIFIER") == 2
+    assert portable.count("github.ref_name == 'v1.30.0' && 'UNSIGNED' || ''") == 1
+    assert portable.count("github.ref_name == 'v1.30.0' && '-UNSIGNED' || ''") == 2
+    assert "&& 'SIGNED-NOT-NOTARIZED' || ''" in portable
+    assert portable.count("github.ref_name == 'v1.30.0' && '-SIGNED-NOT-NOTARIZED' || ''") == 2
+    assert "scripts/import-macos-signing-certificate.sh" in portable
+    assert "MACOS_CERTIFICATE_P12" in portable
+    assert "verify_macos_signing" in portable
+    assert "Attest signed portable archives" not in portable
+    assert "Attest portable archive provenance" in portable
+    for platform in ("macOS", "Windows"):
+        assert f"Photoslop-{platform}.cdx.json" in portable
+        assert f"Photoslop-{platform}-BUILD-IDENTITY.json" in portable
+        assert f"Photoslop-{platform}-THIRD_PARTY_NOTICES.md" in portable
     assert "attest-build-provenance@e8998f949152" in portable
 
     assert "permissions:\n  contents: read" in ipados
@@ -73,11 +88,16 @@ def test_external_ipados_and_portable_build_inputs_are_locked():
         assert "uv pip install" not in source
         for required in (
             "--portable-smoke",
+            "PHOTOSLOP_ARTIFACT_QUALIFIER",
             "photoslop.cdx.json",
             "BUILD-IDENTITY.json",
             "THIRD_PARTY_NOTICES.md",
         ):
             assert required in source
+
+    macos_source = (ROOT / "scripts/build-portable-macos.sh").read_text()
+    assert 'cd "$OUT_DIR"' in macos_source
+    assert 'shasum -a 256 "$(basename "$ZIP")"' in macos_source
 
 
 def test_every_linux_qt_workflow_installs_runtime_libraries():

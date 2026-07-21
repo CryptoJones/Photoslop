@@ -24,7 +24,7 @@ client exposes it.
 | Native/third-party plugins | local opt-in | — | local opt-in | denied |
 | Network model operations | local configured endpoint | — | local configured endpoint | denied |
 | Accessibility automation | automated semantics + manual matrix required | native labels + manual matrix required | structured errors | structured tool errors |
-| Signed distributable | secret-gated macOS/Windows workflow | no public unsigned release | wheel/sdist CI smoke | installed with Python package |
+| Desktop distributable | v1.30.0 macOS signed/not notarized; Windows unsigned; later tags secret-gated | device signing required; no public bundle | wheel/sdist CI smoke | installed with Python package |
 
 ## Versions compared
 

@@ -20,6 +20,12 @@ cd "$ROOT"
 
 VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' photoslop/__about__.py | head -1)"
 VERSION="${VERSION:-0.0.0}"
+QUALIFIER="${PHOTOSLOP_ARTIFACT_QUALIFIER:-}"
+if [[ -n "$QUALIFIER" && ! "$QUALIFIER" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "build-portable-macos.sh: invalid artifact qualifier: $QUALIFIER" >&2
+  exit 1
+fi
+QUALIFIER_SUFFIX="${QUALIFIER:+-$QUALIFIER}"
 
 OUT_DIR="$ROOT/dist/portable-macos"
 rm -rf "$OUT_DIR" "$ROOT/build/portable-macos"
@@ -74,7 +80,7 @@ else
   echo "Signing identity absent; producing an explicitly unsigned validation artifact."
 fi
 
-ZIP="$OUT_DIR/Photoslop-macOS-portable-v$VERSION.zip"
+ZIP="$OUT_DIR/Photoslop-macOS-portable${QUALIFIER_SUFFIX}-v$VERSION.zip"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 
 if [[ -n "${PHOTOSLOP_APPLE_ID:-}" && -n "${PHOTOSLOP_APPLE_TEAM_ID:-}" \
@@ -85,12 +91,17 @@ if [[ -n "${PHOTOSLOP_APPLE_ID:-}" && -n "${PHOTOSLOP_APPLE_TEAM_ID:-}" \
     --password "$PHOTOSLOP_APPLE_APP_PASSWORD"
   xcrun stapler staple "$APP"
   ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
-elif [[ "${PHOTOSLOP_REQUIRE_SIGNING:-0}" == "1" ]]; then
+elif [[ "${PHOTOSLOP_REQUIRE_NOTARIZATION:-${PHOTOSLOP_REQUIRE_SIGNING:-0}}" == "1" ]]; then
   echo "Tagged portable release requires Apple notarization credentials" >&2
   exit 1
+else
+  echo "Notarization credentials absent; archive will not be notarized."
 fi
 
-shasum -a 256 "$ZIP" > "$ZIP.sha256"
+(
+  cd "$OUT_DIR"
+  shasum -a 256 "$(basename "$ZIP")" > "$(basename "$ZIP").sha256"
+)
 cp "$METADATA_DIR/photoslop.cdx.json" "$OUT_DIR/"
 cp "$METADATA_DIR/BUILD-IDENTITY.json" "$OUT_DIR/"
 cp "$METADATA_DIR/THIRD_PARTY_NOTICES.md" "$OUT_DIR/"
