@@ -4,13 +4,18 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
-import resource
 import statistics
 import sys
 import threading
 import time
 from dataclasses import dataclass
+
+try:
+    import resource
+except ImportError:  # Windows has no POSIX resource module.
+    resource = None
 
 from PySide6.QtCore import QCoreApplication, QRect, QSize
 from PySide6.QtGui import QColor
@@ -53,8 +58,42 @@ def fixture(preset: BenchmarkPreset, scale: float = 1.0) -> Document:
 
 
 def _peak_rss_kb() -> int:
-    value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    return round(value / 1024) if sys.platform == "darwin" else value
+    if resource is not None:
+        value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return round(value / 1024) if sys.platform == "darwin" else value
+
+    from ctypes import wintypes
+
+    class _ProcessMemoryCounters(ctypes.Structure):
+        _fields_ = [
+            ("cb", wintypes.DWORD),
+            ("PageFaultCount", wintypes.DWORD),
+            ("PeakWorkingSetSize", ctypes.c_size_t),
+            ("WorkingSetSize", ctypes.c_size_t),
+            ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+            ("PagefileUsage", ctypes.c_size_t),
+            ("PeakPagefileUsage", ctypes.c_size_t),
+        ]
+
+    counters = _ProcessMemoryCounters()
+    counters.cb = ctypes.sizeof(counters)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    psapi.GetProcessMemoryInfo.argtypes = [
+        wintypes.HANDLE,
+        ctypes.POINTER(_ProcessMemoryCounters),
+        wintypes.DWORD,
+    ]
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+    if not psapi.GetProcessMemoryInfo(
+        kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb
+    ):
+        raise OSError(ctypes.get_last_error(), "GetProcessMemoryInfo failed")
+    return round(counters.PeakWorkingSetSize / 1024)
 
 
 def _measure_render_cancellation(doc: Document) -> float:

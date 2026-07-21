@@ -28,6 +28,8 @@ exits nonzero when a budget is exceeded; `--samples N` controls repetitions.
 Run each evidence preset in a fresh process: peak RSS is a process-lifetime
 high-water mark and a shared functional-test process would include unrelated
 earlier allocations.
+Linux/macOS read the process high-water mark through `getrusage`; Windows uses
+`GetProcessMemoryInfo.PeakWorkingSetSize`, reported in the same KiB unit.
 
 ## Observed full-resolution baseline
 

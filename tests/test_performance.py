@@ -38,6 +38,10 @@ def test_export_preview_is_proxy_bounded(qapp):
     assert max(dialog._proxy.width(), dialog._proxy.height()) <= 512
 
 
+def test_peak_rss_uses_the_platform_process_high_water_mark():
+    assert benchmarks._peak_rss_kb() > 0
+
+
 def test_scaled_benchmark_report_schema_and_gates(qapp, monkeypatch):
     # Wall-clock/RSS budgets run in dedicated CI processes. A monolithic test
     # process has unrelated historical ru_maxrss and is not performance evidence.
