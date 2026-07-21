@@ -38,8 +38,8 @@ jobs:
       PHOTOSLOP_APPLE_TEAM_ID: ${{ secrets.PHOTOSLOP_APPLE_TEAM_ID }}
       PHOTOSLOP_APPLE_APP_PASSWORD: ${{ secrets.PHOTOSLOP_APPLE_APP_PASSWORD }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: "3.12"
       - run: python scripts/check-version.py
@@ -50,7 +50,7 @@ jobs:
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         run: ./scripts/import-macos-signing-certificate.sh
       - run: ./scripts/build-portable-macos.sh
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Photoslop-macOS-portable${{ github.ref_name == 'v1.30.0' && '-SIGNED-NOT-NOTARIZED' || '' }}
           path: |
@@ -71,14 +71,14 @@ jobs:
       PHOTOSLOP_WINDOWS_CERT_BASE64: ${{ secrets.PHOTOSLOP_WINDOWS_CERT_BASE64 }}
       PHOTOSLOP_WINDOWS_CERT_PASSWORD: ${{ secrets.PHOTOSLOP_WINDOWS_CERT_PASSWORD }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: "3.12"
       - run: python scripts/check-version.py
       - shell: pwsh
         run: ./scripts/build-portable-windows.ps1
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Photoslop-Windows-portable${{ github.ref_name == 'v1.30.0' && '-UNSIGNED' || '' }}
           path: |
@@ -96,12 +96,12 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: Photoslop-macOS-portable${{ github.ref_name == 'v1.30.0' && '-SIGNED-NOT-NOTARIZED' || '' }}
           path: dist/macos
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: Photoslop-Windows-portable${{ github.ref_name == 'v1.30.0' && '-UNSIGNED' || '' }}
           path: dist/windows
@@ -114,7 +114,7 @@ jobs:
           mv dist/windows/BUILD-IDENTITY.json dist/windows/Photoslop-Windows-BUILD-IDENTITY.json
           mv dist/windows/THIRD_PARTY_NOTICES.md dist/windows/Photoslop-Windows-THIRD_PARTY_NOTICES.md
       - name: Attest portable archive provenance
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: "dist/**/*.zip"
       - name: Attach portable builds and metadata
