@@ -91,9 +91,11 @@ if [[ -n "${PHOTOSLOP_APPLE_ID:-}" && -n "${PHOTOSLOP_APPLE_TEAM_ID:-}" \
     --password "$PHOTOSLOP_APPLE_APP_PASSWORD"
   xcrun stapler staple "$APP"
   ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
-elif [[ "${PHOTOSLOP_REQUIRE_SIGNING:-0}" == "1" ]]; then
+elif [[ "${PHOTOSLOP_REQUIRE_NOTARIZATION:-${PHOTOSLOP_REQUIRE_SIGNING:-0}}" == "1" ]]; then
   echo "Tagged portable release requires Apple notarization credentials" >&2
   exit 1
+else
+  echo "Notarization credentials absent; archive will not be notarized."
 fi
 
 shasum -a 256 "$ZIP" > "$ZIP.sha256"

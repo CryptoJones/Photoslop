@@ -12,9 +12,10 @@ follows [SemVer](https://semver.org).
   documents, preserves PencilKit strokes and stable layer metadata, supports
   document-wide undo/redo, enforces iPad resource limits, and renders
   composites/PNG exports away from the main actor.
-- The macOS and Windows v1.30.0 portable archives are published as an explicit
-  unsigned exception. They include `UNSIGNED` in their filenames and are not
-  Developer ID signed/notarized or Authenticode signed.
+- The macOS v1.30.0 portable archive is Developer ID signed but not notarized
+  and includes `SIGNED-NOT-NOTARIZED` in its filename. The Windows archive is
+  an explicit unsigned exception, includes `UNSIGNED`, and has no Authenticode
+  signature.
 
 ## [1.29.1] — 2026-07-17
 

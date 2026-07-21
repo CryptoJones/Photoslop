@@ -44,8 +44,12 @@ def test_release_permissions_are_confined_to_tag_upload_jobs():
     assert portable.count("PHOTOSLOP_REQUIRE_SIGNING") == 2
     assert portable.count("github.ref_name != 'v1.30.0'") == 2
     assert portable.count("PHOTOSLOP_ARTIFACT_QUALIFIER") == 2
-    assert portable.count("github.ref_name == 'v1.30.0' && 'UNSIGNED' || ''") == 2
-    assert portable.count("github.ref_name == 'v1.30.0' && '-UNSIGNED' || ''") == 4
+    assert portable.count("github.ref_name == 'v1.30.0' && 'UNSIGNED' || ''") == 1
+    assert portable.count("github.ref_name == 'v1.30.0' && '-UNSIGNED' || ''") == 2
+    assert "github.ref_name == 'v1.30.0' && 'SIGNED-NOT-NOTARIZED' || ''" in portable
+    assert portable.count("github.ref_name == 'v1.30.0' && '-SIGNED-NOT-NOTARIZED' || ''") == 2
+    assert "scripts/import-macos-signing-certificate.sh" in portable
+    assert "MACOS_CERTIFICATE_P12" in portable
     assert "Attest signed portable archives" not in portable
     assert "Attest portable archive provenance" in portable
     for platform in ("macOS", "Windows"):

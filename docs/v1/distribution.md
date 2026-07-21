@@ -8,13 +8,14 @@ inputs and a weekly schedule execute both builders.
 
 Tagged portable jobs are normally fail-closed: macOS requires Developer ID
 signing plus Apple notarization credentials; Windows requires an Authenticode
-certificate. Version 1.30.0 is a narrow, maintainer-approved exception that
-publishes desktop archives with `UNSIGNED` in each filename. Those archives are
-not code-signed, the macOS app is not notarized, and operating-system security
-warnings are expected. Checksums, SBOMs, build identities, and GitHub provenance
-attestations remain present, but none is a substitute for a platform signature.
-Later tagged releases remain fail-closed. The unsigned iPad device bundle is
-validation-only and is not uploaded to a public release.
+certificate. Version 1.30.0 has two narrow, maintainer-approved exceptions. Its
+macOS archive is Developer ID signed but not notarized and includes
+`SIGNED-NOT-NOTARIZED` in its filename. Its Windows archive is not Authenticode
+signed and includes `UNSIGNED` in its filename. Operating-system security
+warnings may therefore still appear. Checksums, SBOMs, build identities, and
+GitHub provenance attestations remain present, but none substitutes for missing
+notarization or a platform signature. Later tagged releases remain fail-closed.
+The unsigned iPad device bundle is validation-only and is not uploaded publicly.
 
 The repository `THIRD_PARTY_NOTICES.md` records source-distributed assets. Each
 portable build generates an expanded notice file from the exact locked build
@@ -31,7 +32,8 @@ Before creating a tag, the release owner records:
 - SHA-256 manifests, SBOMs, build identities, dependency inventory hashes, and
   GitHub provenance attestations;
 - verified codesign/notarization and Authenticode output, or for the documented
-  v1.30.0 exception, verified `UNSIGNED` filenames and release warnings;
+  v1.30.0 exceptions, verified macOS `SIGNED-NOT-NOTARIZED` and Windows
+  `UNSIGNED` filenames plus release warnings;
 - a compliance-owner review of generated third-party notices and every bundled
   native codec/backend;
 - the manual accessibility/platform matrix, with unexecuted rows marked

@@ -23,11 +23,11 @@ jobs:
   macos:
     runs-on: macos-15
     env:
-      # v1.30.0 is a maintainer-approved, explicitly unsigned exception.
-      # Every later tagged release remains fail-closed without signing secrets.
-      PHOTOSLOP_REQUIRE_SIGNING: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name != 'v1.30.0' && '1' || '0' }}
-      PHOTOSLOP_ARTIFACT_QUALIFIER: ${{ github.ref_name == 'v1.30.0' && 'UNSIGNED' || '' }}
-      PHOTOSLOP_MACOS_SIGN_IDENTITY: ${{ secrets.PHOTOSLOP_MACOS_SIGN_IDENTITY }}
+      PHOTOSLOP_REQUIRE_SIGNING: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+      # v1.30.0 is Developer ID signed but is not notarized. Later tags remain
+      # fail-closed until the notary credentials are configured.
+      PHOTOSLOP_REQUIRE_NOTARIZATION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name != 'v1.30.0' && '1' || '0' }}
+      PHOTOSLOP_ARTIFACT_QUALIFIER: ${{ github.ref_name == 'v1.30.0' && 'SIGNED-NOT-NOTARIZED' || '' }}
       PHOTOSLOP_APPLE_ID: ${{ secrets.PHOTOSLOP_APPLE_ID }}
       PHOTOSLOP_APPLE_TEAM_ID: ${{ secrets.PHOTOSLOP_APPLE_TEAM_ID }}
       PHOTOSLOP_APPLE_APP_PASSWORD: ${{ secrets.PHOTOSLOP_APPLE_APP_PASSWORD }}
@@ -37,20 +37,29 @@ jobs:
         with:
           python-version: "3.12"
       - run: python scripts/check-version.py
+      - name: Import Developer ID identity
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: ./scripts/import-macos-signing-certificate.sh
       - run: ./scripts/build-portable-macos.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Photoslop-macOS-portable${{ github.ref_name == 'v1.30.0' && '-UNSIGNED' || '' }}
+          name: Photoslop-macOS-portable${{ github.ref_name == 'v1.30.0' && '-SIGNED-NOT-NOTARIZED' || '' }}
           path: |
             dist/portable-macos/*.zip
             dist/portable-macos/*.sha256
             dist/portable-macos/*.json
             dist/portable-macos/THIRD_PARTY_NOTICES.md
+      - name: Remove temporary signing keychain
+        if: always() && startsWith(github.ref, 'refs/tags/v')
+        run: security delete-keychain "$RUNNER_TEMP/photoslop-signing.keychain-db" 2>/dev/null || true
 
   windows:
     runs-on: windows-latest
     env:
-      # Keep this exception identical to the macOS policy above.
+      # v1.30.0 is a maintainer-approved Windows-only unsigned exception.
       PHOTOSLOP_REQUIRE_SIGNING: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name != 'v1.30.0' && '1' || '0' }}
       PHOTOSLOP_ARTIFACT_QUALIFIER: ${{ github.ref_name == 'v1.30.0' && 'UNSIGNED' || '' }}
       PHOTOSLOP_WINDOWS_CERT_BASE64: ${{ secrets.PHOTOSLOP_WINDOWS_CERT_BASE64 }}
@@ -83,7 +92,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: Photoslop-macOS-portable${{ github.ref_name == 'v1.30.0' && '-UNSIGNED' || '' }}
+          name: Photoslop-macOS-portable${{ github.ref_name == 'v1.30.0' && '-SIGNED-NOT-NOTARIZED' || '' }}
           path: dist/macos
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
