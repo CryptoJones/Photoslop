@@ -67,7 +67,8 @@ From the repository root:
 The script regenerates `ipados/Photoslop-iPadOS.xcodeproj`, builds the arm64
 device app with signing disabled, and writes
 `ipados/dist/Photoslop-iPadOS-unsigned.zip`. CI performs the same build and
-compiles/runs the iPad simulator tests.
+compiles/runs the iPad simulator tests. `XCODEGEN` may point the script at an
+executable; CI uses that hook for the downloaded, checksum-verified binary.
 
 To run on a physical iPad, generate the project, open it in Xcode, select the
 `PhotoslopIPad` target, choose your Apple Developer team, and run on the paired

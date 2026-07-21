@@ -33,10 +33,6 @@ jobs:
           ditto -x -k "$archive" "$RUNNER_TEMP/xcodegen-release"
           echo "XCODEGEN=$RUNNER_TEMP/xcodegen-release/xcodegen/bin/xcodegen" \
             >> "$GITHUB_ENV"
-      - name: Generate Xcode project
-        working-directory: ipados
-        run: |
-          "$XCODEGEN" generate
       - name: Build iPadOS app
         run: scripts/build-ipados.sh
       - name: Select iPad simulator

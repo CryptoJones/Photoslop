@@ -7,7 +7,11 @@ DERIVED_DATA="$IPADOS_DIR/build/DerivedData"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 export DEVELOPER_DIR
 
-if ! command -v xcodegen >/dev/null 2>&1; then
+XCODEGEN_BIN="${XCODEGEN:-}"
+if [[ -z "$XCODEGEN_BIN" ]]; then
+  XCODEGEN_BIN="$(command -v xcodegen || true)"
+fi
+if [[ -z "$XCODEGEN_BIN" || ! -x "$XCODEGEN_BIN" ]]; then
   echo "xcodegen is required (brew install xcodegen)." >&2
   exit 1
 fi
@@ -18,7 +22,7 @@ if [[ ! -d "$DEVELOPER_DIR" ]]; then
 fi
 
 cd "$IPADOS_DIR"
-xcodegen generate
+"$XCODEGEN_BIN" generate
 rm -rf "$DERIVED_DATA"
 xcodebuild \
   -project Photoslop-iPadOS.xcodeproj \

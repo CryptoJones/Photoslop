@@ -61,6 +61,9 @@ def test_external_ipados_and_portable_build_inputs_are_locked():
     ipados = (ROOT / ".github/workflows/ipados.yml").read_text()
     assert "XcodeGen/releases/download/2.46.0/xcodegen.zip" in ipados
     assert re.search(r"[0-9a-f]{64}\s+\$archive", ipados)
+    ipados_script = (ROOT / "scripts/build-ipados.sh").read_text()
+    assert 'XCODEGEN_BIN="${XCODEGEN:-}"' in ipados_script
+    assert '"$XCODEGEN_BIN" generate' in ipados_script
 
     for name in ("build-portable-macos.sh", "build-portable-windows.ps1"):
         source = (ROOT / "scripts" / name).read_text()
