@@ -236,11 +236,23 @@ def test_background_open_decodes_without_blocking_action(qapp, tmp_path, monkeyp
 def test_gui_heartbeat_continues_while_worker_runs(qapp):
     service = TaskService(max_workers=1)
     beats = []
+    release_worker = threading.Event()
     timer = QTimer()
     timer.setInterval(10)
-    timer.timeout.connect(lambda: beats.append(time.monotonic()))
+
+    def record_heartbeat():
+        beats.append(time.monotonic())
+        if len(beats) >= 3:
+            release_worker.set()
+
+    timer.timeout.connect(record_heartbeat)
     timer.start()
-    handle = service.submit("sleep", "Sleep", lambda _context: time.sleep(0.12))
+    handle = service.submit(
+        "sleep",
+        "Sleep",
+        lambda _context: release_worker.wait(timeout=1.0),
+    )
     _wait(qapp, lambda: handle.state is TaskState.SUCCEEDED)
     timer.stop()
-    assert len(beats) >= 5
+    assert release_worker.is_set()
+    assert len(beats) >= 3
