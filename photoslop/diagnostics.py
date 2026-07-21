@@ -8,7 +8,7 @@ import os
 import re
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from PySide6.QtCore import QObject, QSettings, Signal
 from PySide6.QtWidgets import (
@@ -29,6 +29,7 @@ _AUTHORIZATION_HEADER = re.compile(r"(?im)^(Authorization\s*:\s*).+$")
 _SECRET_KEY = re.compile(r"(?i)^(password|passwd|token|secret|api[_-]?key|authorization)$")
 _URL_CREDENTIALS = re.compile(r"(https?://)[^/@\s:]+:[^/@\s]+@", re.I)
 _MAX_DETAIL = 16_000
+_UTC = timezone.utc
 
 
 def redact(value: object) -> str:
@@ -80,7 +81,7 @@ class DiagnosticStore(QObject):
     ) -> DiagnosticRecord:
         record = DiagnosticRecord(
             uuid.uuid4().hex[:12],
-            datetime.now(UTC).isoformat(),
+            datetime.now(_UTC).isoformat(),
             redact(operation),
             redact(summary),
             redact(details),

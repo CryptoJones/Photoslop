@@ -19,3 +19,8 @@ JSON values, SVG applications tested, and every waived failure. A row is not
 “full parity” unless both its end-to-end task and interchange assertions pass.
 Platform-dependent manual rows cannot be inferred from offscreen CI and must be
 reported as unverified until a human completes them.
+
+Every Ubuntu job that imports Qt installs the same minimal EGL/GL/font/runtime
+set through `scripts/install-ci-qt-linux.sh`. The core OS/Python matrix does not
+force the optional G'MIC native package to compile on unsupported runners; a
+dedicated Linux job installs that extra and exercises its backend tests.

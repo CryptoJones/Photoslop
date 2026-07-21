@@ -8,11 +8,13 @@ import traceback
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from enum import Enum, IntEnum
 from typing import Any
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
+
+_UTC = timezone.utc
 
 
 class TaskState(str, Enum):
@@ -78,7 +80,7 @@ class TaskHandle(QObject):
         self.state = TaskState.QUEUED
         self.progress_percent = 0
         self.progress_message = ""
-        self.created_at = datetime.now(UTC)
+        self.created_at = datetime.now(_UTC)
         self.started_at: datetime | None = None
         self.finished_at: datetime | None = None
         self.error = ""
@@ -89,7 +91,7 @@ class TaskHandle(QObject):
 
     def _set_state(self, state: TaskState) -> None:
         self.state = state
-        now = datetime.now(UTC)
+        now = datetime.now(_UTC)
         if state is TaskState.RUNNING:
             self.started_at = now
         elif state in {TaskState.SUCCEEDED, TaskState.FAILED, TaskState.CANCELLED}:

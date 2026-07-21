@@ -78,3 +78,10 @@ def test_external_ipados_and_portable_build_inputs_are_locked():
             "THIRD_PARTY_NOTICES.md",
         ):
             assert required in source
+
+
+def test_every_linux_qt_workflow_installs_runtime_libraries():
+    ci = (ROOT / ".github/workflows/test.yml").read_text()
+    performance = (ROOT / ".github/workflows/performance.yml").read_text()
+    assert ci.count("scripts/install-ci-qt-linux.sh") == 6
+    assert performance.count("scripts/install-ci-qt-linux.sh") == 1

@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import os
 from contextlib import suppress
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zipfile import BadZipFile
 
 from defusedxml.ElementTree import ParseError
@@ -15,6 +15,8 @@ from PySide6.QtCore import QSettings
 from photoslop import __version__
 from photoslop.atomicio import WriteTicket, atomic_write
 from photoslop.io_ora import load_ora, save_ora
+
+_UTC = timezone.utc
 
 
 class RecoveryService:
@@ -44,7 +46,7 @@ class RecoveryService:
             "document_id": document.document_id,
             "name": document.name,
             "source_path": document.path,
-            "saved_at": datetime.now(UTC).isoformat(),
+            "saved_at": datetime.now(_UTC).isoformat(),
         }
 
         def write_metadata(temporary: str) -> None:
@@ -87,7 +89,7 @@ class RecoveryService:
     def prune(self) -> None:
         if not os.path.isdir(self.root):
             return
-        now = datetime.now(UTC)
+        now = datetime.now(_UTC)
         snapshots = []
         for name in os.listdir(self.root):
             if not name.endswith(".ora"):
@@ -98,9 +100,9 @@ class RecoveryService:
             try:
                 saved_at = datetime.fromisoformat(metadata["saved_at"])
             except (KeyError, TypeError, ValueError):
-                saved_at = datetime.fromtimestamp(os.path.getmtime(path), UTC)
+                saved_at = datetime.fromtimestamp(os.path.getmtime(path), _UTC)
             if saved_at.tzinfo is None:
-                saved_at = saved_at.replace(tzinfo=UTC)
+                saved_at = saved_at.replace(tzinfo=_UTC)
             if now - saved_at > self.max_age:
                 self.clear(document_id)
                 continue

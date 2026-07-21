@@ -1062,7 +1062,6 @@ build = [
 ]
 dev = [
     { name = "exifread" },
-    { name = "gmic" },
     { name = "lensfunpy" },
     { name = "mcp" },
     { name = "pillow" },
@@ -1102,7 +1101,6 @@ requires-dist = [
     { name = "detect-secrets", marker = "extra == 'security'", specifier = "==1.5.0" },
     { name = "exifread", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "exifread", marker = "extra == 'lens'", specifier = ">=3.0" },
-    { name = "gmic", marker = "extra == 'dev'", specifier = ">=3.6" },
     { name = "gmic", marker = "extra == 'gmic'", specifier = ">=3.6" },
     { name = "lensfunpy", marker = "extra == 'dev'", specifier = ">=1.18" },
     { name = "lensfunpy", marker = "extra == 'lens'", specifier = ">=1.18" },
