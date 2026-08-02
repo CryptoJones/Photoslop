@@ -12,10 +12,10 @@ jobs:
   benchmark:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux Qt runtime libraries
         run: scripts/install-ci-qt-linux.sh
-      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: "3.12"
       - run: uv sync --extra dev --locked
@@ -28,7 +28,7 @@ jobs:
             --samples 5 --enforce > reports/full-4k-10.json
           uv run python -m photoslop.benchmarks 12mp-4 \
             --samples 5 --enforce > reports/full-12mp-4.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: full-scale-performance-${{ github.sha }}
           path: reports/
