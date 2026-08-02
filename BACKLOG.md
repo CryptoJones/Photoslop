@@ -6,6 +6,11 @@ sync — check an item here when its issue closes.
 
 ## Open
 
+- [ ] Update the MCP harness for the 2026-07-28 ("v2") protocol standard —
+  cap `mcp<2` now to stop an unbounded floor from breaking PyPI installs, add a
+  Streamable HTTP transport alongside stdio, then migrate `FastMCP` →
+  `MCPServer` once the SDK v2 line is stable
+  ([#182](https://github.com/CryptoJones/Photoslop/issues/182))
 
 ## Done
 
