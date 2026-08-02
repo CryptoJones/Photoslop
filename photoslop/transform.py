@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPolygonF, QTransform, QUndoCommand
 
 from photoslop.cursors import CursorIntent
+from photoslop.layer import mask_to_alpha
 from photoslop.tools import Tool, ToolOptions
 
 
@@ -239,13 +241,46 @@ class TransformSession:
         self._push(new_image, new_offset, new_mask)
 
     def _transform_mask(self, matrix: QTransform) -> QImage | None:
-        """Apply a single QTransform to the base mask, preserving Grayscale8."""
+        """Apply a single QTransform to the base mask, preserving Grayscale8.
+
+        ``QImage.transformed()`` on a Grayscale8 mask at a non-90° angle
+        converts to ARGB32_Premultiplied internally.  A naive
+        ``convertToFormat(Grayscale8)`` would read premultiplied RGB luminance,
+        which is wrong at edges where alpha < 255.  Instead we route through
+        Alpha8 (mask_to_alpha): the grey value *is* the alpha, so it is
+        interpolated in the alpha channel, and we read the transformed alpha
+        back as Grayscale8.
+        """
         if self.base_mask is None:
             return None
-        new_mask = self.base_mask.transformed(matrix, Qt.TransformationMode.SmoothTransformation)
-        if new_mask.format() != QImage.Format.Format_Grayscale8:
-            new_mask = new_mask.convertToFormat(QImage.Format.Format_Grayscale8)
-        return new_mask
+        alpha = mask_to_alpha(self.base_mask)
+        rotated = alpha.transformed(matrix, Qt.TransformationMode.SmoothTransformation)
+
+        fmt = rotated.format()
+        if fmt == QImage.Format.Format_Alpha8:
+            return QImage(
+                rotated.constBits(), rotated.width(), rotated.height(),
+                rotated.bytesPerLine(), QImage.Format.Format_Grayscale8,
+            ).copy()
+        if fmt == QImage.Format.Format_Grayscale8:
+            return rotated
+
+        # ARGB32_Premultiplied: extract the alpha channel via numpy.
+        from photoslop.npimage import view_u32
+
+        arr = view_u32(rotated)
+        alpha_bytes = (arr >> np.uint32(24)).astype(np.uint8)
+        result = QImage(
+            rotated.width(), rotated.height(), QImage.Format.Format_Grayscale8
+        )
+        out_bpl = result.bytesPerLine()
+        out_arr = np.frombuffer(
+            result.bits(), dtype=np.uint8,
+            count=rotated.height() * out_bpl,
+        ).reshape(rotated.height(), out_bpl)
+        for y in range(rotated.height()):
+            out_arr[y, :rotated.width()] = alpha_bytes[y, :]
+        return result
 
     def _warp_mask(self, bounds: QRectF) -> QImage | None:
         """Warp the base mask through the same patch grid as the image."""

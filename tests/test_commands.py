@@ -3,6 +3,7 @@ from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
 
 from photoslop.commands import (
+    ArbitraryRotateCommand,
     FlipImageCommand,
     FlipLayerCommand,
     InsertLayerCommand,
@@ -15,7 +16,7 @@ from photoslop.commands import (
     TileRecorder,
 )
 from photoslop.document import Document
-from photoslop.layer import Layer
+from photoslop.layer import Layer, blank_image
 
 
 def make_doc(qapp):
@@ -272,3 +273,88 @@ def test_flip_preserves_mask(qapp):
     doc.undo_stack.undo()
     assert layer.mask.pixelColor(black_pos, 15) == QColor(0, 0, 0, 255)  # restored
     assert layer.mask.pixelColor(white_pos, 15) == QColor(255, 255, 255, 255)
+
+
+# ── HAL9000 regression tests ───────────────────────────────────────────
+
+
+def test_merge_down_preserves_adjustment(qapp):
+    """CRITICAL regression: merge-down must not clear lower.adjustment.
+
+    An adjustment layer post-processes the composite *beneath* it via a LUT
+    (document.py:59-61).  draw_layer does not bake the LUT into the layer's
+    pixels, so clearing it (commands.py old code) silently deletes the filter.
+    The LUT must survive the merge and survive undo.
+    """
+    import numpy as np
+
+    doc = make_doc(qapp)  # 100x80, white background
+    lower = doc.layers[0]
+    lower.image.fill(QColor(100, 100, 100))
+
+    # Adjustment layer with a brighten LUT (100 → 160)
+    adj = Layer("Levels", blank_image(QSize(1, 1)))
+    lut = np.clip(np.arange(256) + 60, 0, 255).astype(np.uint8)
+    adj.adjustment = np.tile(lut, (3, 1))
+    doc.undo_stack.push(InsertLayerCommand(doc, 1, adj))
+
+    # Upper layer — red pixels above the adjustment
+    upper = Layer.blank("upper", QSize(100, 80))
+    upper.image.fill(QColor(255, 0, 0))
+    doc.undo_stack.push(InsertLayerCommand(doc, 2, upper))
+
+    original_lut = adj.adjustment.copy()
+
+    # Merge upper into the adjustment layer
+    doc.undo_stack.push(MergeDownCommand(doc, 2))
+    merged = doc.layers[1]
+    assert merged.adjustment is not None  # adjustment NOT cleared
+    np.testing.assert_array_equal(merged.adjustment, original_lut)
+
+    doc.undo_stack.undo()
+    assert doc.layers[1].adjustment is not None
+    np.testing.assert_array_equal(doc.layers[1].adjustment, original_lut)
+
+
+def test_arbitrary_rotate_preserves_mask_format(qapp):
+    """HIGH regression: ArbitraryRotateCommand must keep layer.mask in
+    Grayscale8 after a non-90° rotation.
+
+    QImage.transformed(SmoothTransformation) on Grayscale8 returns
+    ARGB32_Premultiplied.  Without format preservation, mask_to_alpha
+    (layer.py:49) reinterprets the 4-byte ARGB stride as 1-byte Alpha8,
+    scrambling the mask.
+    """
+    doc = make_doc(qapp)
+    layer = doc.active_layer
+    layer.mask = _mask_with_black_rect(doc.size, QRect(30, 20, 40, 40))
+    original_mask = QImage(layer.mask)
+
+    doc.undo_stack.push(ArbitraryRotateCommand(doc, 30.0))
+    assert layer.mask is not None
+    assert layer.mask.format() == QImage.Format.Format_Grayscale8
+
+    doc.undo_stack.undo()
+    assert layer.mask is not None
+    assert layer.mask.format() == QImage.Format.Format_Grayscale8
+    assert layer.mask == original_mask
+
+
+def test_rotate_layer_preserves_mask_format(qapp):
+    """HIGH regression: RotateLayerCommand at a non-90° angle must keep
+    layer.mask in Grayscale8.  Reachable from the CLI via --rotate-layer."""
+    doc = make_doc(qapp)
+    layer = doc.active_layer
+    layer.image = QImage(40, 40, QImage.Format.Format_ARGB32_Premultiplied)
+    layer.image.fill(QColor(255, 0, 0, 255))
+    layer.mask = _mask_with_black_rect(QSize(40, 40), QRect(10, 10, 20, 20))
+    original_mask = QImage(layer.mask)
+
+    doc.undo_stack.push(RotateLayerCommand(doc, layer, 30))
+    assert layer.mask is not None
+    assert layer.mask.format() == QImage.Format.Format_Grayscale8
+
+    doc.undo_stack.undo()
+    assert layer.mask is not None
+    assert layer.mask.format() == QImage.Format.Format_Grayscale8
+    assert layer.mask == original_mask

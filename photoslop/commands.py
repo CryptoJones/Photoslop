@@ -5,6 +5,7 @@ it actually changed (tiles or a region), never whole-canvas snapshots.
 
 from __future__ import annotations
 
+import numpy as np
 from copy import deepcopy
 
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
@@ -12,6 +13,7 @@ from PySide6.QtGui import QImage, QPainter, QTransform, QUndoCommand
 
 from photoslop.document import Document, _effects_margin, draw_layer
 from photoslop.layer import BLEND_MODES, Layer, blank_image, mask_to_alpha
+from photoslop.npimage import view_u32
 
 TILE = 128
 
@@ -23,6 +25,51 @@ def _blit(dst: QImage, pos: QPoint, src: QImage) -> None:
     p.setCompositionMode(_SOURCE)
     p.drawImage(pos, src)
     p.end()
+
+
+def _transform_mask(mask: QImage, transform: QTransform, *, smooth: bool = True) -> QImage:
+    """Apply *transform* to a Grayscale8 mask, preserving its format.
+
+    ``QImage.transformed()`` on a Grayscale8 mask at a non-90° angle converts
+    to ARGB32_Premultiplied internally.  A naive ``convertToFormat(Grayscale8)``
+    would read premultiplied RGB luminance, which is wrong at edges where
+    alpha < 255 (it reads ``gray * alpha / 255`` instead of ``gray``).
+
+    Instead we route through Alpha8 via ``mask_to_alpha``: the grey value *is*
+    the alpha, so it is interpolated in the alpha channel, and we read the
+    transformed alpha back as Grayscale8.
+    """
+    alpha = mask_to_alpha(mask)  # Alpha8: byte == alpha weight
+    mode = Qt.TransformationMode.SmoothTransformation if smooth else Qt.TransformationMode.FastTransformation
+    rotated = alpha.transformed(transform, mode)
+
+    fmt = rotated.format()
+    if fmt == QImage.Format.Format_Alpha8:
+        # Qt preserved Alpha8 — reinterpret bytes as Grayscale8
+        return QImage(
+            rotated.constBits(), rotated.width(), rotated.height(),
+            rotated.bytesPerLine(), QImage.Format.Format_Grayscale8,
+        ).copy()
+
+    if fmt == QImage.Format.Format_Grayscale8:
+        return QImage(rotated)  # shallow copy to detach
+
+    # ARGB32_Premultiplied: extract the alpha channel via numpy.
+    # Alpha8 source → ARGB32_Premultiplied: RGB=0, alpha=interpolated value.
+    # view_u32 >> 24 gives the alpha channel directly.
+    arr = view_u32(rotated)
+    alpha_bytes = (arr >> np.uint32(24)).astype(np.uint8)
+    result = QImage(
+        rotated.width(), rotated.height(), QImage.Format.Format_Grayscale8
+    )
+    out_bpl = result.bytesPerLine()
+    out_arr = np.frombuffer(
+        result.bits(), dtype=np.uint8,
+        count=rotated.height() * out_bpl,
+    ).reshape(rotated.height(), out_bpl)
+    for y in range(rotated.height()):
+        out_arr[y, :rotated.width()] = alpha_bytes[y, :]
+    return result
 
 
 class TileRecorder:
@@ -252,10 +299,18 @@ class SetLayerPropertyCommand(QUndoCommand):
 class MergeDownCommand(QUndoCommand):
     """Fuse the upper layer into the lower one via the same compositing path
     as ``Document.flatten``.  After the merge the lower layer's image is the
-    baked composite, so every per-layer appearance property that was
-    applied during that composite (mask, fill-opacity, effects, adjustment,
-    clipping) is cleared from the layer and restored by undo from the
-    snapshot taken here."""
+    baked composite, so appearance properties that were baked into those
+    pixels (mask, fill-opacity, effects) are cleared from the layer and
+    restored by undo from the snapshot taken here.
+
+    * adjustment is **not** cleared — it is a post-process LUT applied to the
+      composite *beneath* the layer during ``render_region`` (document.py:59),
+      never baked into pixels by ``draw_layer``.  Clearing it would silently
+      delete a filter the user still needs.
+    * clipped is cleared to False — ``draw_layer`` bakes the clip into the
+      merged pixels via ``clip_base_for``; keeping it would double-clip
+      against the current layer-below, which may have changed since the merge.
+    * fx_cache is invalidated because the image changed."""
 
     def __init__(self, doc: Document, index: int):
         super().__init__("Merge Down")
@@ -278,7 +333,7 @@ class MergeDownCommand(QUndoCommand):
             lower.fill_opacity,
             deepcopy(lower.effects),
             lower.clipped,
-            lower.adjustment,
+            lower.adjustment.copy() if lower.adjustment is not None else None,
         )
 
         union = upper.bounds().united(lower.bounds())
@@ -309,7 +364,6 @@ class MergeDownCommand(QUndoCommand):
         lower.mask = None
         lower.fill_opacity = 1.0
         lower.effects = []
-        lower.adjustment = None
         lower.clipped = False
         lower.fx_cache = None
         self.upper = doc.take_layer(self.index)
@@ -650,7 +704,7 @@ class ArbitraryRotateCommand(QUndoCommand):
             for layer, old_img, old_offset, old_mask in self.old_layers:
                 new_img = old_img.transformed(t, Qt.TransformationMode.SmoothTransformation)
                 new_mask = (
-                    old_mask.transformed(t, Qt.TransformationMode.SmoothTransformation)
+                    _transform_mask(old_mask, t)
                     if old_mask is not None
                     else None
                 )
@@ -928,7 +982,7 @@ class RotateLayerCommand(QUndoCommand):
         cy = layer.offset.y() + layer.image.height() / 2.0
         layer.image = layer.image.transformed(QTransform().rotate(deg))
         if layer.mask is not None:
-            layer.mask = layer.mask.transformed(QTransform().rotate(deg))
+            layer.mask = _transform_mask(layer.mask, QTransform().rotate(deg))
         layer.offset = QPoint(
             round(cx - layer.image.width() / 2.0), round(cy - layer.image.height() / 2.0)
         )
