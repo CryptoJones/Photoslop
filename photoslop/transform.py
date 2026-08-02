@@ -259,8 +259,11 @@ class TransformSession:
         fmt = rotated.format()
         if fmt == QImage.Format.Format_Alpha8:
             return QImage(
-                rotated.constBits(), rotated.width(), rotated.height(),
-                rotated.bytesPerLine(), QImage.Format.Format_Grayscale8,
+                rotated.constBits(),
+                rotated.width(),
+                rotated.height(),
+                rotated.bytesPerLine(),
+                QImage.Format.Format_Grayscale8,
             ).copy()
         if fmt == QImage.Format.Format_Grayscale8:
             return rotated
@@ -270,16 +273,15 @@ class TransformSession:
 
         arr = view_u32(rotated)
         alpha_bytes = (arr >> np.uint32(24)).astype(np.uint8)
-        result = QImage(
-            rotated.width(), rotated.height(), QImage.Format.Format_Grayscale8
-        )
+        result = QImage(rotated.width(), rotated.height(), QImage.Format.Format_Grayscale8)
         out_bpl = result.bytesPerLine()
         out_arr = np.frombuffer(
-            result.bits(), dtype=np.uint8,
+            result.bits(),
+            dtype=np.uint8,
             count=rotated.height() * out_bpl,
         ).reshape(rotated.height(), out_bpl)
         for y in range(rotated.height()):
-            out_arr[y, :rotated.width()] = alpha_bytes[y, :]
+            out_arr[y, : rotated.width()] = alpha_bytes[y, :]
         return result
 
     def _warp_mask(self, bounds: QRectF) -> QImage | None:

@@ -5,9 +5,9 @@ it actually changed (tiles or a region), never whole-canvas snapshots.
 
 from __future__ import annotations
 
-import numpy as np
 from copy import deepcopy
 
+import numpy as np
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QImage, QPainter, QTransform, QUndoCommand
 
@@ -40,15 +40,22 @@ def _transform_mask(mask: QImage, transform: QTransform, *, smooth: bool = True)
     transformed alpha back as Grayscale8.
     """
     alpha = mask_to_alpha(mask)  # Alpha8: byte == alpha weight
-    mode = Qt.TransformationMode.SmoothTransformation if smooth else Qt.TransformationMode.FastTransformation
+    mode = (
+        Qt.TransformationMode.SmoothTransformation
+        if smooth
+        else Qt.TransformationMode.FastTransformation
+    )
     rotated = alpha.transformed(transform, mode)
 
     fmt = rotated.format()
     if fmt == QImage.Format.Format_Alpha8:
         # Qt preserved Alpha8 — reinterpret bytes as Grayscale8
         return QImage(
-            rotated.constBits(), rotated.width(), rotated.height(),
-            rotated.bytesPerLine(), QImage.Format.Format_Grayscale8,
+            rotated.constBits(),
+            rotated.width(),
+            rotated.height(),
+            rotated.bytesPerLine(),
+            QImage.Format.Format_Grayscale8,
         ).copy()
 
     if fmt == QImage.Format.Format_Grayscale8:
@@ -59,16 +66,15 @@ def _transform_mask(mask: QImage, transform: QTransform, *, smooth: bool = True)
     # view_u32 >> 24 gives the alpha channel directly.
     arr = view_u32(rotated)
     alpha_bytes = (arr >> np.uint32(24)).astype(np.uint8)
-    result = QImage(
-        rotated.width(), rotated.height(), QImage.Format.Format_Grayscale8
-    )
+    result = QImage(rotated.width(), rotated.height(), QImage.Format.Format_Grayscale8)
     out_bpl = result.bytesPerLine()
     out_arr = np.frombuffer(
-        result.bits(), dtype=np.uint8,
+        result.bits(),
+        dtype=np.uint8,
         count=rotated.height() * out_bpl,
     ).reshape(rotated.height(), out_bpl)
     for y in range(rotated.height()):
-        out_arr[y, :rotated.width()] = alpha_bytes[y, :]
+        out_arr[y, : rotated.width()] = alpha_bytes[y, :]
     return result
 
 
@@ -703,11 +709,7 @@ class ArbitraryRotateCommand(QUndoCommand):
             entries = []
             for layer, old_img, old_offset, old_mask in self.old_layers:
                 new_img = old_img.transformed(t, Qt.TransformationMode.SmoothTransformation)
-                new_mask = (
-                    _transform_mask(old_mask, t)
-                    if old_mask is not None
-                    else None
-                )
+                new_mask = _transform_mask(old_mask, t) if old_mask is not None else None
                 centre = QPointF(
                     old_offset.x() + old_img.width() / 2.0, old_offset.y() + old_img.height() / 2.0
                 )
@@ -848,7 +850,9 @@ class ResizeImageCommand(QUndoCommand):
             layer.offset = QPoint(round(old_off.x() * sx), round(old_off.y() * sy))
             if old_mask is not None:
                 layer.mask = old_mask.scaled(
-                    w, h, Qt.AspectRatioMode.IgnoreAspectRatio,
+                    w,
+                    h,
+                    Qt.AspectRatioMode.IgnoreAspectRatio,
                     Qt.TransformationMode.SmoothTransformation,
                 )
         doc.size = QSize(self.new_size)
@@ -994,9 +998,7 @@ class RotateLayerCommand(QUndoCommand):
     def undo(self) -> None:
         self._apply(360 - self.degrees)
         self.layer.offset = QPoint(self.old_offset)  # exact, no rounding drift
-        self.layer.mask = (
-            QImage(self.old_mask) if self.old_mask is not None else None
-        )
+        self.layer.mask = QImage(self.old_mask) if self.old_mask is not None else None
         self.doc.notify_pixels(self.layer.bounds())
 
 

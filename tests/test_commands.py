@@ -5,7 +5,6 @@ from PySide6.QtGui import QColor, QImage, QPainter
 from photoslop.commands import (
     ArbitraryRotateCommand,
     FlipImageCommand,
-    FlipLayerCommand,
     InsertLayerCommand,
     MergeDownCommand,
     MergeVisibleCommand,
