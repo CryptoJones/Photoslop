@@ -9,6 +9,7 @@ import os
 # The stdlib module is used only to construct output; input parsing is defused.
 import xml.etree.ElementTree as ET  # nosec B405
 import zipfile
+from typing import NamedTuple
 
 from PySide6.QtCore import QBuffer, QIODevice, QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QImage
@@ -27,6 +28,15 @@ from photoslop.resources import (
 )
 
 MIMETYPE = "image/openraster"
+
+
+class _GroupContext(NamedTuple):
+    """Compositing state of an enclosing nested <stack>, folded down one level."""
+
+    name: str
+    opacity: float
+    blend: str
+    visible: bool
 
 
 def _png_bytes(img: QImage) -> bytes:
@@ -69,6 +79,13 @@ def _write_ora(doc: Document, path: str) -> None:
             "photoslop-artboards",
             json.dumps([[n, r.x(), r.y(), r.width(), r.height()] for n, r in doc.artboards]),
         )
+    if doc.group_props:
+        import json
+
+        # Photoslop writes a flat stack with photoslop-group on each layer, so
+        # the group's own opacity and blend mode have nowhere standard to live.
+        # Without this they were silently dropped on every save.
+        image.set("photoslop-group-props", json.dumps(doc.group_props, separators=(",", ":")))
     if doc.icc_space is not None and doc.icc_space.isValid():
         import base64
 
@@ -161,6 +178,43 @@ def _write_ora(doc: Document, path: str) -> None:
         zf.writestr("Thumbnails/thumbnail.png", _png_bytes(thumb))
 
 
+def _group_context(
+    child: ET.Element, parent: _GroupContext | None, group_props: dict[str, dict]
+) -> _GroupContext:
+    """Reserve a group name and fold the enclosing stack's state into it.
+
+    Photoslop's group model (Document.group_props, consumed by render_region)
+    holds one level: a contiguous run of layers is composited into its own
+    buffer, then drawn with the group's opacity and blend mode. That is exactly
+    ORA group semantics for a single level, so an ordinary GIMP/Krita group
+    maps across without approximation.
+
+    Nesting has nowhere to go in a one-level model. Rather than share one entry
+    between depths — which silently loses whichever depth is written second —
+    each <stack> gets its own name carrying the *cumulative* state of its
+    chain. Depth-first order keeps each stack's own layers contiguous, so every
+    run is composited with the state that actually encloses it. This stays
+    exact for pure nesting; it approximates only when a non-normal group blend
+    has to be applied per-run instead of to the whole group's composite.
+    """
+    name = child.get("name") or "Group"
+    candidate, suffix = name, 2
+    while candidate in group_props:
+        candidate, suffix = f"{name} ({suffix})", suffix + 1
+    opacity = float(child.get("opacity", "1.0"))
+    blend = ORA_OPS_REVERSE.get(child.get("composite-op", "svg:src-over"), "normal")
+    visible = child.get("visibility", "visible") != "hidden"
+    if parent is not None:
+        opacity *= parent.opacity
+        blend = blend if blend != "normal" else parent.blend
+        visible = visible and parent.visible
+    # Reserved immediately so a sibling or descendant cannot claim the same
+    # name; dropped again by the caller if the stack turns out to hold no
+    # layers of its own, since a props entry with no run never gets applied.
+    group_props[candidate] = {"opacity": opacity, "blend_mode": blend}
+    return _GroupContext(candidate, opacity, blend, visible)
+
+
 def _walk_layers(
     zf: zipfile.ZipFile,
     members: dict,
@@ -169,15 +223,32 @@ def _walk_layers(
     out: list[Layer],
     *,
     allow_large: bool,
+    group: _GroupContext | None = None,
+    group_props: dict[str, dict] | None = None,
 ) -> None:
     """Collect layers depth-first, flattening nested stacks (groups) with
     accumulated offsets. XML order is top-first, so append order is too."""
     if node is None:
         raise ValueError("OpenRaster: stack.xml has no stack")
+    if group_props is None:
+        group_props = {}
     for child in node:
         if child.tag == "stack":
             off = base + QPoint(int(float(child.get("x", "0"))), int(float(child.get("y", "0"))))
-            _walk_layers(zf, members, child, off, out, allow_large=allow_large)
+            nested = _group_context(child, group, group_props)
+            before = len(out)
+            _walk_layers(
+                zf,
+                members,
+                child,
+                off,
+                out,
+                allow_large=allow_large,
+                group=nested,
+                group_props=group_props,
+            )
+            if not any(layer.group == nested.name for layer in out[before:]):
+                group_props.pop(nested.name, None)
         elif child.tag == "layer":
             if len(out) >= DESKTOP_BUDGET.max_layers:
                 raise ResourceLimitError(
@@ -203,7 +274,7 @@ def _walk_layers(
                 child.get("name") or "Layer",
                 img,
                 base + QPoint(int(float(child.get("x", "0"))), int(float(child.get("y", "0")))),
-                child.get("visibility", "visible") != "hidden",
+                child.get("visibility", "visible") != "hidden" and (group is None or group.visible),
                 float(child.get("opacity", "1.0")),
                 ORA_OPS_REVERSE.get(child.get("composite-op", "svg:src-over"), "normal"),
                 child.get("photoslop-id"),
@@ -217,7 +288,13 @@ def _walk_layers(
                     raise ValueError("OpenRaster: invalid layer mask")
                 layer.mask = mask.convertToFormat(QImage.Format.Format_Grayscale8)
             layer.clipped = child.get("photoslop-clipped") == "1"
-            layer.group = child.get("photoslop-group") or None
+            # A nested <stack> wins over the flat photoslop-group attribute:
+            # Photoslop only ever writes the latter, so the two never collide
+            # on our own files, and on foreign files the real group is the one
+            # that carries opacity and blend state.
+            layer.group = (
+                (group.name if group is not None else None) or child.get("photoslop-group") or None
+            )
             source_src = child.get("photoslop-source")
             filters_json = child.get("photoslop-smart-filters")
             if source_src and source_src in members:
@@ -294,8 +371,15 @@ def load_ora(path: str, *, allow_large: bool = False) -> Document:
         validate_dpi(dpi, operation="OpenRaster")
 
         top_first: list[Layer] = []
+        walked_groups: dict[str, dict] = {}
         _walk_layers(
-            zf, members, root.find("stack"), QPoint(0, 0), top_first, allow_large=allow_large
+            zf,
+            members,
+            root.find("stack"),
+            QPoint(0, 0),
+            top_first,
+            allow_large=allow_large,
+            group_props=walked_groups,
         )
 
     name = path.replace("\\", "/").rsplit("/", 1)[-1]
@@ -319,6 +403,18 @@ def load_ora(path: str, *, allow_large: bool = False) -> Document:
         import json
 
         doc.artboards = [(n, QRect(x, y, w2, h2)) for n, x, y, w2, h2 in json.loads(boards_json)]
+    groups_json = root.get("photoslop-group-props")
+    if groups_json:
+        import json
+
+        for group_name, props in json.loads(groups_json).items():
+            doc.group_props[group_name] = {
+                "opacity": float(props.get("opacity", 1.0)),
+                "blend_mode": str(props.get("blend_mode", "normal")),
+            }
+    # Groups recovered from nested stacks win: they came from the file's own
+    # structure rather than from Photoslop's flat extension attribute.
+    doc.group_props.update(walked_groups)
     doc.active_index = len(doc.layers) - 1
     doc.path = path
     return doc
