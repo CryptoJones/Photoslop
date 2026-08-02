@@ -22,6 +22,25 @@ def make_doc(qapp):
     return Document.new(QSize(100, 80), 72.0, "t", QColor(255, 255, 255))
 
 
+def _assert_mask_values_survived(mask: QImage) -> None:
+    """A mask can be correctly *formatted* and still wrongly *valued*.
+
+    The defect these rotation tests guard is a value corruption: reading
+    premultiplied RGB luminance instead of the alpha channel. That path yields
+    RGB=0 everywhere, so the whole mask collapses to black — fully masked out,
+    with the format assertion still passing. Check that both the white and the
+    black regions are still present, and that the centre (where the black rect
+    is centred, and which any rotation about the centre maps to itself) is
+    still dark.
+    """
+    values = [
+        mask.pixelColor(x, y).value() for y in range(mask.height()) for x in range(mask.width())
+    ]
+    assert sum(1 for v in values if v > 200) > 100, "the unmasked (white) region collapsed"
+    assert sum(1 for v in values if v < 55) > 100, "the masked (black) rect vanished"
+    assert mask.pixelColor(mask.width() // 2, mask.height() // 2).value() < 55
+
+
 def test_tile_recorder_undo_redo(qapp):
     doc = make_doc(qapp)
     layer = doc.active_layer
@@ -130,6 +149,11 @@ def test_merge_down_blend_mode_screen(qapp):
 
     expected = doc.flatten().pixelColor(50, 40)
     assert expected != QColor(255, 0, 0)  # must NOT be SourceOver result
+    # Anchor to the arithmetic, not only to flatten(): screen is
+    # 255 - (255-a)(255-b)/255 per channel, so brown under red is (255, 64, 32).
+    # Comparing against flatten() alone would pass if draw_layer itself
+    # regressed, since both sides would move together.
+    assert expected == QColor(255, 64, 32)
 
     doc.undo_stack.push(MergeDownCommand(doc, 1))
     assert doc.flatten().pixelColor(50, 40) == expected
@@ -212,8 +236,13 @@ def test_merge_down_stale_lower_properties_cleared(qapp):
     assert doc.layers[0].fill_opacity == 1.0
     assert doc.layers[0].mask is None
     assert doc.layers[0].effects == []
-    assert doc.layers[0].adjustment is None
     assert doc.layers[0].clipped is False
+    # adjustment is deliberately absent from the cleared set — it is a
+    # post-process LUT applied beneath the layer, never baked by draw_layer,
+    # and test_merge_down_preserves_adjustment asserts it survives. `lower`
+    # never had one here, so asserting None would pass regardless and read as
+    # a requirement that merge clears it, which is the opposite of the
+    # contract in MergeDownCommand's docstring.
 
     doc.undo_stack.undo()
     assert doc.layers[0].fill_opacity == 0.5
@@ -332,6 +361,7 @@ def test_arbitrary_rotate_preserves_mask_format(qapp):
     doc.undo_stack.push(ArbitraryRotateCommand(doc, 30.0))
     assert layer.mask is not None
     assert layer.mask.format() == QImage.Format.Format_Grayscale8
+    _assert_mask_values_survived(layer.mask)
 
     doc.undo_stack.undo()
     assert layer.mask is not None
@@ -352,8 +382,56 @@ def test_rotate_layer_preserves_mask_format(qapp):
     doc.undo_stack.push(RotateLayerCommand(doc, layer, 30))
     assert layer.mask is not None
     assert layer.mask.format() == QImage.Format.Format_Grayscale8
+    _assert_mask_values_survived(layer.mask)
 
     doc.undo_stack.undo()
     assert layer.mask is not None
     assert layer.mask.format() == QImage.Format.Format_Grayscale8
     assert layer.mask == original_mask
+
+
+def test_merge_visible_bakes_adjustment_layers(qapp):
+    """CRITICAL regression: Merge Visible must not change the composite.
+
+    Document.flatten routes through render_region whenever adjustments exist,
+    and that path applies each layer's LUT to the composite beneath it. A
+    manual draw_layer loop never does — and an adjustment layer is visible, so
+    it was merged in as its own (blank) pixels while its LUT was dropped on the
+    floor. The document changed appearance the moment the user merged.
+    """
+    import numpy as np
+
+    doc = make_doc(qapp)
+    doc.layers[0].image.fill(QColor(200, 200, 200))
+    adj = Layer("Invert", blank_image(QSize(1, 1)))
+    adj.adjustment = np.tile(np.arange(255, -1, -1, dtype=np.uint8), (3, 1))
+    doc.undo_stack.push(InsertLayerCommand(doc, 1, adj))
+
+    before = doc.flatten().pixelColor(50, 40)
+    assert before == QColor(55, 55, 55), "the LUT must be inverting the grey"
+
+    doc.undo_stack.push(MergeVisibleCommand(doc))
+    assert len(doc.layers) == 1
+    assert doc.flatten().pixelColor(50, 40) == before
+
+    doc.undo_stack.undo()
+    assert len(doc.layers) == 2
+    assert doc.layers[1].adjustment is not None
+    assert doc.flatten().pixelColor(50, 40) == before
+
+
+def test_merge_visible_with_nothing_visible_is_a_no_op(qapp):
+    """`max()` over an empty sequence raised, and undo then popped a layer
+    that had never been merged."""
+    doc = make_doc(qapp)
+    upper = Layer.blank("upper", doc.size)
+    doc.undo_stack.push(InsertLayerCommand(doc, 1, upper))
+    for layer in doc.layers:
+        layer.visible = False
+    names = [layer.name for layer in doc.layers]
+
+    doc.undo_stack.push(MergeVisibleCommand(doc))
+    assert [layer.name for layer in doc.layers] == names
+
+    doc.undo_stack.undo()
+    assert [layer.name for layer in doc.layers] == names
