@@ -17,6 +17,24 @@ GitHub provenance attestations remain present, but none substitutes for missing
 notarization or a platform signature. Later tagged releases remain fail-closed.
 The unsigned iPad device bundle is validation-only and is not uploaded publicly.
 
+## Console entry points in a portable build
+
+A portable build is a single PyInstaller executable, so the `photoslop-cli` and
+`photoslop-mcp` console scripts that a `pip`/`uv` install puts on `PATH` are
+reached through that executable instead. Each archive ships a wrapper per
+entry point, and both builders fail if either one cannot run:
+
+| platform | CLI | MCP |
+| --- | --- | --- |
+| macOS | `Photoslop.app/Contents/Resources/bin/photoslop-cli` | `.../photoslop-mcp` |
+| Windows | `Photoslop\photoslop-cli.cmd` | `Photoslop\photoslop-mcp.cmd` |
+
+The underlying selector is `Photoslop --cli …` / `Photoslop --mcp …`, and it is
+only honoured as the first argument so a file named like a flag still opens.
+On macOS the wrappers live under `Contents/Resources` rather than
+`Contents/MacOS` because a non-Mach-O file in `Contents/MacOS` counts as nested
+code to `codesign`, while `Resources` is sealed without special handling.
+
 The repository `THIRD_PARTY_NOTICES.md` records source-distributed assets. Each
 portable build generates an expanded notice file from the exact locked build
 environment and includes every discovered package license file; that generated

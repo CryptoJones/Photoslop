@@ -66,8 +66,35 @@ fi
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist" || true
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist" || true
 
+# The bundle ships one executable, so the console entry points pyproject.toml
+# declares (photoslop-cli, photoslop-mcp) reach it through app.py's --cli/--mcp
+# selector. They live under Resources rather than MacOS on purpose: a
+# non-Mach-O file in Contents/MacOS is nested code as far as codesign is
+# concerned, while Resources is sealed without special handling.
+BIN_DIR="$APP/Contents/Resources/bin"
+mkdir -p "$BIN_DIR"
+for entry in cli mcp; do
+  cat > "$BIN_DIR/photoslop-$entry" <<EOF
+#!/bin/sh
+# Photoslop portable — $entry entry point.
+exec "\$(cd "\$(dirname "\$0")/../../MacOS" && pwd)/Photoslop" --$entry "\$@"
+EOF
+  chmod +x "$BIN_DIR/photoslop-$entry"
+done
+
 echo "Running packaged Qt/codec/import/export smoke test..."
 QT_QPA_PLATFORM=offscreen "$APP/Contents/MacOS/Photoslop" --portable-smoke
+
+echo "Verifying the packaged CLI and MCP entry points..."
+SMOKE_DIR="$(mktemp -d)"
+trap 'rm -rf "$SMOKE_DIR"' EXIT
+QT_QPA_PLATFORM=offscreen "$BIN_DIR/photoslop-cli" \
+  --new 8x8 --output "$SMOKE_DIR/cli.png"
+if [[ ! -s "$SMOKE_DIR/cli.png" ]]; then
+  echo "build-portable-macos.sh: packaged photoslop-cli produced no output" >&2
+  exit 1
+fi
+QT_QPA_PLATFORM=offscreen "$BIN_DIR/photoslop-mcp" --help >/dev/null
 
 if [[ -n "${PHOTOSLOP_MACOS_SIGN_IDENTITY:-}" ]]; then
   codesign --force --deep --options runtime --timestamp \
@@ -108,5 +135,7 @@ cp "$METADATA_DIR/THIRD_PARTY_NOTICES.md" "$OUT_DIR/"
 
 echo "Portable macOS build ready:"
 echo "  App: $APP"
+echo "  CLI: $BIN_DIR/photoslop-cli"
+echo "  MCP: $BIN_DIR/photoslop-mcp"
 echo "  Zip: $ZIP"
 echo "  Checksum: $ZIP.sha256"

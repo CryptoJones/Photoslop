@@ -17,8 +17,42 @@ from photoslop.document import Document
 from photoslop.mainwindow import MainWindow
 
 
+def _console_entry_point(argv: list[str]):
+    """Reach photoslop-cli / photoslop-mcp through the one bundled executable.
+
+    A pip or uv install exposes both console scripts from pyproject.toml, but a
+    portable bundle is a single PyInstaller executable — so without this the
+    CLI and the MCP server simply are not present in the shipped archive, and
+    the GUI is the only surface a portable user gets.
+
+    The selector has to lead. Accepting it anywhere in argv would swallow a
+    file literally named `--cli`, and file arguments are exactly what this
+    binary is handed the rest of the time.
+    """
+    if len(argv) < 2 or argv[1] not in ("--cli", "--mcp"):
+        return None
+    rest = argv[2:]
+    if argv[1] == "--cli":
+        from photoslop.cli import main as cli_main
+
+        return lambda: cli_main(rest)
+
+    from photoslop.server import main as server_main
+
+    def run_server() -> int:
+        # server.main() parses sys.argv itself and returns None.
+        sys.argv = ["photoslop-mcp", *rest]
+        server_main()
+        return 0
+
+    return run_server
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
+    delegate = _console_entry_point(argv)
+    if delegate is not None:
+        return delegate()
     portable_smoke = "--portable-smoke" in argv
     argv = [item for item in argv if item != "--portable-smoke"]
     app = QApplication(argv)
