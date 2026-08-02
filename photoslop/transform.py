@@ -23,27 +23,32 @@ class TransformLayerCommand(QUndoCommand):
         old_offset: QPoint,
         new_image: QImage,
         new_offset: QPoint,
+        old_mask: QImage | None = None,
+        new_mask: QImage | None = None,
     ):
         super().__init__("Free Transform")
         self.doc, self.layer = doc, layer
         self.old_image, self.old_offset = old_image, QPoint(old_offset)
         self.new_image, self.new_offset = new_image, QPoint(new_offset)
+        self.old_mask = old_mask
+        self.new_mask = new_mask
         self._applied = True
 
-    def _swap(self, image: QImage, offset: QPoint) -> None:
+    def _swap(self, image: QImage, offset: QPoint, mask: QImage | None) -> None:
         dirty = self.layer.bounds()
         self.layer.image = QImage(image)
         self.layer.offset = QPoint(offset)
+        self.layer.mask = QImage(mask) if mask is not None else None
         self.doc.notify_pixels(dirty.united(self.layer.bounds()))
 
     def redo(self) -> None:
         if self._applied:
             self._applied = False
             return
-        self._swap(self.new_image, self.new_offset)
+        self._swap(self.new_image, self.new_offset, self.new_mask)
 
     def undo(self) -> None:
-        self._swap(self.old_image, self.old_offset)
+        self._swap(self.old_image, self.old_offset, self.old_mask)
 
 
 class TransformSession:
@@ -55,6 +60,7 @@ class TransformSession:
         self.layer = layer
         self.base_image = QImage(layer.image)  # COW reference
         self.base_offset = QPoint(layer.offset)
+        self.base_mask = QImage(layer.mask) if layer.mask is not None else None
         self.scale_x = 1.0
         self.scale_y = 1.0
         self.rotation = 0.0  # degrees
@@ -210,28 +216,64 @@ class TransformSession:
                 p.drawImage(src.topLeft(), self.base_image, src)
                 p.restore()
             p.end()
-            self._push(new_image, QPoint(round(bounds.left()), round(bounds.top())))
+            new_mask = self._warp_mask(bounds)
+            self._push(new_image, QPoint(round(bounds.left()), round(bounds.top())), new_mask)
             return
         if self.quad is not None:
             m = self.full_matrix()
             w, h = self.base_image.width(), self.base_image.height()
             new_image = self.base_image.transformed(m, Qt.TransformationMode.SmoothTransformation)
+            new_mask = self._transform_mask(m)
             bounds = m.mapRect(QRectF(0, 0, w, h))
             new_offset = QPoint(round(bounds.left()), round(bounds.top()))
-            self._push(new_image, new_offset)
+            self._push(new_image, new_offset, new_mask)
             return
         new_image = self.base_image.transformed(
             self.matrix(), Qt.TransformationMode.SmoothTransformation
         )
+        new_mask = self._transform_mask(self.matrix())
         c = self.center
         new_offset = QPoint(
             round(c.x() - new_image.width() / 2.0), round(c.y() - new_image.height() / 2.0)
         )
-        self._push(new_image, new_offset)
+        self._push(new_image, new_offset, new_mask)
 
-    def _push(self, new_image: QImage, new_offset: QPoint) -> None:
+    def _transform_mask(self, matrix: QTransform) -> QImage | None:
+        """Apply a single QTransform to the base mask, preserving Grayscale8."""
+        if self.base_mask is None:
+            return None
+        new_mask = self.base_mask.transformed(matrix, Qt.TransformationMode.SmoothTransformation)
+        if new_mask.format() != QImage.Format.Format_Grayscale8:
+            new_mask = new_mask.convertToFormat(QImage.Format.Format_Grayscale8)
+        return new_mask
+
+    def _warp_mask(self, bounds: QRectF) -> QImage | None:
+        """Warp the base mask through the same patch grid as the image."""
+        if self.base_mask is None:
+            return None
+        from PySide6.QtCore import QSize
+
+        new_mask = QImage(
+            QSize(max(1, round(bounds.width())), max(1, round(bounds.height()))),
+            self.base_mask.format(),
+        )
+        new_mask.fill(0)
+        mp = QPainter(new_mask)
+        mp.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        mp.translate(-bounds.topLeft())
+        for src, m in self.warp_patches():
+            mp.save()
+            mp.setTransform(m, True)
+            mp.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+            mp.drawImage(src.topLeft(), self.base_mask, src)
+            mp.restore()
+        mp.end()
+        return new_mask
+
+    def _push(self, new_image: QImage, new_offset: QPoint, new_mask: QImage | None = None) -> None:
         self.layer.image = new_image
         self.layer.offset = new_offset
+        self.layer.mask = QImage(new_mask) if new_mask is not None else None
         self.doc.undo_stack.push(
             TransformLayerCommand(
                 self.doc,
@@ -240,12 +282,15 @@ class TransformSession:
                 self.base_offset,
                 QImage(new_image),
                 new_offset,
+                QImage(self.base_mask) if self.base_mask is not None else None,
+                QImage(new_mask) if new_mask is not None else None,
             )
         )
 
     def restore(self) -> None:
         self.layer.image = QImage(self.base_image)
         self.layer.offset = QPoint(self.base_offset)
+        self.layer.mask = QImage(self.base_mask) if self.base_mask is not None else None
 
 
 _HANDLES = ("tl", "tr", "br", "bl", "t", "r", "b", "l")

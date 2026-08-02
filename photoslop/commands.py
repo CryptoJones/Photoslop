@@ -10,7 +10,7 @@ from copy import deepcopy
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QImage, QPainter, QTransform, QUndoCommand
 
-from photoslop.document import Document
+from photoslop.document import Document, _effects_margin, draw_layer
 from photoslop.layer import BLEND_MODES, Layer, blank_image, mask_to_alpha
 
 TILE = 128
@@ -250,31 +250,68 @@ class SetLayerPropertyCommand(QUndoCommand):
 
 
 class MergeDownCommand(QUndoCommand):
+    """Fuse the upper layer into the lower one via the same compositing path
+    as ``Document.flatten``.  After the merge the lower layer's image is the
+    baked composite, so every per-layer appearance property that was
+    applied during that composite (mask, fill-opacity, effects, adjustment,
+    clipping) is cleared from the layer and restored by undo from the
+    snapshot taken here."""
+
     def __init__(self, doc: Document, index: int):
         super().__init__("Merge Down")
         self.doc, self.index = doc, index
         self.upper: Layer | None = None
-        self.old_lower: tuple[QImage, QPoint, float] | None = None
+        self.old_lower: tuple | None = None
+
+    # lower-snapshot tuple: (image, offset, opacity, mask, fill_opacity,
+    # effects, clipped, adjustment)
 
     def redo(self) -> None:
         doc = self.doc
         upper = doc.layers[self.index]
         lower = doc.layers[self.index - 1]
-        self.old_lower = (QImage(lower.image), QPoint(lower.offset), lower.opacity)
+        self.old_lower = (
+            QImage(lower.image),
+            QPoint(lower.offset),
+            lower.opacity,
+            QImage(lower.mask) if lower.mask is not None else None,
+            lower.fill_opacity,
+            deepcopy(lower.effects),
+            lower.clipped,
+            lower.adjustment,
+        )
 
         union = upper.bounds().united(lower.bounds())
+        margin = max(
+            _effects_margin(lower.effects),
+            _effects_margin(upper.effects),
+        )
+        if margin:
+            union = union.adjusted(-margin, -margin, margin, margin)
         merged = blank_image(union.size())
         p = QPainter(merged)
+        p.translate(-union.topLeft())
+        # Lower layer: blend mode is irrelevant on transparent, but draw_layer
+        # applies mask, fill-opacity, and effects so they are baked in.
         p.setOpacity(lower.opacity)
-        p.drawImage(lower.offset - union.topLeft(), lower.image)
+        p.setCompositionMode(BLEND_MODES[lower.blend_mode])
+        draw_layer(p, doc, lower, union)
         if upper.visible:
             p.setOpacity(upper.opacity)
-            p.drawImage(upper.offset - union.topLeft(), upper.image)
+            p.setCompositionMode(BLEND_MODES[upper.blend_mode])
+            draw_layer(p, doc, upper, union)
         p.end()
 
         lower.image = merged
         lower.offset = union.topLeft()
         lower.opacity = 1.0
+        # Appearance properties were baked into the merged pixels.
+        lower.mask = None
+        lower.fill_opacity = 1.0
+        lower.effects = []
+        lower.adjustment = None
+        lower.clipped = False
+        lower.fx_cache = None
         self.upper = doc.take_layer(self.index)
         doc.active_index = self.index - 1
         doc.notify_structure()
@@ -286,7 +323,17 @@ class MergeDownCommand(QUndoCommand):
             raise RuntimeError("cannot undo merge before it was applied")
         lower = doc.layers[self.index - 1]
         dirty = lower.bounds()
-        lower.image, lower.offset, lower.opacity = self.old_lower
+        (
+            lower.image,
+            lower.offset,
+            lower.opacity,
+            lower.mask,
+            lower.fill_opacity,
+            lower.effects,
+            lower.clipped,
+            lower.adjustment,
+        ) = self.old_lower
+        lower.fx_cache = None
         doc.insert_layer(self.index, self.upper)
         doc.notify_pixels(dirty)
 
@@ -577,7 +624,13 @@ class ArbitraryRotateCommand(QUndoCommand):
         self.old_size = QSize(doc.size)
         self.old_guides = (list(doc.guides_h), list(doc.guides_v))
         self.old_layers = [
-            (layer, QImage(layer.image), QPoint(layer.offset)) for layer in doc.layers
+            (
+                layer,
+                QImage(layer.image),
+                QPoint(layer.offset),
+                QImage(layer.mask) if layer.mask is not None else None,
+            )
+            for layer in doc.layers
         ]
         self.new_state: tuple | None = None
 
@@ -594,8 +647,13 @@ class ArbitraryRotateCommand(QUndoCommand):
             old_c = QPointF(w / 2.0, h / 2.0)
             new_c = QPointF(new_size.width() / 2.0, new_size.height() / 2.0)
             entries = []
-            for layer, old_img, old_offset in self.old_layers:
+            for layer, old_img, old_offset, old_mask in self.old_layers:
                 new_img = old_img.transformed(t, Qt.TransformationMode.SmoothTransformation)
+                new_mask = (
+                    old_mask.transformed(t, Qt.TransformationMode.SmoothTransformation)
+                    if old_mask is not None
+                    else None
+                )
                 centre = QPointF(
                     old_offset.x() + old_img.width() / 2.0, old_offset.y() + old_img.height() / 2.0
                 )
@@ -604,13 +662,14 @@ class ArbitraryRotateCommand(QUndoCommand):
                     round(rotated.x() - new_img.width() / 2.0),
                     round(rotated.y() - new_img.height() / 2.0),
                 )
-                entries.append((layer, new_img, new_offset))
+                entries.append((layer, new_img, new_offset, new_mask))
             self.new_state = (new_size, entries)
         new_size, entries = self.new_state
         doc.size = QSize(new_size)
-        for layer, img, offset in entries:
+        for layer, img, offset, mask in entries:
             layer.image = QImage(img)
             layer.offset = QPoint(offset)
+            layer.mask = QImage(mask) if mask is not None else None
         doc.guides_h.clear()
         doc.guides_v.clear()
         doc.guidesChanged.emit()
@@ -621,9 +680,10 @@ class ArbitraryRotateCommand(QUndoCommand):
     def undo(self) -> None:
         doc = self.doc
         doc.size = QSize(self.old_size)
-        for layer, img, offset in self.old_layers:
+        for layer, img, offset, mask in self.old_layers:
             layer.image = QImage(img)
             layer.offset = QPoint(offset)
+            layer.mask = QImage(mask) if mask is not None else None
         doc.guides_h[:] = self.old_guides[0]
         doc.guides_v[:] = self.old_guides[1]
         doc.guidesChanged.emit()
@@ -651,12 +711,16 @@ class MergeVisibleCommand(QUndoCommand):
             union = QRect()
             for _, layer in self.removed:
                 union = union.united(layer.bounds())
+            margin = max(_effects_margin(layer.effects) for _, layer in self.removed)
+            if margin:
+                union = union.adjusted(-margin, -margin, margin, margin)
             img = blank_image(union.size())
             p = QPainter(img)
+            p.translate(-union.topLeft())
             for _, layer in self.removed:
                 p.setOpacity(layer.opacity)
                 p.setCompositionMode(BLEND_MODES[layer.blend_mode])
-                p.drawImage(layer.offset - union.topLeft(), layer.image)
+                draw_layer(p, doc, layer, union)
             p.end()
             self.merged = Layer("Merged", img, union.topLeft())
             self.insert_at = self.removed[0][0]
@@ -702,6 +766,7 @@ class ResizeImageCommand(QUndoCommand):
                 QImage(layer.image),
                 QPoint(layer.offset),
                 deepcopy(layer.vector_data) if layer.vector_data else None,
+                QImage(layer.mask) if layer.mask is not None else None,
             )
             for layer in doc.layers
         ]
@@ -713,7 +778,7 @@ class ResizeImageCommand(QUndoCommand):
         sx = self.new_size.width() / self.old_size.width()
         sy = self.new_size.height() / self.old_size.height()
         canvas = QRect(QPoint(0, 0), QSize(self.new_size))
-        for layer, old_img, old_off, old_vec in self.old_layers:
+        for layer, old_img, old_off, old_vec, old_mask in self.old_layers:
             if old_vec is not None and vector.rerender_into(
                 layer, vector.scale_vector(old_vec, sx, sy), canvas
             ):
@@ -727,16 +792,22 @@ class ResizeImageCommand(QUndoCommand):
                 Qt.TransformationMode.SmoothTransformation,
             )
             layer.offset = QPoint(round(old_off.x() * sx), round(old_off.y() * sy))
+            if old_mask is not None:
+                layer.mask = old_mask.scaled(
+                    w, h, Qt.AspectRatioMode.IgnoreAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
         doc.size = QSize(self.new_size)
         doc.notify_structure()
         doc.notify_pixels(QRect(QPoint(0, 0), doc.size))
 
     def undo(self) -> None:
         doc = self.doc
-        for layer, old_img, old_off, old_vec in self.old_layers:
+        for layer, old_img, old_off, old_vec, old_mask in self.old_layers:
             layer.image = QImage(old_img)
             layer.offset = QPoint(old_off)
             layer.vector_data = dict(old_vec) if old_vec else None
+            layer.mask = QImage(old_mask) if old_mask is not None else None
         doc.size = QSize(self.old_size)
         doc.notify_structure()
         doc.notify_pixels(QRect(QPoint(0, 0), doc.size))
@@ -759,6 +830,8 @@ def _rotate_doc(doc: Document, deg: int) -> None:
         lw, lh = layer.image.width(), layer.image.height()
         x0, y0 = layer.offset.x(), layer.offset.y()
         layer.image = layer.image.transformed(transform)
+        if layer.mask is not None:
+            layer.mask = layer.mask.transformed(transform)
         if deg == 90:
             layer.offset = QPoint(old_h - (y0 + lh), x0)
         elif deg == 180:
@@ -792,6 +865,8 @@ def _flip_doc(doc: Document, horizontal: bool) -> None:
         if layer.vector_data is not None:
             layer.vector_data = vector.flip_vector(layer.vector_data, horizontal, w, h)
         layer.image = layer.image.flipped(axis)
+        if layer.mask is not None:
+            layer.mask = layer.mask.flipped(axis)
         if horizontal:
             layer.offset = QPoint(w - (layer.offset.x() + layer.image.width()), layer.offset.y())
         else:
@@ -840,6 +915,7 @@ class RotateLayerCommand(QUndoCommand):
         self.degrees = degrees % 360
         self.old_offset = QPoint(layer.offset)
         self.old_vector = deepcopy(layer.vector_data) if layer.vector_data else None
+        self.old_mask = QImage(layer.mask) if layer.mask is not None else None
 
     def _apply(self, deg: int) -> None:
         layer = self.layer
@@ -851,6 +927,8 @@ class RotateLayerCommand(QUndoCommand):
         cx = layer.offset.x() + layer.image.width() / 2.0
         cy = layer.offset.y() + layer.image.height() / 2.0
         layer.image = layer.image.transformed(QTransform().rotate(deg))
+        if layer.mask is not None:
+            layer.mask = layer.mask.transformed(QTransform().rotate(deg))
         layer.offset = QPoint(
             round(cx - layer.image.width() / 2.0), round(cy - layer.image.height() / 2.0)
         )
@@ -862,6 +940,9 @@ class RotateLayerCommand(QUndoCommand):
     def undo(self) -> None:
         self._apply(360 - self.degrees)
         self.layer.offset = QPoint(self.old_offset)  # exact, no rounding drift
+        self.layer.mask = (
+            QImage(self.old_mask) if self.old_mask is not None else None
+        )
         self.doc.notify_pixels(self.layer.bounds())
 
 
@@ -877,6 +958,8 @@ class FlipLayerCommand(QUndoCommand):
         layer = self.layer
         axis = Qt.Orientation.Horizontal if self.horizontal else Qt.Orientation.Vertical
         layer.image = layer.image.flipped(axis)
+        if layer.mask is not None:
+            layer.mask = layer.mask.flipped(axis)
         if layer.vector_data is not None:  # self-inverse, like the flip
             layer.vector_data = vector.flip_vector_local(layer.vector_data, self.horizontal)
         self.doc.notify_pixels(layer.bounds())
