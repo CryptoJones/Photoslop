@@ -235,6 +235,7 @@ def test_background_open_decodes_without_blocking_action(qapp, tmp_path, monkeyp
 
 def test_gui_heartbeat_continues_while_worker_runs(qapp):
     service = TaskService(max_workers=1)
+    release_timeout = 5.0
     beats = []
     release_worker = threading.Event()
     timer = QTimer()
@@ -247,12 +248,17 @@ def test_gui_heartbeat_continues_while_worker_runs(qapp):
 
     timer.timeout.connect(record_heartbeat)
     timer.start()
+    # The worker holds the single pool slot until the GUI thread has delivered
+    # three beats, so a regression that blocks the event loop still fails here.
+    # The budget is deliberately loose: three 10ms beats nominally need ~30ms,
+    # but Windows' default timer granularity is ~15.6ms and a loaded CI runner
+    # can stall the loop for far longer, which made a 1.0s budget flaky (#188).
     handle = service.submit(
         "sleep",
         "Sleep",
-        lambda _context: release_worker.wait(timeout=1.0),
+        lambda _context: release_worker.wait(timeout=release_timeout),
     )
-    _wait(qapp, lambda: handle.state is TaskState.SUCCEEDED)
+    _wait(qapp, lambda: handle.state is TaskState.SUCCEEDED, timeout=release_timeout + 2.0)
     timer.stop()
     assert release_worker.is_set()
     assert len(beats) >= 3
