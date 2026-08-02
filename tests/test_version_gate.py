@@ -12,6 +12,53 @@ from photoslop import __version__
 ROOT = Path(__file__).resolve().parent.parent
 
 
+# Actions must be pinned to a full commit SHA, never a mutable tag. The pin
+# value itself is deliberately not asserted: hard-coding it made a routine
+# dependabot bump red-light main with a test failure that named nothing real.
+_PINNED = re.compile(r"@[0-9a-f]{40}\b")
+_CHECKOUT = re.compile(r"actions/checkout@[0-9a-f]{40}\b")
+
+
+def _workflow_jobs(text: str) -> dict[str, str]:
+    """Split a workflow into job name -> job body. Jobs are indented two spaces."""
+    jobs: dict[str, str] = {}
+    name: str | None = None
+    lines: list[str] = []
+    for line in text.split("\njobs:\n", 1)[1].splitlines():
+        header = re.fullmatch(r"  ([A-Za-z0-9_-]+):", line)
+        if header:
+            if name is not None:
+                jobs[name] = "\n".join(lines)
+            name, lines = header.group(1), []
+        elif name is not None:
+            lines.append(line)
+    if name is not None:
+        jobs[name] = "\n".join(lines)
+    return jobs
+
+
+def _assert_pinned_checkouts(portable: str) -> None:
+    """Every job that checks out does so exactly once, from one pinned revision.
+
+    A global count cannot tell "three jobs check out once each" apart from "one
+    job checks out twice and another not at all" — and the release job losing
+    its checkout is precisely the regression #181 fixed.
+    """
+    pins = set(_CHECKOUT.findall(portable))
+    assert len(pins) == 1, f"portable.yml must pin one checkout revision, found {pins}"
+    jobs = _workflow_jobs(portable)
+    for job in ("macos", "windows", "release"):
+        found = _CHECKOUT.findall(jobs[job])
+        assert len(found) == 1, f"job {job!r} needs exactly one pinned checkout, found {found}"
+    release = jobs["release"]
+    checkout_at = _CHECKOUT.search(release).start()
+    assert checkout_at < release.index("actions/download-artifact"), (
+        "the release job must check out before downloading artifacts"
+    )
+    # The credential the checkout would persist is never used; gh uses GH_TOKEN.
+    assert release.count("persist-credentials: false") == 1
+
+
 def _check(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, "scripts/check-version.py", *args],
@@ -40,7 +87,7 @@ def test_release_permissions_are_confined_to_tag_upload_jobs():
     ipados = (ROOT / ".github/workflows/ipados.yml").read_text()
     assert "permissions:\n  contents: read" in portable
     assert portable.count("contents: write") == 1
-    assert portable.count("actions/checkout@11d5960a326750d5838078e36cf38b85af677262") == 3
+    _assert_pinned_checkouts(portable)
     assert "if: startsWith(github.ref, 'refs/tags/v')" in portable
     assert portable.count("PHOTOSLOP_REQUIRE_SIGNING") == 2
     assert portable.count("github.ref_name != 'v1.30.0'") == 2
@@ -58,7 +105,7 @@ def test_release_permissions_are_confined_to_tag_upload_jobs():
         assert f"Photoslop-{platform}.cdx.json" in portable
         assert f"Photoslop-{platform}-BUILD-IDENTITY.json" in portable
         assert f"Photoslop-{platform}-THIRD_PARTY_NOTICES.md" in portable
-    assert "attest-build-provenance@e8998f949152" in portable
+    assert _PINNED.search(portable[portable.index("attest-build-provenance") :])
 
     assert "permissions:\n  contents: read" in ipados
     assert "contents: write" not in ipados

@@ -43,6 +43,11 @@ jobs:
       PHOTOSLOP_APPLE_APP_PASSWORD: ${{ secrets.PHOTOSLOP_APPLE_APP_PASSWORD }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # No step here pushes; gh authenticates with GH_TOKEN. Leaving the
+        # write-capable token in .git/config would only widen what a later
+        # step — or a packaged artifact — could reach.
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: "3.12"
@@ -76,6 +81,11 @@ jobs:
       PHOTOSLOP_WINDOWS_CERT_PASSWORD: ${{ secrets.PHOTOSLOP_WINDOWS_CERT_PASSWORD }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # No step here pushes; gh authenticates with GH_TOKEN. Leaving the
+        # write-capable token in .git/config would only widen what a later
+        # step — or a packaged artifact — could reach.
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: "3.12"
@@ -105,6 +115,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # `actions: read` is what lets `gh api .../actions/workflows/.../runs`
+      # read the conclusion of the ci and security runs for the tagged commit.
+      # Nothing here writes, and no checkout is needed.
       actions: read
     steps:
       - name: Require green ci and security runs for the tagged commit
@@ -117,9 +130,17 @@ jobs:
           while :; do
             pending=""
             for workflow in ${REQUIRED_WORKFLOWS}; do
-              state=$(gh api \
+              # `set -e` would abort the whole job on a transient API error —
+              # rate limit, 5xx, dropped connection — turning a blip into a
+              # failed release that needs the tag build re-run by hand. Treat a
+              # failed query like a pending run and let the loop retry it.
+              if ! state=$(gh api \
                 "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?head_sha=${GITHUB_SHA}&per_page=1" \
-                --jq '(.workflow_runs[0] // {}) | "\(.status // "missing"):\(.conclusion // "none")"')
+                --jq '(.workflow_runs[0] // {}) | "\(.status // "missing"):\(.conclusion // "none")"'); then
+                echo "${workflow}: status query failed, retrying"
+                pending="${pending} ${workflow}"
+                continue
+              fi
               case "${state}" in
                 completed:success)
                   echo "${workflow}: success"
@@ -154,6 +175,11 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # No step here pushes; gh authenticates with GH_TOKEN. Leaving the
+        # write-capable token in .git/config would only widen what a later
+        # step — or a packaged artifact — could reach.
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: Photoslop-macOS-portable${{ github.ref_name == 'v1.30.0' && '-SIGNED-NOT-NOTARIZED' || '' }}
