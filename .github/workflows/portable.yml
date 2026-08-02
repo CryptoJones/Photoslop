@@ -15,6 +15,10 @@ on:
       - "scripts/generate-bundle-metadata.py"
       - "pyproject.toml"
       - "uv.lock"
+      # Both builders embed these into the shipped archive, so a change to
+      # either one is a change to the artifact and must rebuild it.
+      - "LICENSE"
+      - "THIRD_PARTY_NOTICES.md"
       - ".github/workflows/portable.yml"
   schedule:
     - cron: "23 6 * * 1"
@@ -87,9 +91,62 @@ jobs:
             dist/portable-windows/*.json
             dist/portable-windows/THIRD_PARTY_NOTICES.md
 
+  # A tag push runs this workflow directly, so the portable builders alone used
+  # to decide whether release assets were published. `ci` and `security` only
+  # trigger on pull requests and pushes to main, which means a tag cut on any
+  # other commit — or pushed before main's run settled — published without the
+  # suite, lint, dependency audit, or static security checks ever passing.
+  # docs/v1/distribution.md already required them to be green; this enforces it.
+  #
+  # `performance` is deliberately not required: it only runs on a schedule or
+  # manual dispatch, so demanding it here would deadlock every release.
+  verify-checks:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Require green ci and security runs for the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUIRED_WORKFLOWS: test.yml security.yml
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 1800))
+          while :; do
+            pending=""
+            for workflow in ${REQUIRED_WORKFLOWS}; do
+              state=$(gh api \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?head_sha=${GITHUB_SHA}&per_page=1" \
+                --jq '(.workflow_runs[0] // {}) | "\(.status // "missing"):\(.conclusion // "none")"')
+              case "${state}" in
+                completed:success)
+                  echo "${workflow}: success"
+                  ;;
+                completed:*)
+                  echo "::error::${workflow} concluded '${state#*:}' for ${GITHUB_SHA} — refusing to publish release assets"
+                  exit 1
+                  ;;
+                *)
+                  pending="${pending} ${workflow}"
+                  ;;
+              esac
+            done
+            if [ -z "${pending}" ]; then
+              break
+            fi
+            if [ "${SECONDS}" -ge "${deadline}" ]; then
+              echo "::error::timed out after 30m waiting for:${pending}"
+              exit 1
+            fi
+            echo "waiting for:${pending}"
+            sleep 30
+          done
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [macos, windows]
+    needs: [macos, windows, verify-checks]
     runs-on: ubuntu-latest
     permissions:
       contents: write
