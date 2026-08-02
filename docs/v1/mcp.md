@@ -37,6 +37,14 @@ Claude Code, add it to the MCP servers config:
 (Use an absolute path to the console script, or `uv run --with "photoslop[mcp]"
 photoslop-mcp`, if it is not on the client's `PATH`.)
 
+From a portable build there is no install step — point `command` at the wrapper
+inside the archive:
+
+- macOS: `Photoslop.app/Contents/Resources/bin/photoslop-mcp`
+- Windows: `Photoslop\photoslop-mcp.cmd`
+
+See [distribution.md](distribution.md) for why the wrappers sit where they do.
+
 ## Tools
 
 | Tool | What it does |

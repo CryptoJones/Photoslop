@@ -59,10 +59,36 @@ if (-not (Test-Path $Exe)) {
     throw "build-portable-windows.ps1: expected executable was not produced: $Exe"
 }
 
+# The bundle ships one executable, so the console entry points pyproject.toml
+# declares (photoslop-cli, photoslop-mcp) reach it through app.py's
+# --cli/--mcp selector. Shipping .cmd shims keeps the signed exe untouched.
+foreach ($Entry in @("cli", "mcp")) {
+    $Shim = Join-Path $AppDir "photoslop-$Entry.cmd"
+    @(
+        "@echo off",
+        "rem Photoslop portable - $Entry entry point.",
+        "`"%~dp0Photoslop.exe`" --$Entry %*"
+    ) | Set-Content -Encoding ascii $Shim
+}
+
 Write-Host "Running packaged Qt/codec/import/export smoke test..."
 $env:QT_QPA_PLATFORM = "offscreen"
 & $Exe --portable-smoke
 if ($LASTEXITCODE -ne 0) { throw "Packaged smoke test failed with exit code $LASTEXITCODE" }
+
+Write-Host "Verifying the packaged CLI and MCP entry points..."
+$SmokeDir = Join-Path ([IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString())
+New-Item -ItemType Directory -Path $SmokeDir | Out-Null
+try {
+    $CliOutput = Join-Path $SmokeDir "cli.png"
+    & (Join-Path $AppDir "photoslop-cli.cmd") --new 8x8 --output $CliOutput
+    if ($LASTEXITCODE -ne 0) { throw "Packaged photoslop-cli failed with exit code $LASTEXITCODE" }
+    if (-not (Test-Path $CliOutput)) { throw "Packaged photoslop-cli produced no output" }
+    & (Join-Path $AppDir "photoslop-mcp.cmd") --help | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Packaged photoslop-mcp failed with exit code $LASTEXITCODE" }
+} finally {
+    Remove-Item -Recurse -Force $SmokeDir -ErrorAction SilentlyContinue
+}
 
 $CertificatePath = $null
 try {
