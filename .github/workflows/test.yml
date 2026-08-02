@@ -118,13 +118,13 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           mkdir -p reports
-          uv run pytest -q \
-            tests/test_atomic_io.py tests/test_commands.py tests/test_document.py \
-            tests/test_document_integrity.py tests/test_filter_plugins.py \
-            tests/test_model_adapter.py tests/test_ora.py \
-            tests/test_security_boundaries.py tests/test_server.py \
-            tests/test_svg_interchange.py tests/test_tasks.py \
-            tests/test_version_gate.py \
+          # Measure against the whole suite, not a hand-picked file list. The
+          # previous list omitted tests that exercise measured modules — e.g.
+          # tests/test_services.py, while photoslop.services carries a floor —
+          # so the reported percentages understated real coverage and the
+          # floors in scripts/check-critical-coverage.py were calibrated to
+          # that understatement rather than to the code's actual test debt.
+          uv run pytest -q tests/ \
             --cov=photoslop.atomicio --cov=photoslop.commands \
             --cov=photoslop.document --cov=photoslop.io_ora \
             --cov=photoslop.io_svg --cov=photoslop.tasks \
