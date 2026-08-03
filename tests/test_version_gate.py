@@ -153,3 +153,19 @@ def test_every_linux_qt_workflow_installs_runtime_libraries():
     performance = (ROOT / ".github/workflows/performance.yml").read_text()
     assert ci.count("scripts/install-ci-qt-linux.sh") == 6
     assert performance.count("scripts/install-ci-qt-linux.sh") == 1
+
+
+def test_mcp_dependency_is_capped_below_the_next_major():
+    """photoslop/server.py:229 imports mcp.server.fastmcp, which the MCP 2.x
+    line replaces with a new MCPServer API. uv.lock pins 1.28.1, so CI stays
+    green forever — but docs/v1/mcp.md tells users to `pip install
+    "photoslop[mcp]"`, which ignores the lockfile. An unbounded floor would
+    resolve a fresh install straight onto 2.x the day it leaves pre-release,
+    breaking photoslop-mcp for every new installer while our own CI reports
+    all-clear. See issue #182.
+    """
+    pyproject = (ROOT / "pyproject.toml").read_text()
+    requirements = re.findall(r'"(mcp[<>=!,\d. ]*)"', pyproject)
+    assert requirements, "no mcp requirement found in pyproject.toml"
+    for requirement in requirements:
+        assert "<2" in requirement, f"{requirement!r} must be capped below mcp 2.x"

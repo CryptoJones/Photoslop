@@ -12,7 +12,23 @@ sync — check an item here when its issue closes.
   `MCPServer` once the SDK v2 line is stable
   ([#182](https://github.com/CryptoJones/Photoslop/issues/182))
 
+- [ ] Fix the flaky segfault in `test_dialog_fits_to_parent_canvas`, which
+  crashes the whole suite on macOS CI and red-lights unrelated pull requests
+  ([#192](https://github.com/CryptoJones/Photoslop/issues/192))
+
 ## Done
+
+- [x] Carry nested OpenRaster `<stack>` opacity, visibility, and composite-op
+  into layer groups, and persist group state across a save
+  ([#186](https://github.com/CryptoJones/Photoslop/issues/186)) — PR #191
+
+- [x] Ship `photoslop-cli` and `photoslop-mcp` in the portable macOS and
+  Windows builds
+  ([#187](https://github.com/CryptoJones/Photoslop/issues/187)) — PR #190
+
+- [x] Stop `test_gui_heartbeat_continues_while_worker_runs` racing a 1.0s
+  budget on Windows CI
+  ([#188](https://github.com/CryptoJones/Photoslop/issues/188)) — PR #189
 
 - [x] Add a native iPadOS edition with Apple Pencil drawing, touch navigation,
   layered raster editing, Photos/Files import, PNG export, device builds, and
