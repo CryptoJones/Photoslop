@@ -90,12 +90,25 @@ def test_release_permissions_are_confined_to_tag_upload_jobs():
     _assert_pinned_checkouts(portable)
     assert "if: startsWith(github.ref, 'refs/tags/v')" in portable
     assert portable.count("PHOTOSLOP_REQUIRE_SIGNING") == 2
-    assert portable.count("github.ref_name != 'v1.30.0'") == 2
     assert portable.count("PHOTOSLOP_ARTIFACT_QUALIFIER") == 2
-    assert portable.count("github.ref_name == 'v1.30.0' && 'UNSIGNED' || ''") == 1
-    assert portable.count("github.ref_name == 'v1.30.0' && '-UNSIGNED' || ''") == 2
+
+    # Every signing waiver names the tags it applies to, so a new tag is
+    # fail-closed by default and a widened exception shows up in the diff.
+    #
+    # macOS: only v1.30.0, which shipped before notary credentials existed.
+    assert portable.count("github.ref_name != 'v1.30.0'") == 1
     assert "&& 'SIGNED-NOT-NOTARIZED' || ''" in portable
+    assert portable.count("github.ref_name == 'v1.30.0' && 'SIGNED-NOT-NOTARIZED' || ''") == 1
     assert portable.count("github.ref_name == 'v1.30.0' && '-SIGNED-NOT-NOTARIZED' || ''") == 2
+
+    # Windows: no Authenticode certificate exists, so its waiver is an explicit
+    # tag list. Both waived tags ship an archive that says UNSIGNED in its name.
+    windows_unsigned = 'fromJSON(\'["v1.30.0", "v2.0.0"]\')'
+    assert portable.count(f"!contains({windows_unsigned}, github.ref_name)") == 1
+    assert portable.count(f"contains({windows_unsigned}, github.ref_name) && 'UNSIGNED' || ''") == 1
+    assert (
+        portable.count(f"contains({windows_unsigned}, github.ref_name) && '-UNSIGNED' || ''") == 2
+    )
     assert "scripts/import-macos-signing-certificate.sh" in portable
     assert "MACOS_CERTIFICATE_P12" in portable
     assert "verify_macos_signing" in portable
