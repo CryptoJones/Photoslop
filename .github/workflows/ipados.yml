@@ -67,6 +67,25 @@ jobs:
       PHOTOSLOP_IOS_TEAM_ID: J6P99Q4479
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # App Store Connect rejects anything built against an older SDK:
+      # "All iOS and iPadOS apps must be built with the iOS 26 SDK or later."
+      # The runner image's default Xcode is older than that, so pick the newest
+      # Xcode 26+ explicitly and fail loudly, listing what is installed, rather
+      # than archiving with the wrong SDK and only learning at upload.
+      - name: Select an Xcode with the iOS 26 SDK
+        run: |
+          newest=""
+          for candidate in /Applications/Xcode_2[6-9]*.app /Applications/Xcode_[3-9][0-9]*.app; do
+            [ -d "$candidate" ] || continue
+            newest="$candidate"
+          done
+          if [ -z "$newest" ]; then
+            echo "::error::No Xcode 26 or newer on this runner; App Store Connect requires the iOS 26 SDK"
+            ls -d /Applications/Xcode*.app || true
+            exit 1
+          fi
+          echo "Using $newest"
+          echo "DEVELOPER_DIR=$newest/Contents/Developer" >> "$GITHUB_ENV"
       - name: Verify release versions
         run: python3 scripts/check-version.py
       - name: Install XcodeGen
