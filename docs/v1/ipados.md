@@ -95,8 +95,12 @@ repository or in release artifacts:
 | `APP_STORE_CONNECT_ISSUER_ID` | App Store Connect API issuer identifier |
 | `APP_STORE_CONNECT_PRIVATE_KEY` | Base64 of the API key `.p8` |
 
-The API key needs the App Manager role so `-allowProvisioningUpdates` can
-maintain the App Store provisioning profile without a committed profile.
+The API key needs the **Admin** role so `-allowProvisioningUpdates` can maintain
+the App Store provisioning profile without a committed profile. App Manager is
+not sufficient: cloud signing fails with `Cloud signing permission error` and
+`No profiles for 'io.ronin48.photoslop.ipad' were found`. An API key's access
+cannot be edited after it is generated, so a key with the wrong role has to be
+replaced rather than upgraded.
 
 Because `check-version.py` derives `CURRENT_PROJECT_VERSION` from the marketing
 version, each upload consumes exactly one build number. App Store Connect
