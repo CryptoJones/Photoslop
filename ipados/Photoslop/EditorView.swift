@@ -11,6 +11,10 @@ struct EditorView: View {
   @State private var showFileImporter = false
   @State private var showExporter = false
   @State private var showExportOptions = false
+  @State private var showNewDocumentOptions = false
+  @State private var canvasPreset = CanvasPreset.standard
+  @State private var customWidth = "2048"
+  @State private var customHeight = "1536"
   @State private var exportDocument = ExportedImageDocument()
   @State private var exportName = "Photoslop Export"
   @State private var exportFormat = ExportFormat.png
@@ -43,7 +47,10 @@ struct EditorView: View {
         )
         toolStrip
       }
-      .navigationTitle("Photoslop")
+      // No .navigationTitle here on purpose. DocumentGroup binds the title to
+      // the document's file name and drives Rename through it; setting a
+      // constant title replaces that binding, so tapping Rename opened a field
+      // with nowhere to write and the keyboard dismissed immediately.
       .navigationBarTitleDisplayMode(.inline)
       .toolbar { documentToolbar }
     }
@@ -62,6 +69,7 @@ struct EditorView: View {
       if case .failure(let error) = result { errorMessage = error.localizedDescription }
     }
     .sheet(isPresented: $showExportOptions) { exportOptionsSheet }
+    .sheet(isPresented: $showNewDocumentOptions) { newDocumentSheet }
     .onChange(of: selectedPhoto) { _, item in
       guard let item else { return }
       Task {
@@ -179,7 +187,7 @@ struct EditorView: View {
   private var documentToolbar: some ToolbarContent {
     ToolbarItemGroup(placement: .topBarLeading) {
       Button {
-        store.newDocument()
+        showNewDocumentOptions = true
       } label: {
         Label("New", systemImage: "doc.badge.plus")
       }
@@ -286,6 +294,72 @@ struct EditorView: View {
       }
     }
     .presentationDetents([.medium])
+  }
+
+  private var requestedCanvasSize: CGSize? {
+    if let size = canvasPreset.size { return size }
+    guard let width = Int(customWidth.trimmingCharacters(in: .whitespaces)),
+      let height = Int(customHeight.trimmingCharacters(in: .whitespaces))
+    else { return nil }
+    return CanvasPreset.validated(width: width, height: height)
+  }
+
+  private var newDocumentSheet: some View {
+    NavigationStack {
+      Form {
+        Section("Canvas Size") {
+          Picker("Size", selection: $canvasPreset) {
+            ForEach(CanvasPreset.allCases) { preset in
+              VStack(alignment: .leading) {
+                Text(preset.displayName)
+                Text(preset.subtitle).font(.caption).foregroundStyle(.secondary)
+              }
+              .tag(preset)
+            }
+          }
+          .pickerStyle(.inline)
+          .labelsHidden()
+        }
+
+        if canvasPreset == .custom {
+          Section {
+            LabeledContent("Width") {
+              TextField("Width", text: $customWidth)
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.trailing)
+            }
+            LabeledContent("Height") {
+              TextField("Height", text: $customHeight)
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.trailing)
+            }
+          } footer: {
+            Text(
+              requestedCanvasSize == nil
+                ? "Enter a size up to \(ProjectArchive.maximumDimension) px per side "
+                  + "and \(ProjectArchive.maximumPixels / 1_000_000) megapixels in total."
+                : "Creates a \(customWidth) by \(customHeight) px canvas."
+            )
+            .foregroundStyle(requestedCanvasSize == nil ? .red : .secondary)
+          }
+        }
+      }
+      .navigationTitle("New Document")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") { showNewDocumentOptions = false }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Create") {
+            guard let size = requestedCanvasSize else { return }
+            store.newDocument(size: size)
+            showNewDocumentOptions = false
+          }
+          .disabled(requestedCanvasSize == nil)
+        }
+      }
+    }
   }
 
   private func export() { showExportOptions = true }
