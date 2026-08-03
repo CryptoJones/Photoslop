@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-from PySide6.QtCore import QSize
+import pytest
+from PySide6.QtCore import QEvent, QSize
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QHeaderView, QMainWindow, QTreeView, QWidget
@@ -8,6 +9,37 @@ from photoslop.document import Document
 from photoslop.io_ora import save_ora
 from photoslop.layer import Layer
 from photoslop.opendialog import OpenImageDialog, preview_info
+
+
+@pytest.fixture(autouse=True)
+def _retire_preview_dialogs(qapp):
+    """Retire each dialog's preview thread pool before the test returns.
+
+    Every OpenImageDialog owns a TaskService whose QThreadPool is parented to
+    it. `TaskService.active` tracks handles, not threads: a handle leaves
+    `_running` when its completion signal is delivered, while the pool's worker
+    is still unwinding. A test that waits on `active` can therefore return with
+    a live worker thread, and the dialog is then collected at whatever arbitrary
+    later moment Python decides — frequently while an unrelated test is inside
+    processEvents(). Tearing down a QThreadPool from there crashes the
+    interpreter with SIGSEGV, so one leaked dialog fails the whole session
+    instead of the test that leaked it. That is the crash in issue #192.
+
+    waitForDone is the part `active` cannot express. The wait is bounded so a
+    wedged worker fails this module rather than hanging the run, and the dialogs
+    are only deleted, never closed: closing a window runs closeEvent, which for
+    a real main window can raise a modal that blocks forever under the offscreen
+    platform plugin.
+    """
+    yield
+    for widget in qapp.topLevelWidgets():
+        if not isinstance(widget, OpenImageDialog):
+            continue
+        widget._preview_tasks.cancel_all()
+        widget._preview_tasks.pool.waitForDone(5_000)
+        widget.deleteLater()
+    qapp.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+    qapp.processEvents()
 
 
 def make_png(tmp_path, name="pic.png", size=(600, 400)):
