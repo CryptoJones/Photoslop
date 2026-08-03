@@ -8,9 +8,13 @@ path.
 
 ## Editing workflow
 
-- Draw with Apple Pencil using the Pen or bitmap Eraser. PencilKit supplies
-  pressure and predicted-touch handling. Turn on **Finger** to draw with touch;
-  otherwise one finger pans and two fingers pinch to zoom.
+- Draw with Apple Pencil using the Pen, Pencil, Marker, or bitmap Eraser.
+  PencilKit supplies pressure and predicted-touch handling. Turn on **Finger**
+  to draw with touch; otherwise one finger pans and two fingers pinch to zoom.
+- Brushes differ in which Apple Pencil inputs they read. Pen varies with force
+  alone, so tilting the Pencil does not change its stroke. Pencil and Marker
+  also read the Pencil's altitude and azimuth and broaden as it is laid over,
+  which is the tool to reach for when shading. Pen remains the default.
 - Set ink color and brush width from the bottom tool strip.
 - Use the layer sidebar to add, duplicate, rename, show/hide, change opacity,
   reorder, merge down, clear, or delete raster layers.

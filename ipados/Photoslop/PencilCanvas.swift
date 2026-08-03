@@ -9,7 +9,7 @@ struct PencilCanvas: UIViewRepresentable {
   let drawing: PKDrawing
   let inkColor: UIColor
   let inkWidth: CGFloat
-  let isEraser: Bool
+  let tool: BrushTool
   let drawsWithFinger: Bool
   let drawingOpacity: Double
   let onDrawingChanged: (PKDrawing) -> Void
@@ -31,17 +31,14 @@ struct PencilCanvas: UIViewRepresentable {
   private func configure(_ host: CanvasHostView) {
     host.updateCanvasSize(canvasSize)
     host.imageView.image = backgroundImage
-    host.canvasView.tool =
-      isEraser
-      ? PKEraserTool(.bitmap)
-      : PKInkingTool(.pen, color: inkColor, width: inkWidth)
+    host.canvasView.tool = tool.pkTool(color: inkColor, width: inkWidth)
     host.canvasView.drawingPolicy = drawsWithFinger ? .anyInput : .pencilOnly
     host.canvasView.alpha = drawingOpacity
     host.canvasView.isAccessibilityElement = true
     host.canvasView.accessibilityLabel = "Editable image canvas"
     host.canvasView.accessibilityValue = (
       "\(Int(canvasSize.width)) by \(Int(canvasSize.height)) pixels, "
-        + "\(isEraser ? "eraser" : "pen"), "
+        + "\(tool.displayName.lowercased()), "
         + "\(Int((drawingOpacity * 100).rounded())) percent layer opacity"
     )
     host.canvasView.accessibilityHint = (
