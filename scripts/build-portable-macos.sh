@@ -87,7 +87,8 @@ QT_QPA_PLATFORM=offscreen "$APP/Contents/MacOS/Photoslop" --portable-smoke
 
 echo "Verifying the packaged CLI and MCP entry points..."
 SMOKE_DIR="$(mktemp -d)"
-trap 'rm -rf "$SMOKE_DIR"' EXIT
+NOTARY_DIR=""
+trap 'rm -rf "$SMOKE_DIR" ${NOTARY_DIR:+"$NOTARY_DIR"}' EXIT
 QT_QPA_PLATFORM=offscreen "$BIN_DIR/photoslop-cli" \
   --new 8x8 --output "$SMOKE_DIR/cli.png"
 if [[ ! -s "$SMOKE_DIR/cli.png" ]]; then
@@ -110,13 +111,38 @@ fi
 ZIP="$OUT_DIR/Photoslop-macOS-portable${QUALIFIER_SUFFIX}-v$VERSION.zip"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 
-if [[ -n "${PHOTOSLOP_APPLE_ID:-}" && -n "${PHOTOSLOP_APPLE_TEAM_ID:-}" \
-      && -n "${PHOTOSLOP_APPLE_APP_PASSWORD:-}" ]]; then
+# Notarization accepts either an App Store Connect API key or an Apple ID with
+# an app-specific password. The API key is preferred: it carries no interactive
+# account, and the same key already drives the iPadOS TestFlight upload. Either
+# way the credential must belong to the team that owns the Developer ID
+# certificate, or the notary service rejects the submission.
+NOTARIZED=0
+if [[ -n "${NOTARY_KEY_ID:-}" && -n "${NOTARY_ISSUER_ID:-}" \
+      && -n "${NOTARY_PRIVATE_KEY:-}" ]]; then
+  NOTARY_DIR="$(mktemp -d)"
+  NOTARY_KEY_PATH="$NOTARY_DIR/AuthKey_${NOTARY_KEY_ID}.p8"
+  printf '%s' "$NOTARY_PRIVATE_KEY" \
+    | openssl base64 -d -A -out "$NOTARY_KEY_PATH"
+  chmod 600 "$NOTARY_KEY_PATH"
+  xcrun notarytool submit "$ZIP" --wait \
+    --key "$NOTARY_KEY_PATH" \
+    --key-id "$NOTARY_KEY_ID" \
+    --issuer "$NOTARY_ISSUER_ID"
+  NOTARIZED=1
+elif [[ -n "${PHOTOSLOP_APPLE_ID:-}" && -n "${PHOTOSLOP_APPLE_TEAM_ID:-}" \
+        && -n "${PHOTOSLOP_APPLE_APP_PASSWORD:-}" ]]; then
   xcrun notarytool submit "$ZIP" --wait \
     --apple-id "$PHOTOSLOP_APPLE_ID" \
     --team-id "$PHOTOSLOP_APPLE_TEAM_ID" \
     --password "$PHOTOSLOP_APPLE_APP_PASSWORD"
+  NOTARIZED=1
+fi
+
+if [[ "$NOTARIZED" == "1" ]]; then
+  # Staple the ticket into the bundle so first launch works offline, then
+  # rebuild the archive so the shipped zip contains the stapled app.
   xcrun stapler staple "$APP"
+  xcrun stapler validate "$APP"
   ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 elif [[ "${PHOTOSLOP_REQUIRE_NOTARIZATION:-${PHOTOSLOP_REQUIRE_SIGNING:-0}}" == "1" ]]; then
   echo "Tagged portable release requires Apple notarization credentials" >&2

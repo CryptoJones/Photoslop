@@ -4,6 +4,37 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.0.0] — 2026-08-02
+
+### Added
+- The iPad edition ships through TestFlight. Tagged builds sign, export, and
+  upload to App Store Connect automatically from
+  `.github/workflows/ipados.yml` via `scripts/publish-ipados-testflight.sh`,
+  with signing material held in the `testflight` GitHub environment.
+- iPad tool strip gains **Pencil** and **Marker** brushes alongside Pen and the
+  bitmap Eraser. Both read Apple Pencil altitude and azimuth, so a tilted
+  Pencil now broadens the stroke.
+- macOS portable releases are notarized and stapled. `build-portable-macos.sh`
+  accepts an App Store Connect API key for `notarytool` in addition to an
+  Apple ID and app-specific password.
+
+### Fixed
+- Apple Pencil tilt had no effect on the iPad canvas. The canvas hardwired
+  PencilKit's `.pen` ink, which varies with force alone and ignores tilt by
+  design. ([#198](https://github.com/CryptoJones/Photoslop/issues/198))
+- `.ipa` packaging failed with a bare `Copy failed` when a newer rsync preceded
+  `/usr/bin` on `PATH`. `xcodebuild` invokes `/usr/bin/rsync -8aPhhE`, but
+  rsync resolves its server half from `PATH`, and rsync 3.x rejects the
+  `--extended-attributes` that `-E` means to the system openrsync.
+
+### Changed
+- macOS release signing moves to the Developer ID identity for team
+  `J6P99Q4479`. The previous CI certificate belonged to a team the project no
+  longer holds certificates for, which would also have blocked notarization.
+- Tagged macOS archives no longer carry the `SIGNED-NOT-NOTARIZED` qualifier;
+  the notarization gate is configured rather than fail-closed. The v1.30.0
+  exception remains only so that tag can still be rebuilt.
+
 ## [1.30.0] — 2026-07-21
 
 - Remediation release implementing the codebase audit's data-integrity,

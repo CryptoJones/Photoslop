@@ -26,10 +26,13 @@ security set-key-partition-list -S apple-tool:,apple: -s \
 security list-keychains -d user -s "$KEYCHAIN_PATH"
 security default-keychain -d user -s "$KEYCHAIN_PATH"
 
+: "${PHOTOSLOP_MACOS_TEAM_ID:=J6P99Q4479}"
+
 IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
   | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p')"
-if [[ -z "$IDENTITY" || "$IDENTITY" != *"(GPKDR6QL9Q)" ]]; then
-  echo "Expected Developer ID Application identity was not imported" >&2
+if [[ -z "$IDENTITY" || "$IDENTITY" != *"($PHOTOSLOP_MACOS_TEAM_ID)" ]]; then
+  echo "Expected Developer ID Application identity for team" \
+    "$PHOTOSLOP_MACOS_TEAM_ID was not imported" >&2
   exit 1
 fi
 
