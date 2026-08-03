@@ -14,7 +14,7 @@ struct EditorView: View {
   @State private var errorMessage: String?
   @State private var inkColor = Color.black
   @State private var inkWidth = 8.0
-  @State private var isEraser = false
+  @State private var tool = BrushTool.pen
   @State private var drawsWithFinger = false
 
   var body: some View {
@@ -29,7 +29,7 @@ struct EditorView: View {
           drawing: store.activeLayer?.drawing ?? PKDrawing(),
           inkColor: UIColor(inkColor),
           inkWidth: inkWidth,
-          isEraser: isEraser,
+          tool: tool,
           drawsWithFinger: drawsWithFinger,
           drawingOpacity: store.activeLayer?.isVisible == true
             ? (store.activeLayer?.opacity ?? 1)
@@ -137,16 +137,17 @@ struct EditorView: View {
   private var toolStrip: some View {
     ScrollView(.horizontal, showsIndicators: false) {
       HStack(spacing: 14) {
-        Picker("Tool", selection: $isEraser) {
-          Label("Pen", systemImage: "pencil.tip").tag(false)
-          Label("Eraser", systemImage: "eraser").tag(true)
+        Picker("Tool", selection: $tool) {
+          ForEach(BrushTool.allCases) { brush in
+            Label(brush.displayName, systemImage: brush.symbolName).tag(brush)
+          }
         }
         .pickerStyle(.segmented)
-        .frame(width: 160)
+        .frame(width: 300)
 
         ColorPicker("Ink", selection: $inkColor, supportsOpacity: true)
           .labelsHidden()
-          .disabled(isEraser)
+          .disabled(!tool.usesInk)
           .accessibilityLabel("Ink color")
 
         Image(systemName: "circle.fill").font(.system(size: 6))

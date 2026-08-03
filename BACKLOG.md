@@ -21,6 +21,11 @@ sync — check an item here when its issue closes.
   `testflight` GitHub environment
   ([#196](https://github.com/CryptoJones/Photoslop/issues/196))
 
+- [ ] Apple Pencil tilt does not change stroke width on iPad — the canvas is
+  hardwired to PencilKit's `.pen` ink, which reads force only; add Pencil and
+  Marker brushes that read tilt
+  ([#198](https://github.com/CryptoJones/Photoslop/issues/198))
+
 ## Done
 
 - [x] Carry nested OpenRaster `<stack>` opacity, visibility, and composite-op
