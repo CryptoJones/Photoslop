@@ -16,17 +16,17 @@ sync — check an item here when its issue closes.
   crashes the whole suite on macOS CI and red-lights unrelated pull requests
   ([#192](https://github.com/CryptoJones/Photoslop/issues/192))
 
-- [ ] Automate signed iPad delivery — upload a signed build to App Store Connect
+## Done
+
+- [x] Automate signed iPad delivery — upload a signed build to App Store Connect
   for TestFlight on every `v*` tag, with signing material held in the
   `testflight` GitHub environment
-  ([#196](https://github.com/CryptoJones/Photoslop/issues/196))
+  ([#196](https://github.com/CryptoJones/Photoslop/issues/196)) — shipped v2.0.0
 
-- [ ] Apple Pencil tilt does not change stroke width on iPad — the canvas is
-  hardwired to PencilKit's `.pen` ink, which reads force only; add Pencil and
-  Marker brushes that read tilt
-  ([#198](https://github.com/CryptoJones/Photoslop/issues/198))
-
-## Done
+- [x] Apple Pencil tilt does not change stroke width on iPad — the canvas was
+  hardwired to PencilKit's `.pen` ink, which reads force only; Pencil and
+  Marker brushes now read tilt
+  ([#198](https://github.com/CryptoJones/Photoslop/issues/198)) — shipped v2.0.0
 
 - [x] Carry nested OpenRaster `<stack>` opacity, visibility, and composite-op
   into layer groups, and persist group state across a save
