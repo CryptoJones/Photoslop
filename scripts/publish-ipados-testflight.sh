@@ -13,6 +13,15 @@ EXPORT_OPTIONS="$BUILD_DIR/ExportOptions.plist"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 export DEVELOPER_DIR
 
+# xcodebuild packages the .ipa with `/usr/bin/rsync -8aPhhE`, where -E means
+# --extended-attributes. rsync starts its server half by resolving `rsync` on
+# PATH, so a newer rsync earlier in PATH (Homebrew ships 3.x, where -E is
+# --executability) answers instead and aborts with "unknown option", which
+# xcodebuild surfaces only as "Copy failed". Keep the system openrsync first so
+# both halves agree.
+PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+export PATH
+
 : "${PHOTOSLOP_IOS_TEAM_ID:?PHOTOSLOP_IOS_TEAM_ID must be set}"
 : "${APP_STORE_CONNECT_KEY_ID:?APP_STORE_CONNECT_KEY_ID secret is required}"
 : "${APP_STORE_CONNECT_ISSUER_ID:?APP_STORE_CONNECT_ISSUER_ID secret is required}"
