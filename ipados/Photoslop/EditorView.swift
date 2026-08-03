@@ -10,7 +10,12 @@ struct EditorView: View {
   @State private var selectedPhoto: PhotosPickerItem?
   @State private var showFileImporter = false
   @State private var showExporter = false
-  @State private var exportDocument = PNGDocument()
+  @State private var showExportOptions = false
+  @State private var exportDocument = ExportedImageDocument()
+  @State private var exportName = "Photoslop Export"
+  @State private var exportFormat = ExportFormat.png
+  @State private var exportQuality = 0.9
+  @State private var isRenderingExport = false
   @State private var errorMessage: String?
   @State private var inkColor = Color.black
   @State private var inkWidth = 8.0
@@ -51,11 +56,12 @@ struct EditorView: View {
     .fileExporter(
       isPresented: $showExporter,
       document: exportDocument,
-      contentType: .png,
-      defaultFilename: "Photoslop Export.png"
+      contentType: exportFormat.utType,
+      defaultFilename: "\(exportName).\(exportFormat.fileExtension)"
     ) { result in
       if case .failure(let error) = result { errorMessage = error.localizedDescription }
     }
+    .sheet(isPresented: $showExportOptions) { exportOptionsSheet }
     .onChange(of: selectedPhoto) { _, item in
       guard let item else { return }
       Task {
@@ -228,13 +234,76 @@ struct EditorView: View {
     }
   }
 
-  private func export() {
+  /// Name and format are chosen here rather than in the system save panel:
+  /// `fileExporter` presents `UIDocumentPickerViewController`, which offers no
+  /// way to add a format control beside its filename field.
+  private var exportOptionsSheet: some View {
+    NavigationStack {
+      Form {
+        Section {
+          TextField("File name", text: $exportName)
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+          Picker("Format", selection: $exportFormat) {
+            ForEach(ExportFormat.allCases) { format in
+              Text(format.displayName).tag(format)
+            }
+          }
+        } footer: {
+          Text(
+            exportFormat.preservesTransparency
+              ? "Saves as \(exportName).\(exportFormat.fileExtension), keeping transparent areas."
+              : "Saves as \(exportName).\(exportFormat.fileExtension). "
+                + "\(exportFormat.displayName) has no alpha channel, so transparent "
+                + "areas are flattened onto white."
+          )
+        }
+
+        if exportFormat.isLossy {
+          Section("Quality") {
+            HStack {
+              Slider(value: $exportQuality, in: 0.1...1.0, step: 0.05)
+                .accessibilityLabel("Export quality")
+              Text("\(Int((exportQuality * 100).rounded()))%")
+                .monospacedDigit()
+                .frame(width: 52, alignment: .trailing)
+            }
+          }
+        }
+      }
+      .navigationTitle("Export Image")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") { showExportOptions = false }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Export", action: renderAndPresentExporter)
+            .disabled(
+              isRenderingExport
+                || exportName.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+      }
+    }
+    .presentationDetents([.medium])
+  }
+
+  private func export() { showExportOptions = true }
+
+  private func renderAndPresentExporter() {
+    isRenderingExport = true
     Task {
-      guard let data = await store.exportPNG() else {
-        errorMessage = "The document could not be rendered as PNG."
+      defer { isRenderingExport = false }
+      guard
+        let data = await store.exportImage(format: exportFormat, quality: exportQuality)
+      else {
+        showExportOptions = false
+        errorMessage =
+          "The document could not be rendered as \(exportFormat.displayName)."
         return
       }
-      exportDocument = PNGDocument(data: data)
+      exportDocument = ExportedImageDocument(data: data)
+      showExportOptions = false
       showExporter = true
     }
   }
@@ -297,8 +366,11 @@ private struct LayerRow: View {
   }
 }
 
-struct PNGDocument: FileDocument {
-  static var readableContentTypes: [UTType] { [.png] }
+/// Carries already-encoded image bytes to the system save panel. The bytes are
+/// produced by `ExportFormat.encode`, so this type stays format-agnostic and
+/// the concrete type is supplied to `fileExporter` per export.
+struct ExportedImageDocument: FileDocument {
+  static var readableContentTypes: [UTType] { ExportFormat.allCases.map(\.utType) }
   var data = Data()
 
   init(data: Data = Data()) { self.data = data }
