@@ -97,10 +97,12 @@ if [[ ! -s "$SMOKE_DIR/cli.png" ]]; then
 fi
 QT_QPA_PLATFORM=offscreen "$BIN_DIR/photoslop-mcp" --help >/dev/null
 
+SIGNED=0
 if [[ -n "${PHOTOSLOP_MACOS_SIGN_IDENTITY:-}" ]]; then
   codesign --force --deep --options runtime --timestamp \
     --sign "$PHOTOSLOP_MACOS_SIGN_IDENTITY" "$APP"
   codesign --verify --deep --strict --verbose=2 "$APP"
+  SIGNED=1
 elif [[ "${PHOTOSLOP_REQUIRE_SIGNING:-0}" == "1" ]]; then
   echo "Tagged portable release requires PHOTOSLOP_MACOS_SIGN_IDENTITY" >&2
   exit 1
@@ -116,9 +118,15 @@ ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 # account, and the same key already drives the iPadOS TestFlight upload. Either
 # way the credential must belong to the team that owns the Developer ID
 # certificate, or the notary service rejects the submission.
+#
+# Only a signed bundle can be notarized — the notary service returns Invalid for
+# an unsigned one — so an unsigned validation build must skip this entirely even
+# when notary credentials happen to be present in the environment.
 NOTARIZED=0
-if [[ -n "${NOTARY_KEY_ID:-}" && -n "${NOTARY_ISSUER_ID:-}" \
-      && -n "${NOTARY_PRIVATE_KEY:-}" ]]; then
+if [[ "$SIGNED" != "1" ]]; then
+  :
+elif [[ -n "${NOTARY_KEY_ID:-}" && -n "${NOTARY_ISSUER_ID:-}" \
+        && -n "${NOTARY_PRIVATE_KEY:-}" ]]; then
   NOTARY_DIR="$(mktemp -d)"
   NOTARY_KEY_PATH="$NOTARY_DIR/AuthKey_${NOTARY_KEY_ID}.p8"
   printf '%s' "$NOTARY_PRIVATE_KEY" \
