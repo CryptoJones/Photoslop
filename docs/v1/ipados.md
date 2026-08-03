@@ -72,9 +72,40 @@ executable; CI uses that hook for the downloaded, checksum-verified binary.
 
 To run on a physical iPad, generate the project, open it in Xcode, select the
 `PhotoslopIPad` target, choose your Apple Developer team, and run on the paired
-device. TestFlight and App Store distribution require the maintainer's Apple
-distribution identity and provisioning profile; those credentials are never
-stored in this repository or in release artifacts.
+device. The device must be registered in the developer account and must have
+Developer Mode enabled (Settings, then Privacy & Security, then Developer Mode)
+before an installed development build will launch.
+
+## TestFlight distribution
+
+Tag builds upload to App Store Connect automatically. The `testflight` job in
+`.github/workflows/ipados.yml` runs after the unsigned validation build on any
+`v*` tag, and delegates to `scripts/publish-ipados-testflight.sh`, which
+archives the Release configuration, exports an App Store `.ipa`, validates it,
+and uploads it with `altool`.
+
+Signing credentials live in the `testflight` GitHub environment, never in this
+repository or in release artifacts:
+
+| Secret | Contents |
+| --- | --- |
+| `IOS_DISTRIBUTION_CERTIFICATE_P12` | Base64 of the Apple Distribution `.p12` |
+| `IOS_DISTRIBUTION_CERTIFICATE_PASSWORD` | Export password for that `.p12` |
+| `APP_STORE_CONNECT_KEY_ID` | App Store Connect API key identifier |
+| `APP_STORE_CONNECT_ISSUER_ID` | App Store Connect API issuer identifier |
+| `APP_STORE_CONNECT_PRIVATE_KEY` | Base64 of the API key `.p8` |
+
+The API key needs the App Manager role so `-allowProvisioningUpdates` can
+maintain the App Store provisioning profile without a committed profile.
+
+Because `check-version.py` derives `CURRENT_PROJECT_VERSION` from the marketing
+version, each upload consumes exactly one build number. App Store Connect
+rejects a repeated build number, so re-publishing requires a version bump
+rather than a re-run of the same tag.
+
+Once a build finishes processing, internal testers on the App Store Connect
+team receive it immediately. External testers, up to 10,000 by email or public
+link, require Beta App Review on the first build of a version.
 
 ## Initial-edition boundary
 

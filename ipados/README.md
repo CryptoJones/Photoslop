@@ -17,8 +17,13 @@ open Photoslop-iPadOS.xcodeproj
 ```
 
 For a reproducible unsigned arm64 build from the repository root, run
-`./scripts/build-ipados.sh`. Physical-device, TestFlight, and App Store builds
-must be signed with an Apple Developer team in Xcode.
+`./scripts/build-ipados.sh`. Physical-device builds must be signed with an
+Apple Developer team, and the target iPad must be registered in that account
+with Developer Mode enabled.
+
+Tagged releases upload to TestFlight automatically through the `testflight` job
+in `.github/workflows/ipados.yml`, which runs
+`./scripts/publish-ipados-testflight.sh`.
 
 The full feature and distribution notes are in
 [`docs/v1/ipados.md`](../docs/v1/ipados.md).
