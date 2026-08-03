@@ -11,7 +11,7 @@ import numpy as np
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QImage, QPainter, QTransform, QUndoCommand
 
-from photoslop.document import Document, _effects_margin, draw_layer
+from photoslop.document import Document, _effects_margin, draw_layer, render_region
 from photoslop.layer import BLEND_MODES, Layer, blank_image, mask_to_alpha
 from photoslop.npimage import view_u32
 
@@ -73,8 +73,7 @@ def _transform_mask(mask: QImage, transform: QTransform, *, smooth: bool = True)
         dtype=np.uint8,
         count=rotated.height() * out_bpl,
     ).reshape(rotated.height(), out_bpl)
-    for y in range(rotated.height()):
-        out_arr[y, : rotated.width()] = alpha_bytes[y, :]
+    out_arr[:, : rotated.width()] = alpha_bytes
     return result
 
 
@@ -764,20 +763,24 @@ class MergeVisibleCommand(QUndoCommand):
         doc = self.doc
         if self.merged is None:
             self.removed = [(i, layer) for i, layer in enumerate(doc.layers) if layer.visible]
+            # Nothing visible: max() over an empty sequence and removed[0][0]
+            # both raise. Stay a no-op in both directions rather than popping a
+            # layer that was never merged.
+            if not self.removed:
+                return
             union = QRect()
             for _, layer in self.removed:
                 union = union.united(layer.bounds())
             margin = max(_effects_margin(layer.effects) for _, layer in self.removed)
             if margin:
                 union = union.adjusted(-margin, -margin, margin, margin)
-            img = blank_image(union.size())
-            p = QPainter(img)
-            p.translate(-union.topLeft())
-            for _, layer in self.removed:
-                p.setOpacity(layer.opacity)
-                p.setCompositionMode(BLEND_MODES[layer.blend_mode])
-                draw_layer(p, doc, layer, union)
-            p.end()
+            # render_region, not a draw_layer loop: it is the same path
+            # Document.flatten takes, so adjustment LUTs are applied to the
+            # composite beneath their layer and group_props are honoured. A
+            # manual loop bakes neither, and an adjustment layer is visible —
+            # so it would be merged in as its own blank pixels and its filter
+            # silently deleted.
+            img = render_region(doc, union)
             self.merged = Layer("Merged", img, union.topLeft())
             self.insert_at = self.removed[0][0]
         for i, _ in reversed(self.removed):
@@ -789,6 +792,8 @@ class MergeVisibleCommand(QUndoCommand):
 
     def undo(self) -> None:
         doc = self.doc
+        if self.merged is None:
+            return
         doc.layers.pop(self.insert_at)
         for i, layer in self.removed:
             doc.layers.insert(i, layer)
