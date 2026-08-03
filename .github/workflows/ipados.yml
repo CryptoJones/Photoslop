@@ -56,3 +56,39 @@ jobs:
         with:
           name: Photoslop-iPadOS-unsigned-validation-only
           path: ipados/dist/Photoslop-iPadOS-unsigned.zip
+
+  testflight:
+    name: TestFlight upload
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: macos-15
+    environment: testflight
+    env:
+      PHOTOSLOP_IOS_TEAM_ID: J6P99Q4479
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify release versions
+        run: python3 scripts/check-version.py
+      - name: Install XcodeGen
+        run: |
+          archive="$RUNNER_TEMP/xcodegen.zip"
+          curl --fail --location --silent --show-error \
+            https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip \
+            --output "$archive"
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $archive" \
+            | shasum -a 256 -c -
+          mkdir "$RUNNER_TEMP/xcodegen-release"
+          ditto -x -k "$archive" "$RUNNER_TEMP/xcodegen-release"
+          echo "XCODEGEN=$RUNNER_TEMP/xcodegen-release/xcodegen/bin/xcodegen" \
+            >> "$GITHUB_ENV"
+      - name: Import Apple Distribution identity
+        env:
+          IOS_DISTRIBUTION_CERTIFICATE_P12: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_P12 }}
+          IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+        run: scripts/import-ios-signing-certificate.sh
+      - name: Archive, export, and upload to TestFlight
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: scripts/publish-ipados-testflight.sh
