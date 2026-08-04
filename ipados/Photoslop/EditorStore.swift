@@ -218,10 +218,17 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   }
 
   func exportPNG() async -> Data? {
+    await exportImage(format: .png)
+  }
+
+  /// Render the flattened composite and encode it in `format`, off the main
+  /// actor so a large canvas does not stall the UI.
+  func exportImage(format: ExportFormat, quality: CGFloat = 0.9) async -> Data? {
     let capturedLayers = layers
     let capturedSize = canvasSize
     return await Task.detached(priority: .userInitiated) {
-      Self.render(layers: capturedLayers, size: capturedSize).pngData()
+      format.encode(
+        Self.render(layers: capturedLayers, size: capturedSize), quality: quality)
     }.value
   }
 

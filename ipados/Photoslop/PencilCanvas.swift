@@ -93,6 +93,12 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
     canvasView.backgroundColor = .clear
     canvasView.isOpaque = false
     canvasView.layer.backgroundColor = UIColor.clear.cgColor
+    // PencilKit treats ink as a light-mode value and swaps it for display when
+    // the canvas is in dark mode, so black ink paints white and white ink
+    // paints black while mid-tones like purple pass through unchanged. The
+    // canvas here sits over the user's own artwork rather than a themed
+    // background, so pin it to light and let the chosen color be literal.
+    canvasView.overrideUserInterfaceStyle = .light
     canvasView.isScrollEnabled = false
     scrollView.accessibilityLabel = "Zoomable document canvas"
     scrollView.accessibilityHint = "Pinch to zoom and swipe to pan"
