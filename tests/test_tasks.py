@@ -262,3 +262,29 @@ def test_gui_heartbeat_continues_while_worker_runs(qapp):
     timer.stop()
     assert release_worker.is_set()
     assert len(beats) >= 3
+
+
+def test_worker_outlives_the_pool_so_completion_cannot_use_freed_memory(qapp):
+    """A finished QRunnable must not be freed while TaskService still holds it.
+
+    QRunnable auto-deletes by default, so QThreadPool releases the C++ object
+    the moment run() returns. TaskService keeps the worker in _running until
+    _complete pops it, and _complete only runs after the done signal reaches the
+    main thread — by which point Qt has already freed it. Destroying the
+    surviving wrapper then corrupts the heap, and the process dies wherever the
+    event loop is next pumped rather than where the fault was introduced. That
+    is the intermittent suite-wide SIGSEGV in issue #192.
+    """
+    import shiboken6
+
+    service = TaskService(max_workers=1, memory_budget=64 * 1024 * 1024)
+    handle = service.submit("probe", "Probe", lambda ctx: 42, 1024)
+    worker = service._running[handle][1]
+    assert not worker.autoDelete(), "the pool must not own this worker's lifetime"
+
+    service.pool.waitForDone(5_000)
+    assert shiboken6.isValid(worker), "pool freed the worker while Python held it"
+
+    _wait(qapp, lambda: handle.state is TaskState.SUCCEEDED)
+    assert shiboken6.isValid(worker), "worker died before completion was delivered"
+    assert handle not in service._running

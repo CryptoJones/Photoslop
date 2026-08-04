@@ -134,6 +134,17 @@ class _WorkerSignals(QObject):
 class _Worker(QRunnable):
     def __init__(self, pending: _Pending) -> None:
         super().__init__()
+        # QRunnable auto-deletes by default: QThreadPool frees the C++ object as
+        # soon as run() returns. TaskService keeps a Python reference to this
+        # worker in _running until _complete pops it, and _complete only runs
+        # once the done signal has crossed back to the main thread — after the
+        # pool has already freed it. The surviving wrapper then points at
+        # released memory, and destroying it corrupts the heap, so the process
+        # dies at whatever unrelated point next pumps the event loop rather than
+        # where the fault was introduced.
+        #
+        # Hand the lifetime to Python instead, which is what holds the reference.
+        self.setAutoDelete(False)
         self.pending = pending
         self.signals = _WorkerSignals()
 
