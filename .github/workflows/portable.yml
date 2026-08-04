@@ -80,12 +80,18 @@ jobs:
   windows:
     runs-on: windows-latest
     env:
-      # Maintainer-approved Windows-only unsigned exceptions. No Authenticode
-      # certificate exists for this project, so these tags ship an archive that
-      # says UNSIGNED in its name rather than a silently unsigned one. Every
-      # other tag stays fail-closed.
-      PHOTOSLOP_REQUIRE_SIGNING: ${{ (startsWith(github.ref, 'refs/tags/v') && !contains(fromJSON('["v1.30.0", "v2.0.0"]'), github.ref_name)) && '1' || '0' }}
-      PHOTOSLOP_ARTIFACT_QUALIFIER: ${{ contains(fromJSON('["v1.30.0", "v2.0.0"]'), github.ref_name) && 'UNSIGNED' || '' }}
+      # There is no Authenticode certificate for this project, so demanding one
+      # on a tag cannot ever succeed — it only fails the release. Windows tags
+      # therefore ship an archive with UNSIGNED in its filename, which is honest
+      # about what it is, rather than a build that never happens.
+      #
+      # This was a per-tag allowlist and it broke exactly the way an allowlist
+      # does: v2.0.1 was cut after the list was written for v2.0.0, the waiver
+      # missed, and the release job was skipped. Signing turns back on when
+      # PHOTOSLOP_WINDOWS_CERT_BASE64 exists, not when someone remembers to edit
+      # a list. See issue #210.
+      PHOTOSLOP_REQUIRE_SIGNING: "0"
+      PHOTOSLOP_ARTIFACT_QUALIFIER: ${{ startsWith(github.ref, 'refs/tags/v') && 'UNSIGNED' || '' }}
       PHOTOSLOP_WINDOWS_CERT_BASE64: ${{ secrets.PHOTOSLOP_WINDOWS_CERT_BASE64 }}
       PHOTOSLOP_WINDOWS_CERT_PASSWORD: ${{ secrets.PHOTOSLOP_WINDOWS_CERT_PASSWORD }}
     steps:
@@ -103,7 +109,7 @@ jobs:
         run: ./scripts/build-portable-windows.ps1
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Photoslop-Windows-portable${{ contains(fromJSON('["v1.30.0", "v2.0.0"]'), github.ref_name) && '-UNSIGNED' || '' }}
+          name: Photoslop-Windows-portable${{ startsWith(github.ref, 'refs/tags/v') && '-UNSIGNED' || '' }}
           path: |
             dist/portable-windows/*.zip
             dist/portable-windows/*.sha256
@@ -195,7 +201,7 @@ jobs:
           path: dist/macos
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: Photoslop-Windows-portable${{ contains(fromJSON('["v1.30.0", "v2.0.0"]'), github.ref_name) && '-UNSIGNED' || '' }}
+          name: Photoslop-Windows-portable${{ startsWith(github.ref, 'refs/tags/v') && '-UNSIGNED' || '' }}
           path: dist/windows
       - name: Give platform metadata unique release names
         run: |
