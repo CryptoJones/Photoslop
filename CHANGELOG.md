@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.0.2] — 2026-08-04
+
+### Fixed
+- Tagged Windows builds no longer demand an Authenticode certificate that does
+  not exist. The requirement was waived through a per-tag allowlist, which
+  missed `v2.0.1` because the list had been written for `v2.0.0`; the build
+  aborted and the release job was skipped, so 2.0.1 published no desktop
+  assets. Tagged Windows archives are labelled `UNSIGNED`, and signing returns
+  when a certificate is configured rather than when a list is edited.
+  ([#210](https://github.com/CryptoJones/Photoslop/issues/210))
+
+2.0.1 is otherwise identical: its iPad build reached TestFlight and its macOS
+archive was signed and notarized, but no GitHub release was produced.
+
 ## [2.0.1] — 2026-08-04
 
 ### Fixed
