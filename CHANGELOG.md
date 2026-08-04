@@ -4,6 +4,41 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.0.1] — 2026-08-04
+
+### Fixed
+- `TaskService` freed its worker while still holding a reference to it.
+  `QRunnable` auto-deletes, so `QThreadPool` released the C++ object as soon as
+  `run()` returned, but completion is delivered to the main thread afterwards
+  and pops the worker from `_running`. Destroying that wrapper corrupted the
+  heap, killing the process wherever the event loop was next pumped. Every
+  finished preview task had been leaving a dangling worker behind.
+  ([#192](https://github.com/CryptoJones/Photoslop/issues/192))
+- iPad ink colors were inverted: black painted white and white painted black,
+  while mid-tones were correct. PencilKit converts ink for dark mode, which
+  suits note-taking but not painting on the user's own artwork.
+  ([#204](https://github.com/CryptoJones/Photoslop/pull/204))
+- Renaming an iPad document was impossible. A constant `navigationTitle`
+  replaced the binding `DocumentGroup` installs, so Rename opened a field with
+  nothing behind it and the keyboard dismissed immediately.
+- The tagged macOS build selected an Xcode older than the iOS 26 SDK that App
+  Store Connect requires, and the Windows job demanded an Authenticode
+  certificate that does not exist. Both gates now fail loudly or waive
+  explicitly by tag. ([#202](https://github.com/CryptoJones/Photoslop/pull/202))
+
+### Added
+- iPad export offers PNG, JPEG, HEIC, TIFF, GIF, and BMP, with a file name and
+  format chosen before the system save panel and a quality slider for the lossy
+  formats. Formats without an alpha channel are flattened onto white rather
+  than exporting transparent areas as black.
+- New iPad documents can pick a canvas size: Standard, Square, HD, 4K UHD, A4
+  and US Letter at 300 DPI, Photo 6x4, or a custom size validated against the
+  project's own limits.
+
+### Security
+- `cryptography` 50.0.0 for CVE-2026-69247.
+  ([#206](https://github.com/CryptoJones/Photoslop/pull/206))
+
 ## [2.0.0] — 2026-08-02
 
 ### Added
