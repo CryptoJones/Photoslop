@@ -101,14 +101,15 @@ def test_release_permissions_are_confined_to_tag_upload_jobs():
     assert portable.count("github.ref_name == 'v1.30.0' && 'SIGNED-NOT-NOTARIZED' || ''") == 1
     assert portable.count("github.ref_name == 'v1.30.0' && '-SIGNED-NOT-NOTARIZED' || ''") == 2
 
-    # Windows: no Authenticode certificate exists, so its waiver is an explicit
-    # tag list. Both waived tags ship an archive that says UNSIGNED in its name.
-    windows_unsigned = 'fromJSON(\'["v1.30.0", "v2.0.0"]\')'
-    assert portable.count(f"!contains({windows_unsigned}, github.ref_name)") == 1
-    assert portable.count(f"contains({windows_unsigned}, github.ref_name) && 'UNSIGNED' || ''") == 1
-    assert (
-        portable.count(f"contains({windows_unsigned}, github.ref_name) && '-UNSIGNED' || ''") == 2
-    )
+    # Windows: no Authenticode certificate exists, so requiring one on a tag can
+    # only fail the release. Every tagged Windows archive says UNSIGNED in its
+    # name instead. Deliberately not a per-tag allowlist — that shape shipped
+    # once and broke on the very next tag, because a list only covers the
+    # versions someone remembered to add.
+    assert portable.count('PHOTOSLOP_REQUIRE_SIGNING: "0"') == 1
+    assert portable.count("startsWith(github.ref, 'refs/tags/v') && 'UNSIGNED' || ''") == 1
+    assert portable.count("startsWith(github.ref, 'refs/tags/v') && '-UNSIGNED' || ''") == 2
+    assert "fromJSON(" not in portable, "a per-tag signing allowlist came back"
     assert "scripts/import-macos-signing-certificate.sh" in portable
     assert "MACOS_CERTIFICATE_P12" in portable
     assert "verify_macos_signing" in portable
