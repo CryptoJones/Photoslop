@@ -80,9 +80,12 @@ jobs:
   windows:
     runs-on: windows-latest
     env:
-      # v1.30.0 is a maintainer-approved Windows-only unsigned exception.
-      PHOTOSLOP_REQUIRE_SIGNING: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name != 'v1.30.0' && '1' || '0' }}
-      PHOTOSLOP_ARTIFACT_QUALIFIER: ${{ github.ref_name == 'v1.30.0' && 'UNSIGNED' || '' }}
+      # Maintainer-approved Windows-only unsigned exceptions. No Authenticode
+      # certificate exists for this project, so these tags ship an archive that
+      # says UNSIGNED in its name rather than a silently unsigned one. Every
+      # other tag stays fail-closed.
+      PHOTOSLOP_REQUIRE_SIGNING: ${{ (startsWith(github.ref, 'refs/tags/v') && !contains(fromJSON('["v1.30.0", "v2.0.0"]'), github.ref_name)) && '1' || '0' }}
+      PHOTOSLOP_ARTIFACT_QUALIFIER: ${{ contains(fromJSON('["v1.30.0", "v2.0.0"]'), github.ref_name) && 'UNSIGNED' || '' }}
       PHOTOSLOP_WINDOWS_CERT_BASE64: ${{ secrets.PHOTOSLOP_WINDOWS_CERT_BASE64 }}
       PHOTOSLOP_WINDOWS_CERT_PASSWORD: ${{ secrets.PHOTOSLOP_WINDOWS_CERT_PASSWORD }}
     steps:
@@ -100,7 +103,7 @@ jobs:
         run: ./scripts/build-portable-windows.ps1
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Photoslop-Windows-portable${{ github.ref_name == 'v1.30.0' && '-UNSIGNED' || '' }}
+          name: Photoslop-Windows-portable${{ contains(fromJSON('["v1.30.0", "v2.0.0"]'), github.ref_name) && '-UNSIGNED' || '' }}
           path: |
             dist/portable-windows/*.zip
             dist/portable-windows/*.sha256
@@ -192,7 +195,7 @@ jobs:
           path: dist/macos
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: Photoslop-Windows-portable${{ github.ref_name == 'v1.30.0' && '-UNSIGNED' || '' }}
+          name: Photoslop-Windows-portable${{ contains(fromJSON('["v1.30.0", "v2.0.0"]'), github.ref_name) && '-UNSIGNED' || '' }}
           path: dist/windows
       - name: Give platform metadata unique release names
         run: |
