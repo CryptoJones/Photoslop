@@ -110,6 +110,13 @@ def test_release_permissions_are_confined_to_tag_upload_jobs():
     assert portable.count("startsWith(github.ref, 'refs/tags/v') && 'UNSIGNED' || ''") == 1
     assert portable.count("startsWith(github.ref, 'refs/tags/v') && '-UNSIGNED' || ''") == 2
     assert "fromJSON(" not in portable, "a per-tag signing allowlist came back"
+
+    # Tagging is the only manual release step: the job creates the release when
+    # it is missing. Uploading to a release nobody made discards a build that
+    # already succeeded, which is how v2.0.2 lost its assets on the first try.
+    assert 'gh release view "${GITHUB_REF_NAME}"' in portable
+    assert 'gh release create "${GITHUB_REF_NAME}"' in portable
+    assert "--verify-tag" in portable
     assert "scripts/import-macos-signing-certificate.sh" in portable
     assert "MACOS_CERTIFICATE_P12" in portable
     assert "verify_macos_signing" in portable

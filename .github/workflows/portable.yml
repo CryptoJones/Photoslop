@@ -215,9 +215,20 @@ jobs:
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: "dist/**/*.zip"
+      # `gh release upload` requires the release to exist already, so a tag whose
+      # release had not been hand-created failed here with "release not found"
+      # after every build had succeeded — the assets were built, attested, and
+      # then dropped. Create it when missing so tagging is the only manual step.
       - name: Attach portable builds and metadata
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release upload "${GITHUB_REF_NAME}"
-          dist/macos/* dist/windows/* --clobber
+        run: |
+          set -euo pipefail
+          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "Photoslop ${GITHUB_REF_NAME}" \
+              --verify-tag \
+              --notes "Portable builds for ${GITHUB_REF_NAME}. See CHANGELOG.md."
+          fi
+          gh release upload "${GITHUB_REF_NAME}" \
+            dist/macos/* dist/windows/* --clobber
