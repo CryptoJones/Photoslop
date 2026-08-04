@@ -16,6 +16,14 @@ path.
   also read the Pencil's altitude and azimuth and broaden as it is laid over,
   which is the tool to reach for when shading. Pen remains the default.
 - Set ink color and brush width from the bottom tool strip.
+- **New** offers a starting canvas size: Standard, Square, HD, 4K UHD, A4 and
+  US Letter at 300 DPI, Photo 6x4, or a custom size. **Canvas Size** applies the
+  same choice to the open document, padding or cropping around centred content
+  exactly as `photoslop-cli --canvas-size` does, and is undoable. Reach for it
+  when a document was created from the document browser, which builds one at the
+  default size without asking.
+- **About Photoslop** reports the marketing version and build number, plus the
+  open document's canvas size and layer count.
 - Use the layer sidebar to add, duplicate, rename, show/hide, change opacity,
   reorder, merge down, clear, or delete raster layers.
 - Open an image from Files or Photos. Imports create a document at the image's
