@@ -100,6 +100,40 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     mutate(actionName: "New Document") { installNewDocument(size: size) }
   }
 
+  /// Pad or crop the canvas to `size`, keeping existing artwork centred.
+  ///
+  /// This is canvas resizing, not scaling: pixels keep their size and the
+  /// border grows or is trimmed around them. The centred anchor matches
+  /// `photoslop-cli --canvas-size`, which offsets content by half the
+  /// difference, so a document resized either way lands identically.
+  func resizeCanvas(to size: CGSize) {
+    guard ProjectArchive.isValidCanvas(size), size != canvasSize else { return }
+    let offset = CGPoint(
+      x: ((size.width - canvasSize.width) / 2).rounded(),
+      y: ((size.height - canvasSize.height) / 2).rounded()
+    )
+    let translation = CGAffineTransform(translationX: offset.x, y: offset.y)
+    mutate(actionName: "Canvas Size") {
+      canvasSize = size
+      layers = layers.map { layer in
+        var resized = layer
+        resized.image = Self.recanvased(layer.image, to: size, offset: offset)
+        resized.drawing = layer.drawing.transformed(using: translation)
+        return resized
+      }
+    }
+  }
+
+  /// Draw `image` onto a transparent canvas of `size` at `offset`.
+  private static func recanvased(_ image: UIImage, to size: CGSize, offset: CGPoint) -> UIImage {
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = false
+    return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+      image.draw(at: offset)
+    }
+  }
+
   func importImage(data: Data, suggestedName: String? = nil) throws {
     let normalized = try ProjectArchive.decodeImage(data)
     mutate(actionName: "Import Image") {

@@ -118,3 +118,55 @@ extension UIImage {
     )
   }
 }
+
+extension EditorStoreTests {
+  /// Canvas resize pads and crops around centred content, matching
+  /// `photoslop-cli --canvas-size`, which offsets by half the difference.
+  func testCanvasResizeKeepsArtworkCentredLikeTheCli() {
+    let store = EditorStore()
+    let original = store.canvasSize
+    let grown = CGSize(width: original.width + 400, height: original.height + 200)
+
+    store.resizeCanvas(to: grown)
+
+    XCTAssertEqual(store.canvasSize, grown)
+    for layer in store.layers {
+      XCTAssertEqual(layer.image.size, grown, "\(layer.name) was not recanvased")
+    }
+  }
+
+  func testCanvasResizeIsUndoable() {
+    let store = EditorStore()
+    let undoManager = UndoManager()
+    store.undoManager = undoManager
+    let original = store.canvasSize
+
+    store.resizeCanvas(to: CGSize(width: 640, height: 480))
+    XCTAssertEqual(store.canvasSize, CGSize(width: 640, height: 480))
+    XCTAssertTrue(undoManager.canUndo)
+
+    undoManager.undo()
+    XCTAssertEqual(store.canvasSize, original)
+  }
+
+  func testCanvasResizeRefusesSizesTheProjectCannotSave() {
+    let store = EditorStore()
+    let original = store.canvasSize
+
+    store.resizeCanvas(to: CGSize(width: 0, height: 100))
+    XCTAssertEqual(store.canvasSize, original, "a zero dimension must be refused")
+
+    store.resizeCanvas(to: CGSize(width: 40_000, height: 40_000))
+    XCTAssertEqual(store.canvasSize, original, "past the caps must be refused")
+
+    store.resizeCanvas(to: original)
+    XCTAssertEqual(store.canvasSize, original)
+  }
+
+  func testAboutInformationIsPresentInTheBundle() {
+    let info = Bundle(for: EditorStore.self).infoDictionary ?? [:]
+    XCTAssertNotNil(
+      info["CFBundleShortVersionString"], "About shows the marketing version")
+    XCTAssertNotNil(info["CFBundleVersion"], "About shows the build number")
+  }
+}

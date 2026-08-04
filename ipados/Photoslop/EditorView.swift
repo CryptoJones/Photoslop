@@ -12,6 +12,8 @@ struct EditorView: View {
   @State private var showExporter = false
   @State private var showExportOptions = false
   @State private var showNewDocumentOptions = false
+  @State private var canvasSheetMode = CanvasSheetMode.newDocument
+  @State private var showAbout = false
   @State private var canvasPreset = CanvasPreset.standard
   @State private var customWidth = "2048"
   @State private var customHeight = "1536"
@@ -70,6 +72,7 @@ struct EditorView: View {
     }
     .sheet(isPresented: $showExportOptions) { exportOptionsSheet }
     .sheet(isPresented: $showNewDocumentOptions) { newDocumentSheet }
+    .sheet(isPresented: $showAbout) { aboutSheet }
     .onChange(of: selectedPhoto) { _, item in
       guard let item else { return }
       Task {
@@ -187,11 +190,24 @@ struct EditorView: View {
   private var documentToolbar: some ToolbarContent {
     ToolbarItemGroup(placement: .topBarLeading) {
       Button {
+        canvasSheetMode = .newDocument
         showNewDocumentOptions = true
       } label: {
         Label("New", systemImage: "doc.badge.plus")
       }
       .keyboardShortcut("n", modifiers: .command)
+
+      // Reachable however the document was made. DocumentGroup builds a
+      // document straight from EditorStore() when one is created in the
+      // document browser, so a size chosen only at New would never be offered
+      // for the browser's documents — which is most of them.
+      Button {
+        canvasSheetMode = .resize
+        syncCustomFieldsToCanvas()
+        showNewDocumentOptions = true
+      } label: {
+        Label("Canvas Size", systemImage: "aspectratio")
+      }
 
       Button {
         showFileImporter = true
@@ -223,9 +239,15 @@ struct EditorView: View {
         .keyboardShortcut("z", modifiers: [.command, .shift])
 
         Button(action: export) {
-          Label("Export PNG", systemImage: "square.and.arrow.up")
+          Label("Export Image", systemImage: "square.and.arrow.up")
         }
         .keyboardShortcut("e", modifiers: [.command, .shift])
+
+        Button {
+          showAbout = true
+        } label: {
+          Label("About Photoslop", systemImage: "info.circle")
+        }
       }
     }
   }
@@ -344,22 +366,96 @@ struct EditorView: View {
           }
         }
       }
-      .navigationTitle("New Document")
+      .navigationTitle(canvasSheetMode.title)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
           Button("Cancel") { showNewDocumentOptions = false }
         }
         ToolbarItem(placement: .confirmationAction) {
-          Button("Create") {
+          Button(canvasSheetMode.confirmTitle) {
             guard let size = requestedCanvasSize else { return }
-            store.newDocument(size: size)
+            switch canvasSheetMode {
+            case .newDocument: store.newDocument(size: size)
+            case .resize: store.resizeCanvas(to: size)
+            }
             showNewDocumentOptions = false
           }
           .disabled(requestedCanvasSize == nil)
         }
       }
     }
+  }
+
+  /// Whether the canvas sheet creates a document or resizes the open one.
+  private enum CanvasSheetMode {
+    case newDocument
+    case resize
+
+    var title: String {
+      switch self {
+      case .newDocument: "New Document"
+      case .resize: "Canvas Size"
+      }
+    }
+
+    var confirmTitle: String {
+      switch self {
+      case .newDocument: "Create"
+      case .resize: "Resize"
+      }
+    }
+  }
+
+  /// Start a resize from the size the document already has, so the fields show
+  /// the current canvas rather than whatever was typed last.
+  private func syncCustomFieldsToCanvas() {
+    customWidth = String(Int(store.canvasSize.width))
+    customHeight = String(Int(store.canvasSize.height))
+    canvasPreset =
+      CanvasPreset.allCases.first { $0.size == store.canvasSize } ?? .custom
+  }
+
+  private var aboutSheet: some View {
+    let info = Bundle.main.infoDictionary ?? [:]
+    let version = info["CFBundleShortVersionString"] as? String ?? "unknown"
+    let build = info["CFBundleVersion"] as? String ?? "unknown"
+    return NavigationStack {
+      List {
+        Section {
+          LabeledContent("Version", value: version)
+          LabeledContent("Build", value: build)
+        } header: {
+          VStack(spacing: 6) {
+            Image(systemName: "paintbrush.pointed.fill")
+              .font(.system(size: 44))
+              .foregroundStyle(.tint)
+            Text("Photoslop for iPad").font(.headline)
+          }
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 12)
+          .textCase(nil)
+        }
+
+        Section("Canvas") {
+          LabeledContent("Size", value: "\(Int(store.canvasSize.width)) x \(Int(store.canvasSize.height)) px")
+          LabeledContent("Layers", value: "\(store.layers.count)")
+        }
+
+        Section {
+          Text("Proudly Made in Nebraska. Go Big Red!")
+          Link("https://xkcd.com/2347/", destination: URL(string: "https://xkcd.com/2347/")!)
+        }
+      }
+      .navigationTitle("About")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Done") { showAbout = false }
+        }
+      }
+    }
+    .presentationDetents([.medium])
   }
 
   private func export() { showExportOptions = true }
