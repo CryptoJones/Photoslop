@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.0.3] — 2026-08-04
+
+### Added
+- **Canvas Size** on iPad, reachable from any document. The size picker added in
+  2.0.1 hung off the in-editor New button, but `DocumentGroup` builds a document
+  straight from the document browser without asking, so most documents were
+  stuck at the default with no way to change it. Resizing pads or crops around
+  centred content, matching `photoslop-cli --canvas-size`, translates PencilKit
+  strokes by the same offset, and is a single undoable step.
+- **About Photoslop** on iPad, reporting the marketing version and build number
+  alongside the open document's canvas size and layer count.
+
+### Changed
+- The iPad Export button no longer reads "Export PNG"; it has offered PNG, JPEG,
+  HEIC, TIFF, GIF, and BMP since 2.0.1.
+
 ## [2.0.2] — 2026-08-04
 
 ### Fixed
