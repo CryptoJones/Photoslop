@@ -1,4 +1,4 @@
-# Photoslop for iPadOS
+# Photoslop for iPad and iPhone
 
 The iPad-native editor uses SwiftUI `DocumentGroup` and a versioned
 `.photoslop` package document. It preserves layered raster images and PencilKit

@@ -10,7 +10,7 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
-    TARGETED_DEVICE_FAMILY: "2"
+    TARGETED_DEVICE_FAMILY: "1,2"
     SUPPORTS_MACCATALYST: NO
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     CURRENT_PROJECT_VERSION: "20003"
@@ -32,7 +32,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
-        TARGETED_DEVICE_FAMILY: "2"
+        TARGETED_DEVICE_FAMILY: "1,2"
     info:
       path: Photoslop/Info.plist
       properties:
@@ -81,7 +81,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.ronin48.photoslop.ipad.tests
         GENERATE_INFOPLIST_FILE: YES
-        TARGETED_DEVICE_FAMILY: "2"
+        TARGETED_DEVICE_FAMILY: "1,2"
 
 schemes:
   PhotoslopIPad:
