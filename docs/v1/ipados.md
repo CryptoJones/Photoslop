@@ -1,10 +1,26 @@
 # Photoslop for iPadOS
 
-Photoslop v2.0.3 includes an iPad-native edition targeting iPadOS 17 and newer.
-It lives in `ipados/` and uses SwiftUI, UIKit, and PencilKit. This is a native
+Photoslop v2.0.3 includes an iOS-native edition targeting iPadOS and iOS 17 and
+newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
+built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
 iOS, but Qt for Python does not currently provide a supported iOS deployment
 path.
+
+## iPhone and iPad
+
+One binary serves both, adapting to the horizontal size class rather than the
+device name, so an iPad in a narrow Split View gets the phone layout too.
+
+- **Regular width** keeps the layer list in a sidebar beside the canvas.
+- **Compact width** moves it to a sheet reached from **Layers**, because
+  `NavigationSplitView` collapses its sidebar into a pushed column there, and
+  reaching the layers would otherwise navigate away from the drawing.
+- The tool strip narrows its brush picker and width slider at compact width and
+  scrolls horizontally if it still does not fit.
+
+CI runs the simulator suite on both an iPad and an iPhone so neither layout
+regresses unnoticed.
 
 ## Editing workflow
 

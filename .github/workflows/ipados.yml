@@ -35,21 +35,41 @@ jobs:
             >> "$GITHUB_ENV"
       - name: Build iPadOS app
         run: scripts/build-ipados.sh
-      - name: Select iPad simulator
+      # The app is universal, and the two size classes take different code
+      # paths: a regular width keeps the layer sidebar beside the canvas, a
+      # compact one moves it into a sheet. Testing only an iPad would leave the
+      # phone layout uncovered.
+      - name: Select simulators
         id: simulator
         run: |
-          DEVICE_ID="$(xcrun simctl list devices available -j | jq -r \
+          devices="$(xcrun simctl list devices available -j)"
+          IPAD_ID="$(echo "$devices" | jq -r \
             '[.devices[][] | select(.name | startswith("iPad"))][0].udid')"
-          test -n "$DEVICE_ID" -a "$DEVICE_ID" != "null"
-          echo "id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
-      - name: Run iPadOS tests
+          IPHONE_ID="$(echo "$devices" | jq -r \
+            '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')"
+          for id in "$IPAD_ID" "$IPHONE_ID"; do
+            test -n "$id" -a "$id" != "null"
+          done
+          echo "ipad=$IPAD_ID" >> "$GITHUB_OUTPUT"
+          echo "iphone=$IPHONE_ID" >> "$GITHUB_OUTPUT"
+      - name: Run iPad tests
         working-directory: ipados
         run: |
           xcodebuild \
             -project Photoslop-iPadOS.xcodeproj \
             -scheme PhotoslopIPad \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}' \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.ipad }}' \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+      - name: Run iPhone tests
+        working-directory: ipados
+        run: |
+          xcodebuild \
+            -project Photoslop-iPadOS.xcodeproj \
+            -scheme PhotoslopIPad \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.iphone }}' \
             CODE_SIGNING_ALLOWED=NO \
             test
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

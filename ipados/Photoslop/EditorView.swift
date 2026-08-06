@@ -27,34 +27,27 @@ struct EditorView: View {
   @State private var inkWidth = 8.0
   @State private var tool = BrushTool.pen
   @State private var drawsWithFinger = false
+  @State private var showLayers = false
+  @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+  /// A phone has no room for a permanent sidebar beside the canvas.
+  private var isCompact: Bool { horizontalSizeClass == .compact }
 
   var body: some View {
-    NavigationSplitView {
-      layerSidebar
-        .navigationTitle("Layers")
-    } detail: {
-      VStack(spacing: 0) {
-        PencilCanvas(
-          backgroundImage: store.canvasBackground,
-          canvasSize: store.canvasSize,
-          drawing: store.activeLayer?.drawing ?? PKDrawing(),
-          inkColor: UIColor(inkColor),
-          inkWidth: inkWidth,
-          tool: tool,
-          drawsWithFinger: drawsWithFinger,
-          drawingOpacity: store.activeLayer?.isVisible == true
-            ? (store.activeLayer?.opacity ?? 1)
-            : 0,
-          onDrawingChanged: store.setDrawing
-        )
-        toolStrip
+    Group {
+      if isCompact {
+        // NavigationSplitView collapses its sidebar into a pushed column at
+        // compact width, so reaching the layer list would navigate away from
+        // the drawing. A sheet keeps the canvas on screen underneath.
+        NavigationStack { editorSurface }
+      } else {
+        NavigationSplitView {
+          layerSidebar
+            .navigationTitle("Layers")
+        } detail: {
+          editorSurface
+        }
       }
-      // No .navigationTitle here on purpose. DocumentGroup binds the title to
-      // the document's file name and drives Rename through it; setting a
-      // constant title replaces that binding, so tapping Rename opened a field
-      // with nowhere to write and the keyboard dismissed immediately.
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar { documentToolbar }
     }
     .fileImporter(
       isPresented: $showFileImporter,
@@ -99,6 +92,43 @@ struct EditorView: View {
     }
     .onAppear { store.undoManager = undoManager }
     .onChange(of: undoManager) { _, manager in store.undoManager = manager }
+  }
+
+  private var editorSurface: some View {
+    VStack(spacing: 0) {
+      PencilCanvas(
+        backgroundImage: store.canvasBackground,
+        canvasSize: store.canvasSize,
+        drawing: store.activeLayer?.drawing ?? PKDrawing(),
+        inkColor: UIColor(inkColor),
+        inkWidth: inkWidth,
+        tool: tool,
+        drawsWithFinger: drawsWithFinger,
+        drawingOpacity: store.activeLayer?.isVisible == true
+          ? (store.activeLayer?.opacity ?? 1)
+          : 0,
+        onDrawingChanged: store.setDrawing
+      )
+      toolStrip
+    }
+    // No .navigationTitle here on purpose. DocumentGroup binds the title to
+    // the document's file name and drives Rename through it; setting a
+    // constant title replaces that binding, so tapping Rename opened a field
+    // with nowhere to write and the keyboard dismissed immediately.
+    .navigationBarTitleDisplayMode(.inline)
+    .toolbar { documentToolbar }
+    .sheet(isPresented: $showLayers) {
+      NavigationStack {
+        layerSidebar
+          .navigationTitle("Layers")
+          .navigationBarTitleDisplayMode(.inline)
+          .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+              Button("Done") { showLayers = false }
+            }
+          }
+      }
+    }
   }
 
   private var layerSidebar: some View {
@@ -160,7 +190,7 @@ struct EditorView: View {
           }
         }
         .pickerStyle(.segmented)
-        .frame(width: 300)
+        .frame(width: isCompact ? 240 : 300)
 
         ColorPicker("Ink", selection: $inkColor, supportsOpacity: true)
           .labelsHidden()
@@ -169,7 +199,7 @@ struct EditorView: View {
 
         Image(systemName: "circle.fill").font(.system(size: 6))
         Slider(value: $inkWidth, in: 1...80, step: 1)
-          .frame(width: 180)
+          .frame(width: isCompact ? 130 : 180)
           .accessibilityLabel("Brush width")
         Image(systemName: "circle.fill").font(.system(size: 18))
 
@@ -189,6 +219,16 @@ struct EditorView: View {
   @ToolbarContentBuilder
   private var documentToolbar: some ToolbarContent {
     ToolbarItemGroup(placement: .topBarLeading) {
+      // On iPad the sidebar is always beside the canvas, so this would be
+      // redundant; on a phone it is the only way to reach layers.
+      if isCompact {
+        Button {
+          showLayers = true
+        } label: {
+          Label("Layers", systemImage: "square.3.layers.3d")
+        }
+      }
+
       Button {
         canvasSheetMode = .newDocument
         showNewDocumentOptions = true
