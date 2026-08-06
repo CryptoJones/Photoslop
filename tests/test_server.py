@@ -3,6 +3,8 @@
 directly; the FastMCP wiring is exercised only when the optional ``mcp`` extra
 is installed."""
 
+import sys
+
 import pytest
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor, QImage
@@ -130,3 +132,52 @@ def test_build_server_registers_the_three_tools(tmp_path):
 
     names = {t.name for t in asyncio.run(srv.list_tools())}
     assert {"list_operations", "edit_image", "document_info"} <= names
+
+
+def test_every_advertised_transport_is_one_the_sdk_can_serve():
+    """--transport must not offer a name FastMCP.run would reject.
+
+    argparse validates the flag against our own tuple, so a transport that the
+    pinned SDK does not implement would pass argument parsing and fail only once
+    someone tried to serve on it.
+    """
+    pytest.importorskip("mcp")
+    import typing
+
+    from mcp.server.fastmcp import FastMCP
+
+    supported = typing.get_args(typing.get_type_hints(FastMCP.run)["transport"])
+    assert set(server.TRANSPORTS) <= set(supported), (
+        f"advertised {server.TRANSPORTS} but the SDK serves {supported}"
+    )
+    assert server.TRANSPORTS[0] == "stdio", "stdio needs no listener, so it stays the default"
+
+
+def test_http_bind_settings_reach_the_server(tmp_path):
+    """host and port have to land on the instance, not just be accepted.
+
+    They are only consulted by the HTTP transports, so a silently dropped
+    setting would bind the default port and go unnoticed until something else
+    already held it.
+    """
+    pytest.importorskip("mcp")
+    srv = server.build_server(root=tmp_path, host="127.0.0.1", port=8123)
+    assert srv.settings.host == "127.0.0.1"
+    assert srv.settings.port == 8123
+
+
+def test_stdio_server_still_builds_without_bind_settings(tmp_path):
+    pytest.importorskip("mcp")
+    srv = server.build_server(root=tmp_path)
+    assert srv.name == "photoslop"
+
+
+def test_transport_flag_defaults_to_stdio_and_rejects_unknown_names(monkeypatch, tmp_path):
+    """The parser is the guard against a typo becoming a network listener."""
+    pytest.importorskip("mcp")
+    import contextlib
+    import io
+
+    monkeypatch.setattr(sys, "argv", ["photoslop-mcp", "--transport", "carrier-pigeon"])
+    with pytest.raises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+        server.main()

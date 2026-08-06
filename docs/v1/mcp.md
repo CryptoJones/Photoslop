@@ -18,6 +18,29 @@ photoslop-mcp --root /path/to/images   # serves over stdio
 Equivalently `python -m photoslop.server`. It is headless-safe (forces Qt's
 offscreen platform), so it runs over SSH and in CI.
 
+## Transports
+
+`--transport` selects how the server is reached. stdio is the default because it
+needs no listener at all — the client spawns the process and talks over its
+pipes, so nothing is exposed to the network.
+
+| Transport | Use it for |
+| --- | --- |
+| `stdio` *(default)* | A client that launches the server itself, such as Claude Desktop |
+| `streamable-http` | A long-running server several clients connect to |
+| `sse` | Older clients predating Streamable HTTP |
+
+```bash
+photoslop-mcp --transport streamable-http --port 8000 --root /path/to/images
+```
+
+`--host` defaults to `127.0.0.1`, so an HTTP server is reachable only from the
+same machine until that is deliberately widened. Bear in mind what widening it
+means: `--root` is the only thing confining tool calls to a directory, and over
+HTTP that boundary becomes reachable by anything that can open a socket to the
+port. The server prints the transport, address, and active root on startup so
+the exposure is stated rather than assumed.
+
 ## Register with a client
 
 Point any MCP client at the `photoslop-mcp` command. For Claude Desktop /

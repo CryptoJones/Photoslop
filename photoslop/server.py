@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -221,8 +222,23 @@ def document_info(input: str) -> dict:
         raise ToolError(str(exc), code) from exc
 
 
-def build_server(*, root: str | os.PathLike[str] | None = None, allow_overwrite: bool = False):
+#: Transports the pinned SDK can serve. stdio is the MCP default and the only
+#: one that needs no network listener, so it stays the default here. SSE is the
+#: 1.x-era HTTP transport, superseded by Streamable HTTP but still spoken by
+#: older clients.
+TRANSPORTS = ("stdio", "streamable-http", "sse")
+
+
+def build_server(
+    *,
+    root: str | os.PathLike[str] | None = None,
+    allow_overwrite: bool = False,
+    host: str | None = None,
+    port: int | None = None,
+):
     """Construct the FastMCP server with the three tools registered.
+
+    ``host`` and ``port`` only affect the HTTP transports; stdio ignores them.
 
     Needs the optional ``mcp`` dependency (``pip install 'photoslop[mcp]'``)."""
     try:
@@ -234,6 +250,11 @@ def build_server(*, root: str | os.PathLike[str] | None = None, allow_overwrite:
         ) from exc
 
     configure(root=root or os.getcwd(), allow_overwrite=allow_overwrite)
+    settings = {}
+    if host is not None:
+        settings["host"] = host
+    if port is not None:
+        settings["port"] = port
     server = FastMCP(
         "photoslop",
         instructions=(
@@ -245,6 +266,7 @@ def build_server(*, root: str | os.PathLike[str] | None = None, allow_overwrite:
             "Network model operations and unsafe plugins are unavailable. "
             f"document_info inspects a file read-only. Engine version {__version__}."
         ),
+        **settings,
     )
     server.tool()(list_operations)
     server.tool()(edit_image)
@@ -253,7 +275,7 @@ def build_server(*, root: str | os.PathLike[str] | None = None, allow_overwrite:
 
 
 def main() -> None:
-    """Console entry point: serve over stdio (the MCP default transport)."""
+    """Console entry point. Serves over stdio unless another transport is asked for."""
     parser = argparse.ArgumentParser(prog="photoslop-mcp")
     parser.add_argument(
         "--root",
@@ -265,8 +287,40 @@ def main() -> None:
         action="store_true",
         help="permit tools to replace existing outputs under --root",
     )
+    parser.add_argument(
+        "--transport",
+        choices=TRANSPORTS,
+        default="stdio",
+        help="transport to serve on (default: stdio, which needs no listener)",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="bind address for the HTTP transports (default: 127.0.0.1, loopback only)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="port for the HTTP transports (default: 8000)",
+    )
     args = parser.parse_args()
-    build_server(root=args.root, allow_overwrite=args.allow_overwrite).run()
+    # The filesystem sandbox is the only thing standing between a tool call and
+    # the rest of the disk, and an HTTP transport turns that from a local
+    # concern into a reachable one. Say plainly what is exposed and where.
+    if args.transport != "stdio":
+        print(
+            f"photoslop-mcp serving {args.transport} on {args.host}:{args.port}; "
+            f"tools are confined to {Path(args.root).resolve()}",
+            file=sys.stderr,
+        )
+    server = build_server(
+        root=args.root,
+        allow_overwrite=args.allow_overwrite,
+        host=args.host,
+        port=args.port,
+    )
+    server.run(transport=args.transport)
 
 
 if __name__ == "__main__":
