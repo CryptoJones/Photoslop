@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.1.0] — 2026-08-06
+
+### Added
+- **iPhone support.** Photoslop is now a universal app; iPhone and iPad ship in
+  one binary. The layout follows the horizontal size class rather than the
+  device name, so an iPad in a narrow Split View gets the phone treatment too.
+  At compact width the editor is a `NavigationStack` and the layer list opens in
+  a sheet over the canvas, because `NavigationSplitView` collapses its sidebar
+  into a pushed column there and reaching layers would otherwise navigate away
+  from the drawing. The brush picker and width slider narrow to match.
+  ([#203](https://github.com/CryptoJones/Photoslop/issues/203))
+- A start page on launch. `DocumentGroup` uses the file browser as its root
+  scene unless a launch scene exists, so the app opened on a directory listing
+  before the user had said whether they wanted to create or open anything. The
+  browser now appears only once Open is chosen. iOS 18 and newer; iPadOS 17
+  keeps the previous behaviour rather than the app dropping those devices.
+
+### Changed
+- CI runs the simulator suite on both an iPad and an iPhone. The two size
+  classes take different code paths, so testing one left the other uncovered.
+
 ## [2.0.3] — 2026-08-04
 
 ### Added
