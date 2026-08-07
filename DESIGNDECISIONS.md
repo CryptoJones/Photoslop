@@ -141,6 +141,38 @@ and Photoslop's resident footprint stays flat.
 
 ---
 
+## DD-010 — iOS stays a DocumentGroup app, browser panel and all
+
+**Status: Accepted (2026-08-06).**
+
+The iOS launch screen shows Apple's document browser beneath it — recents,
+locations, and a file listing — before the user has said whether they want to
+create or open anything. Photoslop keeps it.
+
+**Why.** `DocumentGroupLaunchScene` layers a launch view *over* the browser; the
+browser is the scene's root and no API hides it. This was confirmed by probe
+rather than assumed: renaming the scene's title changed the screen while the
+panel beneath it did not move, so the launch scene is in control and the panel
+is simply not its to remove.
+
+Getting a landing page with no browser means not rooting the app on
+`DocumentGroup` — a `WindowGroup` shell presenting a document browser on demand.
+`DocumentGroup` supplies document rename, autosave, version history, and iCloud
+integration for free, and every one of them would have to be rebuilt and then
+kept correct. Rename in particular is already shipped and confirmed working on
+device.
+
+**Consequences.**
+
+- The launch screen is the standard iOS document-app experience. That is a
+  deliberate choice, not an unfinished one, so a future report of "it shows the
+  files first" is answered here rather than reopened.
+- Documents keep rename, autosave, versions, and iCloud without app-side code.
+- Reversing this means accepting the rebuild cost above, in a new entry that
+  supersedes this one.
+
+---
+
 *New decisions get the next DD number. Reversing one requires a new entry
 that names the entry it supersedes — history is append-only.*
 
