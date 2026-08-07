@@ -18,7 +18,6 @@ struct EditorView: View {
   @State private var textBody = ""
   @State private var textSize = 48.0
   @State private var textColor = Color.black
-  @State private var isPlacingText = false
   @State private var isMovingText = false
   @State private var editingTextLayerID: UUID?
   @State private var canvasPreset = CanvasPreset.standard
@@ -121,11 +120,10 @@ struct EditorView: View {
         drawingOpacity: store.activeLayer?.isVisible == true
           ? (store.activeLayer?.opacity ?? 1)
           : 0,
-        onCanvasTapped: isPlacingText ? placeText : nil,
         onCanvasDragged: isMovingText ? moveText : nil,
         onDrawingChanged: store.setDrawing
       )
-      if isPlacingText || isMovingText { placementBanner }
+      if isMovingText { placementBanner }
       toolStrip
     }
     // No .navigationTitle here on purpose. DocumentGroup binds the title to
@@ -282,7 +280,6 @@ struct EditorView: View {
 
         Button {
           isMovingText.toggle()
-          isPlacingText = false
         } label: {
           Label("Move Text", systemImage: "arrow.up.and.down.and.arrow.left.and.right")
         }
@@ -549,17 +546,10 @@ struct EditorView: View {
 
   private var placementBanner: some View {
     HStack(spacing: 12) {
-      Image(systemName: isMovingText ? "hand.draw" : "hand.tap")
-      Text(
-        isMovingText
-          ? "Drag the text to move it"
-          : "Tap the canvas to place the text"
-      )
+      Image(systemName: "hand.draw")
+      Text("Drag the text to move it")
       Spacer()
-      Button("Done") {
-        isPlacingText = false
-        isMovingText = false
-      }
+      Button("Done") { isMovingText = false }
     }
     .font(.callout)
     .padding(.horizontal, 16)
@@ -601,10 +591,10 @@ struct EditorView: View {
           }
         }
         ToolbarItem(placement: .confirmationAction) {
-          Button(editingTextLayerID == nil ? "Place" : "Save") {
+          Button(editingTextLayerID == nil ? "Add" : "Save") {
             showTextOptions = false
             if editingTextLayerID == nil {
-              isPlacingText = true
+              addTextCentred()
             } else {
               commitTextEdit()
             }
@@ -616,16 +606,20 @@ struct EditorView: View {
     .presentationDetents([.medium])
   }
 
-  private func placeText(at point: CGPoint) {
-    isPlacingText = false
-    if editingTextLayerID != nil {
-      // Re-placing an existing layer rather than adding another one.
-      commitTextEdit()
-      return
-    }
+  /// Add the layer straight away, centred and on top of the stack.
+  ///
+  /// This used to wait for a tap on the canvas. A tap that landed outside the
+  /// artwork — easy when a large photo is zoomed to fit and surrounded by grey —
+  /// was silently dropped, so nothing appeared and no layer was created, with
+  /// nothing said about why. Placing immediately cannot fail that way, and Move
+  /// Text positions it afterwards.
+  private func addTextCentred() {
+    let anchor = CGPoint(x: store.canvasSize.width / 2, y: store.canvasSize.height / 2)
     let added = store.addTextLayer(
-      textBody, fontSize: textSize, color: UIColor(textColor), at: point)
-    if !added {
+      textBody, fontSize: textSize, color: UIColor(textColor), at: anchor)
+    if added {
+      isMovingText = true
+    } else {
       errorMessage = "There was nothing to render as text."
     }
   }

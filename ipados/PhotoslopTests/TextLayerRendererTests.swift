@@ -274,3 +274,44 @@ extension EditorStoreTests {
     XCTAssertFalse(store.moveTextLayer(id, to: CGPoint(x: 5, y: 5)))
   }
 }
+
+extension EditorStoreTests {
+  /// Adding text over an imported photo used to produce nothing: placement
+  /// waited for a canvas tap, and a tap outside the artwork — easy when a large
+  /// photo is zoomed to fit inside grey surround — was silently dropped.
+  func testTextCanBeAddedOverAnImportedPhoto() throws {
+    let store = EditorStore()
+    let size = CGSize(width: 4032, height: 3024)
+    // scale 1 on purpose: the renderer otherwise uses the screen's scale, and a
+    // 3x phone would produce a 12096x9072 image that exceeds the project's pixel
+    // cap. A decoded photo is scale 1, so this matches what import really sees.
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    let photo = UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+      UIColor.systemTeal.setFill()
+      ctx.fill(CGRect(origin: .zero, size: size))
+    }
+    try store.importImage(data: XCTUnwrap(photo.pngData()), suggestedName: "Photo")
+    XCTAssertEqual(store.layers.count, 1)
+
+    let centre = CGPoint(x: store.canvasSize.width / 2, y: store.canvasSize.height / 2)
+    XCTAssertTrue(store.addTextLayer("OVER PHOTO", fontSize: 200, color: .red, at: centre))
+
+    XCTAssertEqual(store.layers.count, 2, "the text layer was not added")
+    let top = try XCTUnwrap(store.layers.last)
+    XCTAssertTrue(top.isText, "text must go on top of the existing stack")
+    XCTAssertEqual(top.image.size, store.canvasSize)
+    XCTAssertEqual(store.activeLayerID, top.id, "the new text should be selected")
+  }
+
+  /// The centre of any canvas is inside it, so the default anchor can never be
+  /// the off-canvas position that produced nothing before.
+  func testTheDefaultTextAnchorIsAlwaysOnTheCanvas() {
+    for size in [CGSize(width: 1, height: 1), CGSize(width: 4032, height: 3024)] {
+      let centre = CGPoint(x: size.width / 2, y: size.height / 2)
+      XCTAssertTrue(
+        (0...size.width).contains(centre.x) && (0...size.height).contains(centre.y),
+        "centre of \(size) fell outside the canvas")
+    }
+  }
+}
