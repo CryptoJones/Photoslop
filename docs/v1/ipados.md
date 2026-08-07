@@ -32,10 +32,9 @@ regresses unnoticed.
   also read the Pencil's altitude and azimuth and broaden as it is laid over,
   which is the tool to reach for when shading. Pen remains the default.
 - Set ink color and brush width from the bottom tool strip.
-- **Add Text** puts text on its own layer, positioned the same way as
-  `photoslop-cli --text "X,Y,SIZE[,R,G,B]:TEXT"`. Type the words, pick a size
-  and colour, then tap the canvas: the tap is the anchor, and the text's
-  top-left lands there exactly as the CLI's `X,Y` does.
+- **Add Text** puts text on its own layer, on top of the stack, centred on the
+  canvas and ready to move. The anchor is the text's top-left, the same
+  convention as `photoslop-cli --text "X,Y,SIZE[,R,G,B]:TEXT"`.
 - Text stays editable. **Edit Text** reopens the words, size, and colour of the
   selected text layer and re-renders it in place, keeping its position in the
   stack along with its visibility and opacity. **Move Text** drags it to a new
