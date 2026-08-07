@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.3.0] — 2026-08-07
+
+### Changed
+- `photoslop-mcp` runs on the MCP SDK 2.x `MCPServer` API; the `mcp` requirement
+  moves to `>=2,<3`. The 1.x `FastMCP` class does not exist in 2.0.0, so the
+  requirement and the import move together — the guard test now derives the
+  expected range from which server API `server.py` imports rather than
+  hard-coding a ceiling.
+  ([#182](https://github.com/CryptoJones/Photoslop/issues/182))
+
+### Fixed
+- Adding text over an imported photo produced nothing. Placement waited for a
+  canvas tap and silently discarded taps outside the artwork, which is the easy
+  mistake when a large photo is zoomed to fit inside a grey surround. Text is
+  now added on confirm: centred, on top of the stack, selected, and ready to
+  move.
+- Moving text lurched in steps rather than following the finger. The scroll view
+  pans on one finger whenever finger-drawing is off, so it and the move gesture
+  claimed the same drag and the canvas scrolled while the text moved. Panning
+  stands down while a move is armed.
+
 ## [2.2.0] — 2026-08-06
 
 ### Added
