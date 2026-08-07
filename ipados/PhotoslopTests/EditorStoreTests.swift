@@ -170,3 +170,36 @@ extension EditorStoreTests {
     XCTAssertNotNil(info["CFBundleVersion"], "About shows the build number")
   }
 }
+
+extension EditorStoreTests {
+  /// DocumentGroup builds new documents itself with no chance to ask for a size
+  /// first, so the editor offers the choice when the document appears. That
+  /// only works if a new document can be told apart from an opened one.
+  func testANewDocumentAsksForItsCanvasSize() {
+    let store = EditorStore()
+    XCTAssertTrue(store.awaitingCanvasSizeChoice)
+  }
+
+  func testAskingIsClearedOnceOfferedSoItDoesNotRepeat() {
+    let store = EditorStore()
+    store.canvasSizeChoiceOffered()
+    XCTAssertFalse(
+      store.awaitingCanvasSizeChoice,
+      "the sheet would return on every reappearance, rotation, and resume")
+  }
+
+  /// The opened-document path cannot be exercised directly — ReadConfiguration
+  /// has no public initialiser — so this pins the property that path relies on:
+  /// the flag defaults to false and only `init()` raises it, so nothing on the
+  /// opening path can turn it on.
+  func testTheAskFlagStaysOffOnceCleared() throws {
+    let store = EditorStore()
+    store.canvasSizeChoiceOffered()
+    store.resizeCanvas(to: CGSize(width: 900, height: 700))
+
+    let wrapper = try ProjectArchive.encode(try store.snapshot(contentType: .photoslopProject))
+    let restored = try ProjectArchive.decode(wrapper)
+    XCTAssertEqual(restored.canvasSize, CGSize(width: 900, height: 700))
+    XCTAssertFalse(store.awaitingCanvasSizeChoice)
+  }
+}

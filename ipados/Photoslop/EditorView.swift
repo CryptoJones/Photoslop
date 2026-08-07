@@ -98,7 +98,13 @@ struct EditorView: View {
     } message: {
       Text(errorMessage ?? "")
     }
-    .onAppear { store.undoManager = undoManager }
+    .onAppear {
+      store.undoManager = undoManager
+      offerCanvasSizeForNewDocument()
+    }
+    .onChange(of: store.awaitingCanvasSizeChoice) { _, _ in
+      offerCanvasSizeForNewDocument()
+    }
     .onChange(of: undoManager) { _, manager in store.undoManager = manager }
   }
 
@@ -450,7 +456,7 @@ struct EditorView: View {
             guard let size = requestedCanvasSize else { return }
             switch canvasSheetMode {
             case .newDocument: store.newDocument(size: size)
-            case .resize: store.resizeCanvas(to: size)
+            case .sizeNewDocument, .resize: store.resizeCanvas(to: size)
             }
             showNewDocumentOptions = false
           }
@@ -463,11 +469,14 @@ struct EditorView: View {
   /// Whether the canvas sheet creates a document or resizes the open one.
   private enum CanvasSheetMode {
     case newDocument
+    /// Sizing the document DocumentGroup just created. It already exists and is
+    /// empty, so this resizes rather than creating a second one.
+    case sizeNewDocument
     case resize
 
     var title: String {
       switch self {
-      case .newDocument: "New Document"
+      case .newDocument, .sizeNewDocument: "New Document"
       case .resize: "Canvas Size"
       }
     }
@@ -475,6 +484,7 @@ struct EditorView: View {
     var confirmTitle: String {
       switch self {
       case .newDocument: "Create"
+      case .sizeNewDocument: "Use This Size"
       case .resize: "Resize"
       }
     }
@@ -644,6 +654,18 @@ struct EditorView: View {
     if !updated {
       errorMessage = "There was nothing to render as text."
     }
+  }
+
+  /// DocumentGroup creates a document before the editor is ever on screen, so
+  /// the size question is asked the moment that document appears. Cancelling
+  /// keeps the default, which is why this resizes an existing empty document
+  /// rather than gating creation on an answer.
+  private func offerCanvasSizeForNewDocument() {
+    guard store.awaitingCanvasSizeChoice else { return }
+    store.canvasSizeChoiceOffered()
+    canvasSheetMode = .sizeNewDocument
+    syncCustomFieldsToCanvas()
+    showNewDocumentOptions = true
   }
 
   private func export() { showExportOptions = true }
