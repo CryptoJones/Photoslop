@@ -14,6 +14,11 @@ struct EditorView: View {
   @State private var showNewDocumentOptions = false
   @State private var canvasSheetMode = CanvasSheetMode.newDocument
   @State private var showAbout = false
+  @State private var showTextOptions = false
+  @State private var textBody = ""
+  @State private var textSize = 48.0
+  @State private var textColor = Color.black
+  @State private var isPlacingText = false
   @State private var canvasPreset = CanvasPreset.standard
   @State private var customWidth = "2048"
   @State private var customHeight = "1536"
@@ -66,6 +71,7 @@ struct EditorView: View {
     .sheet(isPresented: $showExportOptions) { exportOptionsSheet }
     .sheet(isPresented: $showNewDocumentOptions) { newDocumentSheet }
     .sheet(isPresented: $showAbout) { aboutSheet }
+    .sheet(isPresented: $showTextOptions) { textOptionsSheet }
     .onChange(of: selectedPhoto) { _, item in
       guard let item else { return }
       Task {
@@ -107,8 +113,10 @@ struct EditorView: View {
         drawingOpacity: store.activeLayer?.isVisible == true
           ? (store.activeLayer?.opacity ?? 1)
           : 0,
+        onCanvasTapped: isPlacingText ? placeText : nil,
         onDrawingChanged: store.setDrawing
       )
+      if isPlacingText { placementBanner }
       toolStrip
     }
     // No .navigationTitle here on purpose. DocumentGroup binds the title to
@@ -247,6 +255,12 @@ struct EditorView: View {
         showNewDocumentOptions = true
       } label: {
         Label("Canvas Size", systemImage: "aspectratio")
+      }
+
+      Button {
+        showTextOptions = true
+      } label: {
+        Label("Add Text", systemImage: "textformat")
       }
 
       Button {
@@ -496,6 +510,69 @@ struct EditorView: View {
       }
     }
     .presentationDetents([.medium])
+  }
+
+  private var placementBanner: some View {
+    HStack(spacing: 12) {
+      Image(systemName: "hand.tap")
+      Text("Tap the canvas to place the text")
+      Spacer()
+      Button("Cancel") { isPlacingText = false }
+    }
+    .font(.callout)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 10)
+    .background(.tint.opacity(0.15))
+  }
+
+  private var textOptionsSheet: some View {
+    NavigationStack {
+      Form {
+        Section("Text") {
+          TextField("Type something", text: $textBody, axis: .vertical)
+            .lineLimit(1...5)
+        }
+        Section {
+          LabeledContent("Size") {
+            HStack {
+              Slider(value: $textSize, in: 8...400, step: 1)
+                .accessibilityLabel("Text size")
+              Text("\(Int(textSize)) pt").monospacedDigit().frame(width: 64, alignment: .trailing)
+            }
+          }
+          ColorPicker("Color", selection: $textColor, supportsOpacity: true)
+        } footer: {
+          Text(
+            "Adds the text as a new layer, the same as photoslop-cli --text. "
+              + "It becomes pixels straight away, so edit the words before placing it."
+          )
+        }
+      }
+      .navigationTitle("Add Text")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") { showTextOptions = false }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Place") {
+            showTextOptions = false
+            isPlacingText = true
+          }
+          .disabled(textBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+      }
+    }
+    .presentationDetents([.medium])
+  }
+
+  private func placeText(at point: CGPoint) {
+    isPlacingText = false
+    let added = store.addTextLayer(
+      textBody, fontSize: textSize, color: UIColor(textColor), at: point)
+    if !added {
+      errorMessage = "There was nothing to render as text."
+    }
   }
 
   private func export() { showExportOptions = true }

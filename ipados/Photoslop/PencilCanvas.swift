@@ -12,6 +12,9 @@ struct PencilCanvas: UIViewRepresentable {
   let tool: BrushTool
   let drawsWithFinger: Bool
   let drawingOpacity: Double
+  /// When set, a tap reports where in canvas pixels it landed instead of
+  /// drawing, so text can be placed at the spot the user pointed at.
+  var onCanvasTapped: ((CGPoint) -> Void)?
   let onDrawingChanged: (PKDrawing) -> Void
 
   func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -46,6 +49,10 @@ struct PencilCanvas: UIViewRepresentable {
         + "Use two fingers to pan or pinch to zoom. Layer controls and Undo are outside the canvas."
     )
     host.canvasView.accessibilityTraits.insert(.allowsDirectInteraction)
+    // Placement has to win over PencilKit's own touch handling, so drawing is
+    // suspended for as long as a tap is what the user means.
+    host.onCanvasTapped = onCanvasTapped
+    host.canvasView.isUserInteractionEnabled = onCanvasTapped == nil
     host.scrollView.panGestureRecognizer.minimumNumberOfTouches = drawsWithFinger ? 2 : 1
     if host.canvasView.drawing.dataRepresentation() != drawing.dataRepresentation() {
       let delegate = host.canvasView.delegate
@@ -74,6 +81,7 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
   let canvasView = PKCanvasView()
   private var canvasSize = CGSize.zero
   private var fitted = false
+  var onCanvasTapped: ((CGPoint) -> Void)?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -107,6 +115,21 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
     scrollView.addSubview(contentView)
     contentView.addSubview(imageView)
     contentView.addSubview(canvasView)
+
+    let tap = UITapGestureRecognizer(target: self, action: #selector(handlePlacementTap))
+    contentView.addGestureRecognizer(tap)
+  }
+
+  /// Reports the tap in canvas pixels. contentView is sized to the canvas and
+  /// scaled by the scroll view's zoom, so a location in its coordinate space is
+  /// already the pixel the user pointed at, whatever the zoom.
+  @objc private func handlePlacementTap(_ recognizer: UITapGestureRecognizer) {
+    guard let onCanvasTapped else { return }
+    let point = recognizer.location(in: contentView)
+    guard point.x >= 0, point.y >= 0,
+      point.x <= canvasSize.width, point.y <= canvasSize.height
+    else { return }
+    onCanvasTapped(point)
   }
 
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }

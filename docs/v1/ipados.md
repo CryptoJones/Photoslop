@@ -32,6 +32,13 @@ regresses unnoticed.
   also read the Pencil's altitude and azimuth and broaden as it is laid over,
   which is the tool to reach for when shading. Pen remains the default.
 - Set ink color and brush width from the bottom tool strip.
+- **Add Text** rasterises text onto a new layer, the same as
+  `photoslop-cli --text "X,Y,SIZE[,R,G,B]:TEXT"`. Type the words, pick a size
+  and colour, then tap the canvas to place them: the tap is the anchor, and
+  the text's top-left lands there exactly as the CLI's `X,Y` does. Drawing is
+  suspended while placement is armed so the tap positions rather than paints.
+  The text becomes pixels immediately and is not re-editable afterwards, which
+  matches the desktop op; change the words before placing rather than after.
 - **New** offers a starting canvas size: Standard, Square, HD, 4K UHD, A4 and
   US Letter at 300 DPI, Photo 6x4, or a custom size. **Canvas Size** applies the
   same choice to the open document, padding or cropping around centred content

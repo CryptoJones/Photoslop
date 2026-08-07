@@ -134,6 +134,32 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }
   }
 
+  /// Add rasterised text as its own layer, mirroring `photoslop-cli --text`.
+  ///
+  /// The text becomes pixels immediately, exactly as it does on the desktop op
+  /// this matches; the layer is not re-editable afterwards. Returns false when
+  /// there was nothing to draw, so the caller can say so rather than silently
+  /// adding an empty layer.
+  @discardableResult
+  func addTextLayer(
+    _ text: String,
+    fontSize: CGFloat,
+    color: UIColor,
+    at anchor: CGPoint
+  ) -> Bool {
+    guard
+      let image = TextLayerRenderer.render(
+        text: text, fontSize: fontSize, color: color,
+        at: anchor, canvasSize: canvasSize)
+    else { return false }
+    mutate(actionName: "Add Text") {
+      let layer = RasterLayer(name: TextLayerRenderer.layerName(for: text), image: image)
+      layers.append(layer)
+      activeLayerID = layer.id
+    }
+    return true
+  }
+
   func importImage(data: Data, suggestedName: String? = nil) throws {
     let normalized = try ProjectArchive.decodeImage(data)
     mutate(actionName: "Import Image") {
