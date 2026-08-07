@@ -176,17 +176,32 @@ def test_every_linux_qt_workflow_installs_runtime_libraries():
     assert performance.count("scripts/install-ci-qt-linux.sh") == 1
 
 
-def test_mcp_dependency_is_capped_below_the_next_major():
-    """photoslop/server.py:229 imports mcp.server.fastmcp, which the MCP 2.x
-    line replaces with a new MCPServer API. uv.lock pins 1.28.1, so CI stays
-    green forever — but docs/v1/mcp.md tells users to `pip install
-    "photoslop[mcp]"`, which ignores the lockfile. An unbounded floor would
-    resolve a fresh install straight onto 2.x the day it leaves pre-release,
-    breaking photoslop-mcp for every new installer while our own CI reports
-    all-clear. See issue #182.
+def test_mcp_requirement_matches_the_api_the_code_uses():
+    """The pin has to track the API `photoslop/server.py` actually imports.
+
+    `pip install "photoslop[mcp]"` ignores the lockfile, so the requirement is
+    what a fresh install resolves against. The 1.x line exposes
+    `mcp.server.fastmcp.FastMCP` and the 2.x line replaces it with
+    `mcp.server.mcpserver.MCPServer`; a requirement that admits the major the
+    code does not use breaks `photoslop-mcp` for every new installer while our
+    own CI, which builds from the lockfile, reports all-clear. This is why
+    dependabot's "relax the ceiling" pull requests are declined rather than
+    merged: the ceiling moves when the import moves. See issue #182.
     """
+    server_source = (ROOT / "photoslop/server.py").read_text()
+    uses_v2 = "mcp.server.mcpserver" in server_source
+    uses_v1 = "mcp.server.fastmcp" in server_source
+    assert uses_v1 != uses_v2, "server.py must import exactly one of the two server APIs"
+
     pyproject = (ROOT / "pyproject.toml").read_text()
     requirements = re.findall(r'"(mcp[<>=!,\d. ]*)"', pyproject)
     assert requirements, "no mcp requirement found in pyproject.toml"
+    expected_floor, expected_ceiling = (">=2", "<3") if uses_v2 else (">=1", "<2")
     for requirement in requirements:
-        assert "<2" in requirement, f"{requirement!r} must be capped below mcp 2.x"
+        assert expected_ceiling in requirement, (
+            f"{requirement!r} must be capped {expected_ceiling} for the API server.py imports"
+        )
+        assert expected_floor in requirement, (
+            f"{requirement!r} needs a {expected_floor} floor so a fresh install cannot "
+            "resolve onto the major the code no longer supports"
+        )

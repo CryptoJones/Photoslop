@@ -8,7 +8,7 @@ plugins and network-model operations deliberately removed from the agent surface
 
 ## Install & run
 
-The server needs the optional `mcp` extra:
+The server needs the optional `mcp` extra, which pulls the MCP SDK 2.x:
 
 ```bash
 pip install "photoslop[mcp]"     # or: uv sync --extra mcp
@@ -35,7 +35,10 @@ photoslop-mcp --transport streamable-http --port 8000 --root /path/to/images
 ```
 
 `--host` defaults to `127.0.0.1`, so an HTTP server is reachable only from the
-same machine until that is deliberately widened. Bear in mind what widening it
+same machine until that is deliberately widened. Host and port are transport
+arguments in the 2.x SDK rather than server settings; passing them to the server
+itself is accepted and quietly ignored, which would bind the default port while
+the flags looked honoured. Bear in mind what widening it
 means: `--root` is the only thing confining tool calls to a directory, and over
 HTTP that boundary becomes reachable by anything that can open a socket to the
 port. The server prints the transport, address, and active root on startup so
