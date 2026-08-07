@@ -12,11 +12,16 @@ sync — check an item here when its issue closes.
   `MCPServer` once the SDK v2 line is stable
   ([#182](https://github.com/CryptoJones/Photoslop/issues/182))
 
-- [ ] Fix the flaky segfault in `test_dialog_fits_to_parent_canvas`, which
-  crashes the whole suite on macOS CI and red-lights unrelated pull requests
-  ([#192](https://github.com/CryptoJones/Photoslop/issues/192))
-
 ## Done
+
+- [x] Fix the suite-wide segfault that red-lighted unrelated pull requests — a
+  TaskService use-after-free, not a flaky test: QRunnable auto-deletes, so the
+  thread pool freed each worker while TaskService still held it
+  ([#192](https://github.com/CryptoJones/Photoslop/issues/192)) — shipped v2.0.1
+
+- [x] Add a native iPhone edition — universal binary, layout driven by the
+  horizontal size class, layers in a sheet at compact width
+  ([#203](https://github.com/CryptoJones/Photoslop/issues/203)) — shipped v2.1.0
 
 - [x] Automate signed iPad delivery — upload a signed build to App Store Connect
   for TestFlight on every `v*` tag, with signing material held in the
