@@ -4,6 +4,37 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.2.0] — 2026-08-06
+
+### Added
+- **Text on iPhone and iPad.** Add Text places words on their own layer,
+  anchored where you tap, positioned the same way as
+  `photoslop-cli --text "X,Y,SIZE[,R,G,B]:TEXT"`. Text stays editable: Edit Text
+  reopens the words, size, and colour of the selected layer and re-renders it in
+  place, and Move Text drags it, with the whole drag collapsing to one undo
+  step. The words, size, colour, and anchor live in the document, which is what
+  makes both possible.
+- `photoslop-mcp --transport` serves over Streamable HTTP and SSE as well as
+  stdio, with `--host` and `--port`. stdio stays the default because it needs no
+  listener; `--host` defaults to loopback because `--root` is the only thing
+  confining tool calls to a directory, and HTTP turns that boundary from a local
+  concern into a reachable one.
+  ([#182](https://github.com/CryptoJones/Photoslop/issues/182))
+
+### Fixed
+- Creating a document asks for a canvas size instead of silently using
+  2048x1536. The picker existed but only on the New button and the Canvas Size
+  command, and `DocumentGroup` creates documents from the launch screen and file
+  browser without consulting the app, so neither was on the path most documents
+  took.
+
+### Changed
+- The iPad project format is at version 2, carrying text layers. Documents
+  written before this still open; the field is optional, so they decode with no
+  text layers, which is what they had.
+- Canvas resize carries a text layer's anchor along with its pixels, so editing
+  after a resize no longer snaps the text back to where the old canvas put it.
+
 ## [2.1.0] — 2026-08-06
 
 ### Added
