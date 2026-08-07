@@ -156,3 +156,121 @@ extension EditorStoreTests {
     XCTAssertEqual(store.layers.count, before)
   }
 }
+
+extension EditorStoreTests {
+  func testTextSurvivesASaveAndReload() throws {
+    let store = EditorStore()
+    store.addTextLayer("Round trip", fontSize: 44, color: .red, at: CGPoint(x: 30, y: 60))
+
+    let snapshot = try store.snapshot(contentType: .photoslopProject)
+    let wrapper = try ProjectArchive.encode(snapshot)
+    let restored = try ProjectArchive.decode(wrapper)
+
+    let text = try XCTUnwrap(restored.layers.last?.text, "text was not persisted")
+    XCTAssertEqual(text.string, "Round trip")
+    XCTAssertEqual(text.fontSize, 44, accuracy: 0.001)
+    XCTAssertEqual(text.anchor.x, 30, accuracy: 0.001)
+    XCTAssertEqual(text.anchor.y, 60, accuracy: 0.001)
+    XCTAssertEqual(text.red, 1, accuracy: 0.01, "colour did not survive")
+  }
+
+  /// A version 1 document predates the text field entirely. Rejecting it would
+  /// strand every project already saved on a device.
+  func testVersionOneDocumentsStillOpen() throws {
+    let store = EditorStore()
+    let snapshot = try store.snapshot(contentType: .photoslopProject)
+    var manifest = snapshot.manifest
+    manifest.version = 1
+    manifest.layers = manifest.layers.map {
+      var record = $0
+      record.text = nil
+      return record
+    }
+    let legacy = ProjectSnapshot(manifest: manifest, layers: snapshot.layers)
+
+    let restored = try ProjectArchive.decode(try ProjectArchive.encode(legacy))
+    XCTAssertEqual(restored.layers.count, store.layers.count)
+    XCTAssertTrue(restored.layers.allSatisfy { $0.text == nil })
+  }
+
+  func testEditingTextKeepsTheLayerAndItsPosition() throws {
+    let store = EditorStore()
+    store.addTextLayer("before", fontSize: 40, color: .black, at: CGPoint(x: 25, y: 35))
+    let id = try XCTUnwrap(store.activeLayerID)
+    let count = store.layers.count
+
+    XCTAssertTrue(store.updateTextLayer(id, string: "after", fontSize: 50, color: .blue))
+
+    XCTAssertEqual(store.layers.count, count, "editing must not add a layer")
+    let layer = try XCTUnwrap(store.layers.first { $0.id == id })
+    let text = try XCTUnwrap(layer.text)
+    XCTAssertEqual(text.string, "after")
+    XCTAssertEqual(text.fontSize, 50, accuracy: 0.001)
+    XCTAssertEqual(text.anchor.x, 25, accuracy: 0.001, "editing moved the text")
+    XCTAssertEqual(text.anchor.y, 35, accuracy: 0.001, "editing moved the text")
+    XCTAssertEqual(layer.name, "after", "the layer name follows the words")
+  }
+
+  func testMovingTextChangesOnlyTheAnchor() throws {
+    let store = EditorStore()
+    store.addTextLayer("drag me", fontSize: 40, color: .black, at: CGPoint(x: 10, y: 10))
+    let id = try XCTUnwrap(store.activeLayerID)
+
+    XCTAssertTrue(store.moveTextLayer(id, to: CGPoint(x: 90, y: 120)))
+    let text = try XCTUnwrap(store.layers.first { $0.id == id }?.text)
+    XCTAssertEqual(text.anchor.x, 90, accuracy: 0.001)
+    XCTAssertEqual(text.anchor.y, 120, accuracy: 0.001)
+    XCTAssertEqual(text.string, "drag me", "moving must not alter the words")
+  }
+
+  /// A drag emits a sample per touch. Without coalescing, one gesture would
+  /// leave dozens of undo entries and undo would crawl backwards pixel by pixel.
+  func testADragCoalescesIntoOneUndoStep() throws {
+    let store = EditorStore()
+    let undoManager = UndoManager()
+    // UndoManager groups by run loop event by default, and a test never turns
+    // the run loop, so the add and the drag would land in one group and a
+    // single undo would reverse both. Separating them is what makes this test
+    // measure coalescing rather than grouping.
+    undoManager.groupsByEvent = false
+    store.undoManager = undoManager
+
+    undoManager.beginUndoGrouping()
+    store.addTextLayer("drag", fontSize: 40, color: .black, at: CGPoint(x: 10, y: 10))
+    undoManager.endUndoGrouping()
+    let id = try XCTUnwrap(store.activeLayerID)
+
+    // One gesture: many samples while the finger moves, then the release.
+    undoManager.beginUndoGrouping()
+    for x in stride(from: 20, through: 80, by: 10) {
+      store.moveTextLayer(id, to: CGPoint(x: CGFloat(x), y: 40), coalesce: true)
+    }
+    store.moveTextLayer(id, to: CGPoint(x: 90, y: 40))
+    undoManager.endUndoGrouping()
+
+    undoManager.undo()
+    let text = try XCTUnwrap(store.layers.first { $0.id == id }?.text)
+    XCTAssertEqual(text.anchor.x, 10, accuracy: 0.001, "one undo should return to before the drag")
+  }
+
+  func testResizingTheCanvasCarriesTheTextAnchorWithIt() throws {
+    let store = EditorStore()
+    store.addTextLayer("anchored", fontSize: 40, color: .black, at: CGPoint(x: 100, y: 100))
+    let id = try XCTUnwrap(store.activeLayerID)
+    let original = store.canvasSize
+
+    let grown = CGSize(width: original.width + 400, height: original.height + 200)
+    store.resizeCanvas(to: grown)
+
+    let text = try XCTUnwrap(store.layers.first { $0.id == id }?.text)
+    XCTAssertEqual(text.anchor.x, 300, accuracy: 1, "anchor did not follow the centred padding")
+    XCTAssertEqual(text.anchor.y, 200, accuracy: 1, "anchor did not follow the centred padding")
+  }
+
+  func testNonTextLayersRefuseTextOperations() {
+    let store = EditorStore()
+    let id = store.activeLayerID!
+    XCTAssertFalse(store.updateTextLayer(id, string: "nope", fontSize: 20, color: .black))
+    XCTAssertFalse(store.moveTextLayer(id, to: CGPoint(x: 5, y: 5)))
+  }
+}

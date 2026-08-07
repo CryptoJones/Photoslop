@@ -19,6 +19,8 @@ struct EditorView: View {
   @State private var textSize = 48.0
   @State private var textColor = Color.black
   @State private var isPlacingText = false
+  @State private var isMovingText = false
+  @State private var editingTextLayerID: UUID?
   @State private var canvasPreset = CanvasPreset.standard
   @State private var customWidth = "2048"
   @State private var customHeight = "1536"
@@ -114,9 +116,10 @@ struct EditorView: View {
           ? (store.activeLayer?.opacity ?? 1)
           : 0,
         onCanvasTapped: isPlacingText ? placeText : nil,
+        onCanvasDragged: isMovingText ? moveText : nil,
         onDrawingChanged: store.setDrawing
       )
-      if isPlacingText { placementBanner }
+      if isPlacingText || isMovingText { placementBanner }
       toolStrip
     }
     // No .navigationTitle here on purpose. DocumentGroup binds the title to
@@ -258,9 +261,25 @@ struct EditorView: View {
       }
 
       Button {
+        editingTextLayerID = nil
+        textBody = ""
         showTextOptions = true
       } label: {
         Label("Add Text", systemImage: "textformat")
+      }
+
+      // Only meaningful when the active layer actually holds text.
+      if activeTextLayer != nil {
+        Button(action: beginEditingActiveText) {
+          Label("Edit Text", systemImage: "character.cursor.ibeam")
+        }
+
+        Button {
+          isMovingText.toggle()
+          isPlacingText = false
+        } label: {
+          Label("Move Text", systemImage: "arrow.up.and.down.and.arrow.left.and.right")
+        }
       }
 
       Button {
@@ -512,12 +531,25 @@ struct EditorView: View {
     .presentationDetents([.medium])
   }
 
+  /// The active layer, when it holds text. Editing and moving both need one.
+  private var activeTextLayer: RasterLayer? {
+    guard let layer = store.activeLayer, layer.isText else { return nil }
+    return layer
+  }
+
   private var placementBanner: some View {
     HStack(spacing: 12) {
-      Image(systemName: "hand.tap")
-      Text("Tap the canvas to place the text")
+      Image(systemName: isMovingText ? "hand.draw" : "hand.tap")
+      Text(
+        isMovingText
+          ? "Drag the text to move it"
+          : "Tap the canvas to place the text"
+      )
       Spacer()
-      Button("Cancel") { isPlacingText = false }
+      Button("Done") {
+        isPlacingText = false
+        isMovingText = false
+      }
     }
     .font(.callout)
     .padding(.horizontal, 16)
@@ -543,21 +575,29 @@ struct EditorView: View {
           ColorPicker("Color", selection: $textColor, supportsOpacity: true)
         } footer: {
           Text(
-            "Adds the text as a new layer, the same as photoslop-cli --text. "
-              + "It becomes pixels straight away, so edit the words before placing it."
+            "Text is its own layer, the same as photoslop-cli --text. The words, "
+              + "size, and colour are kept with the document, so it can be edited "
+              + "or moved again later."
           )
         }
       }
-      .navigationTitle("Add Text")
+      .navigationTitle(editingTextLayerID == nil ? "Add Text" : "Edit Text")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") { showTextOptions = false }
+          Button("Cancel") {
+            showTextOptions = false
+            editingTextLayerID = nil
+          }
         }
         ToolbarItem(placement: .confirmationAction) {
-          Button("Place") {
+          Button(editingTextLayerID == nil ? "Place" : "Save") {
             showTextOptions = false
-            isPlacingText = true
+            if editingTextLayerID == nil {
+              isPlacingText = true
+            } else {
+              commitTextEdit()
+            }
           }
           .disabled(textBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
@@ -568,9 +608,40 @@ struct EditorView: View {
 
   private func placeText(at point: CGPoint) {
     isPlacingText = false
+    if editingTextLayerID != nil {
+      // Re-placing an existing layer rather than adding another one.
+      commitTextEdit()
+      return
+    }
     let added = store.addTextLayer(
       textBody, fontSize: textSize, color: UIColor(textColor), at: point)
     if !added {
+      errorMessage = "There was nothing to render as text."
+    }
+  }
+
+  private func moveText(to point: CGPoint, isFinal: Bool) {
+    guard let id = activeTextLayer?.id else { return }
+    store.moveTextLayer(id, to: point, coalesce: !isFinal)
+  }
+
+  /// Load the active text layer's own words back into the sheet, so editing
+  /// starts from what is on the canvas rather than whatever was typed last.
+  private func beginEditingActiveText() {
+    guard let layer = activeTextLayer, let content = layer.text else { return }
+    editingTextLayerID = layer.id
+    textBody = content.string
+    textSize = content.fontSize
+    textColor = Color(content.color)
+    showTextOptions = true
+  }
+
+  private func commitTextEdit() {
+    guard let id = editingTextLayerID else { return }
+    editingTextLayerID = nil
+    let updated = store.updateTextLayer(
+      id, string: textBody, fontSize: textSize, color: UIColor(textColor))
+    if !updated {
       errorMessage = "There was nothing to render as text."
     }
   }

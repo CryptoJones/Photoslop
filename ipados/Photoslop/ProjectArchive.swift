@@ -11,8 +11,46 @@ extension UTType {
   )
 }
 
+/// A text layer's source, kept so the words stay editable and movable.
+///
+/// The rendered pixels are derived from this; without it a text layer is
+/// indistinguishable from any other raster once written to disk.
+struct TextContent: Codable, Equatable {
+  var string: String
+  var fontSize: Double
+  var red: Double
+  var green: Double
+  var blue: Double
+  var alpha: Double
+  var x: Double
+  var y: Double
+
+  var anchor: CGPoint { CGPoint(x: x, y: y) }
+  var color: UIColor {
+    UIColor(red: red, green: green, blue: blue, alpha: alpha)
+  }
+
+  init(string: String, fontSize: CGFloat, color: UIColor, anchor: CGPoint) {
+    var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 1
+    color.getRed(&r, green: &g, blue: &b, alpha: &a)
+    self.string = string
+    self.fontSize = Double(fontSize)
+    self.red = Double(r)
+    self.green = Double(g)
+    self.blue = Double(b)
+    self.alpha = Double(a)
+    self.x = Double(anchor.x)
+    self.y = Double(anchor.y)
+  }
+}
+
 struct ProjectManifest: Codable {
-  static let currentVersion = 1
+  /// Version 2 added `LayerRecord.text`. Version 1 documents still open: the
+  /// field is optional, so they decode with no text layers, which is exactly
+  /// what they had. Readers accept anything up to this; a bump that rejected
+  /// older files would strand every project already on a device.
+  static let currentVersion = 2
+  static let oldestReadableVersion = 1
 
   var version: Int
   var canvas: PixelSize
@@ -29,6 +67,8 @@ struct ProjectManifest: Codable {
     var name: String
     var isVisible: Bool
     var opacity: Double
+    /// Present only on text layers. Absent in version 1 documents.
+    var text: TextContent?
   }
 }
 
@@ -85,7 +125,8 @@ enum ProjectArchive {
           id: $0.id,
           name: $0.name,
           isVisible: $0.isVisible,
-          opacity: $0.opacity
+          opacity: $0.opacity,
+          text: $0.text
         )
       }
     )
@@ -135,7 +176,8 @@ enum ProjectArchive {
     else { throw CocoaError(.fileReadCorruptFile) }
 
     let manifest = try JSONDecoder().decode(ProjectManifest.self, from: manifestData)
-    guard manifest.version == ProjectManifest.currentVersion,
+    guard (ProjectManifest.oldestReadableVersion...ProjectManifest.currentVersion)
+      .contains(manifest.version),
       !manifest.layers.isEmpty, manifest.layers.count <= maximumLayers
     else { throw CocoaError(.fileReadUnsupportedScheme) }
     let size = CGSize(width: manifest.canvas.width, height: manifest.canvas.height)
@@ -168,7 +210,8 @@ enum ProjectArchive {
         image: image,
         drawing: drawing,
         isVisible: record.isVisible,
-        opacity: record.opacity
+        opacity: record.opacity,
+        text: record.text
       ))
     }
     if let activeLayerID = manifest.activeLayerID, !seen.contains(activeLayerID) {

@@ -12,6 +12,11 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
   var drawing: PKDrawing
   var isVisible: Bool
   var opacity: Double
+  /// Set on text layers. The image is rendered from this, so keeping it is what
+  /// lets the words be re-edited and the text be moved after it is placed.
+  var text: TextContent?
+
+  var isText: Bool { text != nil }
 
   init(
     id: UUID = UUID(),
@@ -19,7 +24,8 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
     image: UIImage,
     drawing: PKDrawing = PKDrawing(),
     isVisible: Bool = true,
-    opacity: Double = 1
+    opacity: Double = 1,
+    text: TextContent? = nil
   ) {
     self.id = id
     self.name = name
@@ -27,6 +33,7 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
     self.drawing = drawing
     self.isVisible = isVisible
     self.opacity = opacity
+    self.text = text
   }
 }
 
@@ -49,6 +56,8 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
 
   weak var undoManager: UndoManager?
   private var mutationRevision = 0
+  /// State from before the current drag, so the gesture undoes as one step.
+  private var textMoveOrigin: EditorState?
   private var renderRevision = 0
 
   init() {
@@ -119,6 +128,14 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
         var resized = layer
         resized.image = Self.recanvased(layer.image, to: size, offset: offset)
         resized.drawing = layer.drawing.transformed(using: translation)
+        // The stored anchor has to travel with the pixels. Leaving it behind
+        // would look right until the text was next edited, at which point it
+        // would jump back to where the old canvas put it.
+        if var text = resized.text {
+          text.x += Double(offset.x)
+          text.y += Double(offset.y)
+          resized.text = text
+        }
         return resized
       }
     }
@@ -147,17 +164,84 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     color: UIColor,
     at anchor: CGPoint
   ) -> Bool {
-    guard
-      let image = TextLayerRenderer.render(
-        text: text, fontSize: fontSize, color: color,
-        at: anchor, canvasSize: canvasSize)
-    else { return false }
+    let content = TextContent(string: text, fontSize: fontSize, color: color, anchor: anchor)
+    guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
     mutate(actionName: "Add Text") {
-      let layer = RasterLayer(name: TextLayerRenderer.layerName(for: text), image: image)
+      let layer = RasterLayer(
+        name: TextLayerRenderer.layerName(for: text), image: image, text: content)
       layers.append(layer)
       activeLayerID = layer.id
     }
     return true
+  }
+
+  /// Re-render a text layer from new words, size, or colour.
+  ///
+  /// The layer keeps its identity, position in the stack, visibility, and
+  /// opacity; only the pixels and the stored source change. Returns false when
+  /// the layer is not a text layer or the new text is blank, so the caller can
+  /// say so rather than silently blanking a layer.
+  @discardableResult
+  func updateTextLayer(
+    _ id: UUID,
+    string: String,
+    fontSize: CGFloat,
+    color: UIColor
+  ) -> Bool {
+    guard let existing = layers.first(where: { $0.id == id })?.text else { return false }
+    let content = TextContent(
+      string: string, fontSize: fontSize, color: color, anchor: existing.anchor)
+    guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
+    mutate(actionName: "Edit Text") {
+      update(id) {
+        $0.image = image
+        $0.text = content
+        $0.name = TextLayerRenderer.layerName(for: string)
+      }
+    }
+    return true
+  }
+
+  /// Move a text layer's anchor, re-rendering at the new position.
+  ///
+  /// Dragging emits a stream of these, so `coalesce` keeps the whole gesture as
+  /// a single undo step instead of one per touch sample.
+  @discardableResult
+  func moveTextLayer(_ id: UUID, to anchor: CGPoint, coalesce: Bool = false) -> Bool {
+    guard let existing = layers.first(where: { $0.id == id })?.text else { return false }
+    var content = existing
+    content.x = Double(anchor.x)
+    content.y = Double(anchor.y)
+    guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
+
+    // One undo step for the whole gesture, which means the state to return to
+    // is the one from before the *first* sample. Registering on the last sample
+    // instead would only ever undo the final pixel of the drag.
+    let origin = textMoveOrigin ?? currentState()
+    if coalesce { textMoveOrigin = origin }
+
+    objectWillChange.send()
+    update(id) {
+      $0.image = image
+      $0.text = content
+    }
+    mutationRevision += 1
+    if !coalesce {
+      textMoveOrigin = nil
+      registerUndo(previous: origin, actionName: "Move Text")
+    }
+    refreshCanvas()
+    return true
+  }
+
+  private static func renderText(_ content: TextContent, canvasSize: CGSize) -> UIImage? {
+    TextLayerRenderer.render(
+      text: content.string,
+      fontSize: CGFloat(content.fontSize),
+      color: content.color,
+      at: content.anchor,
+      canvasSize: canvasSize
+    )
   }
 
   func importImage(data: Data, suggestedName: String? = nil) throws {

@@ -15,6 +15,10 @@ struct PencilCanvas: UIViewRepresentable {
   /// When set, a tap reports where in canvas pixels it landed instead of
   /// drawing, so text can be placed at the spot the user pointed at.
   var onCanvasTapped: ((CGPoint) -> Void)?
+  /// When set, dragging reports the position in canvas pixels so a text layer
+  /// can be moved. `isFinal` marks the end of the gesture, which is where the
+  /// undo entry belongs — one per drag rather than one per touch sample.
+  var onCanvasDragged: ((CGPoint, Bool) -> Void)?
   let onDrawingChanged: (PKDrawing) -> Void
 
   func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -52,7 +56,9 @@ struct PencilCanvas: UIViewRepresentable {
     // Placement has to win over PencilKit's own touch handling, so drawing is
     // suspended for as long as a tap is what the user means.
     host.onCanvasTapped = onCanvasTapped
-    host.canvasView.isUserInteractionEnabled = onCanvasTapped == nil
+    host.onCanvasDragged = onCanvasDragged
+    // Placement and moving both need the touch before PencilKit gets it.
+    host.canvasView.isUserInteractionEnabled = onCanvasTapped == nil && onCanvasDragged == nil
     host.scrollView.panGestureRecognizer.minimumNumberOfTouches = drawsWithFinger ? 2 : 1
     if host.canvasView.drawing.dataRepresentation() != drawing.dataRepresentation() {
       let delegate = host.canvasView.delegate
@@ -82,6 +88,7 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
   private var canvasSize = CGSize.zero
   private var fitted = false
   var onCanvasTapped: ((CGPoint) -> Void)?
+  var onCanvasDragged: ((CGPoint, Bool) -> Void)?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -118,6 +125,30 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
 
     let tap = UITapGestureRecognizer(target: self, action: #selector(handlePlacementTap))
     contentView.addGestureRecognizer(tap)
+
+    let drag = UIPanGestureRecognizer(target: self, action: #selector(handleMoveDrag))
+    drag.maximumNumberOfTouches = 1
+    contentView.addGestureRecognizer(drag)
+  }
+
+  @objc private func handleMoveDrag(_ recognizer: UIPanGestureRecognizer) {
+    guard let onCanvasDragged else { return }
+    switch recognizer.state {
+    case .changed:
+      onCanvasDragged(clamped(recognizer.location(in: contentView)), false)
+    case .ended:
+      onCanvasDragged(clamped(recognizer.location(in: contentView)), true)
+    default:
+      break
+    }
+  }
+
+  /// Keep a drag that leaves the canvas from parking text off the edge.
+  private func clamped(_ point: CGPoint) -> CGPoint {
+    CGPoint(
+      x: min(max(0, point.x), canvasSize.width),
+      y: min(max(0, point.y), canvasSize.height)
+    )
   }
 
   /// Reports the tap in canvas pixels. contentView is sized to the canvas and
