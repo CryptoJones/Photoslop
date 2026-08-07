@@ -60,8 +60,21 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   private var textMoveOrigin: EditorState?
   private var renderRevision = 0
 
+  /// True for a document DocumentGroup just created, false for one opened from
+  /// disk. DocumentGroup builds new documents itself with no chance to ask for
+  /// a size first, so the editor uses this to offer the choice on first
+  /// appearance instead of silently settling for the default.
+  @Published private(set) var awaitingCanvasSizeChoice = false
+
   init() {
     installNewDocument(size: CGSize(width: 2048, height: 1536))
+    awaitingCanvasSizeChoice = true
+  }
+
+  /// Called once the choice has been offered, so it is not asked again when the
+  /// view reappears after a sheet, a rotation, or a return from the background.
+  func canvasSizeChoiceOffered() {
+    awaitingCanvasSizeChoice = false
   }
 
   required init(configuration: ReadConfiguration) throws {
