@@ -58,6 +58,7 @@ targets:
                 - application/vnd.photoslop.project
         LSApplicationCategoryType: public.app-category.graphics-design
         LSSupportsOpeningDocumentsInPlace: true
+        UIFileSharingEnabled: true
         NSPhotoLibraryUsageDescription: Photoslop imports images you choose for editing.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
@@ -83,15 +84,33 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TARGETED_DEVICE_FAMILY: "1,2"
 
+  # Toolbar reachability depends on the width of a real navigation bar, so it
+  # can only be checked by driving the running app.
+  PhotoslopIPadUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: PhotoslopUITests
+    dependencies:
+      - target: PhotoslopIPad
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.ronin48.photoslop.ipad.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        TEST_TARGET_NAME: PhotoslopIPad
+
 schemes:
   PhotoslopIPad:
     build:
       targets:
         PhotoslopIPad: all
         PhotoslopIPadTests: [test]
+        PhotoslopIPadUITests: [test]
     test:
       gatherCoverageData: true
       targets:
         - PhotoslopIPadTests
+        - PhotoslopIPadUITests
     archive:
       config: Release
