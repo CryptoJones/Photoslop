@@ -144,29 +144,48 @@ def test_every_advertised_transport_is_one_the_sdk_can_serve():
     pytest.importorskip("mcp")
     import typing
 
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
-    supported = typing.get_args(typing.get_type_hints(FastMCP.run)["transport"])
+    supported = typing.get_args(typing.get_type_hints(MCPServer.run)["transport"])
     assert set(server.TRANSPORTS) <= set(supported), (
         f"advertised {server.TRANSPORTS} but the SDK serves {supported}"
     )
     assert server.TRANSPORTS[0] == "stdio", "stdio needs no listener, so it stays the default"
 
 
-def test_http_bind_settings_reach_the_server(tmp_path):
-    """host and port have to land on the instance, not just be accepted.
+def test_bind_settings_go_to_the_transport_not_the_constructor():
+    """The 2.x SDK takes host and port on `run`, not on the server.
 
-    They are only consulted by the HTTP transports, so a silently dropped
-    setting would bind the default port and go unnoticed until something else
-    already held it.
+    Passing them to the constructor is silently accepted and ignored, so the
+    server would bind the default port while the flags looked honoured. Assert
+    they are routed as transport options instead.
     """
     pytest.importorskip("mcp")
-    srv = server.build_server(root=tmp_path, host="127.0.0.1", port=8123)
-    assert srv.settings.host == "127.0.0.1"
-    assert srv.settings.port == 8123
+    import inspect
+
+    from mcp.server.mcpserver import MCPServer
+
+    for name in ("run_streamable_http_async", "run_sse_async"):
+        params = inspect.signature(getattr(MCPServer, name)).parameters
+        assert "host" in params and "port" in params, f"{name} no longer takes host/port"
+
+    assert server.transport_options("streamable-http", "0.0.0.0", 9001) == {
+        "host": "0.0.0.0",
+        "port": 9001,
+    }
+    assert server.transport_options("sse", "127.0.0.1", 8000) == {
+        "host": "127.0.0.1",
+        "port": 8000,
+    }
 
 
-def test_stdio_server_still_builds_without_bind_settings(tmp_path):
+def test_stdio_is_given_no_bind_settings():
+    """stdio has no listener, so a host or port would be meaningless there."""
+    pytest.importorskip("mcp")
+    assert server.transport_options("stdio", "127.0.0.1", 8000) == {}
+
+
+def test_stdio_server_still_builds(tmp_path):
     pytest.importorskip("mcp")
     srv = server.build_server(root=tmp_path)
     assert srv.name == "photoslop"

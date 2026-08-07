@@ -6,13 +6,15 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] Update the MCP harness for the 2026-07-28 ("v2") protocol standard —
-  cap `mcp<2` now to stop an unbounded floor from breaking PyPI installs, add a
-  Streamable HTTP transport alongside stdio, then migrate `FastMCP` →
-  `MCPServer` once the SDK v2 line is stable
-  ([#182](https://github.com/CryptoJones/Photoslop/issues/182))
+Nothing open. New work gets a GitHub issue and a line here at the same time.
 
 ## Done
+
+- [x] Update the MCP harness for the 2026-07-28 ("v2") protocol standard — capped
+  `mcp` while the code used the 1.x API, added Streamable HTTP and SSE transports
+  alongside stdio, then migrated `FastMCP` → `MCPServer` once 2.0.0 shipped as a
+  stable release
+  ([#182](https://github.com/CryptoJones/Photoslop/issues/182))
 
 - [x] Fix the suite-wide segfault that red-lighted unrelated pull requests — a
   TaskService use-after-free, not a flaky test: QRunnable auto-deletes, so the

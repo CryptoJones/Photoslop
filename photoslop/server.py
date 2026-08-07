@@ -229,33 +229,32 @@ def document_info(input: str) -> dict:
 TRANSPORTS = ("stdio", "streamable-http", "sse")
 
 
-def build_server(
-    *,
-    root: str | os.PathLike[str] | None = None,
-    allow_overwrite: bool = False,
-    host: str | None = None,
-    port: int | None = None,
-):
-    """Construct the FastMCP server with the three tools registered.
+def transport_options(transport: str, host: str, port: int) -> dict[str, object]:
+    """Bind settings for `run`, empty for stdio.
 
-    ``host`` and ``port`` only affect the HTTP transports; stdio ignores them.
+    The 2.x SDK takes host and port as transport arguments rather than server
+    settings, so passing them to the constructor silently does nothing and the
+    server binds the default port instead. stdio has no listener at all, so
+    handing it a host would be meaningless."""
+    if transport == "stdio":
+        return {}
+    return {"host": host, "port": port}
+
+
+def build_server(*, root: str | os.PathLike[str] | None = None, allow_overwrite: bool = False):
+    """Construct the MCP server with the three tools registered.
 
     Needs the optional ``mcp`` dependency (``pip install 'photoslop[mcp]'``)."""
     try:
-        from mcp.server.fastmcp import FastMCP
+        from mcp.server.mcpserver import MCPServer
     except ModuleNotFoundError as exc:  # pragma: no cover - import guard
         raise SystemExit(
-            "photoslop-mcp needs the MCP SDK: install with "
+            "photoslop-mcp needs the MCP SDK 2.x: install with "
             "'pip install \"photoslop[mcp]\"' (or 'uv sync --extra mcp')."
         ) from exc
 
     configure(root=root or os.getcwd(), allow_overwrite=allow_overwrite)
-    settings = {}
-    if host is not None:
-        settings["host"] = host
-    if port is not None:
-        settings["port"] = port
-    server = FastMCP(
+    server = MCPServer(
         "photoslop",
         instructions=(
             "Photoslop image editor as tools. Call list_operations to discover "
@@ -266,7 +265,6 @@ def build_server(
             "Network model operations and unsafe plugins are unavailable. "
             f"document_info inspects a file read-only. Engine version {__version__}."
         ),
-        **settings,
     )
     server.tool()(list_operations)
     server.tool()(edit_image)
@@ -314,13 +312,8 @@ def main() -> None:
             f"tools are confined to {Path(args.root).resolve()}",
             file=sys.stderr,
         )
-    server = build_server(
-        root=args.root,
-        allow_overwrite=args.allow_overwrite,
-        host=args.host,
-        port=args.port,
-    )
-    server.run(transport=args.transport)
+    server = build_server(root=args.root, allow_overwrite=args.allow_overwrite)
+    server.run(transport=args.transport, **transport_options(args.transport, args.host, args.port))
 
 
 if __name__ == "__main__":
