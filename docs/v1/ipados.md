@@ -31,6 +31,15 @@ regresses unnoticed. Toolbar reachability is covered by XCUITest rather than
 the unit suite: whether a control survives a real navigation bar is a question
 only a running app can answer.
 
+The XCUITests run with `-retry-tests-on-failure -test-iterations 3`. The
+flakiness is in the harness rather than the app: relaunching between test
+methods intermittently brings the app up on a screen the test did not ask for,
+while fifteen consecutive launches inside a single test method never flake.
+Settle-waits on sheet dismissal, waiting for `.notRunning` in teardown, and a
+launch retry each failed to remove it. A real defect still fails all three
+attempts, so the retries buy tolerance for the harness without hiding
+regressions.
+
 ## Editing workflow
 
 - Draw with Apple Pencil using the Pen, Pencil, Marker, or bitmap Eraser.

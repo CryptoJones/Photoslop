@@ -15,7 +15,13 @@ class UITestCase: XCTestCase {
   }
 
   override func tearDown() {
-    XCUIApplication().terminate()
+    // Terminating is not enough: the next test's `launch()` can race a scene
+            // still being torn down, and the app then comes up on a screen nobody
+    // asked for. Fifteen consecutive launches inside one test method never
+    // flake; launches across method boundaries did, until this waited.
+    let app = XCUIApplication()
+    app.terminate()
+    _ = app.wait(for: .notRunning, timeout: 20)
     super.tearDown()
   }
 }
@@ -27,16 +33,35 @@ extension XCUIApplication {
   /// stands between the launch scene and the editor. Dismissing it here keeps
   /// every other test from having to know that.
   func openNewDocument(file: StaticString = #filePath, line: UInt = #line) {
-    launch()
     let create = buttons["Create Document"]
+    launch()
+    if !create.waitForExistence(timeout: 30) {
+      // One retry, for the case where the previous scene had not finished going
+      // away when this process launched.
+      terminate()
+      _ = wait(for: .notRunning, timeout: 20)
+      launch()
+    }
     XCTAssertTrue(
-      create.waitForExistence(timeout: 60), "launch scene never appeared", file: file, line: line)
+      create.waitForExistence(timeout: 30), "launch scene never appeared", file: file, line: line)
     create.tap()
 
     let useThisSize = buttons["Use This Size"]
     if useThisSize.waitForExistence(timeout: 30) {
       useThisSize.tap()
+      // Waiting for the sheet to actually leave, not just for the tap to land.
+      // A `navigationBars` query run while a sheet is still dismissing can match
+      // the sheet's own bar instead of the editor's, so an assertion about the
+      // toolbar fails for reasons that have nothing to do with the toolbar. That
+      // is what made this suite fail a different test on each run.
+      XCTAssertTrue(
+        useThisSize.waitForNonExistence(timeout: 15),
+        "the canvas size sheet never dismissed", file: file, line: line)
     }
+
+    XCTAssertTrue(
+      navigationBars.buttons["Export Image"].waitForExistence(timeout: 30),
+      "the editor never came up", file: file, line: line)
   }
 
   /// Reach About, which sits on the bar at regular width and in the actions menu
@@ -46,14 +71,16 @@ extension XCUIApplication {
     let about = navigationBars.buttons["About Photoslop"]
     if about.waitForExistence(timeout: 10), about.isHittable {
       about.tap()
-      return true
+    } else {
+      let more = navigationBars.buttons["More Actions"]
+      guard more.waitForExistence(timeout: 10) else { return false }
+      more.tap()
+      let menuAbout = buttons["About Photoslop"]
+      guard menuAbout.waitForExistence(timeout: 10) else { return false }
+      menuAbout.tap()
     }
-    let more = navigationBars.buttons["More Actions"]
-    guard more.waitForExistence(timeout: 10) else { return false }
-    more.tap()
-    let menuAbout = buttons["About Photoslop"]
-    guard menuAbout.waitForExistence(timeout: 10) else { return false }
-    menuAbout.tap()
-    return true
+    // Tapping is not arriving: the sheet has to be up before anything is read
+    // off it.
+    return navigationBars["About"].waitForExistence(timeout: 15)
   }
 }
