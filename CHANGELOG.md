@@ -4,6 +4,57 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.4.0] — 2026-08-08
+
+### Added
+- **New layer from photo, several at a time.** The layer list gains a button
+  beside Add, Duplicate and Merge that takes a multiple selection from the photo
+  library and turns each photo into its own layer, on top of the stack, in one
+  undo step for the whole selection. Importing a photo used to replace the whole
+  document, so a second image threw the first away and a double exposure was
+  impossible. `Import Image` and `Photos` are unchanged — they are how an image
+  *becomes* a document; this is how one joins the document already open.
+  Photos are scaled to fit the canvas and centred, never cropped: a layer image
+  has to be exactly canvas-sized, so a different aspect ratio has to lose either
+  the parts outside the canvas or the space at the edges, and transparent edges
+  are recoverable where cropped pixels are not. A selection past the
+  2,048-layer cap is refused whole rather than half-added.
+  ([#234](https://github.com/CryptoJones/Photoslop/pull/234))
+- About on iOS now carries what the desktop About carries: Le Basilisk, the same
+  one-line description, and the licence with a repository link, over the version
+  and build. The mascot is drawn in code with no asset file, so
+  `scripts/render-ios-mascot.py` exports it into the asset catalogue and CI fails
+  if the committed asset drifts from the code that draws it.
+  ([#233](https://github.com/CryptoJones/Photoslop/pull/233))
+
+### Fixed
+- **iPhone had no way to export at all.** Every document action went on one
+  navigation bar; a phone bar has room for about two items a side, so UIKit
+  collapsed the leading group into an overflow menu and dropped the trailing
+  `ToolbarItem` outright, taking Undo, Redo, Export and About with it. Grouped
+  items can overflow into a menu, the contents of a single item cannot. Compact
+  width now picks its own three — Layers, a More Actions menu, and Export — with
+  undo and redo at the leading edge of the tool strip.
+  ([#227](https://github.com/CryptoJones/Photoslop/issues/227))
+- **A device with no local Files location could not create a document at all**,
+  failing with "No location available to save". `Info.plist` declared
+  `LSSupportsOpeningDocumentsInPlace` without `UIFileSharingEnabled`, which is
+  what exposes the app's Documents folder as On My iPhone/iPad, so `DocumentGroup`
+  had nowhere to save on a fresh device or one not signed into iCloud Drive.
+  ([#228](https://github.com/CryptoJones/Photoslop/issues/228))
+- **The canvas-size question was never asked** for a created document. Creating
+  one writes it to disk and reopens it through `init(configuration:)`, so the flag
+  `init()` set belonged to a store that never reached the screen. The opening path
+  now recognises a document indistinguishable from a fresh one.
+  ([#229](https://github.com/CryptoJones/Photoslop/issues/229))
+- About called every device an iPad, including every iPhone. It now names no
+  platform at all, matching the desktop edition.
+  ([#230](https://github.com/CryptoJones/Photoslop/issues/230))
+- The photo picker did nothing at compact width: the layer list is a sheet there,
+  and a picker asked for while it is up was silently dropped. It is now raised
+  from the list's dismissal.
+  ([#234](https://github.com/CryptoJones/Photoslop/pull/234))
+
 ## [2.3.0] — 2026-08-07
 
 ### Changed
