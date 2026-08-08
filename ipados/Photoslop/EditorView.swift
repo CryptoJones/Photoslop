@@ -600,7 +600,12 @@ struct EditorView: View {
             Image(systemName: "paintbrush.pointed.fill")
               .font(.system(size: 44))
               .foregroundStyle(.tint)
-            Text("Photoslop for iPad").font(.headline)
+            // Names no platform, matching the desktop edition's "Photoslop
+            // <version>". This read "Photoslop for iPad" on every device,
+            // including every iPhone. Branching on the idiom would fix that,
+            // but one binary that declines to guess is simpler and cannot be
+            // wrong on a device nobody has thought about yet.
+            Text("Photoslop").font(.headline)
           }
           .frame(maxWidth: .infinity)
           .padding(.vertical, 12)
