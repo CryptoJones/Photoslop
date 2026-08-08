@@ -59,8 +59,18 @@ only a running app can answer.
   exactly as `photoslop-cli --canvas-size` does, and is undoable. Reach for it to
   change a size already in use, or after cancelling the question a new document
   asks.
-- **About Photoslop** reports the marketing version and build number, plus the
-  open document's canvas size and layer count.
+- **About Photoslop** introduces the app the way the desktop edition does: Le
+  Basilisk, the name with no platform attached, and the same one-line
+  description, over the licence and repository link. It also reports the
+  marketing version and build number, and the open document's canvas size and
+  layer count. The sheet opens at half height and can be dragged up.
+
+  The mascot is drawn in code by `photoslop/appicon.py` and has no asset file, so
+  `scripts/render-ios-mascot.py` exports the QPainter original into
+  `Mascot.imageset` at three scales. Re-run it after changing `draw_mascot`; the
+  `quality` CI job fails if the committed asset has drifted from the code. The
+  app icon is not reused for this: it is flattened onto white, which would show
+  as a white box in a grouped list and in dark mode.
 - Use the layer sidebar to add, duplicate, rename, show/hide, change opacity,
   reorder, merge down, clear, or delete raster layers.
 - Open an image from Files or Photos. Imports create a document at the image's

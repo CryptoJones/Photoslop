@@ -597,15 +597,27 @@ struct EditorView: View {
           LabeledContent("Build", value: build)
         } header: {
           VStack(spacing: 6) {
-            Image(systemName: "paintbrush.pointed.fill")
-              .font(.system(size: 44))
-              .foregroundStyle(.tint)
+            // Le Basilisk, the same QPainter original the desktop About shows.
+            // Rendered into the asset catalogue by scripts/render-ios-mascot.py
+            // rather than reusing the app icon, which is flattened onto white
+            // and would sit in a white box here and in dark mode.
+            Image("Mascot")
+              .resizable()
+              .scaledToFit()
+              .frame(width: 96, height: 96)
+              .accessibilityLabel("Photoslop mascot")
             // Names no platform, matching the desktop edition's "Photoslop
             // <version>". This read "Photoslop for iPad" on every device,
             // including every iPhone. Branching on the idiom would fix that,
             // but one binary that declines to guess is simpler and cannot be
             // wrong on a device nobody has thought about yet.
             Text("Photoslop").font(.headline)
+            // The same sentence the desktop About leads with, so the two
+            // editions describe themselves in one voice.
+            Text("A memory-frugal, multiplatform, layered raster image editor.")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+              .multilineTextAlignment(.center)
           }
           .frame(maxWidth: .infinity)
           .padding(.vertical, 12)
@@ -615,6 +627,13 @@ struct EditorView: View {
         Section("Canvas") {
           LabeledContent("Size", value: "\(Int(store.canvasSize.width)) x \(Int(store.canvasSize.height)) px")
           LabeledContent("Layers", value: "\(store.layers.count)")
+        }
+
+        Section {
+          LabeledContent("License", value: "Apache-2.0")
+          Link(
+            "github.com/CryptoJones/Photoslop",
+            destination: URL(string: "https://github.com/CryptoJones/Photoslop")!)
         }
 
         Section {
@@ -630,7 +649,10 @@ struct EditorView: View {
         }
       }
     }
-    .presentationDetents([.medium])
+    // Medium alone locked a phone to half height with no way to drag up, so
+    // anything past the fold was reachable only by scrolling inside it. About is
+    // the one sheet here whose content grows, so it gets to expand.
+    .presentationDetents([.medium, .large])
   }
 
   /// The active layer, when it holds text. Editing and moving both need one.
