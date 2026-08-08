@@ -11,6 +11,7 @@ struct EditorView: View {
   @State private var showPhotosPicker = false
   @State private var selectedLayerPhotos: [PhotosPickerItem] = []
   @State private var showLayerPhotosPicker = false
+  @State private var pendingLayerPhotoPick = false
   @State private var isAddingLayerPhotos = false
   @State private var showFileImporter = false
   @State private var showExporter = false
@@ -148,6 +149,11 @@ struct EditorView: View {
     .navigationBarTitleDisplayMode(.inline)
     .toolbar { documentToolbar }
     .sheet(isPresented: $showLayers) {
+      if pendingLayerPhotoPick {
+        pendingLayerPhotoPick = false
+        showLayerPhotosPicker = true
+      }
+    } content: {
       NavigationStack {
         layerSidebar
           .navigationTitle("Layers")
@@ -192,8 +198,19 @@ struct EditorView: View {
         Button(action: store.addLayer) { Image(systemName: "plus") }
           .accessibilityLabel("Add layer")
         Button {
-          showLayerPhotosPicker = true
+          // At compact width the layer list is a sheet, and a picker asked for
+          // while it is up is silently dropped: the flag flips and nothing
+          // appears, the same way #229's canvas sheet was lost. Close the layer
+          // list first and let its dismissal raise the picker. On iPad the list
+          // is a sidebar rather than a sheet, so it can present straight away.
+          if isCompact {
+            pendingLayerPhotoPick = true
+            showLayers = false
+          } else {
+            showLayerPhotosPicker = true
+          }
         } label: {
+
           if isAddingLayerPhotos {
             ProgressView()
           } else {
