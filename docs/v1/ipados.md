@@ -78,6 +78,9 @@ regressions.
   `scripts/render-ios-mascot.py` exports the QPainter original into
   `Mascot.imageset` at three scales. Re-run it after changing `draw_mascot`; the
   `quality` CI job fails if the committed asset has drifted from the code. The
+  check compares decoded pixels with a tolerance rather than PNG bytes: Qt
+  antialiases and packs PNGs slightly differently on Linux than on macOS, so a
+  byte comparison fails on the CI runner for an asset that is perfectly current. The
   app icon is not reused for this: it is flattened onto white, which would show
   as a white box in a grouped list and in dark mode.
 - Use the layer sidebar to add, duplicate, rename, show/hide, change opacity,

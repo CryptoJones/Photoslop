@@ -55,6 +55,51 @@ def render() -> dict[Path, bytes]:
     return written
 
 
+# Byte equality is the wrong test across platforms: Qt's rasteriser antialiases and
+# its PNG encoder packs slightly differently on Linux than on macOS, so an asset
+# committed from a Mac never matches one rendered on a Linux CI runner byte for
+# byte. Comparing decoded pixels with a tolerance still catches the thing worth
+# catching — the artwork itself changing — without failing on the encoder.
+CHANNEL_TOLERANCE = 16
+MAX_DIFFERING_FRACTION = 0.02
+
+
+def _differs(committed: bytes, rendered: bytes) -> str | None:
+    """Describe how two renders differ, or None when they match closely enough."""
+    from PySide6.QtCore import QByteArray
+    from PySide6.QtGui import QImage
+
+    left, right = QImage(), QImage()
+    left.loadFromData(QByteArray(committed), "PNG")
+    right.loadFromData(QByteArray(rendered), "PNG")
+    if left.isNull():
+        return "the committed file is not a readable PNG"
+    if left.size() != right.size():
+        return (
+            f"size {left.width()}x{left.height()} "
+            f"but the code draws {right.width()}x{right.height()}"
+        )
+
+    fmt = QImage.Format.Format_ARGB32
+    left, right = left.convertToFormat(fmt), right.convertToFormat(fmt)
+    differing = 0
+    for y in range(left.height()):
+        for x in range(left.width()):
+            a, b = left.pixelColor(x, y), right.pixelColor(x, y)
+            spread = max(
+                abs(a.red() - b.red()),
+                abs(a.green() - b.green()),
+                abs(a.blue() - b.blue()),
+                abs(a.alpha() - b.alpha()),
+            )
+            if spread > CHANNEL_TOLERANCE:
+                differing += 1
+    fraction = differing / (left.width() * left.height())
+    if fraction > MAX_DIFFERING_FRACTION:
+        return f"{fraction:.1%} of pixels differ from what the code draws"
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -68,20 +113,24 @@ def main() -> int:
     contents = json.dumps(CONTENTS, indent=2) + "\n"
 
     if args.check:
-        stale = [
-            path.name
-            for path, data in rendered.items()
-            if not path.exists() or path.read_bytes() != data
-        ]
+        stale = []
+        for path, data in rendered.items():
+            if not path.exists():
+                stale.append(f"{path.name} is missing")
+                continue
+            reason = _differs(path.read_bytes(), data)
+            if reason is not None:
+                stale.append(f"{path.name}: {reason}")
         index = IMAGESET / "Contents.json"
         if not index.exists() or index.read_text(encoding="utf-8") != contents:
-            stale.append(index.name)
+            stale.append(f"{index.name} does not list the expected scales")
         if stale:
             raise SystemExit(
-                f"{IMAGESET.relative_to(ROOT)} is stale: {', '.join(stale)}. "
-                "Re-run scripts/render-ios-mascot.py."
+                f"{IMAGESET.relative_to(ROOT)} is stale — "
+                + "; ".join(stale)
+                + ". Re-run scripts/render-ios-mascot.py."
             )
-        print("mascot asset is current")
+        print("mascot asset matches the code that draws it")
         return 0
 
     IMAGESET.mkdir(parents=True, exist_ok=True)
