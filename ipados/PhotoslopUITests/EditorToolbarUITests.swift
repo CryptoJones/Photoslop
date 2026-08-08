@@ -8,12 +8,7 @@ import XCTest
 /// Every document action went on one bar, and at iPhone width UIKit collapsed
 /// the leading group into an overflow menu and dropped the trailing group —
 /// Undo, Redo, Export and About — entirely, leaving no way to export at all.
-final class EditorToolbarUITests: XCTestCase {
-  override func setUp() {
-    super.setUp()
-    continueAfterFailure = false
-  }
-
+final class EditorToolbarUITests: UITestCase {
   /// Export has to be on the bar itself on every device, not behind a menu and
   /// certainly not missing: it is the only way to get artwork out of the app.
   func testExportIsOnTheToolbarAndOpensTheExportSheet() {

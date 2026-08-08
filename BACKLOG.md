@@ -25,7 +25,9 @@ sync — check an item here when its issue closes.
   opening path now recognises an untouched new document instead
   ([#229](https://github.com/CryptoJones/Photoslop/issues/229))
 
-- [ ] About says "Photoslop for iPad" on an iPhone
+- [ ] About said "Photoslop for iPad" on every device, including every iPhone.
+  It now names no platform at all, matching the desktop edition's
+  "Photoslop <version>"
   ([#230](https://github.com/CryptoJones/Photoslop/issues/230))
 
 ## Done
