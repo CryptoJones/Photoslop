@@ -212,6 +212,139 @@ extension EditorStoreTests {
   /// cannot be called directly. These cover the recogniser it consults, over
   /// states that have been through a real encode/decode round trip — the trip
   /// that loses `init()`'s flag.
+  // MARK: - New layer from photo
+
+  /// The point of the feature: a second image joins the document instead of
+  /// replacing it, which is what a double exposure needs.
+  func testAddingAPhotoLayerKeepsWhatIsAlreadyThere() throws {
+    let store = EditorStore()
+    try store.importImage(data: Self.jpeg(width: 2031, height: 1429), suggestedName: "First")
+    let canvas = store.canvasSize
+    XCTAssertEqual(store.layers.count, 1)
+
+    let added = try store.addImageLayers([
+      (name: "Photo", image: Self.image(width: 1318, height: 2014))
+    ])
+
+    XCTAssertEqual(added, 1)
+    XCTAssertEqual(store.layers.count, 2, "the first image must survive the second")
+    XCTAssertEqual(store.layers.first?.name, "First")
+    XCTAssertEqual(store.canvasSize, canvas, "adding a layer must not resize the canvas")
+    XCTAssertEqual(store.activeLayerID, store.layers.last?.id)
+  }
+
+  /// `ProjectArchive.snapshot` refuses any layer whose image is not exactly
+  /// canvas-sized, so a document with a mismatched layer cannot be saved at all.
+  func testPhotoLayersAreCanvasSizedWhateverThePhotoWas() throws {
+    let store = EditorStore()
+    store.resizeCanvas(to: CGSize(width: 1000, height: 800))
+
+    try store.addImageLayers([
+      (name: "Landscape", image: Self.image(width: 2031, height: 1429)),
+      (name: "Portrait", image: Self.image(width: 1318, height: 2014)),
+      (name: "Tiny", image: Self.image(width: 40, height: 40)),
+    ])
+
+    for layer in store.layers {
+      XCTAssertEqual(layer.image.size, store.canvasSize, "\(layer.name) is not canvas-sized")
+    }
+    XCTAssertNoThrow(try store.snapshot(contentType: .photoslopProject))
+  }
+
+  /// Aspect ratio is preserved, so a portrait photo keeps its proportions and
+  /// pays for the difference in transparent edges rather than in stretching.
+  func testFittingPreservesAspectRatioAndDoesNotUpscale() {
+    let canvas = CGSize(width: 1000, height: 1000)
+
+    let wide = EditorStore.fitted(Self.image(width: 2000, height: 1000), into: canvas)
+    XCTAssertEqual(wide.size, canvas)
+    // 2000x1000 into 1000x1000 fits at half scale: 1000x500, so a quarter of the
+    // height is transparent at the top and a quarter at the bottom.
+    XCTAssertTrue(Self.isTransparent(wide, at: CGPoint(x: 500, y: 10)))
+    XCTAssertFalse(Self.isTransparent(wide, at: CGPoint(x: 500, y: 500)))
+
+    // Smaller than the canvas: left alone rather than blown up.
+    let small = EditorStore.fitted(Self.image(width: 100, height: 100), into: canvas)
+    XCTAssertTrue(Self.isTransparent(small, at: CGPoint(x: 10, y: 10)))
+    XCTAssertFalse(Self.isTransparent(small, at: CGPoint(x: 500, y: 500)))
+  }
+
+  func testAWholeSelectionIsOneUndoStep() throws {
+    let store = EditorStore()
+    let undo = UndoManager()
+    store.undoManager = undo
+
+    try store.addImageLayers([
+      (name: "One", image: Self.image(width: 100, height: 100)),
+      (name: "Two", image: Self.image(width: 100, height: 100)),
+      (name: "Three", image: Self.image(width: 100, height: 100)),
+    ])
+    XCTAssertEqual(store.layers.count, 4)
+
+    undo.undo()
+    XCTAssertEqual(store.layers.count, 1, "three photos should undo in one step, not three")
+  }
+
+  func testDuplicateNamesAreMadeUnique() throws {
+    let store = EditorStore()
+    try store.addImageLayers([
+      (name: "Photo", image: Self.image(width: 100, height: 100)),
+      (name: "Photo", image: Self.image(width: 100, height: 100)),
+    ])
+    XCTAssertEqual(Set(store.layers.map(\.name)).count, store.layers.count)
+  }
+
+  /// Refused as a batch rather than half-added, so the document is never left in
+  /// a state the project cannot hold.
+  func testASelectionThatWouldExceedTheLayerCapIsRefusedWhole() throws {
+    let store = EditorStore()
+    let before = store.layers.count
+    let tooMany = Array(
+      repeating: (name: "Photo", image: Self.image(width: 10, height: 10)),
+      count: ProjectArchive.maximumLayers)
+
+    XCTAssertThrowsError(try store.addImageLayers(tooMany))
+    XCTAssertEqual(store.layers.count, before, "a refused batch must add nothing")
+  }
+
+  func testAnEmptySelectionDoesNothing() throws {
+    let store = EditorStore()
+    let before = store.layers.count
+    XCTAssertEqual(try store.addImageLayers([]), 0)
+    XCTAssertEqual(store.layers.count, before)
+  }
+
+  private static func image(width: Int, height: Int) -> UIImage {
+    let size = CGSize(width: width, height: height)
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    return UIGraphicsImageRenderer(size: size, format: format).image { context in
+      UIColor.systemPink.setFill()
+      context.fill(CGRect(origin: .zero, size: size))
+    }
+  }
+
+  private static func jpeg(width: Int, height: Int) -> Data {
+    guard let data = image(width: width, height: height).jpegData(compressionQuality: 0.9) else {
+      preconditionFailure("could not encode a test JPEG")
+    }
+    return data
+  }
+
+  private static func isTransparent(_ image: UIImage, at point: CGPoint) -> Bool {
+    guard let cgImage = image.cgImage else { return false }
+    var pixel: [UInt8] = [0, 0, 0, 0]
+    guard
+      let context = CGContext(
+        data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    else { return false }
+    context.draw(
+      cgImage, in: CGRect(x: -point.x, y: -(CGFloat(cgImage.height) - point.y), width: CGFloat(cgImage.width), height: CGFloat(cgImage.height)))
+    return pixel[3] == 0
+  }
+
   func testAFreshDocumentSurvivesTheDiskRoundTripAsStillNeedingASize() throws {
     let store = EditorStore()
     let restored = try roundTrip(store)

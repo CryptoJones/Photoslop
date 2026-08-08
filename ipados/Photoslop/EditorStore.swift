@@ -294,6 +294,61 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }
   }
 
+  /// Add each image as its own layer, on top of the stack, as one undo step.
+  ///
+  /// Distinct from `importImage`, which replaces the document: that is how an
+  /// image becomes a document, this is how one joins the document already open.
+  /// Doing a double exposure needs the second behaviour and only had the first.
+  ///
+  /// Images are scaled to fit the canvas and centred, never cropped. A layer
+  /// image has to be exactly canvas-sized — `ProjectArchive.snapshot` enforces
+  /// it — so an image of a different aspect ratio has to lose something: either
+  /// the parts outside the canvas, or the space at the edges. Transparent edges
+  /// are recoverable and cropped pixels are not, and a portrait photo dropped
+  /// into a landscape canvas would lose most of itself to a crop.
+  @discardableResult
+  func addImageLayers(_ images: [(name: String, image: UIImage)]) throws -> Int {
+    guard !images.isEmpty else { return 0 }
+    guard layers.count + images.count <= ProjectArchive.maximumLayers else {
+      throw ImportError.resourceLimit(
+        "A project holds \(ProjectArchive.maximumLayers) layers. "
+          + "This document has \(layers.count) and \(images.count) more were chosen.")
+    }
+
+    let canvas = canvasSize
+    let prepared = images.map {
+      (name: $0.name, image: Self.fitted($0.image, into: canvas))
+    }
+    mutate(actionName: prepared.count == 1 ? "New Layer from Photo" : "New Layers from Photos") {
+      for entry in prepared {
+        let layer = RasterLayer(name: uniqueName(base: entry.name), image: entry.image)
+        layers.append(layer)
+        activeLayerID = layer.id
+      }
+    }
+    return prepared.count
+  }
+
+  /// Draw `image` centred on a transparent canvas-sized bitmap, scaled down to
+  /// fit if it is larger. Smaller images are left at their own size rather than
+  /// stretched, because upscaling invents detail that was never photographed.
+  static func fitted(_ image: UIImage, into canvas: CGSize) -> UIImage {
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = false
+    return UIGraphicsImageRenderer(size: canvas, format: format).image { _ in
+      let scale = min(
+        1, min(canvas.width / image.size.width, canvas.height / image.size.height))
+      let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+      image.draw(
+        in: CGRect(
+          x: ((canvas.width - size.width) / 2).rounded(),
+          y: ((canvas.height - size.height) / 2).rounded(),
+          width: size.width,
+          height: size.height))
+    }
+  }
+
   func select(_ id: UUID) {
     guard layers.contains(where: { $0.id == id }) else { return }
     activeLayerID = id
