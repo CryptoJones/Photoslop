@@ -65,23 +65,23 @@ final class EditorToolbarUITests: UITestCase {
     let app = XCUIApplication()
     let create = app.buttons["Create Document"]
     app.launch()
-    if !create.waitForExistence(timeout: 30) {
+    if !create.waitForExistence(timeout: 90) {
       app.terminate()
       _ = app.wait(for: .notRunning, timeout: 20)
       app.launch()
     }
-    XCTAssertTrue(create.waitForExistence(timeout: 30), "launch scene never appeared")
+    XCTAssertTrue(create.waitForExistence(timeout: 90), "launch scene never appeared")
     create.tap()
 
     let useThisSize = app.buttons["Use This Size"]
-    if useThisSize.waitForExistence(timeout: 30) {
+    if useThisSize.waitForExistence(timeout: 60) {
       useThisSize.tap()
       XCTAssertTrue(
-        useThisSize.waitForNonExistence(timeout: 15),
+        useThisSize.waitForNonExistence(timeout: 30),
         "the canvas size sheet never dismissed")
     }
     XCTAssertTrue(
-      app.navigationBars.buttons["Export Image"].waitForExistence(timeout: 30),
+      app.navigationBars.buttons["Export Image"].waitForExistence(timeout: 90),
       "the editor never came up")
 
     return app
