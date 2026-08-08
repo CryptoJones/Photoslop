@@ -6,7 +6,27 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-Nothing open. New work gets a GitHub issue and a line here at the same time.
+- [ ] iPhone has no way to export — every document action goes on one bar, and
+  at compact width UIKit collapses the leading group into an overflow menu and
+  drops the trailing `ToolbarItem` outright, taking Undo, Redo, Export, and
+  About with it. Compact width picks its own three instead: Layers, a More
+  Actions menu, and Export, with undo/redo in the tool strip
+  ([#227](https://github.com/CryptoJones/Photoslop/issues/227))
+
+- [ ] A device with no local Files location cannot create a document at all —
+  `LSSupportsOpeningDocumentsInPlace` without `UIFileSharingEnabled` leaves
+  `DocumentGroup` nowhere to save on a fresh device or one not signed into
+  iCloud Drive
+  ([#228](https://github.com/CryptoJones/Photoslop/issues/228))
+
+- [ ] The canvas-size question is never asked for a created document — creating
+  one writes it to disk and reopens it through `init(configuration:)`, so the
+  flag `init()` sets is spent on a store that never reaches the screen. The
+  opening path now recognises an untouched new document instead
+  ([#229](https://github.com/CryptoJones/Photoslop/issues/229))
+
+- [ ] About says "Photoslop for iPad" on an iPhone
+  ([#230](https://github.com/CryptoJones/Photoslop/issues/230))
 
 ## Done
 

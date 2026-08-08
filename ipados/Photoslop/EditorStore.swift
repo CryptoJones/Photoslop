@@ -51,7 +51,7 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
 
   @Published private(set) var layers: [RasterLayer] = []
   @Published var activeLayerID: UUID?
-  @Published private(set) var canvasSize = CGSize(width: 2048, height: 1536)
+  @Published private(set) var canvasSize = EditorStore.defaultCanvasSize
   @Published private(set) var canvasBackground = UIImage()
 
   weak var undoManager: UndoManager?
@@ -60,14 +60,16 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   private var textMoveOrigin: EditorState?
   private var renderRevision = 0
 
-  /// True for a document DocumentGroup just created, false for one opened from
-  /// disk. DocumentGroup builds new documents itself with no chance to ask for
-  /// a size first, so the editor uses this to offer the choice on first
-  /// appearance instead of silently settling for the default.
+  /// The size a document starts at when nobody has said otherwise.
+  static let defaultCanvasSize = CGSize(width: 2048, height: 1536)
+
+  /// True for a document that has never had its canvas size chosen, so the
+  /// editor offers the choice on first appearance instead of silently settling
+  /// for the default.
   @Published private(set) var awaitingCanvasSizeChoice = false
 
   init() {
-    installNewDocument(size: CGSize(width: 2048, height: 1536))
+    installNewDocument(size: Self.defaultCanvasSize)
     awaitingCanvasSizeChoice = true
   }
 
@@ -86,6 +88,31 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
       activeLayerID = layers.last?.id
     }
     refreshCanvas()
+    awaitingCanvasSizeChoice = Self.isUntouchedNewDocument(state)
+  }
+
+  /// Whether a decoded document is indistinguishable from one `init()` just
+  /// made, and so has never had its size chosen.
+  ///
+  /// The editor is not handed the store `init()` built. Creating a document —
+  /// from the launch scene or from the browser — writes it to disk and reopens
+  /// it through this initialiser, so a flag set in `init()` is spent on a store
+  /// that never reaches the screen. That is why the launch scene's Create
+  /// Document stopped asking: nothing was wrong with the flag, it was simply
+  /// set on the wrong instance. Recognising the shape of a brand-new document
+  /// is what survives the round trip.
+  ///
+  /// The cost is that reopening a still-blank default document asks again. It is
+  /// a blank canvas either way and Cancel keeps the size, so asking twice is
+  /// harmless where never asking was not.
+  static func isUntouchedNewDocument(_ state: EditorState) -> Bool {
+    guard state.canvasSize == defaultCanvasSize, state.layers.count == 1,
+      let only = state.layers.first
+    else { return false }
+    // The name is part of the test: renaming the layer is an edit, and an
+    // edited document has been accepted at the size it already has.
+    return only.name == "Background" && only.drawing.strokes.isEmpty && only.text == nil
+      && only.isVisible && only.opacity == 1
   }
 
   func snapshot(contentType: UTType) throws -> ProjectSnapshot {
@@ -117,7 +144,7 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     return index > 0
   }
 
-  func newDocument(size: CGSize = CGSize(width: 2048, height: 1536)) {
+  func newDocument(size: CGSize = EditorStore.defaultCanvasSize) {
     guard ProjectArchive.isValidCanvas(size) else { return }
     mutate(actionName: "New Document") { installNewDocument(size: size) }
   }

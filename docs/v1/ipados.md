@@ -12,15 +12,24 @@ path.
 One binary serves both, adapting to the horizontal size class rather than the
 device name, so an iPad in a narrow Split View gets the phone layout too.
 
-- **Regular width** keeps the layer list in a sidebar beside the canvas.
-- **Compact width** moves it to a sheet reached from **Layers**, because
-  `NavigationSplitView` collapses its sidebar into a pushed column there, and
-  reaching the layers would otherwise navigate away from the drawing.
+- **Regular width** keeps the layer list in a sidebar beside the canvas, and
+  every document action on the navigation bar.
+- **Compact width** moves the layer list to a sheet reached from **Layers**,
+  because `NavigationSplitView` collapses its sidebar into a pushed column
+  there, and reaching the layers would otherwise navigate away from the
+  drawing.
+- A phone's navigation bar holds three controls beside the document title, so
+  the compact layout picks them rather than leaving the choice to UIKit:
+  **Layers**, a **More Actions** menu holding New, Canvas Size, the text
+  actions, Import Image, Photos, and About, and **Export**. Undo and redo move
+  to the leading edge of the tool strip, which never has to be scrolled to.
 - The tool strip narrows its brush picker and width slider at compact width and
   scrolls horizontally if it still does not fit.
 
 CI runs the simulator suite on both an iPad and an iPhone so neither layout
-regresses unnoticed.
+regresses unnoticed. Toolbar reachability is covered by XCUITest rather than
+the unit suite: whether a control survives a real navigation bar is a question
+only a running app can answer.
 
 ## Editing workflow
 
@@ -47,26 +56,40 @@ regresses unnoticed.
 - **New** offers a starting canvas size: Standard, Square, HD, 4K UHD, A4 and
   US Letter at 300 DPI, Photo 6x4, or a custom size. **Canvas Size** applies the
   same choice to the open document, padding or cropping around centred content
-  exactly as `photoslop-cli --canvas-size` does, and is undoable. Reach for it
-  when a document was created from the document browser, which builds one at the
-  default size without asking.
+  exactly as `photoslop-cli --canvas-size` does, and is undoable. Reach for it to
+  change a size already in use, or after cancelling the question a new document
+  asks.
 - **About Photoslop** reports the marketing version and build number, plus the
   open document's canvas size and layer count.
 - Use the layer sidebar to add, duplicate, rename, show/hide, change opacity,
   reorder, merge down, clear, or delete raster layers.
 - Open an image from Files or Photos. Imports create a document at the image's
   native pixel dimensions.
+- Creating a document asks for its canvas size before you draw. The question
+  cannot ride on a flag set when the document is built: creating one writes it to
+  disk and reopens it through `init(configuration:)`, so anything set in `init()`
+  belongs to a store that never reaches the screen. The opening path recognises
+  an untouched new document instead — default canvas, one unedited `Background`
+  layer — which is what survives that round trip. Reopening a still-blank
+  document therefore asks again; Cancel keeps the size.
 - Create, open, autosave, and reopen layered `.photoslop` package documents.
   The package preserves canvas geometry, stable layer IDs/order, names,
   visibility, opacity, raster PNGs, the active layer, and PencilKit strokes.
+  Documents are visible in Files under **On My iPhone/iPad → Photoslop**; the
+  app declares `UIFileSharingEnabled` alongside
+  `LSSupportsOpeningDocumentsInPlace` so that a device with no other local
+  provider — a fresh one, or one not signed into iCloud Drive — still has
+  somewhere to save.
 - Undo and redo drawing, layer lifecycle/reordering, visibility, opacity,
   renaming, clearing, imports, and document replacement with the toolbar or
   `Command-Z` / `Shift-Command-Z`.
-- Export a flattened PNG through the iPadOS document picker. The exported image
-  includes every visible raster layer and PencilKit drawing at its layer
-  opacity.
+- Export a flattened image through the iOS document picker. **Export** names
+  the file and picks PNG, JPEG, HEIC, TIFF, GIF, or BMP, with a quality slider
+  for the lossy two; formats without an alpha channel are flattened onto white
+  first. The exported image includes every visible raster layer and PencilKit
+  drawing at its layer opacity.
 - Standard document-browser New/Open/Save behavior is available with a hardware
-  keyboard; `Shift-Command-E` exports PNG.
+  keyboard; `Shift-Command-E` exports.
 
 Compositing, merge rendering, and PNG export run outside the main actor. A
 generation check prevents an older background render from replacing a newer
@@ -154,7 +177,7 @@ link, require Beta App Review on the first build of a version.
 ## Initial-edition boundary
 
 The iPad edition currently covers persistent layered raster/PencilKit painting,
-image import, document-wide undo, and flattened PNG export. The desktop edition
+image import, document-wide undo, and flattened image export. The desktop edition
 remains the authoritative home for OpenRaster round trips, selections,
 adjustments, filters, appearance effects, editable vectors/text, automation,
 CLI, and MCP. An unsigned GitHub artifact is a reproducible developer build,

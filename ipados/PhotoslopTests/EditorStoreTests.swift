@@ -188,11 +188,13 @@ extension EditorStoreTests {
       "the sheet would return on every reappearance, rotation, and resume")
   }
 
-  /// The opened-document path cannot be exercised directly — ReadConfiguration
-  /// has no public initialiser — so this pins the property that path relies on:
-  /// the flag defaults to false and only `init()` raises it, so nothing on the
-  /// opening path can turn it on.
-  func testTheAskFlagStaysOffOnceCleared() throws {
+  /// This used to assert that "only `init()` raises the flag, so nothing on the
+  /// opening path can turn it on" — which was the bug, stated as a guarantee.
+  /// Creating a document writes it to disk and reopens it through
+  /// `init(configuration:)`, so `init()`'s flag is spent on a store that never
+  /// reaches the screen and the question was never asked. What it pins now is
+  /// that answering, then editing, does not bring the question back.
+  func testAnsweringThenEditingDoesNotBringTheQuestionBack() throws {
     let store = EditorStore()
     store.canvasSizeChoiceOffered()
     store.resizeCanvas(to: CGSize(width: 900, height: 700))
@@ -201,5 +203,74 @@ extension EditorStoreTests {
     let restored = try ProjectArchive.decode(wrapper)
     XCTAssertEqual(restored.canvasSize, CGSize(width: 900, height: 700))
     XCTAssertFalse(store.awaitingCanvasSizeChoice)
+    XCTAssertFalse(
+      EditorStore.isUntouchedNewDocument(restored),
+      "a document resized on purpose has had its size chosen")
+  }
+
+  /// `ReadConfiguration` has no public initialiser, so `init(configuration:)`
+  /// cannot be called directly. These cover the recogniser it consults, over
+  /// states that have been through a real encode/decode round trip — the trip
+  /// that loses `init()`'s flag.
+  func testAFreshDocumentSurvivesTheDiskRoundTripAsStillNeedingASize() throws {
+    let store = EditorStore()
+    let restored = try roundTrip(store)
+
+    XCTAssertTrue(
+      EditorStore.isUntouchedNewDocument(restored),
+      "the launch scene writes a new document to disk and reopens it; if this "
+        + "shape is not recognised, the size question is never asked")
+  }
+
+  func testAnEditedDocumentIsNotMistakenForANewOne() throws {
+    for (name, edit) in editsThatCountAsTouching {
+      let store = EditorStore()
+      edit(store)
+      let restored = try roundTrip(store)
+      XCTAssertFalse(
+        EditorStore.isUntouchedNewDocument(restored),
+        "\(name) is an edit, so the document has been accepted at its size")
+    }
+  }
+
+  /// Each of these alone should be enough to stop the question being asked.
+  private var editsThatCountAsTouching: [(String, (EditorStore) -> Void)] {
+    [
+      ("resizing the canvas", { $0.resizeCanvas(to: CGSize(width: 640, height: 480)) }),
+      ("adding a layer", { $0.addLayer() }),
+      (
+        "renaming the only layer",
+        { store in
+          guard let id = store.activeLayerID else { return }
+          store.rename("Sketch", for: id)
+        }
+      ),
+      (
+        "hiding the only layer",
+        { store in
+          guard let id = store.activeLayerID else { return }
+          store.setVisible(false, for: id)
+        }
+      ),
+      (
+        "changing opacity",
+        { store in
+          guard let id = store.activeLayerID else { return }
+          store.setOpacity(0.5, for: id)
+        }
+      ),
+      (
+        "adding text",
+        { store in
+          _ = store.addTextLayer(
+            "hello", fontSize: 48, color: .black, at: CGPoint(x: 100, y: 100))
+        }
+      ),
+    ]
+  }
+
+  private func roundTrip(_ store: EditorStore) throws -> EditorState {
+    try ProjectArchive.decode(
+      try ProjectArchive.encode(try store.snapshot(contentType: .photoslopProject)))
   }
 }

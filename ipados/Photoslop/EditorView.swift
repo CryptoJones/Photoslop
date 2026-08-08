@@ -8,6 +8,7 @@ struct EditorView: View {
   @ObservedObject var store: EditorStore
   @Environment(\.undoManager) private var undoManager
   @State private var selectedPhoto: PhotosPickerItem?
+  @State private var showPhotosPicker = false
   @State private var showFileImporter = false
   @State private var showExporter = false
   @State private var showExportOptions = false
@@ -61,6 +62,7 @@ struct EditorView: View {
       allowsMultipleSelection: false,
       onCompletion: importFile
     )
+    .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhoto, matching: .images)
     .fileExporter(
       isPresented: $showExporter,
       document: exportDocument,
@@ -199,6 +201,19 @@ struct EditorView: View {
   private var toolStrip: some View {
     ScrollView(.horizontal, showsIndicators: false) {
       HStack(spacing: 14) {
+        // A phone's navigation bar has room for three controls beside the
+        // document title, and Layers, the actions menu and Export take them.
+        // Undo and redo are used mid-drawing and cannot go behind a menu, so
+        // they come here instead — at the leading edge, which is the part of
+        // the strip that never has to be scrolled to.
+        if isCompact {
+          // Icon-only: a navigation bar hides a Label's title by itself, an
+          // HStack does not, and spelling both out costs a third of the strip.
+          undoButton.labelStyle(.iconOnly)
+          redoButton.labelStyle(.iconOnly)
+          Divider().frame(height: 24)
+        }
+
         Picker("Tool", selection: $tool) {
           ForEach(BrushTool.allCases) { brush in
             Label(brush.displayName, systemImage: brush.symbolName).tag(brush)
@@ -231,100 +246,171 @@ struct EditorView: View {
     .background(.bar)
   }
 
+  /// Two layouts, because a phone's navigation bar cannot hold the iPad's.
+  ///
+  /// Everything used to go on the bar unconditionally. A phone bar has room for
+  /// about two items a side, so UIKit collapsed the leading group into its own
+  /// overflow menu and dropped the trailing group outright — Undo, Redo, Export
+  /// and About were not on the bar and not in the menu either, so on iPhone
+  /// there was no way at all to export. Grouped items overflow; the contents of
+  /// a single `ToolbarItem` cannot, which is why the `HStack` that held them
+  /// disappeared whole. Choosing the phone's own split keeps the actions worth
+  /// a tap on the bar and puts the rest in one menu we control.
+  ///
+  /// The compact budget is three: a fourth costs the document title and sends
+  /// the trailing side back into UIKit's overflow.
   @ToolbarContentBuilder
   private var documentToolbar: some ToolbarContent {
-    ToolbarItemGroup(placement: .topBarLeading) {
-      // On iPad the sidebar is always beside the canvas, so this would be
-      // redundant; on a phone it is the only way to reach layers.
-      if isCompact {
-        Button {
-          showLayers = true
+    if isCompact {
+      ToolbarItemGroup(placement: .topBarLeading) {
+        // On iPad the sidebar is always beside the canvas, so this would be
+        // redundant; on a phone it is the only way to reach layers.
+        layersButton
+        Menu {
+          newDocumentButton
+          canvasSizeButton
+          textButtons
+          Divider()
+          importImageButton
+          photosButton
+          Divider()
+          aboutButton
         } label: {
-          Label("Layers", systemImage: "square.3.layers.3d")
+          Label("More Actions", systemImage: "ellipsis.circle")
         }
       }
 
-      Button {
-        canvasSheetMode = .newDocument
-        showNewDocumentOptions = true
-      } label: {
-        Label("New", systemImage: "doc.badge.plus")
+      // Export earns the one trailing slot: it is how artwork leaves the app,
+      // and a second item here costs the document title and pushes both into
+      // UIKit's overflow. Undo and redo live in the tool strip for that reason.
+      ToolbarItemGroup(placement: .topBarTrailing) {
+        exportButton
       }
-      .keyboardShortcut("n", modifiers: .command)
-
-      // Reachable however the document was made. DocumentGroup builds a
-      // document straight from EditorStore() when one is created in the
-      // document browser, so a size chosen only at New would never be offered
-      // for the browser's documents — which is most of them.
-      Button {
-        canvasSheetMode = .resize
-        syncCustomFieldsToCanvas()
-        showNewDocumentOptions = true
-      } label: {
-        Label("Canvas Size", systemImage: "aspectratio")
+    } else {
+      ToolbarItemGroup(placement: .topBarLeading) {
+        newDocumentButton
+        canvasSizeButton
+        textButtons
+        importImageButton
+        photosButton
       }
 
-      Button {
-        editingTextLayerID = nil
-        textBody = ""
-        showTextOptions = true
-      } label: {
-        Label("Add Text", systemImage: "textformat")
-      }
-
-      // Only meaningful when the active layer actually holds text.
-      if activeTextLayer != nil {
-        Button(action: beginEditingActiveText) {
-          Label("Edit Text", systemImage: "character.cursor.ibeam")
-        }
-
-        Button {
-          isMovingText.toggle()
-        } label: {
-          Label("Move Text", systemImage: "arrow.up.and.down.and.arrow.left.and.right")
-        }
-      }
-
-      Button {
-        showFileImporter = true
-      } label: {
-        Label("Import Image", systemImage: "photo.badge.plus")
-      }
-
-      PhotosPicker(selection: $selectedPhoto, matching: .images) {
-        Label("Photos", systemImage: "photo.on.rectangle")
+      ToolbarItemGroup(placement: .topBarTrailing) {
+        undoButton
+        redoButton
+        exportButton
+        aboutButton
       }
     }
+  }
 
-    ToolbarItem(placement: .topBarTrailing) {
-      HStack {
-        Button {
-          undoManager?.undo()
-        } label: {
-          Label("Undo", systemImage: "arrow.uturn.backward")
-        }
-        .disabled(undoManager?.canUndo != true)
-        .keyboardShortcut("z", modifiers: .command)
+  private var layersButton: some View {
+    Button {
+      showLayers = true
+    } label: {
+      Label("Layers", systemImage: "square.3.layers.3d")
+    }
+  }
 
-        Button {
-          undoManager?.redo()
-        } label: {
-          Label("Redo", systemImage: "arrow.uturn.forward")
-        }
-        .disabled(undoManager?.canRedo != true)
-        .keyboardShortcut("z", modifiers: [.command, .shift])
+  private var newDocumentButton: some View {
+    Button {
+      canvasSheetMode = .newDocument
+      showNewDocumentOptions = true
+    } label: {
+      Label("New", systemImage: "doc.badge.plus")
+    }
+    .keyboardShortcut("n", modifiers: .command)
+  }
 
-        Button(action: export) {
-          Label("Export Image", systemImage: "square.and.arrow.up")
-        }
-        .keyboardShortcut("e", modifiers: [.command, .shift])
+  /// Reachable however the document was made. DocumentGroup builds a document
+  /// straight from EditorStore() when one is created in the document browser,
+  /// so a size chosen only at New would never be offered for the browser's
+  /// documents — which is most of them.
+  private var canvasSizeButton: some View {
+    Button {
+      canvasSheetMode = .resize
+      syncCustomFieldsToCanvas()
+      showNewDocumentOptions = true
+    } label: {
+      Label("Canvas Size", systemImage: "aspectratio")
+    }
+  }
 
-        Button {
-          showAbout = true
-        } label: {
-          Label("About Photoslop", systemImage: "info.circle")
-        }
+  @ViewBuilder
+  private var textButtons: some View {
+    Button {
+      editingTextLayerID = nil
+      textBody = ""
+      showTextOptions = true
+    } label: {
+      Label("Add Text", systemImage: "textformat")
+    }
+
+    // Only meaningful when the active layer actually holds text.
+    if activeTextLayer != nil {
+      Button(action: beginEditingActiveText) {
+        Label("Edit Text", systemImage: "character.cursor.ibeam")
       }
+
+      Button {
+        isMovingText.toggle()
+      } label: {
+        Label("Move Text", systemImage: "arrow.up.and.down.and.arrow.left.and.right")
+      }
+    }
+  }
+
+  private var importImageButton: some View {
+    Button {
+      showFileImporter = true
+    } label: {
+      Label("Import Image", systemImage: "photo.badge.plus")
+    }
+  }
+
+  /// A plain button driving `.photosPicker`, not a `PhotosPicker` view, because
+  /// the compact layout puts this inside a `Menu` and a picker nested in a menu
+  /// dismisses the menu without ever presenting.
+  private var photosButton: some View {
+    Button {
+      showPhotosPicker = true
+    } label: {
+      Label("Photos", systemImage: "photo.on.rectangle")
+    }
+  }
+
+  private var undoButton: some View {
+    Button {
+      undoManager?.undo()
+    } label: {
+      Label("Undo", systemImage: "arrow.uturn.backward")
+    }
+    .disabled(undoManager?.canUndo != true)
+    .keyboardShortcut("z", modifiers: .command)
+  }
+
+  private var redoButton: some View {
+    Button {
+      undoManager?.redo()
+    } label: {
+      Label("Redo", systemImage: "arrow.uturn.forward")
+    }
+    .disabled(undoManager?.canRedo != true)
+    .keyboardShortcut("z", modifiers: [.command, .shift])
+  }
+
+  private var exportButton: some View {
+    Button(action: export) {
+      Label("Export Image", systemImage: "square.and.arrow.up")
+    }
+    .keyboardShortcut("e", modifiers: [.command, .shift])
+  }
+
+  private var aboutButton: some View {
+    Button {
+      showAbout = true
+    } label: {
+      Label("About Photoslop", systemImage: "info.circle")
     }
   }
 
@@ -444,6 +530,10 @@ struct EditorView: View {
       }
       .navigationTitle(canvasSheetMode.title)
       .navigationBarTitleDisplayMode(.inline)
+      // The question has now actually been put to someone, so stop tracking it
+      // as outstanding. Doing this on appearance rather than when the sheet is
+      // requested is what makes a dropped presentation retry.
+      .onAppear { store.canvasSizeChoiceOffered() }
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
           Button("Cancel") { showNewDocumentOptions = false }
@@ -654,9 +744,18 @@ struct EditorView: View {
   /// the size question is asked the moment that document appears. Cancelling
   /// keeps the default, which is why this resizes an existing empty document
   /// rather than gating creation on an answer.
+  ///
+  /// The flag is deliberately *not* cleared here. DocumentGroup builds the
+  /// editor more than once for a document it creates, and only the last of
+  /// those is ever on screen. `awaitingCanvasSizeChoice` lives on the store and
+  /// survives that; `showNewDocumentOptions` is `@State` and does not. Clearing
+  /// the flag here spent it on a view that was then thrown away, so the visible
+  /// editor saw an already-answered question and never asked it — the sheet was
+  /// requested on an instance nobody could see. The sheet clears it once it has
+  /// actually appeared instead, which makes an unpresented offer retry rather
+  /// than vanish.
   private func offerCanvasSizeForNewDocument() {
     guard store.awaitingCanvasSizeChoice else { return }
-    store.canvasSizeChoiceOffered()
     canvasSheetMode = .sizeNewDocument
     syncCustomFieldsToCanvas()
     showNewDocumentOptions = true
