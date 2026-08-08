@@ -8,12 +8,7 @@ import XCTest
 /// Every document action went on one bar, and at iPhone width UIKit collapsed
 /// the leading group into an overflow menu and dropped the trailing group —
 /// Undo, Redo, Export and About — entirely, leaving no way to export at all.
-final class EditorToolbarUITests: XCTestCase {
-  override func setUp() {
-    super.setUp()
-    continueAfterFailure = false
-  }
-
+final class EditorToolbarUITests: UITestCase {
   /// Export has to be on the bar itself on every device, not behind a menu and
   /// certainly not missing: it is the only way to get artwork out of the app.
   func testExportIsOnTheToolbarAndOpensTheExportSheet() {
@@ -68,16 +63,26 @@ final class EditorToolbarUITests: XCTestCase {
   /// question `DocumentGroup` triggers for the document it creates.
   private func openEditor() -> XCUIApplication {
     let app = XCUIApplication()
-    app.launch()
-
     let create = app.buttons["Create Document"]
-    XCTAssertTrue(create.waitForExistence(timeout: 60), "launch scene never appeared")
+    app.launch()
+    if !create.waitForExistence(timeout: 30) {
+      app.terminate()
+      _ = app.wait(for: .notRunning, timeout: 20)
+      app.launch()
+    }
+    XCTAssertTrue(create.waitForExistence(timeout: 30), "launch scene never appeared")
     create.tap()
 
     let useThisSize = app.buttons["Use This Size"]
-    if useThisSize.waitForExistence(timeout: 10) {
+    if useThisSize.waitForExistence(timeout: 30) {
       useThisSize.tap()
+      XCTAssertTrue(
+        useThisSize.waitForNonExistence(timeout: 15),
+        "the canvas size sheet never dismissed")
     }
+    XCTAssertTrue(
+      app.navigationBars.buttons["Export Image"].waitForExistence(timeout: 30),
+      "the editor never came up")
 
     return app
   }

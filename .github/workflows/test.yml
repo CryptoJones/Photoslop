@@ -30,6 +30,12 @@ jobs:
         run: uv run ruff check .
       - name: Formatting baseline
         run: uv run ruff format --check .
+      # The iOS About shows the mascot the desktop draws in code, exported to an
+      # asset catalogue. Nothing else would notice the two drifting apart.
+      - name: iOS mascot asset matches the code that draws it
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: uv run python scripts/render-ios-mascot.py --check
       - name: Deprecations are errors in the cleared CLI surface
         env:
           QT_QPA_PLATFORM: offscreen

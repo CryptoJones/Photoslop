@@ -31,6 +31,15 @@ regresses unnoticed. Toolbar reachability is covered by XCUITest rather than
 the unit suite: whether a control survives a real navigation bar is a question
 only a running app can answer.
 
+The XCUITests run with `-retry-tests-on-failure -test-iterations 3`. The
+flakiness is in the harness rather than the app: relaunching between test
+methods intermittently brings the app up on a screen the test did not ask for,
+while fifteen consecutive launches inside a single test method never flake.
+Settle-waits on sheet dismissal, waiting for `.notRunning` in teardown, and a
+launch retry each failed to remove it. A real defect still fails all three
+attempts, so the retries buy tolerance for the harness without hiding
+regressions.
+
 ## Editing workflow
 
 - Draw with Apple Pencil using the Pen, Pencil, Marker, or bitmap Eraser.
@@ -59,8 +68,21 @@ only a running app can answer.
   exactly as `photoslop-cli --canvas-size` does, and is undoable. Reach for it to
   change a size already in use, or after cancelling the question a new document
   asks.
-- **About Photoslop** reports the marketing version and build number, plus the
-  open document's canvas size and layer count.
+- **About Photoslop** introduces the app the way the desktop edition does: Le
+  Basilisk, the name with no platform attached, and the same one-line
+  description, over the licence and repository link. It also reports the
+  marketing version and build number, and the open document's canvas size and
+  layer count. The sheet opens at half height and can be dragged up.
+
+  The mascot is drawn in code by `photoslop/appicon.py` and has no asset file, so
+  `scripts/render-ios-mascot.py` exports the QPainter original into
+  `Mascot.imageset` at three scales. Re-run it after changing `draw_mascot`; the
+  `quality` CI job fails if the committed asset has drifted from the code. The
+  check compares decoded pixels with a tolerance rather than PNG bytes: Qt
+  antialiases and packs PNGs slightly differently on Linux than on macOS, so a
+  byte comparison fails on the CI runner for an asset that is perfectly current. The
+  app icon is not reused for this: it is flattened onto white, which would show
+  as a white box in a grouped list and in dark mode.
 - Use the layer sidebar to add, duplicate, rename, show/hide, change opacity,
   reorder, merge down, clear, or delete raster layers.
 - Open an image from Files or Photos. Imports create a document at the image's

@@ -8,12 +8,7 @@ import XCTest
 /// writes it to disk and reopens it through `init(configuration:)`, so that flag
 /// was spent on a store that never reached the screen. Only a running app can
 /// tell whether the question actually gets asked.
-final class NewDocumentUITests: XCTestCase {
-  override func setUp() {
-    super.setUp()
-    continueAfterFailure = false
-  }
-
+final class NewDocumentUITests: UITestCase {
   func testCreatingADocumentAsksForItsCanvasSize() {
     let app = XCUIApplication()
     app.launch()
@@ -47,25 +42,9 @@ final class NewDocumentUITests: XCTestCase {
 
     // About reports the canvas the document actually ended up with.
     // `LabeledContent` folds its label into the value, hence "Size, ...".
-    XCTAssertTrue(openAbout(app), "could not reach About")
+    XCTAssertTrue(app.openAbout(), "could not reach About")
     XCTAssertTrue(
       app.staticTexts["Size, 1920 x 1080 px"].waitForExistence(timeout: 10),
       "the chosen preset did not resize the canvas")
-  }
-
-  /// About sits on the bar on iPad and in the actions menu on a phone.
-  private func openAbout(_ app: XCUIApplication) -> Bool {
-    let about = app.navigationBars.buttons["About Photoslop"]
-    if about.waitForExistence(timeout: 10), about.isHittable {
-      about.tap()
-      return true
-    }
-    let more = app.navigationBars.buttons["More Actions"]
-    guard more.waitForExistence(timeout: 10) else { return false }
-    more.tap()
-    let menuAbout = app.buttons["About Photoslop"]
-    guard menuAbout.waitForExistence(timeout: 10) else { return false }
-    menuAbout.tap()
-    return true
   }
 }
