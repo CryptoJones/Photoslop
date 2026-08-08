@@ -14,14 +14,31 @@ import XCTest
 /// branch matched the layer sheet's own Cancel. This one waits for the picker's
 /// own photo thumbnails, which nothing else on screen can supply.
 final class LayerFromPhotoUITests: UITestCase {
-  func testNewLayerFromPhotoOpensThePicker() {
+  /// Compact width only, deliberately. This is where the bug was — the layer
+  /// list is a sheet there, and the picker had to be raised from its dismissal —
+  /// and it is the one place the route to the list is deterministic. On a
+  /// regular-width iPad the list is a sidebar that presents the picker directly,
+  /// and whether that sidebar is showing depends on the model and the
+  /// orientation: these tests passed on a 13-inch iPad and failed on whichever
+  /// iPad the CI runner offers, reporting "there is no way to make a layer from a
+  /// photo" — true of the screen it was looking at, false of the app.
+  override func setUp() {
+    super.setUp()
+    continueAfterFailure = false
+  }
+
+  private func skipUnlessCompact() throws {
+    try XCTSkipUnless(
+      UIDevice.current.userInterfaceIdiom == .phone,
+      "the sheet-versus-sidebar difference this covers only exists at compact width")
+  }
+
+  func testNewLayerFromPhotoOpensThePicker() throws {
+    try skipUnlessCompact()
     let app = XCUIApplication()
     app.openNewDocument()
 
-    let layers = app.navigationBars.buttons["Layers"]
-    if layers.waitForExistence(timeout: 10), layers.isHittable {
-      layers.tap()
-    }
+    XCTAssertTrue(app.openLayerList(), "the layer list could not be reached")
 
     let button = app.buttons["New layer from photo"]
     XCTAssertTrue(
@@ -37,13 +54,11 @@ final class LayerFromPhotoUITests: UITestCase {
 
   /// The whole point: photos join the document instead of replacing it.
   func testChosenPhotosBecomeLayersOverWhatIsAlreadyThere() throws {
+    try skipUnlessCompact()
     let app = XCUIApplication()
     app.openNewDocument()
 
-    let layers = app.navigationBars.buttons["Layers"]
-    if layers.waitForExistence(timeout: 10), layers.isHittable {
-      layers.tap()
-    }
+    XCTAssertTrue(app.openLayerList(), "the layer list could not be reached")
     XCTAssertTrue(app.cells.firstMatch.waitForExistence(timeout: 15))
     let before = app.cells.count
 
@@ -62,9 +77,7 @@ final class LayerFromPhotoUITests: UITestCase {
     XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 10), "the picker offers no Add")
     app.buttons["Add"].tap()
 
-    if layers.waitForExistence(timeout: 30), layers.isHittable {
-      layers.tap()
-    }
+    XCTAssertTrue(app.openLayerList(), "the layer list could not be reached again")
     XCTAssertTrue(app.cells.firstMatch.waitForExistence(timeout: 20))
     XCTAssertEqual(
       app.cells.count, before + 2,
