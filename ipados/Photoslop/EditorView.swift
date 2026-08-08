@@ -9,6 +9,10 @@ struct EditorView: View {
   @Environment(\.undoManager) private var undoManager
   @State private var selectedPhoto: PhotosPickerItem?
   @State private var showPhotosPicker = false
+  @State private var selectedLayerPhotos: [PhotosPickerItem] = []
+  @State private var showLayerPhotosPicker = false
+  @State private var pendingLayerPhotoPick = false
+  @State private var isAddingLayerPhotos = false
   @State private var showFileImporter = false
   @State private var showExporter = false
   @State private var showExportOptions = false
@@ -63,6 +67,16 @@ struct EditorView: View {
       onCompletion: importFile
     )
     .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhoto, matching: .images)
+    .photosPicker(
+      isPresented: $showLayerPhotosPicker,
+      selection: $selectedLayerPhotos,
+      maxSelectionCount: nil,
+      matching: .images
+    )
+    .onChange(of: selectedLayerPhotos) { _, items in
+      guard !items.isEmpty else { return }
+      addLayers(from: items)
+    }
     .fileExporter(
       isPresented: $showExporter,
       document: exportDocument,
@@ -135,6 +149,11 @@ struct EditorView: View {
     .navigationBarTitleDisplayMode(.inline)
     .toolbar { documentToolbar }
     .sheet(isPresented: $showLayers) {
+      if pendingLayerPhotoPick {
+        pendingLayerPhotoPick = false
+        showLayerPhotosPicker = true
+      }
+    } content: {
       NavigationStack {
         layerSidebar
           .navigationTitle("Layers")
@@ -178,6 +197,28 @@ struct EditorView: View {
       HStack {
         Button(action: store.addLayer) { Image(systemName: "plus") }
           .accessibilityLabel("Add layer")
+        Button {
+          // At compact width the layer list is a sheet, and a picker asked for
+          // while it is up is silently dropped: the flag flips and nothing
+          // appears, the same way #229's canvas sheet was lost. Close the layer
+          // list first and let its dismissal raise the picker. On iPad the list
+          // is a sidebar rather than a sheet, so it can present straight away.
+          if isCompact {
+            pendingLayerPhotoPick = true
+            showLayers = false
+          } else {
+            showLayerPhotosPicker = true
+          }
+        } label: {
+
+          if isAddingLayerPhotos {
+            ProgressView()
+          } else {
+            Image(systemName: "photo.badge.plus")
+          }
+        }
+        .disabled(isAddingLayerPhotos)
+        .accessibilityLabel("New layer from photo")
         Button(action: store.duplicateActiveLayer) {
           Image(systemName: "square.on.square")
         }
@@ -411,6 +452,48 @@ struct EditorView: View {
       showAbout = true
     } label: {
       Label("About Photoslop", systemImage: "info.circle")
+    }
+  }
+
+  /// Load every chosen photo, then hand them to the store together so the whole
+  /// selection is a single undo step rather than one per photo.
+  private func addLayers(from items: [PhotosPickerItem]) {
+    isAddingLayerPhotos = true
+    Task {
+      defer {
+        isAddingLayerPhotos = false
+        selectedLayerPhotos = []
+      }
+      var loaded: [(name: String, image: UIImage)] = []
+      var unreadable = 0
+      for item in items {
+        guard let data = try? await item.loadTransferable(type: Data.self),
+          let image = try? ProjectArchive.decodeImage(data)
+        else {
+          unreadable += 1
+          continue
+        }
+        loaded.append((name: "Photo", image: image))
+      }
+
+      guard !loaded.isEmpty else {
+        errorMessage =
+          unreadable == 0
+          ? "Nothing was chosen." : "Those photos could not be read as images."
+        return
+      }
+
+      do {
+        let added = try store.addImageLayers(loaded)
+        // Say so rather than leaving a silent gap in the layer list.
+        if unreadable > 0 {
+          errorMessage =
+            "Added \(added) of \(added + unreadable). "
+            + "\(unreadable) could not be read as images."
+        }
+      } catch {
+        errorMessage = error.localizedDescription
+      }
     }
   }
 

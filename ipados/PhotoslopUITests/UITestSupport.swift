@@ -64,6 +64,35 @@ extension XCUIApplication {
       "the editor never came up", file: file, line: line)
   }
 
+  /// Get the layer list on screen, wherever this device keeps it.
+  ///
+  /// Three different places: a sheet behind **Layers** at compact width, an
+  /// always-visible sidebar on a wide iPad, and a *collapsed* sidebar behind the
+  /// system toggle on an iPad in portrait. Only the first two were handled, so
+  /// these tests passed locally on a landscape iPad and failed on CI's portrait
+  /// one — reported as "there is no way to make a layer from a photo", which was
+  /// true of the screen the test was looking at and false of the app.
+  @discardableResult
+  func openLayerList() -> Bool {
+    let marker = buttons["New layer from photo"]
+    if marker.exists { return true }
+
+    let layers = navigationBars.buttons["Layers"]
+    if layers.waitForExistence(timeout: 10), layers.isHittable {
+      layers.tap()
+      if marker.waitForExistence(timeout: 15) { return true }
+    }
+
+    for toggle in ["ToggleSidebar", "SidebarToggle"] {
+      let button = navigationBars.buttons[toggle]
+      if button.exists, button.isHittable {
+        button.tap()
+        if marker.waitForExistence(timeout: 15) { return true }
+      }
+    }
+    return marker.waitForExistence(timeout: 10)
+  }
+
   /// Reach About, which sits on the bar at regular width and in the actions menu
   /// at compact width.
   @discardableResult
