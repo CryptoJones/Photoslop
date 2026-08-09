@@ -6,31 +6,48 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] iPhone has no way to export — every document action goes on one bar, and
-  at compact width UIKit collapses the leading group into an overflow menu and
-  drops the trailing `ToolbarItem` outright, taking Undo, Redo, Export, and
-  About with it. Compact width picks its own three instead: Layers, a More
-  Actions menu, and Export, with undo/redo in the tool strip
-  ([#227](https://github.com/CryptoJones/Photoslop/issues/227))
+- [ ] Import an image as a layer on the desktop and the CLI — iOS gained this in
+  v2.4.0, but neither `photoslop-cli` nor the GUI can bring a second file in as a
+  layer at all, so a two-file composite has to be scripted against the engine
+  ([#237](https://github.com/CryptoJones/Photoslop/issues/237))
 
-- [ ] A device with no local Files location cannot create a document at all —
-  `LSSupportsOpeningDocumentsInPlace` without `UIFileSharingEnabled` leaves
-  `DocumentGroup` nowhere to save on a fresh device or one not signed into
-  iCloud Drive
-  ([#228](https://github.com/CryptoJones/Photoslop/issues/228))
-
-- [ ] The canvas-size question is never asked for a created document — creating
-  one writes it to disk and reopens it through `init(configuration:)`, so the
-  flag `init()` sets is spent on a store that never reaches the screen. The
-  opening path now recognises an untouched new document instead
-  ([#229](https://github.com/CryptoJones/Photoslop/issues/229))
-
-- [ ] About said "Photoslop for iPad" on every device, including every iPhone.
-  It now names no platform at all, matching the desktop edition's
-  "Photoslop <version>"
-  ([#230](https://github.com/CryptoJones/Photoslop/issues/230))
+- [ ] The XCUITest suite needs `-retry-tests-on-failure` to be green — the app is
+  reliable (15/15 launches inside one test method) but the harness races at
+  test-method boundaries. Settle-waits, teardown waits and a relaunch retry did
+  not remove it
+  ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] Add "new layer from photo" to iOS — a multiple selection from the photo
+  library, each photo its own layer over the open document in one undo step.
+  Importing used to replace the whole document, so a second image threw the first
+  away and a double exposure was impossible
+  ([#234](https://github.com/CryptoJones/Photoslop/pull/234)) — shipped v2.4.0
+
+- [x] iPhone had no way to export — every document action went on one bar, and at
+  compact width UIKit collapsed the leading group into an overflow menu and
+  dropped the trailing `ToolbarItem` outright, taking Undo, Redo, Export, and
+  About with it. Compact width now picks its own three: Layers, a More Actions
+  menu, and Export, with undo/redo in the tool strip
+  ([#227](https://github.com/CryptoJones/Photoslop/issues/227)) — shipped v2.4.0
+
+- [x] A device with no local Files location could not create a document at all —
+  `LSSupportsOpeningDocumentsInPlace` without `UIFileSharingEnabled` left
+  `DocumentGroup` nowhere to save on a fresh device or one not signed into iCloud
+  Drive
+  ([#228](https://github.com/CryptoJones/Photoslop/issues/228)) — shipped v2.4.0
+
+- [x] The canvas-size question was never asked for a created document — creating
+  one writes it to disk and reopens it through `init(configuration:)`, so the flag
+  `init()` set was spent on a store that never reached the screen. The opening
+  path now recognises an untouched new document instead
+  ([#229](https://github.com/CryptoJones/Photoslop/issues/229)) — shipped v2.4.0
+
+- [x] About said "Photoslop for iPad" on every device, including every iPhone. It
+  now names no platform at all, matching the desktop edition, and carries the
+  mascot, description and licence the desktop About carries
+  ([#230](https://github.com/CryptoJones/Photoslop/issues/230)) — shipped v2.4.0
 
 - [x] Update the MCP harness for the 2026-07-28 ("v2") protocol standard — capped
   `mcp` while the code used the 1.x API, added Streamable HTTP and SSE transports
