@@ -32,22 +32,26 @@ extension XCUIApplication {
   /// `DocumentGroup` asks a created document for its canvas size, so that sheet
   /// stands between the launch scene and the editor. Dismissing it here keeps
   /// every other test from having to know that.
+  /// Timeouts are generous on purpose. A CI runner takes about three times as
+  /// long as this machine for the same test — 75 seconds against 25 — so limits
+  /// tuned locally expire there while the app is still coming up, and the failure
+  /// reads as "the editor never came up" when the truth is that nobody waited.
   func openNewDocument(file: StaticString = #filePath, line: UInt = #line) {
     let create = buttons["Create Document"]
     launch()
-    if !create.waitForExistence(timeout: 30) {
+    if !create.waitForExistence(timeout: 90) {
       // One retry, for the case where the previous scene had not finished going
       // away when this process launched.
       terminate()
-      _ = wait(for: .notRunning, timeout: 20)
+      _ = wait(for: .notRunning, timeout: 30)
       launch()
     }
     XCTAssertTrue(
-      create.waitForExistence(timeout: 30), "launch scene never appeared", file: file, line: line)
+      create.waitForExistence(timeout: 90), "launch scene never appeared", file: file, line: line)
     create.tap()
 
     let useThisSize = buttons["Use This Size"]
-    if useThisSize.waitForExistence(timeout: 30) {
+    if useThisSize.waitForExistence(timeout: 60) {
       useThisSize.tap()
       // Waiting for the sheet to actually leave, not just for the tap to land.
       // A `navigationBars` query run while a sheet is still dismissing can match
@@ -55,12 +59,12 @@ extension XCUIApplication {
       // toolbar fails for reasons that have nothing to do with the toolbar. That
       // is what made this suite fail a different test on each run.
       XCTAssertTrue(
-        useThisSize.waitForNonExistence(timeout: 15),
+        useThisSize.waitForNonExistence(timeout: 30),
         "the canvas size sheet never dismissed", file: file, line: line)
     }
 
     XCTAssertTrue(
-      navigationBars.buttons["Export Image"].waitForExistence(timeout: 30),
+      navigationBars.buttons["Export Image"].waitForExistence(timeout: 90),
       "the editor never came up", file: file, line: line)
   }
 
@@ -78,9 +82,9 @@ extension XCUIApplication {
     if marker.exists { return true }
 
     let layers = navigationBars.buttons["Layers"]
-    if layers.waitForExistence(timeout: 10), layers.isHittable {
+    if layers.waitForExistence(timeout: 30), layers.isHittable {
       layers.tap()
-      if marker.waitForExistence(timeout: 15) { return true }
+      if marker.waitForExistence(timeout: 30) { return true }
     }
 
     for toggle in ["ToggleSidebar", "SidebarToggle"] {
