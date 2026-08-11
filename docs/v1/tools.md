@@ -82,3 +82,5 @@ See [Selections](selections.md) for refine, feather, and content-aware fill.
 | Hand | `H` (or hold `Space`) | Pan. |
 | Zoom | `Z` | Click/`Alt`-click; `Ctrl+=`/`Ctrl+-`, `Ctrl+0` fit, `Ctrl+1` 100%, toolbar +/− buttons. Ladder 1/32×–16×. |
 | Rotate View | `R` / `Shift+R` | 90° display-only rotation — pixels untouched. |
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

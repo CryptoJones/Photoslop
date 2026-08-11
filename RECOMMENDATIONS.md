@@ -777,3 +777,5 @@ A release candidate should not ship until all of the following are true:
 This file should remain an active engineering checklist. When an item is fixed,
 link its regression tests and pull request beside the item; do not mark it done
 from implementation alone.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

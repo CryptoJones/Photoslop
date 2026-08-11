@@ -46,6 +46,11 @@ _PATH_VALUE_OPS = frozenset(
         "cmyk-out",
     }
 )
+# Ops whose value is *always* a path to read, with no preset spelling to fall
+# back on. These must be resolved through the policy unconditionally: the whole
+# value is a filename, so skipping it would let a caller read any file on the
+# host into a layer and write it back out past the sandbox.
+_IMAGE_PATH_OPS = frozenset({"import-layer"})
 
 
 @dataclass(frozen=True)
@@ -151,6 +156,8 @@ def _normalise_ops(operations: list[dict] | None) -> list[tuple[str, str]]:
         value = str(entry.get("value", _FLAG))
         if name in _PATH_VALUE_OPS and value.lower().endswith(".icc"):
             value = _POLICY.input(value, purpose=f"{name} profile")
+        elif name in _IMAGE_PATH_OPS:
+            value = _POLICY.input(value, purpose=f"{name} source")
         pairs.append((name, value))
     return pairs
 

@@ -21,8 +21,9 @@
 `Ctrl+Alt+D` Feather Selection · `Ctrl+Alt+R` Refine Selection · `F9` Play Action
 
 ## Layers
-`Ctrl+J` duplicate · `Ctrl+G` group · `Ctrl+Shift+G` ungroup ·
-`Ctrl+Alt+G` clipping mask · `Ctrl+E` merge down · `Ctrl+Shift+E` merge visible ·
+`Ctrl+Shift+I` new layer from image · `Ctrl+J` duplicate · `Ctrl+G` group ·
+`Ctrl+Shift+G` ungroup · `Ctrl+Alt+G` clipping mask ·
+`Ctrl+E` merge down · `Ctrl+Shift+E` merge visible ·
 `Ctrl+Shift+Alt+E` stamp visible
 
 ## Adjustments
@@ -38,3 +39,5 @@
 
 ## File
 `Ctrl+N` new · `Ctrl+O` open · `Ctrl+S` save (ORA) · Export As for raster
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

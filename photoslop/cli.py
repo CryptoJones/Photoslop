@@ -946,6 +946,21 @@ def _op_duplicate_layer(ctx: Context, value: str) -> None:
     doc.active_index += 1
 
 
+def _op_import_layer(ctx: Context, value: str) -> None:
+    from photoslop.services import FileService
+
+    path = value.strip()
+    if not path:
+        raise _ValueError("--import-layer expects a file path")
+    doc = ctx.doc
+    try:
+        layer = FileService.load_as_layer(path, doc.size, allow_large=ctx.allow_large_document)
+    except (OSError, ValueError) as exc:
+        raise _ValueError(f"--import-layer: {exc}") from exc
+    doc.layers.append(layer)
+    doc.active_index = len(doc.layers) - 1
+
+
 def _op_flatten(ctx: Context, value: str) -> None:
     from photoslop.layer import Layer
 
@@ -1108,6 +1123,12 @@ OPS: dict = {
     "layer-opacity": ("PCT", "set the target layer's opacity", _op_layer_opacity),
     "content-aware-fill": (None, "diffusion-fill the selection", _op_content_aware_fill),
     "feather": ("RADIUS", "feather the current selection's edge", _op_feather),
+    "import-layer": (
+        "FILE",
+        "add an image file to the open document as a new layer on top, "
+        "centred at its own size (--input is how a file becomes the document)",
+        _op_import_layer,
+    ),
     "duplicate-layer": (None, "duplicate the active layer", _op_duplicate_layer),
     "flatten": (None, "collapse all layers into one", _op_flatten),
     "convert-smart": (None, "snapshot target layer(s) as smart objects", _op_convert_smart),

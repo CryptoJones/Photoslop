@@ -64,3 +64,5 @@ Comparisons must record machine/OS/Qt/Python, commit, fixture, scale, samples,
 P50/P95, peak RSS, cancellation latency, measured surface/view bytes, and all
 gate results. An optimization fails review if it creates a persistent
 full-canvas composite or an unbounded cache.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

@@ -11,3 +11,5 @@ the edge) and land as one undo step.
 
 Filters applied to a smart-object layer record themselves for
 **Re-apply Smart Filters** — see [Layers](layers.md).
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

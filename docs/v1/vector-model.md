@@ -45,3 +45,5 @@ Saving writes schema v1 plus the current raster fallback. Opening and resaving a
 legacy ORA preserves its visible result. Masks, clipping, and raster-only live
 effects intentionally use the fallback at the required target region; ordinary
 vector display/output uses direct geometry.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

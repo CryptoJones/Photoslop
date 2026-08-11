@@ -816,6 +816,14 @@ class MainWindow(QMainWindow):
             self._act("&New Layer", "Ctrl+Shift+N", lambda: self.layer_panel.add_layer())
         )
         m_layer.addAction(
+            self._act(
+                "New Layer from &Image…",
+                "Ctrl+Shift+I",
+                self.action_import_layer,
+                prerequisite="document",
+            )
+        )
+        m_layer.addAction(
             self._act("&Duplicate Layer", "Ctrl+J", lambda: self.layer_panel.duplicate_layer())
         )
         m_layer.addAction(self._act("Delete La&yer", None, lambda: self.layer_panel.delete_layer()))
@@ -1348,6 +1356,40 @@ class MainWindow(QMainWindow):
                 priority=TaskPriority.INTERACTIVE,
             )
             handle.succeeded.connect(lambda doc, source=path: self._finish_open(doc, source))
+
+    def action_import_layer(self) -> None:
+        """Bring image files into the *open* document as layers.
+
+        File ▸ Open is how a file becomes a document; this is how one joins the
+        document already open, so neither command has to guess which was meant.
+        Every selected file becomes its own layer in one undo step.
+        """
+        doc = self.current_doc()
+        if doc is None:
+            return
+        allow_large = self._allow_large_documents()
+        layers = []
+        imported = ""
+        for path in OpenImageDialog.get_paths(self, self._last_directory()):
+            try:
+                layers.append(FileService.load_as_layer(path, doc.size, allow_large=allow_large))
+            except (OSError, ValueError) as exc:
+                QMessageBox.warning(
+                    self, "Import Layer", f"Could not import {os.path.basename(path)}:\n{exc}"
+                )
+            else:
+                imported = path
+        if not layers:
+            return
+        doc.undo_stack.beginMacro(
+            "Import Layer" if len(layers) == 1 else f"Import {len(layers)} Layers"
+        )
+        try:
+            for layer in layers:
+                doc.undo_stack.push(InsertLayerCommand(doc, len(doc.layers), layer, "Import Layer"))
+        finally:
+            doc.undo_stack.endMacro()
+        self._set_last_directory(imported)
 
     def _recent_paths(self) -> list[str]:
         value = self.settings.value(RECENT_FILES_KEY, [])

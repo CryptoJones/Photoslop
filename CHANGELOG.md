@@ -4,6 +4,48 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [Unreleased]
+
+### Added
+- **New layer from an image file on the desktop and the CLI.** iOS gained this
+  in 2.4.0; neither `photoslop-cli` nor the GUI could bring a second file into
+  an open document as a layer at all, so a two-file composite had to be scripted
+  against the engine. The desktop gains **Layer ▸ New Layer from Image…**
+  (`Ctrl+Shift+I`) — select several files and each becomes its own layer on top
+  of the stack, in one undo step for the whole selection — and the shared engine
+  gains `--import-layer FILE`, the 59th operation, which repeats to stack
+  several. As on iOS this stays a separate action from opening a file: the
+  input is how a file *becomes* the document, `--import-layer` is how one
+  *joins* the document already open, so neither has to guess from context.
+  ([#237](https://github.com/CryptoJones/Photoslop/issues/237))
+
+  The desktop keeps the imported pixels at their own size and centres them, so a
+  source larger than the canvas overhangs it rather than being downscaled and
+  the canvas never grows to fit an import. This is a deliberate difference from
+  iOS, which scales to fit because a `.photoslop` layer image must be exactly
+  canvas-sized; a desktop `Layer` carries its own offset and extent, so matching
+  iOS would throw away resolution the document can hold. Layered sources
+  (`.ora`, `.svg`) arrive flattened into the single layer.
+
+### Fixed
+- The MCP surface resolves an operation's path value through the sandbox policy
+  whenever the whole value *is* a path. `import-layer` would otherwise have let
+  a caller read any file on the host into a layer and write it back out past
+  `--root`, since the previous rule only sandboxed a path value that ended in
+  `.icc`.
+- Documentation discrepancies that had accumulated against the shipped code:
+  `feature-parity.md` claimed both "58 shared engine ops" and "All 54
+  operations" in the same file and named 1.30.0 in its versions table under a
+  v2.4.0 heading, its surfaces table still called the mobile edition
+  iPadOS-only though it has been a universal iPhone/iPad binary since 2.2.0, the
+  README still described the iPad edition as of v1.30.0, and the iOS "new layer
+  from photo" feature shipped in 2.4.0 was never written up in the iPadOS guide.
+  Three new checks in `tests/test_docs_parity.py` now pin the CLI option table,
+  the operation counts, and the documented version to the engine so the numbers
+  cannot drift silently again.
+- Every Markdown doc carries the project signature line in one consistent form;
+  23 of the 26 guides were missing it.
+
 ## [2.4.0] — 2026-08-08
 
 ### Added
@@ -1591,3 +1633,5 @@ Photoslop 1.0 — the flagship. One day, 77 releases, v0.1.0 → v1.0.0.
   move nudges.
 - **Files**: OpenRaster (`.ora`) save/load (GIMP/Krita-interoperable);
   imports PNG/JPEG/BMP/WebP/GIF/TIFF; exports PNG/JPEG/WebP/BMP.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

@@ -46,3 +46,5 @@ Broken plugins are skipped, never fatal.
 - **Edit → Generative Fill… (Model)**: make a selection, type a prompt; the
   result composites through the standard selection plumbing (feather
   respected), one undo step.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

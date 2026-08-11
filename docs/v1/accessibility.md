@@ -71,3 +71,5 @@ object tree alone.
 | macOS | VoiceOver + keyboard | Versioned smoke record |
 | Linux | Orca/AT-SPI + keyboard | Versioned smoke record |
 | iPadOS | VoiceOver + touch/keyboard; Switch Control | Versioned smoke record |
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

@@ -176,4 +176,4 @@ device.
 *New decisions get the next DD number. Reversing one requires a new entry
 that names the entry it supersedes — history is append-only.*
 
-Proudly Made in Nebraska. Go Big Red! 🌽 https://xkcd.com/2347/
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

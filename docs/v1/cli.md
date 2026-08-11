@@ -99,6 +99,7 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--layer-opacity` `PCT` | set the target layer's opacity |
 | `--content-aware-fill` | diffusion-fill the selection |
 | `--feather` `RADIUS` | feather the current selection's edge |
+| `--import-layer` `FILE` | add an image file to the open document as a new layer on top, centred at its own size (`--input` is how a file becomes the document) |
 | `--duplicate-layer` | duplicate the active layer |
 | `--flatten` | collapse all layers into one |
 | `--convert-smart` | snapshot target layer(s) as smart objects |
@@ -119,6 +120,15 @@ Notes:
   whites).
 - Model ops need `--model-url` first — see
   [Model Backends](model-backends.md) for the server contract.
+- `--import-layer` and the positional `input` are deliberately separate: the
+  input is how a file *becomes* the document, `--import-layer` is how one
+  *joins* the document already open, so neither has to guess from context.
+  Repeat the flag to stack several files, in argument order. The layer keeps
+  its own pixels at its own size and is centred, so a source larger than the
+  canvas overhangs it rather than being downscaled — the canvas never grows to
+  fit an import. Layered sources (`.ora`, `.svg`) arrive flattened into the one
+  layer. (The iOS edition scales to fit instead; see
+  [iPadOS](ipados.md#importing-a-photo-as-a-layer).)
 
 ## Recipes
 ```bash
@@ -141,6 +151,10 @@ photoslop-cli --new 800x300 --text-rich '40,40:<span style="font-size:72pt">Phot
 photoslop-cli photo.png --model-url http://localhost:8188/ps --select-subject \
               --feather 3 --generative-fill "clean studio background" --output out.png
 
+# double exposure: two photos, one document, no GUI
+photoslop-cli portrait.jpg --import-layer trees.jpg --blend-mode screen \
+              --layer-opacity 70 --output double.ora
+
 # inspect an ORA without opening the GUI
 photoslop-cli project.ora --info | jq '.layers[].name'
 
@@ -148,3 +162,5 @@ photoslop-cli project.ora --info | jq '.layers[].name'
 photoslop-cli --new A4 --dpi 300 --fill 245,240,230 \
               --text "200,200,64,40,40,40:Hello from the CLI" --output poster.png
 ```
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

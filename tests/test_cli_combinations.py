@@ -7,14 +7,30 @@ pairwise + ordered cases is the honest sweep."""
 
 import itertools
 import json
+import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 
 import pytest
 from PySide6.QtGui import QColor, QImage
 
 from photoslop import cli
 from photoslop.modeladapter import image_to_png_b64, png_b64_to_image
+
+
+def _import_fixture() -> str:
+    """A small on-disk PNG for --import-layer. The pair sweep's fragments are
+    canned argv, so this one needs a path that exists before the table is
+    built rather than a per-test tmp_path."""
+    path = Path(tempfile.mkdtemp(prefix="photoslop-import-")) / "stamp.png"
+    image = QImage(16, 12, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(QColor(0, 160, 220))
+    image.save(str(path))
+    return str(path)
+
+
+IMPORT_FIXTURE = _import_fixture()
 
 # canned pipeline fragments, chosen to be valid on the 60x40 grey fixture
 # regardless of what ran before them (sizes stay >= 12px in every pair)
@@ -64,6 +80,7 @@ PAIR_ARGS = {
     "layer-opacity": ["--layer-opacity", "70"],
     "content-aware-fill": ["--select", "3,3,6,6", "--content-aware-fill", "--deselect"],
     "feather": ["--select", "2,2,10,10", "--feather", "2"],
+    "import-layer": ["--import-layer", IMPORT_FIXTURE],
     "duplicate-layer": ["--duplicate-layer"],
     "flatten": ["--flatten"],
     "convert-smart": ["--convert-smart"],

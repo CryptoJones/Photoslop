@@ -117,6 +117,28 @@ def test_mcp_errors_expose_stable_automation_codes(tmp_path):
     assert overwrite.value.code is ErrorCode.UNSAFE_OPERATION
 
 
+def test_import_layer_source_is_confined_to_the_root(qapp, tmp_path):
+    """import-layer's whole value is a filename, so it must be resolved through
+    the policy unconditionally — otherwise a caller reads any file on the host
+    into a layer and writes it back out past the sandbox."""
+    canvas = make_png(tmp_path, "canvas.png", size=(60, 40))
+    make_png(tmp_path, "stamp.png", size=(20, 10))
+
+    inside = server.edit_image(
+        [{"op": "import-layer", "value": "stamp.png"}], input=canvas, info=True
+    )
+    assert [layer["name"] for layer in inside["info"]["layers"]] == ["Background", "stamp"]
+    assert inside["info"]["layers"][1]["offset"] == [20, 15]
+
+    outside = tmp_path.parent / "secret.png"
+    make_png(tmp_path.parent, "secret.png", size=(8, 8))
+    with pytest.raises(ToolError) as escape:
+        server.edit_image(
+            [{"op": "import-layer", "value": str(outside)}], input=canvas, output="out.png"
+        )
+    assert escape.value.code is ErrorCode.UNSAFE_OPERATION
+
+
 def test_document_info_is_read_only(qapp, tmp_path):
     src = make_png(tmp_path, size=(80, 50))
     info = server.document_info(src)

@@ -25,3 +25,5 @@ release-gate tests. Observed module coverage was:
 The floor is checked by `scripts/check-critical-coverage.py`. Raise an
 individual floor only after adding durable tests and recording a new observed
 baseline; do not lower one merely to make CI green.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

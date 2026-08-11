@@ -14,3 +14,5 @@ Artboards persist in ORA and SVG in their explicit order. The shared artboard
 engine supports add, rename/resize, delete, reorder, clear, and undo. CLI/MCP:
 `--add-artboard NAME,X,Y,W,H`, structured `--artboard-op JSON`, and
 `--export-artboards DIR`.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

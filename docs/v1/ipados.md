@@ -86,7 +86,10 @@ regressions.
 - Use the layer sidebar to add, duplicate, rename, show/hide, change opacity,
   reorder, merge down, clear, or delete raster layers.
 - Open an image from Files or Photos. Imports create a document at the image's
-  native pixel dimensions.
+  native pixel dimensions — that is how a photo *becomes* a document. To put
+  one *into* the document already open, see
+  [Importing a photo as a layer](#importing-a-photo-as-a-layer) below.
+
 - Creating a document asks for its canvas size before you draw. The question
   cannot ride on a flag set when the document is built: creating one writes it to
   disk and reopens it through `init(configuration:)`, so anything set in `init()`
@@ -117,6 +120,32 @@ Compositing, merge rendering, and PNG export run outside the main actor. A
 generation check prevents an older background render from replacing a newer
 edit. iPad documents are capped at 16,384 px per side, 100 million pixels,
 2,048 layers, 256 MiB per layer payload, and 1 GiB per project package.
+
+### Importing a photo as a layer
+
+**New layer from photo**, beside Add / Duplicate / Merge in the layer list,
+brings photos into the document you already have open. Take a multiple
+selection and each photo becomes its own layer on top of the stack, in one undo
+step for the whole selection. On a phone the picker is raised from the layer
+list itself.
+
+This is a separate action from opening an image, which is how a photo *becomes*
+a document — importing used to replace the whole document, so a second image
+threw the first away and a double exposure was impossible. Two clearly separate
+actions beat one that guesses from context which was meant, which is the same
+ruling the desktop **Layer ▸ New Layer from Image…** and the CLI's
+`--import-layer` follow ([Layers](layers.md#new-layer-from-an-image-file)).
+
+Photos are scaled to fit the canvas and centred, never cropped — **this is the
+one place the iOS edition deliberately differs from the desktop**, which keeps
+the source at native size and lets it overhang. A `.photoslop` layer image has
+to be exactly canvas-sized or `ProjectArchive.snapshot` refuses it and the
+document cannot be saved at all, so a mismatched aspect ratio must lose either
+the parts outside the canvas or the space at the edges. Transparent edges are
+recoverable and cropped pixels are not, and a portrait photo dropped into a
+landscape canvas would lose most of itself to a crop. Images smaller than the
+canvas keep their own size rather than being stretched, because upscaling
+invents detail that was never captured.
 
 ## `.photoslop` package layout
 
@@ -205,4 +234,4 @@ adjustments, filters, appearance effects, editable vectors/text, automation,
 CLI, and MCP. An unsigned GitHub artifact is a reproducible developer build,
 not an App Store-signed IPA.
 
-Proudly Made in Nebraska. Go Big Red! 🌽 https://xkcd.com/2347/
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*
