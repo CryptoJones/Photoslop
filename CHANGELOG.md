@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [Unreleased]
+## [2.5.0] — 2026-08-10
 
 ### Added
 - **New layer from an image file on the desktop and the CLI.** iOS gained this
