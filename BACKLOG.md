@@ -6,6 +6,15 @@ sync — check an item here when its issue closes.
 
 ## Open
 
+- [ ] Ink colour and brush width are off-screen on iPhone and iPad mini — the
+  tool strip overflows its width and scrolls with no indicator, so the two
+  controls a painting app touches most are simply not there. Measured: the width
+  slider sits at x=415.7 on a 402pt iPhone and x=773.5 on a 744pt iPad mini, and
+  the ink well and Finger toggle are not in the accessibility tree at all. Third
+  instance this month of a control that exists in code, passes its tests, and
+  cannot be reached on the device
+  ([#246](https://github.com/CryptoJones/Photoslop/issues/246))
+
 - [ ] The iPadOS job still passes `-retry-tests-on-failure -test-iterations 2`,
   for one failure mode only: the XCTest daemon failing to initialise a UI-testing
   session (`XCTDaemonErrorDomain Code=19`, `AXDisableAccessibilityOnTermination`),
