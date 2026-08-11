@@ -52,20 +52,30 @@ jobs:
           done
           echo "ipad=$IPAD_ID" >> "$GITHUB_OUTPUT"
           echo "iphone=$IPHONE_ID" >> "$GITHUB_OUTPUT"
-      # Two iterations, down from three, and for one reason only: XCTest's own
-      # infrastructure errors on a loaded runner — "Failed to get background
-      # assertion for target app", "Failed to get matching snapshots: Timed out
-      # while evaluating UI query". Those are raised by the harness before any
-      # assertion runs, so no amount of waiting or scoping in test code prevents
-      # them.
+      # Two iterations, and for exactly one failure mode: the XCTest daemon
+      # failing to bring up a UI-testing session at all —
       #
-      # Everything the old three-iteration retry was actually covering has been
-      # fixed rather than absorbed: a narrow iPad overflowing its navigation bar
-      # and losing Export (#227 one size class up, which made the *next* test
-      # time out and so looked like a race), every test inheriting the documents
-      # the last one made, and a layer-count assertion that raced an async
-      # decode. Keeping the number low is the point — the lower it is, the less
-      # room there is for the next real defect to hide as flakiness.
+      #   Failed to initialize for UI testing: XCTDaemonErrorDomain Code=19
+      #   "Failed call to AXDisableAccessibilityOnTermination"
+      #
+      # Zero tests execute when that happens. There is no app involved, no
+      # assertion to wait on, and nothing test code can reach; retrying the
+      # invocation is the only remedy available to us.
+      #
+      # Every cause that was about this project is fixed rather than absorbed: a
+      # narrow iPad overflowing its navigation bar and losing Export (#227 one
+      # size class up — the overflowing test was never the failing one, so the
+      # *next* test timed out and it looked like a race); every test inheriting
+      # the documents the last one made; a layer-count assertion racing an async
+      # decode; queries enumerating the system document browser's hierarchy until
+      # XCTest could not snapshot them; a cold simulator charging its
+      # first-document cost to whichever test ran first; and the canvas-size
+      # question being asked more than once. The suite passes with no retries at
+      # all on erased simulators, and the iPad leg passed here with none.
+      #
+      # Keep this number at two. The lower it is, the less room there is for the
+      # next real defect to hide as flakiness — which is what it was doing to
+      # #227 for months.
       - name: Run iPad tests
         working-directory: ipados
         run: |
