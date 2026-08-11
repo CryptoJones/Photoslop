@@ -119,7 +119,11 @@ Resize a photo, auto-level it, then save a PNG:
 
 The server confines resolved paths (including symlink targets) to `--root`,
 rejects existing outputs and non-empty export directories, and never exposes
-network model operations or native/third-party plugins. A trusted operator can
+network model operations or native/third-party plugins. Operations whose value
+is itself a path are resolved through the same policy — `import-layer`'s source
+unconditionally, and the ICC ops when given an `.icc` file rather than a preset
+name — so a pipeline cannot read a file from outside the root into a layer and
+write it back out. A trusted operator can
 add `--allow-overwrite`; hard resource and parser limits still apply.
 
 Tool failures begin with a stable bracketed code and also expose that code on
@@ -134,4 +138,4 @@ The MCP server is a policy layer over `photoslop.cli.apply_pipeline`. It derives
 its catalog from the CLI table, then denies local-only capabilities before any
 document is opened.
 
-Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

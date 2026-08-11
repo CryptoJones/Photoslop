@@ -6,11 +6,6 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] Import an image as a layer on the desktop and the CLI — iOS gained this in
-  v2.4.0, but neither `photoslop-cli` nor the GUI can bring a second file in as a
-  layer at all, so a two-file composite has to be scripted against the engine
-  ([#237](https://github.com/CryptoJones/Photoslop/issues/237))
-
 - [ ] The XCUITest suite needs `-retry-tests-on-failure` to be green — the app is
   reliable (15/15 launches inside one test method) but the harness races at
   test-method boundaries. Settle-waits, teardown waits and a relaunch retry did
@@ -18,6 +13,14 @@ sync — check an item here when its issue closes.
   ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] Import an image as a layer on the desktop and the CLI — **Layer ▸ New Layer
+  from Image…** (`Ctrl+Shift+I`) and `--import-layer FILE`, the 59th shared engine
+  operation, both separate from opening a file the way iOS keeps them separate.
+  The desktop keeps the import at native size and centres it, overhanging the
+  canvas rather than downscaling, because a desktop layer carries its own offset
+  and extent where a `.photoslop` layer image must be canvas-sized
+  ([#237](https://github.com/CryptoJones/Photoslop/issues/237))
 
 - [x] Add "new layer from photo" to iOS — a multiple selection from the photo
   library, each photo its own layer over the open document in one undo step.

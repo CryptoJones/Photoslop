@@ -21,3 +21,5 @@ commits, `Esc` cancels.
   refs exactly).
 - **Content-Aware Scale** (Image menu): seam carving, shrink *and* grow
   (distinct-seam insertion), up to ~4× per pass.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

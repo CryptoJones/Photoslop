@@ -32,3 +32,5 @@ task success and cancellation records provide an attributable result history.
 Autosave successes are intentionally omitted to prevent them from crowding out
 user operations. Passwords, tokens, authorization headers, URL credentials,
 and secret-valued context keys are removed before persistence.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

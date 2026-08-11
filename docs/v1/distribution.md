@@ -62,3 +62,5 @@ Before creating a tag, the release owner records:
 Signing credentials stay in the repository secret store. They are never
 written to source artifacts; the Windows temporary certificate is removed by a
 `finally` block after signing.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

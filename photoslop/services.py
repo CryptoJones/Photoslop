@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QPoint, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QImageReader
 
 from photoslop import color, io_formats, npimage
@@ -15,6 +15,7 @@ from photoslop.document import Document
 from photoslop.io_ora import load_ora, save_ora
 from photoslop.io_raw import develop_raw, is_raw_path, load_raw
 from photoslop.io_svg import load_svg, save_svg
+from photoslop.layer import Layer
 from photoslop.resources import validate_dimensions
 
 
@@ -63,6 +64,27 @@ class FileService:
         dpm = image.dotsPerMeterX()
         dpi = round(dpm * 0.0254) if dpm > 0 else 72
         return Document.from_image(image, os.path.basename(path), float(dpi))
+
+    @staticmethod
+    def load_as_layer(path: str, canvas: QSize, *, allow_large: bool = False) -> Layer:
+        """One file as a single layer, centred on ``canvas`` at its own size.
+
+        The layer keeps every source pixel and is allowed to overhang the canvas
+        — ``Layer`` carries its own offset and extent, so downscaling here would
+        throw away resolution the document can hold. Free Transform is how you
+        fit it. (iOS cannot do this: a `.photoslop` layer image must be exactly
+        canvas-sized, so its importer scales to fit instead.)
+
+        Layered sources arrive flattened: a layer is one buffer, and keeping the
+        source's stack would make this a merge of two documents.
+        """
+        document = FileService.load(path, allow_large=allow_large)
+        image = document.flatten()
+        origin = QPoint(
+            (canvas.width() - image.width()) // 2,
+            (canvas.height() - image.height()) // 2,
+        )
+        return Layer(os.path.splitext(os.path.basename(path))[0], image, origin)
 
     @staticmethod
     def save(

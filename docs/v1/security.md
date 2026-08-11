@@ -38,3 +38,4 @@ export directories are protected unless the server operator starts it with
 `--allow-overwrite`. MCP never exposes network-model operations, unsafe plugins,
 large-document overrides, or insecure-HTTP overrides.
 
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

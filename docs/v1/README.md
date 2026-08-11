@@ -35,4 +35,4 @@ command line — as of **v2.4.0**.
 Photoslop is a memory-frugal, multiplatform, layered raster image editor —
 Apache-2.0, built with PySide6 + numpy.
 
-Proudly Made in Nebraska. Go Big Red! 🌽 https://xkcd.com/2347/
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

@@ -22,7 +22,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 ## What it does
 
 Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
-(Linux, Windows, macOS, and iPadOS) and treats RAM like it costs money:
+(Linux, Windows, macOS, iPadOS, and iOS) and treats RAM like it costs money:
 
 - **Layers** — add, delete, duplicate, reorder, hide/show, per-layer opacity,
   13 blend modes (multiply, screen, overlay, dodge/burn, difference…)
@@ -101,14 +101,15 @@ Prefer a one-command launcher? From a checkout, run **`./run.sh`**
 missing, then starts the app. Any arguments pass straight through to
 `photoslop` (e.g. `./run.sh path/to/image.png`).
 
-### iPadOS
+### iPadOS and iOS
 
-Photoslop v1.30.0 includes a native iPad edition under [`ipados/`](ipados/). It is
-built with SwiftUI and PencilKit because Qt for Python does not support direct
-iOS deployment. The iPad edition provides Apple Pencil/finger drawing, touch
-pan and pinch zoom, a native layer stack, versioned `.photoslop` package
-documents with iPadOS autosave, document-wide undo/redo, Photos/Files import,
-and off-main PNG export. The broader PySide desktop toolset, OpenRaster editing,
+Photoslop includes a native mobile edition under [`ipados/`](ipados/) — one
+universal binary for iPad and iPhone. It is built with SwiftUI and PencilKit
+because Qt for Python does not support direct iOS deployment. It provides Apple
+Pencil/finger drawing, touch pan and pinch zoom, a native layer stack, text that
+stays editable, new layers from photos, versioned `.photoslop` package documents
+with autosave, document-wide undo/redo, Photos/Files import, and off-main PNG
+export. The broader PySide desktop toolset, OpenRaster editing,
 vector model, CLI, and MCP server remain desktop-only in this release.
 
 Build the unsigned arm64 developer bundle with:

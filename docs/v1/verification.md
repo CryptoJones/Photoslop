@@ -24,3 +24,5 @@ Every Ubuntu job that imports Qt installs the same minimal EGL/GL/font/runtime
 set through `scripts/install-ci-qt-linux.sh`. The core OS/Python matrix does not
 force the optional G'MIC native package to compile on unsupported runners; a
 dedicated Linux job installs that extra and exercises its backend tests.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

@@ -65,6 +65,7 @@ CASES = {
     "layer-opacity": ("50", "150"),
     "content-aware-fill": (None, None),
     "feather": ("3", "-1"),
+    "import-layer": ("photo.png", "no-such-file.png"),
     "duplicate-layer": (None, None),
     "flatten": (None, None),
     "convert-smart": (None, None),
@@ -634,6 +635,61 @@ def test_content_aware_fill_and_feather(qapp, tmp_path):
         )
         == 0
     )
+
+
+def test_import_layer_joins_the_open_document(qapp, tmp_path):
+    """--input is how a file becomes the document; --import-layer is how one
+    joins the document already open. The imported layer keeps its own pixels
+    and is centred, so it may hang off the canvas rather than be downscaled."""
+    src = make_input(tmp_path, QColor(60, 60, 60), size=(60, 40))
+    stamp_path = str(tmp_path / "stamp.png")
+    stamp = QImage(20, 10, QImage.Format.Format_ARGB32_Premultiplied)
+    stamp.fill(QColor(0, 160, 220))
+    stamp.save(stamp_path)
+
+    assert run([src, "--import-layer", stamp_path, "--output", tmp_path / "o.ora"]) == 0
+    loaded = load_ora(str(tmp_path / "o.ora"))
+    assert [layer.name for layer in loaded.layers] == ["Background", "stamp"]
+    assert loaded.size == QSize(60, 40)  # the canvas is the document's, not the import's
+    imported = loaded.layers[1]
+    assert imported.image.size() == QSize(20, 10)  # native size, not scaled to fit
+    assert (imported.offset.x(), imported.offset.y()) == (20, 15)  # centred
+
+    # several at a time, each its own layer, stacked in argument order
+    assert (
+        run(
+            [
+                src,
+                "--import-layer",
+                stamp_path,
+                "--import-layer",
+                src,
+                "--output",
+                tmp_path / "m.ora",
+            ]
+        )
+        == 0
+    )
+    assert [layer.name for layer in load_ora(str(tmp_path / "m.ora")).layers] == [
+        "Background",
+        "stamp",
+        "in",
+    ]
+
+
+def test_import_layer_larger_than_the_canvas_overhangs(qapp, tmp_path):
+    src = make_input(tmp_path, QColor(60, 60, 60), size=(20, 20))
+    big = str(tmp_path / "big.png")
+    make_image = QImage(60, 40, QImage.Format.Format_ARGB32_Premultiplied)
+    make_image.fill(QColor(200, 30, 30))
+    make_image.save(big)
+
+    assert run([src, "--import-layer", big, "--output", tmp_path / "o.ora"]) == 0
+    loaded = load_ora(str(tmp_path / "o.ora"))
+    imported = loaded.layers[1]
+    assert imported.image.size() == QSize(60, 40)  # every source pixel survives
+    assert (imported.offset.x(), imported.offset.y()) == (-20, -10)  # centred, overhanging
+    assert loaded.size == QSize(20, 20)  # the canvas never grows to fit an import
 
 
 def test_duplicate_flatten_smart(qapp, tmp_path):

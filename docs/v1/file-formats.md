@@ -74,3 +74,5 @@ fast local baseline — luma untouched, chroma smoothed. **Filter → Denoise
 (Model)** (`--denoise-model 40` with `--model-url`) routes to any AI
 denoiser through the model-backend contract (`POST {base}/denoise`) —
 the heavy lifting and its memory stay on the backend (DD-009).
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

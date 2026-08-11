@@ -82,3 +82,5 @@ resample exactly once at commit.
 The engine never touches widgets — documents, layers, filters, transforms,
 IO, and model adapters run under Qt's offscreen platform, which is what
 `photoslop-cli` and the 1400-case test suite use.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

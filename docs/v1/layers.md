@@ -4,6 +4,26 @@ Every layer is one premultiplied ARGB32 buffer (copy-on-write shared) with a
 name, offset, visibility, opacity, and blend mode. The Layers panel manages
 the stack; the History panel shows every undoable step.
 
+## New layer from an image file
+**Layer ▸ New Layer from Image…** (`Ctrl+Shift+I`) brings image files into the
+document you already have open — select several and each becomes its own layer
+on top of the stack, in one undo step for the whole selection. This is separate
+from **File ▸ Open** on purpose: Open is how a file *becomes* a document, this
+is how one *joins* the document already open, so neither command has to guess
+which you meant.
+
+An imported layer keeps every source pixel at its own size and is centred, so
+a photo larger than the canvas hangs off the edges rather than being
+downscaled — reach for Free Transform (`Ctrl+T`) to fit it. The canvas never
+grows to accommodate an import, and layered sources (`.ora`, `.svg`) arrive
+flattened into the single layer.
+
+Headless mirror: `photoslop-cli in.png --import-layer photo.jpg`
+([CLI](cli.md)). The iOS edition has the same command as **new layer from
+photo** in the layer list, but scales each photo to fit the canvas — a
+`.photoslop` layer image must be exactly canvas-sized
+([iPadOS](ipados.md#importing-a-photo-as-a-layer)).
+
 ## Vector layers (parametric Shape and Pen)
 Shape and Pen layers remember their geometry (`vector_data`, saved in .ora
 as `photoslop-vector`): click with the same tool to re-edit with drag
@@ -55,3 +75,5 @@ composite below it, honoured by the canvas, flatten, and the colour sampler.
 ## Merging
 `Ctrl+E` merge down · `Ctrl+Shift+E` merge visible · `Ctrl+Shift+Alt+E`
 stamp visible to a new layer.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

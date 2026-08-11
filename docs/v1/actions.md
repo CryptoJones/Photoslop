@@ -28,3 +28,5 @@ Edit → Actions — the batch-workflow macro recorder.
 Actions live in memory for the session; on-disk action files are a planned
 follow-up. For durable scripted pipelines today, use the
 [command line](cli.md) — every recorded operation has a CLI equivalent.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

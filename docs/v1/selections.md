@@ -29,3 +29,5 @@ Diffusion-inpaints the selected region from its boundary.
 
 ## Crop to Selection (`Ctrl+Alt+C`)
 Instant offset-shift crop, fully undoable.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

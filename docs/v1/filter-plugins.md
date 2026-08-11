@@ -157,3 +157,5 @@ Each run costs the same transient copy every built-in filter already pays.
 A plugin that allocates wildly is the plugin's bug, not the host's; keep
 per-pixel work chunked (see `CHUNK_ROWS` in `photoslop/adjust.py` for the
 house pattern).
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

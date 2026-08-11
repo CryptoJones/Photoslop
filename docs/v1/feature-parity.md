@@ -16,7 +16,7 @@ than "missing".
 Capabilities differ deliberately by surface; a check here does not imply every
 client exposes it.
 
-| Capability | Desktop Qt | iPadOS | CLI | MCP |
+| Capability | Desktop Qt | iOS (iPhone + iPad) | CLI | MCP |
 |---|---:|---:|---:|---:|
 | Layered project persistence | ORA | `.photoslop` package | ORA read/write | ORA read/write under root policy |
 | Raster/Pencil drawing | ✅ | ✅ PencilKit | — | — |
@@ -24,13 +24,13 @@ client exposes it.
 | Native/third-party plugins | local opt-in | — | local opt-in | denied |
 | Network model operations | local configured endpoint | — | local configured endpoint | denied |
 | Accessibility automation | automated semantics + manual matrix required | native labels + manual matrix required | structured errors | structured tool errors |
-| Desktop distributable | v1.30.0 macOS signed/not notarized; Windows unsigned; later tags secret-gated | device signing required; no public bundle | wheel/sdist CI smoke | installed with Python package |
+| Desktop distributable | v2.4.0 macOS signed/not notarized; Windows unsigned; later tags secret-gated | device signing required; no public bundle | wheel/sdist CI smoke | installed with Python package |
 
 ## Versions compared
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 1.30.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS |
+| **Photoslop** | 2.4.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
@@ -146,7 +146,7 @@ for the versioned platform screen-reader and visual smoke procedures.
 |---|---|---|---|---|---|---|---|
 | Action/macro recording | ✅ [Actions](actions.md) | ✅ | 🟡 (script instead) | ❌ | 🟡 (presets/batch) | ✅ (styles) | ✅ (styles) |
 | Scripting language | ❌ (CLI instead) | ✅ (JS/AppleScript/VBS) | ✅ (Script-Fu, Python 3) | ❌ | ✅ (Lua SDK) | ✅ (Lua + AI API) | 🟡 (AppleScript, Mac) |
-| Headless CLI | ✅ **58 shared engine ops** [CLI](cli.md) | ❌ | ✅ (`gimp -i -b`, script-driven) | ❌ | ❌ | ✅ (`darktable-cli`, export-focused) | ❌ |
+| Headless CLI | ✅ **59 shared engine ops** [CLI](cli.md) | ❌ | ✅ (`gimp -i -b`, script-driven) | ❌ | ❌ | ✅ (`darktable-cli`, export-focused) | ❌ |
 | Start pipelines from blank docs | ✅ (`--new A4 --dpi 300`) | — | ✅ (script) | ❌ | — | — | — |
 | Batch export | ✅ (shell loops + CLI) | ✅ (Actions batch) | ✅ | ❌ | ✅ | ✅ | ✅ (process recipes) |
 
@@ -181,7 +181,7 @@ Photoslop is an editor, not a DAM — these rows are scope notes, not gaps.
 
 ## Where Photoslop stands out
 
-- **Headless automation through a shared engine.** All 54 operations are shared
+- **Headless automation through a shared engine.** All 59 operations are shared
   by CLI and MCP; GUI presentation-only interactions have explicit parity
   rulings. Pipelines compose as ordered operations (`--new A4 --dpi 300 --adjust
   "exposure=1" --select-poly … --clear --output out.png`). None of the six has
@@ -246,4 +246,4 @@ Competitor claims verified July 2026 against:
 Photoslop claims are grounded in this documentation library — every ✅ links
 to the guide that describes the shipped feature.
 
-Proudly Made in Nebraska. Go Big Red! 🌽 https://xkcd.com/2347/
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

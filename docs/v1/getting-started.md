@@ -43,3 +43,5 @@ first one, they start in your home directory rather than the launch directory.
   button; drag from a ruler to place a guide. Rulers mark the exact image
   edge — even for 100-MP frames at 1/32 zoom.
 - Workspaces (View → Workspace) save and restore panel layouts.
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

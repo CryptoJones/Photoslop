@@ -55,3 +55,5 @@ because it's **viewport-only work** — no layer buffers change:
 - CLI: `--assign-profile`, `--convert-profile`, `--proof PROFILE`
   (simulation baked into raster output), `--cmyk-out FILE.icc`
   (CMYK JPEG/TIFF via littlecms — DD-005: export only, never a mode).
+
+*Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*
