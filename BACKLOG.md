@@ -6,13 +6,28 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] The XCUITest suite needs `-retry-tests-on-failure` to be green — the app is
-  reliable (15/15 launches inside one test method) but the harness races at
-  test-method boundaries. Settle-waits, teardown waits and a relaunch retry did
-  not remove it
-  ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
+- [ ] The XCUITest suite still needs `-retry-tests-on-failure -test-iterations 2`
+  (down from three). Everything the retries were *hiding* is fixed — a narrow
+  iPad overflowing its navigation bar and losing Export, every test inheriting
+  the last one's documents, and a layer-count assertion racing an async decode —
+  and the suite passes locally with no retries at all on three devices. What
+  remains is two things: XCTest's own infrastructure errors on a loaded runner
+  (`Failed to get background assertion for target app`, `Failed to get matching
+  snapshots`), raised before any assertion runs and so not addressable from test
+  code; and the **first** UI test of a run exceeding the 90s editor wait on a
+  cold simulator — always the first class alphabetically, once per device. The
+  next thing to try for the second is a warm-up launch outside any assertion's
+  timeout ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] Export Image left the navigation bar on a narrow iPad — an iPad mini in
+  portrait is 744pt and reports the regular size class, so it took the nine-item
+  iPad layout (eleven with a text layer active) and UIKit collapsed the trailing
+  group behind an unlabelled chevron. #227 one size class up. One bar layout per
+  idiom now, budgeted for the narrowest device and with an item count that cannot
+  change with the document's contents
+  ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 - [x] Import an image as a layer on the desktop and the CLI — **Layer ▸ New Layer
   from Image…** (`Ctrl+Shift+I`) and `--import-layer FILE`, the 59th shared engine

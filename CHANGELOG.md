@@ -4,6 +4,44 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+- **Export left the navigation bar on a narrow iPad.** An iPad mini in portrait
+  is 744pt and reports the *regular* size class, so it took the iPad layout —
+  nine bar items, and eleven once a text layer made Edit Text and Move Text
+  appear. UIKit collapsed the trailing group behind an unlabelled chevron and
+  Export Image was no longer on the bar. This is #227 one size class up. There
+  is now one bar layout per idiom, budgeted for the narrowest device and with a
+  fixed item count that cannot change with the document's contents: New, Canvas
+  Size and a More Actions menu lead; Export and About trail; undo and redo move
+  to the tool strip at every width, where they are anyway closer to hand while
+  drawing. Import Image, Photos and the text actions cost one extra tap on a
+  large iPad — the alternative was a width threshold with a margin thin enough
+  for this to return the next time an action is added.
+  ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
+- The iOS UI tests are down to `-test-iterations 2` from 3, and what the retries
+  cover has changed. The suite failed a different test on most runs and that was
+  read as harness raciness; it was the overflow above — the overflowing test was
+  never the failing one, so the run carried on and the *next* test timed out on
+  "the editor never came up" — plus every test inheriting the documents the
+  previous one created, plus a layer-count assertion that read `cells.count` once
+  while the decode it was counting is asynchronous. All three are fixed:
+  `-PhotoslopFreshDocumentStore` empties the document directory at launch, the
+  count is waited for, and the shared helpers resolve every query with
+  `.firstMatch` so XCTest stops at the first hit instead of enumerating the
+  system document browser's hierarchy. With no retries at all the suite passes on
+  an iPad mini, a 13-inch iPad Pro and an iPhone, about 45% faster. The remaining
+  two iterations cover XCTest's own infrastructure errors on a loaded CI runner
+  (`Failed to get background assertion for target app`), which are raised before
+  any assertion runs and cannot be addressed from test code. #238 stays open for
+  that.
+
+### Added
+- UI tests that pin the bar's budget: nothing may be handed to UIKit's own
+  overflow on any device, and adding a text layer may not change the bar's item
+  count. Neither of the two faults above could have survived them.
+
 ## [2.5.0] — 2026-08-10
 
 ### Added

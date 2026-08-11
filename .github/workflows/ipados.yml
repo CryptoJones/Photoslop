@@ -52,11 +52,20 @@ jobs:
           done
           echo "ipad=$IPAD_ID" >> "$GITHUB_OUTPUT"
           echo "iphone=$IPHONE_ID" >> "$GITHUB_OUTPUT"
-      # The XCUITests are retried because the harness, not the app, is racy:
-      # relaunching between test methods intermittently comes up on a screen
-      # nobody asked for. Fifteen consecutive launches inside a single test
-      # method never flake, and settle-waits, teardown waits and a launch retry
-      # all failed to remove it. A real defect still fails all three attempts.
+      # Two iterations, down from three, and for one reason only: XCTest's own
+      # infrastructure errors on a loaded runner — "Failed to get background
+      # assertion for target app", "Failed to get matching snapshots: Timed out
+      # while evaluating UI query". Those are raised by the harness before any
+      # assertion runs, so no amount of waiting or scoping in test code prevents
+      # them.
+      #
+      # Everything the old three-iteration retry was actually covering has been
+      # fixed rather than absorbed: a narrow iPad overflowing its navigation bar
+      # and losing Export (#227 one size class up, which made the *next* test
+      # time out and so looked like a race), every test inheriting the documents
+      # the last one made, and a layer-count assertion that raced an async
+      # decode. Keeping the number low is the point — the lower it is, the less
+      # room there is for the next real defect to hide as flakiness.
       - name: Run iPad tests
         working-directory: ipados
         run: |
@@ -65,7 +74,7 @@ jobs:
             -scheme PhotoslopIPad \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.ipad }}' \
-            -retry-tests-on-failure -test-iterations 3 \
+            -retry-tests-on-failure -test-iterations 2 \
             CODE_SIGNING_ALLOWED=NO \
             test
       - name: Run iPhone tests
@@ -76,7 +85,7 @@ jobs:
             -scheme PhotoslopIPad \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.iphone }}' \
-            -retry-tests-on-failure -test-iterations 3 \
+            -retry-tests-on-failure -test-iterations 2 \
             CODE_SIGNING_ALLOWED=NO \
             test
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

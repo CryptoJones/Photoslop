@@ -40,9 +40,11 @@ final class EditorToolbarUITests: UITestCase {
   /// What does not fit on a phone goes in one menu the app controls, rather
   /// than being handed to UIKit's overflow and silently losing half of it.
   func testCompactWidthKeepsEveryOtherActionInOneMenu() throws {
+    // The iPad has its own More Actions menu now, but a different one: Layers
+    // is a sidebar there rather than a bar button, and About stays on the bar.
     try XCTSkipUnless(
       UIDevice.current.userInterfaceIdiom == .phone,
-      "iPad shows these actions on the bar itself")
+      "the iPad menu holds a different set; this pins the phone's")
     let app = openEditor()
 
     XCTAssertTrue(
@@ -59,31 +61,56 @@ final class EditorToolbarUITests: UITestCase {
     }
   }
 
+  /// Nothing may be handed to UIKit's own overflow, on any device.
+  ///
+  /// This is the assertion that would have caught the iPad mini: at 744pt the
+  /// regular-width layout put five leading and four trailing items on the bar,
+  /// UIKit collapsed the trailing group behind a chevron, and Export Image left
+  /// the bar. Every other test still passed, because they all reached Export
+  /// through a query that does not care whether a button is on the bar or in
+  /// the system overflow — the failure only ever showed up as the *next* test
+  /// timing out on "the editor never came up".
+  func testNothingIsHandedToTheSystemOverflow() {
+    let app = openEditor()
+
+    let overflow = app.navigationBars.buttons["OverflowBarButtonItem"]
+    XCTAssertFalse(
+      overflow.exists,
+      """
+      UIKit collapsed part of the navigation bar into its own overflow, which \
+      hides actions behind an unlabelled chevron. The bar is over budget for \
+      this device's width — move something into the app's own More Actions menu.
+      """)
+  }
+
+  /// The bar's item count may not depend on the document's contents.
+  ///
+  /// Edit Text and Move Text appear only while a text layer is active, so on a
+  /// narrow bar the toolbar fit until the moment someone added text and then
+  /// silently overflowed. A bar that changes size as you work is one no test
+  /// written before that step can catch, which is why they now live in the
+  /// menu at every width that is not provably wide enough.
+  func testAddingTextDoesNotPushActionsOffTheBar() {
+    let app = openEditor()
+    let barItemsBefore = app.navigationBars.buttons.count
+
+    app.addText("Hi")
+
+    XCTAssertFalse(
+      app.navigationBars.buttons["OverflowBarButtonItem"].exists,
+      "adding a text layer pushed the navigation bar into UIKit's overflow")
+    XCTAssertEqual(
+      app.navigationBars.buttons.count, barItemsBefore,
+      "the navigation bar gained or lost items because a text layer became active")
+    XCTAssertTrue(
+      app.navigationBars.buttons["Export Image"].exists, "Export left the bar once text was added")
+  }
+
   /// Launch into a fresh document, past the launch scene and the canvas-size
   /// question `DocumentGroup` triggers for the document it creates.
   private func openEditor() -> XCUIApplication {
     let app = XCUIApplication()
-    let create = app.buttons["Create Document"]
-    app.launch()
-    if !create.waitForExistence(timeout: 90) {
-      app.terminate()
-      _ = app.wait(for: .notRunning, timeout: 20)
-      app.launch()
-    }
-    XCTAssertTrue(create.waitForExistence(timeout: 90), "launch scene never appeared")
-    create.tap()
-
-    let useThisSize = app.buttons["Use This Size"]
-    if useThisSize.waitForExistence(timeout: 60) {
-      useThisSize.tap()
-      XCTAssertTrue(
-        useThisSize.waitForNonExistence(timeout: 30),
-        "the canvas size sheet never dismissed")
-    }
-    XCTAssertTrue(
-      app.navigationBars.buttons["Export Image"].waitForExistence(timeout: 90),
-      "the editor never came up")
-
+    app.openNewDocument()
     return app
   }
 }

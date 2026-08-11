@@ -242,18 +242,14 @@ struct EditorView: View {
   private var toolStrip: some View {
     ScrollView(.horizontal, showsIndicators: false) {
       HStack(spacing: 14) {
-        // A phone's navigation bar has room for three controls beside the
-        // document title, and Layers, the actions menu and Export take them.
         // Undo and redo are used mid-drawing and cannot go behind a menu, so
-        // they come here instead — at the leading edge, which is the part of
-        // the strip that never has to be scrolled to.
-        if isCompact {
-          // Icon-only: a navigation bar hides a Label's title by itself, an
-          // HStack does not, and spelling both out costs a third of the strip.
-          undoButton.labelStyle(.iconOnly)
-          redoButton.labelStyle(.iconOnly)
-          Divider().frame(height: 24)
-        }
+        // they live here rather than on the bar — at the leading edge, which is
+        // the part of the strip that never has to be scrolled to. This is every
+        // width, not just the phone: no navigation bar in the app has a spare
+        // slot for them now that each one is budgeted for its narrowest device.
+        undoButton.labelStyle(.iconOnly)
+        redoButton.labelStyle(.iconOnly)
+        Divider().frame(height: 24)
 
         Picker("Tool", selection: $tool) {
           ForEach(BrushTool.allCases) { brush in
@@ -328,17 +324,39 @@ struct EditorView: View {
         exportButton
       }
     } else {
+      // One iPad layout, sized for the narrowest iPad rather than the widest.
+      //
+      // This used to put five leading and four trailing items on the bar, on the
+      // assumption that `.regular` means *wide*. It does not: an iPad mini in
+      // portrait is 744pt, UIKit had nowhere to put nine items, and it collapsed
+      // the trailing group behind an unlabelled chevron — Export Image left the
+      // bar. That is #227 again, one size class up.
+      //
+      // A width threshold was the obvious repair and the wrong one. The bar also
+      // grows with the *document*: Edit Text and Move Text exist only while a
+      // text layer is active, so a 13-inch iPad in portrait fits nine items and
+      // overflows at eleven the moment someone adds text. A budget that holds
+      // only until the user does something is not a budget, and every test
+      // written before that step passes. So: five items, fixed, at every iPad
+      // width — provably inside the narrowest iPad's bar and independent of what
+      // the document contains. The cost is that Import Image, Photos and the
+      // text actions are one tap deeper on a large iPad; the alternative is a
+      // margin thin enough for this bug to return the next time an action is
+      // added.
       ToolbarItemGroup(placement: .topBarLeading) {
         newDocumentButton
         canvasSizeButton
-        textButtons
-        importImageButton
-        photosButton
+        Menu {
+          textButtons
+          Divider()
+          importImageButton
+          photosButton
+        } label: {
+          Label("More Actions", systemImage: "ellipsis.circle")
+        }
       }
 
       ToolbarItemGroup(placement: .topBarTrailing) {
-        undoButton
-        redoButton
         exportButton
         aboutButton
       }
