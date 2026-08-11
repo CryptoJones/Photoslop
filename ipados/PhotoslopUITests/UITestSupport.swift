@@ -110,18 +110,31 @@ extension XCUIApplication {
       create.waitForExistence(timeout: 30), "launch scene never appeared", file: file, line: line)
     create.tap()
 
+    // The canvas-size question can be asked more than once, so answer it until
+    // it stops being asked rather than assuming a single sheet.
+    //
+    // Reopening a still-blank document asks again — that is the app's documented
+    // behaviour, not a bug: a new document is written to disk and reopened
+    // through `init(configuration:)`, and the opening path recognises an
+    // untouched one. Answering exactly once was fine while every test inherited
+    // the last one's documents, and stopped being fine once the store was
+    // emptied at launch, because more of the runs now start from a genuinely new
+    // document. The old code tapped the first sheet and then asserted the button
+    // was gone, which a second sheet fails by simply existing.
+    //
+    // Waiting for the sheet to actually leave still matters: a `navigationBars`
+    // query run mid-dismissal can match the sheet's own bar instead of the
+    // editor's, so a toolbar assertion fails for reasons unrelated to toolbars.
     let useThisSize = buttons["Use This Size"].firstMatch
-    if useThisSize.waitForExistence(timeout: 60) {
+    for _ in 1...3 {
+      guard useThisSize.waitForExistence(timeout: 60) else { break }
       useThisSize.tap()
-      // Waiting for the sheet to actually leave, not just for the tap to land.
-      // A `navigationBars` query run while a sheet is still dismissing can match
-      // the sheet's own bar instead of the editor's, so an assertion about the
-      // toolbar fails for reasons that have nothing to do with the toolbar. That
-      // is what made this suite fail a different test on each run.
-      XCTAssertTrue(
-        useThisSize.waitForNonExistence(timeout: 30),
-        "the canvas size sheet never dismissed", file: file, line: line)
+      guard useThisSize.waitForNonExistence(timeout: 30) else { continue }
+      // Gone for now — but give a re-ask a moment to arrive before moving on.
+      if !useThisSize.waitForExistence(timeout: 3) { break }
     }
+    XCTAssertFalse(
+      useThisSize.exists, "the canvas size sheet never dismissed", file: file, line: line)
 
     XCTAssertTrue(
       navigationBars.buttons["Export Image"].firstMatch.waitForExistence(timeout: 90),
