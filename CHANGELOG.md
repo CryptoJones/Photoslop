@@ -7,18 +7,23 @@ follows [SemVer](https://semver.org).
 ## [Unreleased]
 
 ### Fixed
-- The iOS UI tests no longer run with `-retry-tests-on-failure`. 2.5.1 reduced
-  the budget to two iterations and named what still needed it; both remaining
-  causes are now fixed. Queries in the shared helpers resolve with `.firstMatch`,
-  so XCTest stops at the first hit instead of enumerating the system document
-  browser's hierarchy until it can no longer take a snapshot. And the cold-start
-  cost — a freshly booted simulator installing the app and creating its first
-  document, which used to exceed the 90-second editor wait and was charged to
-  whichever test class sorted first — now runs once in a warm-up that holds no
-  assertions, so it cannot fail a test on the app's behalf. Verified on *erased*
-  simulators, the exact condition that was failing: an iPad mini and an iPhone,
-  no retries, green on both.
-  ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
+- Every project-side cause of the iOS UI-test flakiness is fixed. 2.5.1 got the
+  retry budget down to two iterations and named what still needed it; both of
+  those are now closed. The cold-start cost — a freshly booted simulator
+  installing the app and creating its first document, which exceeded the
+  90-second editor wait and was charged to whichever test class sorted first —
+  runs once in a warm-up holding no assertions, so it cannot fail a test on the
+  app's behalf. That exposed a sixth cause in turn: reopening a still-blank
+  document asks for its canvas size again, which is documented behaviour, and
+  emptying the document store made more runs meet it; the helper answers until
+  the question stops being asked. With all six fixed the suite passes with **no
+  retries at all** on erased simulators — an iPad mini and an iPhone 17 Pro — and
+  the iPad leg has passed on CI with none.
+
+  The two iterations stay for one failure mode that is not ours: the XCTest
+  daemon failing to initialise a UI-testing session at all
+  (`XCTDaemonErrorDomain Code=19`), where zero tests execute and no app is
+  involved. ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## [2.5.1] — 2026-08-11
 

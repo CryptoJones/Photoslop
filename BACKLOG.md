@@ -6,17 +6,24 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-_Nothing open._
+- [ ] The iPadOS job still passes `-retry-tests-on-failure -test-iterations 2`,
+  for one failure mode only: the XCTest daemon failing to initialise a UI-testing
+  session (`XCTDaemonErrorDomain Code=19`, `AXDisableAccessibilityOnTermination`),
+  where zero tests execute and no app is involved. All six causes that belonged
+  to this project are fixed, and the suite passes with no retries on erased
+  simulators. Closing this needs a runner that does not drop the accessibility
+  session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
 
-- [x] The XCUITest suite is green with **no** `-retry-tests-on-failure`. The
-  premise that the app was reliable and the harness racy was wrong: five causes
-  were hiding behind the flag — a narrow iPad overflowing its bar and losing
-  Export, every test inheriting the last one's documents, a layer-count assertion
-  racing an async decode, queries too expensive for XCTest to snapshot, and a
-  cold simulator charging its first-document cost to whichever test ran first.
-  All five are fixed; verified on erased simulators
+- [x] Every project-side cause of the XCUITest flakiness is fixed, and the retry
+  budget is down from three iterations to two. The premise that the app was
+  reliable and the harness racy was wrong: six causes were hiding behind the flag
+  — a narrow iPad overflowing its bar and losing Export, every test inheriting the
+  last one's documents, a layer-count assertion racing an async decode, queries
+  too expensive for XCTest to snapshot, a cold simulator charging its
+  first-document cost to whichever test ran first, and the canvas-size question
+  being asked twice. Verified with no retries at all on erased simulators
   ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 - [x] Export Image left the navigation bar on a narrow iPad — an iPad mini in

@@ -31,53 +31,60 @@ regresses unnoticed. Toolbar reachability is covered by XCUITest rather than
 the unit suite: whether a control survives a real navigation bar is a question
 only a running app can answer.
 
-The XCUITests run with no retries at all. They needed them for a long time, on
-the reading that the flakiness was in the harness: the suite failed a different
-test on most runs, yet fifteen consecutive launches inside one test method never
-flaked. That reading was wrong, and five separate causes were hiding behind the
-flag.
+The XCUITests run with `-retry-tests-on-failure -test-iterations 2`, down from
+three, and what the flag covers has changed completely.
 
-**A navigation bar over its budget.** An iPad mini in portrait is 744pt and
-reports the *regular* size class, so it took the iPad layout — nine bar items,
-eleven once a text layer made Edit Text and Move Text appear. UIKit collapsed the
-trailing group behind an unlabelled chevron and **Export Image left the bar**,
-which is [#227](https://github.com/CryptoJones/Photoslop/issues/227) again one
-size class up. The test that hit it was never the one that failed: every helper
-reaches Export through a query that does not care whether a button is on the bar
-or in the system overflow, so the run carried on and the *next* test timed out on
-"the editor never came up" while the editor had been up the whole time. That is
-what made the failure appear to move around.
+The suite used to fail a different test on most runs, which was read as harness
+raciness on the evidence that fifteen consecutive launches inside one test method
+never flaked. That reading was wrong. **Six** causes were hiding behind the flag,
+and every one of them that belonged to this project is now fixed rather than
+absorbed:
 
-**Shared state.** `DocumentGroup` keeps every document a test creates, so a run
-ended with "Untitled 1" through "Untitled 15" behind it, each test starting
-somewhere different and a relaunch able to restore the previous document instead
-of the launch scene. `-PhotoslopFreshDocumentStore` empties the document
-directory at launch.
+- **A navigation bar over its budget.** An iPad mini in portrait is 744pt and
+  reports the *regular* size class, so it took the iPad layout — nine bar items,
+  eleven once a text layer made Edit Text and Move Text appear. UIKit collapsed
+  the trailing group behind an unlabelled chevron and **Export Image left the
+  bar**, which is [#227](https://github.com/CryptoJones/Photoslop/issues/227)
+  again one size class up. The test that hit it was never the one that failed:
+  the helpers reach Export through a query that does not care whether a button is
+  on the bar or in the system overflow, so the run carried on and the *next* test
+  timed out on "the editor never came up" while the editor had been up the whole
+  time. That is what made the failure appear to move around.
+- **Shared state.** `DocumentGroup` keeps every document a test creates, so a run
+  ended with "Untitled 1" through "Untitled 15" behind it.
+  `-PhotoslopFreshDocumentStore` empties the directory at launch.
+- **A racing assertion.** The photo-layer test read `cells.count` once, straight
+  after the layer list appeared, while the decode it counts is asynchronous.
+- **Queries too expensive to snapshot.** Between Create Document and the editor
+  the system document browser is on screen — another process's hierarchy, and a
+  large one. `.firstMatch` stops at the first hit instead of resolving all of it.
+- **Cold start charged to an arbitrary test.** A freshly booted simulator
+  installing the app and creating its first document took longer than the
+  90-second wait, and whichever class sorted first paid for it. That path now
+  runs once in a warm-up holding no assertions — a warm-up must not be able to
+  fail a test.
+- **The canvas-size question asked twice.** Reopening a still-blank document asks
+  again, which is documented behaviour; emptying the store made more runs start
+  from a genuinely new document and meet it. The helper answers until the
+  question stops being asked.
 
-**A racing assertion.** The photo-layer test read `cells.count` once, straight
-after the layer list appeared, while decoding the photos and inserting the layers
-is asynchronous. It waits for the count now.
+With all six fixed the suite passes with **no retries at all** on erased
+simulators — an iPad mini (A17 Pro) and an iPhone 17 Pro, 13 UI and 59 unit tests
+green on each — and the iPad leg has passed on CI with none.
 
-**Queries too expensive to snapshot.** Between Create Document and the editor the
-system document browser is on screen — another process's hierarchy, and a large
-one. Resolving a whole query across it outran XCTest's snapshot timeout on a
-loaded runner, which is not an assertion failure and so cannot be waited out.
-Every query in the shared helpers is `.firstMatch`, which stops at the first hit.
+What the two iterations still cover is not ours to fix: the XCTest daemon
+occasionally fails to bring up a UI-testing session at all —
 
-**Cold start charged to an arbitrary test.** A freshly booted simulator
-installing the app and creating its first document took longer than the
-90-second wait, and whichever class sorted first paid for all of it. That path
-now runs once in a warm-up in `setUp`, holding no assertions at all — a warm-up
-must not be able to fail a test, and if the app is genuinely broken the real test
-says so in its own words.
+```
+Failed to initialize for UI testing: XCTDaemonErrorDomain Code=19
+"Failed call to AXDisableAccessibilityOnTermination: kAXErrorCannotComplete"
+```
 
-Verified on **erased** simulators, the exact cold-start condition that was
-failing: an iPad mini (A17 Pro) and an iPhone 17 Pro, no retries, 13 UI tests and
-59 unit tests green on each.
-
-If the iPadOS job goes red now, something is actually wrong. That is the point. A
-retry cannot tell a flaky test from a feature that is only sometimes there, and
-for as long as this suite had one, it was hiding the second.
+— and **zero tests execute** when it does. No app is involved, there is no
+assertion to wait on, and nothing in test code can reach it; retrying the
+invocation is the only remedy available. Keep the number at two: the lower it is,
+the less room there is for the next real defect to hide as flakiness, which is
+what it was doing to #227.
 
 ## Editing workflow
 
