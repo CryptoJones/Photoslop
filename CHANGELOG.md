@@ -20,16 +20,22 @@ follows [SemVer](https://semver.org).
   large iPad — the alternative was a width threshold with a margin thin enough
   for this to return the next time an action is added.
   ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
-- The iOS UI tests no longer need `-retry-tests-on-failure -test-iterations 3`.
-  The suite failed a different test on most runs and that was read as harness
-  raciness; it was the overflow above, plus every test inheriting the documents
-  the previous one created. The overflowing test was never the failing one — the
-  run carried on and the *next* test timed out on "the editor never came up",
-  which is what made the failure appear to move around. A new
-  `-PhotoslopFreshDocumentStore` launch argument empties the document directory,
-  and only the launch dance is retried, inside the test helper, so every
-  assertion runs exactly once. Green with no retries on an iPad mini, a 13-inch
-  iPad Pro, and an iPhone, and about 45% faster.
+- The iOS UI tests are down to `-test-iterations 2` from 3, and what the retries
+  cover has changed. The suite failed a different test on most runs and that was
+  read as harness raciness; it was the overflow above — the overflowing test was
+  never the failing one, so the run carried on and the *next* test timed out on
+  "the editor never came up" — plus every test inheriting the documents the
+  previous one created, plus a layer-count assertion that read `cells.count` once
+  while the decode it was counting is asynchronous. All three are fixed:
+  `-PhotoslopFreshDocumentStore` empties the document directory at launch, the
+  count is waited for, and the shared helpers resolve every query with
+  `.firstMatch` so XCTest stops at the first hit instead of enumerating the
+  system document browser's hierarchy. With no retries at all the suite passes on
+  an iPad mini, a 13-inch iPad Pro and an iPhone, about 45% faster. The remaining
+  two iterations cover XCTest's own infrastructure errors on a loaded CI runner
+  (`Failed to get background assertion for target app`), which are raised before
+  any assertion runs and cannot be addressed from test code. #238 stays open for
+  that.
 
 ### Added
 - UI tests that pin the bar's budget: nothing may be handed to UIKit's own

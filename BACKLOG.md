@@ -6,18 +6,25 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-_Nothing open._
+- [ ] The XCUITest suite still needs `-retry-tests-on-failure -test-iterations 2`
+  (down from three). Everything the retries were *hiding* is fixed — a narrow
+  iPad overflowing its navigation bar and losing Export, every test inheriting
+  the last one's documents, and a layer-count assertion racing an async decode —
+  and the suite passes locally with no retries at all on three devices. What
+  remains is XCTest's own infrastructure errors on a loaded runner (`Failed to
+  get background assertion for target app`, `Failed to get matching snapshots`),
+  raised before any assertion runs and so not addressable from test code. Needs a
+  quieter runner, a smaller per-invocation suite, or Apple
+  ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
 
-- [x] The XCUITest suite is green with no `-retry-tests-on-failure`. The
-  flakiness was not in the harness: a 744pt iPad reported the regular size class,
-  took the nine-item iPad bar, and UIKit pushed Export Image into its own
-  overflow — so the *next* test timed out on "the editor never came up" while the
-  editor was up, which is why the failure appeared to move between tests. Every
-  test also inherited the previous one's documents. One bar layout per idiom now,
-  budgeted for the narrowest device and independent of document contents, plus a
-  `-PhotoslopFreshDocumentStore` launch argument
+- [x] Export Image left the navigation bar on a narrow iPad — an iPad mini in
+  portrait is 744pt and reports the regular size class, so it took the nine-item
+  iPad layout (eleven with a text layer active) and UIKit collapsed the trailing
+  group behind an unlabelled chevron. #227 one size class up. One bar layout per
+  idiom now, budgeted for the narrowest device and with an item count that cannot
+  change with the document's contents
   ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 - [x] Import an image as a layer on the desktop and the CLI — **Layer ▸ New Layer

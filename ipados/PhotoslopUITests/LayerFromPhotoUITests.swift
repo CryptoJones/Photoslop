@@ -79,8 +79,23 @@ final class LayerFromPhotoUITests: UITestCase {
 
     XCTAssertTrue(app.openLayerList(), "the layer list could not be reached again")
     XCTAssertTrue(app.cells.firstMatch.waitForExistence(timeout: 20))
-    XCTAssertEqual(
-      app.cells.count, before + 2,
-      "two photos should add two layers and keep what was already there")
+
+    // Wait for the count rather than reading it once. Decoding the photos and
+    // inserting the layers is asynchronous, so the layer list is on screen — and
+    // its first cell exists — before the new layers are in it. Reading `count`
+    // at that moment races the decode and returns the *old* number, which on
+    // this machine lands after the work and on a CI runner three times slower
+    // lands before it. That is a test bug, not an app one, and it is exactly the
+    // sort of thing `-retry-tests-on-failure` was quietly absorbing.
+    let grew = NSPredicate(format: "count == %d", before + 2)
+    expectation(for: grew, evaluatedWith: app.cells)
+    waitForExpectations(timeout: 30) { error in
+      XCTAssertNil(
+        error,
+        """
+        two photos should add two layers and keep what was already there — \
+        the list settled at \(app.cells.count) cells, expected \(before + 2)
+        """)
+    }
   }
 }

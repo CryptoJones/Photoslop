@@ -52,15 +52,20 @@ jobs:
           done
           echo "ipad=$IPAD_ID" >> "$GITHUB_OUTPUT"
           echo "iphone=$IPHONE_ID" >> "$GITHUB_OUTPUT"
-      # No -retry-tests-on-failure. The suite was retried because it failed a
-      # different test on most runs; the cause turned out to be two real faults
-      # rather than harness noise. A narrow iPad overflowed its navigation bar
-      # and lost Export, so the *next* test timed out waiting for an editor that
-      # had been on screen the whole time; and every test inherited the
-      # documents the last one made, so each started from a different state.
-      # Both are fixed. A blanket retry would only hide the next one: it re-runs
-      # the assertions too, which is how a real defect gets three chances to
-      # look intermittent. Only the launch dance is retried, inside the helper.
+      # Two iterations, down from three, and for one reason only: XCTest's own
+      # infrastructure errors on a loaded runner — "Failed to get background
+      # assertion for target app", "Failed to get matching snapshots: Timed out
+      # while evaluating UI query". Those are raised by the harness before any
+      # assertion runs, so no amount of waiting or scoping in test code prevents
+      # them.
+      #
+      # Everything the old three-iteration retry was actually covering has been
+      # fixed rather than absorbed: a narrow iPad overflowing its navigation bar
+      # and losing Export (#227 one size class up, which made the *next* test
+      # time out and so looked like a race), every test inheriting the documents
+      # the last one made, and a layer-count assertion that raced an async
+      # decode. Keeping the number low is the point — the lower it is, the less
+      # room there is for the next real defect to hide as flakiness.
       - name: Run iPad tests
         working-directory: ipados
         run: |
@@ -69,6 +74,7 @@ jobs:
             -scheme PhotoslopIPad \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.ipad }}' \
+            -retry-tests-on-failure -test-iterations 2 \
             CODE_SIGNING_ALLOWED=NO \
             test
       - name: Run iPhone tests
@@ -79,6 +85,7 @@ jobs:
             -scheme PhotoslopIPad \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.iphone }}' \
+            -retry-tests-on-failure -test-iterations 2 \
             CODE_SIGNING_ALLOWED=NO \
             test
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

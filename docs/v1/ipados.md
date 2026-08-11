@@ -31,35 +31,49 @@ regresses unnoticed. Toolbar reachability is covered by XCUITest rather than
 the unit suite: whether a control survives a real navigation bar is a question
 only a running app can answer.
 
-The XCUITests run without `-retry-tests-on-failure`. They needed it for a
-while, on the reading that the flakiness was in the harness: the suite failed a
-different test on most runs, yet fifteen consecutive launches inside one test
-method never flaked. That reading was wrong, and the retries were hiding two
-real faults.
+The XCUITests run with `-retry-tests-on-failure -test-iterations 2`, down from
+three. What changed is not the flag but what it is covering.
 
-The first was a navigation bar over its budget. An iPad mini in portrait is
-744pt and reports the *regular* size class, so it took the iPad layout — nine
-bar items, eleven once a text layer made Edit Text and Move Text appear. UIKit
-collapsed the trailing group behind an unlabelled chevron and **Export Image
-left the bar**, which is [#227](https://github.com/CryptoJones/Photoslop/issues/227)
-again one size class up. The test that noticed was not the one that failed: the
-run carried on, and the *next* test timed out on "the editor never came up"
-while the editor was on screen the whole time. That is what made the failure
-look like it moved around.
+The suite used to fail a different test on most runs, which was read as harness
+raciness on the evidence that fifteen consecutive launches inside one test method
+never flaked. That reading was wrong, and three real faults were hiding behind
+the retries.
 
-The second was shared state. `DocumentGroup` keeps every document a test
-creates, so a run ended with "Untitled 1" through "Untitled 15" behind it, each
-test starting from a different place than the last and a relaunch able to
-restore the previous document instead of the launch scene.
+The first was a navigation bar over its budget. An iPad mini in portrait is 744pt
+and reports the *regular* size class, so it took the iPad layout — nine bar
+items, eleven once a text layer made Edit Text and Move Text appear. UIKit
+collapsed the trailing group behind an unlabelled chevron and **Export Image left
+the bar**, which is [#227](https://github.com/CryptoJones/Photoslop/issues/227)
+again one size class up. The test that hit it was never the one that failed:
+every helper reaches Export through a query that does not care whether a button
+is on the bar or in the system overflow, so the run carried on and the *next*
+test timed out on "the editor never came up" while the editor had been up the
+whole time. That is what made the failure appear to move around.
 
-Both are fixed — one bar layout per idiom, budgeted for the narrowest device and
-independent of document contents, and `-PhotoslopFreshDocumentStore` empties the
-document directory at launch. The suite now passes with no retries on an iPad
-mini, a 13-inch iPad Pro, and an iPhone, and runs about 45% faster because no
-test is waiting out a timeout any more. Only the launch dance is retried, inside
-the test helper, so every assertion still runs exactly once and a real defect
-fails on the first attempt rather than getting three chances to look
-intermittent.
+The second was shared state. `DocumentGroup` keeps every document a test creates,
+so a run ended with "Untitled 1" through "Untitled 15" behind it, each test
+starting somewhere different and a relaunch able to restore the previous document
+instead of the launch scene. `-PhotoslopFreshDocumentStore` now empties the
+document directory at launch.
+
+The third was a test bug: the photo-layer test read `cells.count` once, straight
+after the layer list appeared, while decoding the photos and inserting the layers
+is asynchronous. It waits for the count now.
+
+What is left is genuinely not fixable from test code. On a loaded runner XCTest
+raises its own infrastructure errors — `Failed to get background assertion for
+target app`, `Failed to get matching snapshots: Timed out while evaluating UI
+query` — before any assertion runs, so they cannot be waited out, scoped away, or
+retried by the caller. Query cost was reduced as far as it goes (`.firstMatch`
+everywhere in the shared helpers, so XCTest stops at the first hit instead of
+enumerating the system document browser's hierarchy), and the remaining exposure
+is the runner itself. Two iterations covers that; keeping the number low is the
+point, because the lower it is the less room there is for the next real defect to
+hide as flakiness.
+
+Locally, with no retries at all, the suite passes on an iPad mini (A17 Pro), a
+13-inch iPad Pro (M5) and an iPhone 17 Pro — and the iPad runs got about 45%
+faster once no test was waiting out a 90-second timeout.
 
 ## Editing workflow
 
