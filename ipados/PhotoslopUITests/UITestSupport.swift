@@ -32,12 +32,22 @@ extension XCUIApplication {
   /// `DocumentGroup` asks a created document for its canvas size, so that sheet
   /// stands between the launch scene and the editor. Dismissing it here keeps
   /// every other test from having to know that.
+  ///
   /// Timeouts are generous on purpose. A CI runner takes about three times as
   /// long as this machine for the same test — 75 seconds against 25 — so limits
   /// tuned locally expire there while the app is still coming up, and the failure
   /// reads as "the editor never came up" when the truth is that nobody waited.
+  ///
+  /// Every query here is `.firstMatch`. Without it XCTest resolves the *whole*
+  /// query, and between Create Document and the editor the system document
+  /// browser is on screen — a hierarchy belonging to another process, and a
+  /// large one. On the CI runner that enumeration outran the snapshot timeout
+  /// and the run died on `Failed to get matching snapshots: Timed out while
+  /// evaluating UI query`, which is not an assertion failure and so cannot be
+  /// waited out or retried by the caller. `.firstMatch` stops at the first hit
+  /// rather than enumerating, which is the documented remedy.
   func openNewDocument(file: StaticString = #filePath, line: UInt = #line) {
-    let create = buttons["Create Document"]
+    let create = buttons["Create Document"].firstMatch
 
     // Three attempts at the *launch dance only*, which is the racy part: a
     // relaunch can beat the previous scene's teardown and come up somewhere the
@@ -58,7 +68,7 @@ extension XCUIApplication {
       create.waitForExistence(timeout: 30), "launch scene never appeared", file: file, line: line)
     create.tap()
 
-    let useThisSize = buttons["Use This Size"]
+    let useThisSize = buttons["Use This Size"].firstMatch
     if useThisSize.waitForExistence(timeout: 60) {
       useThisSize.tap()
       // Waiting for the sheet to actually leave, not just for the tap to land.
@@ -72,7 +82,7 @@ extension XCUIApplication {
     }
 
     XCTAssertTrue(
-      navigationBars.buttons["Export Image"].waitForExistence(timeout: 90),
+      navigationBars.buttons["Export Image"].firstMatch.waitForExistence(timeout: 90),
       "the editor never came up", file: file, line: line)
   }
 
@@ -86,17 +96,17 @@ extension XCUIApplication {
   /// true of the screen the test was looking at and false of the app.
   @discardableResult
   func openLayerList() -> Bool {
-    let marker = buttons["New layer from photo"]
+    let marker = buttons["New layer from photo"].firstMatch
     if marker.exists { return true }
 
-    let layers = navigationBars.buttons["Layers"]
+    let layers = navigationBars.buttons["Layers"].firstMatch
     if layers.waitForExistence(timeout: 30), layers.isHittable {
       layers.tap()
       if marker.waitForExistence(timeout: 30) { return true }
     }
 
     for toggle in ["ToggleSidebar", "SidebarToggle"] {
-      let button = navigationBars.buttons[toggle]
+      let button = navigationBars.buttons[toggle].firstMatch
       if button.exists, button.isHittable {
         button.tap()
         if marker.waitForExistence(timeout: 15) { return true }
@@ -112,29 +122,29 @@ extension XCUIApplication {
   /// A test that cares about the *result* of adding text should not have to
   /// know which.
   func addText(_ body: String, file: StaticString = #filePath, line: UInt = #line) {
-    let addText = navigationBars.buttons["Add Text"]
+    let addText = navigationBars.buttons["Add Text"].firstMatch
     if addText.waitForExistence(timeout: 10), addText.isHittable {
       addText.tap()
     } else {
-      let more = navigationBars.buttons["More Actions"]
+      let more = navigationBars.buttons["More Actions"].firstMatch
       XCTAssertTrue(
         more.waitForExistence(timeout: 10), "neither Add Text nor a menu holding it is on the bar",
         file: file, line: line)
       more.tap()
-      let menuItem = buttons["Add Text"]
+      let menuItem = buttons["Add Text"].firstMatch
       XCTAssertTrue(
         menuItem.waitForExistence(timeout: 10), "Add Text is missing from More Actions",
         file: file, line: line)
       menuItem.tap()
     }
 
-    let field = textFields["Type something"]
+    let field = textFields["Type something"].firstMatch
     XCTAssertTrue(
       field.waitForExistence(timeout: 20), "the text sheet never appeared", file: file, line: line)
     field.tap()
     field.typeText(body)
 
-    let add = buttons["Add"]
+    let add = buttons["Add"].firstMatch
     XCTAssertTrue(add.waitForExistence(timeout: 10), "no Add button", file: file, line: line)
     add.tap()
     XCTAssertTrue(
@@ -145,14 +155,14 @@ extension XCUIApplication {
   /// at compact width.
   @discardableResult
   func openAbout() -> Bool {
-    let about = navigationBars.buttons["About Photoslop"]
+    let about = navigationBars.buttons["About Photoslop"].firstMatch
     if about.waitForExistence(timeout: 10), about.isHittable {
       about.tap()
     } else {
-      let more = navigationBars.buttons["More Actions"]
+      let more = navigationBars.buttons["More Actions"].firstMatch
       guard more.waitForExistence(timeout: 10) else { return false }
       more.tap()
-      let menuAbout = buttons["About Photoslop"]
+      let menuAbout = buttons["About Photoslop"].firstMatch
       guard menuAbout.waitForExistence(timeout: 10) else { return false }
       menuAbout.tap()
     }
