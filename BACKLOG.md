@@ -6,13 +6,19 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] The XCUITest suite needs `-retry-tests-on-failure` to be green — the app is
-  reliable (15/15 launches inside one test method) but the harness races at
-  test-method boundaries. Settle-waits, teardown waits and a relaunch retry did
-  not remove it
-  ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
+_Nothing open._
 
 ## Done
+
+- [x] The XCUITest suite is green with no `-retry-tests-on-failure`. The
+  flakiness was not in the harness: a 744pt iPad reported the regular size class,
+  took the nine-item iPad bar, and UIKit pushed Export Image into its own
+  overflow — so the *next* test timed out on "the editor never came up" while the
+  editor was up, which is why the failure appeared to move between tests. Every
+  test also inherited the previous one's documents. One bar layout per idiom now,
+  budgeted for the narrowest device and independent of document contents, plus a
+  `-PhotoslopFreshDocumentStore` launch argument
+  ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 - [x] Import an image as a layer on the desktop and the CLI — **Layer ▸ New Layer
   from Image…** (`Ctrl+Shift+I`) and `--import-layer FILE`, the 59th shared engine

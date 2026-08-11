@@ -38,16 +38,24 @@ extension XCUIApplication {
   /// reads as "the editor never came up" when the truth is that nobody waited.
   func openNewDocument(file: StaticString = #filePath, line: UInt = #line) {
     let create = buttons["Create Document"]
-    launch()
-    if !create.waitForExistence(timeout: 90) {
-      // One retry, for the case where the previous scene had not finished going
-      // away when this process launched.
-      terminate()
-      _ = wait(for: .notRunning, timeout: 30)
+
+    // Three attempts at the *launch dance only*, which is the racy part: a
+    // relaunch can beat the previous scene's teardown and come up somewhere the
+    // test did not ask for. This is deliberately not `-retry-tests-on-failure`
+    // — that re-runs the assertions too, so a genuine defect gets three
+    // chances to look intermittent. Here every assertion below still runs
+    // exactly once, and only getting to the launch scene is retried.
+    launchArguments.append("-PhotoslopFreshDocumentStore")
+    for attempt in 1...3 {
+      if attempt > 1 {
+        terminate()
+        _ = wait(for: .notRunning, timeout: 30)
+      }
       launch()
+      if create.waitForExistence(timeout: 90) { break }
     }
     XCTAssertTrue(
-      create.waitForExistence(timeout: 90), "launch scene never appeared", file: file, line: line)
+      create.waitForExistence(timeout: 30), "launch scene never appeared", file: file, line: line)
     create.tap()
 
     let useThisSize = buttons["Use This Size"]
@@ -95,6 +103,42 @@ extension XCUIApplication {
       }
     }
     return marker.waitForExistence(timeout: 10)
+  }
+
+  /// Add a text layer, wherever this width keeps **Add Text**.
+  ///
+  /// It is on the bar only when the bar is provably wide enough; otherwise it
+  /// is in the app's own More Actions menu, alongside Edit Text and Move Text.
+  /// A test that cares about the *result* of adding text should not have to
+  /// know which.
+  func addText(_ body: String, file: StaticString = #filePath, line: UInt = #line) {
+    let addText = navigationBars.buttons["Add Text"]
+    if addText.waitForExistence(timeout: 10), addText.isHittable {
+      addText.tap()
+    } else {
+      let more = navigationBars.buttons["More Actions"]
+      XCTAssertTrue(
+        more.waitForExistence(timeout: 10), "neither Add Text nor a menu holding it is on the bar",
+        file: file, line: line)
+      more.tap()
+      let menuItem = buttons["Add Text"]
+      XCTAssertTrue(
+        menuItem.waitForExistence(timeout: 10), "Add Text is missing from More Actions",
+        file: file, line: line)
+      menuItem.tap()
+    }
+
+    let field = textFields["Type something"]
+    XCTAssertTrue(
+      field.waitForExistence(timeout: 20), "the text sheet never appeared", file: file, line: line)
+    field.tap()
+    field.typeText(body)
+
+    let add = buttons["Add"]
+    XCTAssertTrue(add.waitForExistence(timeout: 10), "no Add button", file: file, line: line)
+    add.tap()
+    XCTAssertTrue(
+      add.waitForNonExistence(timeout: 20), "the text sheet never dismissed", file: file, line: line)
   }
 
   /// Reach About, which sits on the bar at regular width and in the actions menu

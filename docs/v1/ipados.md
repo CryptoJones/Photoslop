@@ -31,14 +31,35 @@ regresses unnoticed. Toolbar reachability is covered by XCUITest rather than
 the unit suite: whether a control survives a real navigation bar is a question
 only a running app can answer.
 
-The XCUITests run with `-retry-tests-on-failure -test-iterations 3`. The
-flakiness is in the harness rather than the app: relaunching between test
-methods intermittently brings the app up on a screen the test did not ask for,
-while fifteen consecutive launches inside a single test method never flake.
-Settle-waits on sheet dismissal, waiting for `.notRunning` in teardown, and a
-launch retry each failed to remove it. A real defect still fails all three
-attempts, so the retries buy tolerance for the harness without hiding
-regressions.
+The XCUITests run without `-retry-tests-on-failure`. They needed it for a
+while, on the reading that the flakiness was in the harness: the suite failed a
+different test on most runs, yet fifteen consecutive launches inside one test
+method never flaked. That reading was wrong, and the retries were hiding two
+real faults.
+
+The first was a navigation bar over its budget. An iPad mini in portrait is
+744pt and reports the *regular* size class, so it took the iPad layout — nine
+bar items, eleven once a text layer made Edit Text and Move Text appear. UIKit
+collapsed the trailing group behind an unlabelled chevron and **Export Image
+left the bar**, which is [#227](https://github.com/CryptoJones/Photoslop/issues/227)
+again one size class up. The test that noticed was not the one that failed: the
+run carried on, and the *next* test timed out on "the editor never came up"
+while the editor was on screen the whole time. That is what made the failure
+look like it moved around.
+
+The second was shared state. `DocumentGroup` keeps every document a test
+creates, so a run ended with "Untitled 1" through "Untitled 15" behind it, each
+test starting from a different place than the last and a relaunch able to
+restore the previous document instead of the launch scene.
+
+Both are fixed — one bar layout per idiom, budgeted for the narrowest device and
+independent of document contents, and `-PhotoslopFreshDocumentStore` empties the
+document directory at launch. The suite now passes with no retries on an iPad
+mini, a 13-inch iPad Pro, and an iPhone, and runs about 45% faster because no
+test is waiting out a timeout any more. Only the launch dance is retried, inside
+the test helper, so every assertion still runs exactly once and a real defect
+fails on the first attempt rather than getting three chances to look
+intermittent.
 
 ## Editing workflow
 
