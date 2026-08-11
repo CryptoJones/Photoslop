@@ -60,16 +60,26 @@ The third was a test bug: the photo-layer test read `cells.count` once, straight
 after the layer list appeared, while decoding the photos and inserting the layers
 is asynchronous. It waits for the count now.
 
-What is left is genuinely not fixable from test code. On a loaded runner XCTest
-raises its own infrastructure errors — `Failed to get background assertion for
-target app`, `Failed to get matching snapshots: Timed out while evaluating UI
-query` — before any assertion runs, so they cannot be waited out, scoped away, or
-retried by the caller. Query cost was reduced as far as it goes (`.firstMatch`
-everywhere in the shared helpers, so XCTest stops at the first hit instead of
-enumerating the system document browser's hierarchy), and the remaining exposure
-is the runner itself. Two iterations covers that; keeping the number low is the
-point, because the lower it is the less room there is for the next real defect to
-hide as flakiness.
+Two things are left, and the retry is doing real work for both.
+
+XCTest raises its own infrastructure errors on a loaded runner — `Failed to get
+background assertion for target app`, `Failed to get matching snapshots: Timed
+out while evaluating UI query` — before any assertion runs, so they cannot be
+waited out, scoped away, or retried by the caller. Query cost was reduced as far
+as it goes (`.firstMatch` everywhere in the shared helpers, so XCTest stops at
+the first hit rather than enumerating the system document browser's hierarchy).
+
+The second is narrower and better understood than it was: **the first UI test of
+a run** can exceed the 90-second wait for the editor. It is always the first
+class alphabetically, once per device, and it fails on "the editor never came up"
+after the launch helper's three attempts — a cold simulator creating and opening
+its first document, not a defect in the screen being tested. The next thing to
+try is a warm-up launch outside any assertion's timeout, so the cold-start cost
+is not charged to the first test that happens to run.
+
+Two iterations covers both; keeping the number low is the point, because the
+lower it is the less room there is for the next real defect to hide as
+flakiness.
 
 Locally, with no retries at all, the suite passes on an iPad mini (A17 Pro), a
 13-inch iPad Pro (M5) and an iPhone 17 Pro — and the iPad runs got about 45%

@@ -11,11 +11,13 @@ sync — check an item here when its issue closes.
   iPad overflowing its navigation bar and losing Export, every test inheriting
   the last one's documents, and a layer-count assertion racing an async decode —
   and the suite passes locally with no retries at all on three devices. What
-  remains is XCTest's own infrastructure errors on a loaded runner (`Failed to
-  get background assertion for target app`, `Failed to get matching snapshots`),
-  raised before any assertion runs and so not addressable from test code. Needs a
-  quieter runner, a smaller per-invocation suite, or Apple
-  ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
+  remains is two things: XCTest's own infrastructure errors on a loaded runner
+  (`Failed to get background assertion for target app`, `Failed to get matching
+  snapshots`), raised before any assertion runs and so not addressable from test
+  code; and the **first** UI test of a run exceeding the 90s editor wait on a
+  cold simulator — always the first class alphabetically, once per device. The
+  next thing to try for the second is a warm-up launch outside any assertion's
+  timeout ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
 
