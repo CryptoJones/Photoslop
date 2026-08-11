@@ -52,20 +52,19 @@ jobs:
           done
           echo "ipad=$IPAD_ID" >> "$GITHUB_OUTPUT"
           echo "iphone=$IPHONE_ID" >> "$GITHUB_OUTPUT"
-      # Two iterations, down from three, and for one reason only: XCTest's own
-      # infrastructure errors on a loaded runner — "Failed to get background
-      # assertion for target app", "Failed to get matching snapshots: Timed out
-      # while evaluating UI query". Those are raised by the harness before any
-      # assertion runs, so no amount of waiting or scoping in test code prevents
-      # them.
-      #
-      # Everything the old three-iteration retry was actually covering has been
+      # No -retry-tests-on-failure. Every cause the retries were covering is
       # fixed rather than absorbed: a narrow iPad overflowing its navigation bar
-      # and losing Export (#227 one size class up, which made the *next* test
-      # time out and so looked like a race), every test inheriting the documents
-      # the last one made, and a layer-count assertion that raced an async
-      # decode. Keeping the number low is the point — the lower it is, the less
-      # room there is for the next real defect to hide as flakiness.
+      # and losing Export (#227 one size class up — the overflowing test was
+      # never the failing one, so the *next* test timed out and it looked like a
+      # race); every test inheriting the documents the last one made; a
+      # layer-count assertion racing an async decode; queries enumerating the
+      # system document browser's hierarchy until XCTest could not snapshot it;
+      # and a cold simulator charging its first-document cost to whichever test
+      # ran first, which now happens once in a warm-up that holds no assertions.
+      #
+      # If this job goes red, something is actually wrong. That is the point: a
+      # retry cannot tell a flaky test from a feature that is only sometimes
+      # there, and for as long as this suite had one it was hiding the second.
       - name: Run iPad tests
         working-directory: ipados
         run: |
@@ -74,7 +73,6 @@ jobs:
             -scheme PhotoslopIPad \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.ipad }}' \
-            -retry-tests-on-failure -test-iterations 2 \
             CODE_SIGNING_ALLOWED=NO \
             test
       - name: Run iPhone tests
@@ -85,7 +83,6 @@ jobs:
             -scheme PhotoslopIPad \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.iphone }}' \
-            -retry-tests-on-failure -test-iterations 2 \
             CODE_SIGNING_ALLOWED=NO \
             test
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

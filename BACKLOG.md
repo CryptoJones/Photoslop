@@ -6,20 +6,18 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] The XCUITest suite still needs `-retry-tests-on-failure -test-iterations 2`
-  (down from three). Everything the retries were *hiding* is fixed — a narrow
-  iPad overflowing its navigation bar and losing Export, every test inheriting
-  the last one's documents, and a layer-count assertion racing an async decode —
-  and the suite passes locally with no retries at all on three devices. What
-  remains is two things: XCTest's own infrastructure errors on a loaded runner
-  (`Failed to get background assertion for target app`, `Failed to get matching
-  snapshots`), raised before any assertion runs and so not addressable from test
-  code; and the **first** UI test of a run exceeding the 90s editor wait on a
-  cold simulator — always the first class alphabetically, once per device. The
-  next thing to try for the second is a warm-up launch outside any assertion's
-  timeout ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
+_Nothing open._
 
 ## Done
+
+- [x] The XCUITest suite is green with **no** `-retry-tests-on-failure`. The
+  premise that the app was reliable and the harness racy was wrong: five causes
+  were hiding behind the flag — a narrow iPad overflowing its bar and losing
+  Export, every test inheriting the last one's documents, a layer-count assertion
+  racing an async decode, queries too expensive for XCTest to snapshot, and a
+  cold simulator charging its first-document cost to whichever test ran first.
+  All five are fixed; verified on erased simulators
+  ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 - [x] Export Image left the navigation bar on a narrow iPad — an iPad mini in
   portrait is 744pt and reports the regular size class, so it took the nine-item

@@ -9,9 +9,51 @@ import XCTest
 /// half-dismissed presentation. That is how a test which passes alone and passes
 /// in CI fails only when a new test class is added ahead of it in the run order.
 class UITestCase: XCTestCase {
+  private static var hasWarmedUp = false
+
   override func setUp() {
     super.setUp()
     continueAfterFailure = false
+    Self.warmUpOnce()
+  }
+
+  /// Pay the cold-start cost once, before any assertion can be charged for it.
+  ///
+  /// The first UI test of a run kept failing on CI with "the editor never came
+  /// up" — always the first class alphabetically, once per device. Nothing was
+  /// wrong with the screen under test: a freshly booted simulator installing the
+  /// app, launching it, and creating and opening its first document simply took
+  /// longer than the 90-second wait, and whichever test happened to run first
+  /// paid for all of it. Raising that timeout would only move the number; the
+  /// cost belongs outside the assertions entirely.
+  ///
+  /// So the whole first-document path runs here, once per test-target
+  /// invocation, and deliberately without a single assertion — a warm-up that
+  /// cannot fail a test. If the app is genuinely broken the real test says so in
+  /// its own words, rather than the failure landing on whichever class sorted
+  /// first.
+  private static func warmUpOnce() {
+    guard !hasWarmedUp else { return }
+    hasWarmedUp = true
+
+    let app = XCUIApplication()
+    app.launchArguments.append("-PhotoslopFreshDocumentStore")
+    app.launch()
+
+    let create = app.buttons["Create Document"].firstMatch
+    if create.waitForExistence(timeout: 180) {
+      create.tap()
+      let useThisSize = app.buttons["Use This Size"].firstMatch
+      if useThisSize.waitForExistence(timeout: 120) {
+        useThisSize.tap()
+        _ = useThisSize.waitForNonExistence(timeout: 60)
+      }
+      // Reaching the editor is what actually warms the expensive path.
+      _ = app.navigationBars.buttons["Export Image"].firstMatch.waitForExistence(timeout: 180)
+    }
+
+    app.terminate()
+    _ = app.wait(for: .notRunning, timeout: 30)
   }
 
   override func tearDown() {

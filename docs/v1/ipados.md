@@ -31,59 +31,53 @@ regresses unnoticed. Toolbar reachability is covered by XCUITest rather than
 the unit suite: whether a control survives a real navigation bar is a question
 only a running app can answer.
 
-The XCUITests run with `-retry-tests-on-failure -test-iterations 2`, down from
-three. What changed is not the flag but what it is covering.
+The XCUITests run with no retries at all. They needed them for a long time, on
+the reading that the flakiness was in the harness: the suite failed a different
+test on most runs, yet fifteen consecutive launches inside one test method never
+flaked. That reading was wrong, and five separate causes were hiding behind the
+flag.
 
-The suite used to fail a different test on most runs, which was read as harness
-raciness on the evidence that fifteen consecutive launches inside one test method
-never flaked. That reading was wrong, and three real faults were hiding behind
-the retries.
+**A navigation bar over its budget.** An iPad mini in portrait is 744pt and
+reports the *regular* size class, so it took the iPad layout — nine bar items,
+eleven once a text layer made Edit Text and Move Text appear. UIKit collapsed the
+trailing group behind an unlabelled chevron and **Export Image left the bar**,
+which is [#227](https://github.com/CryptoJones/Photoslop/issues/227) again one
+size class up. The test that hit it was never the one that failed: every helper
+reaches Export through a query that does not care whether a button is on the bar
+or in the system overflow, so the run carried on and the *next* test timed out on
+"the editor never came up" while the editor had been up the whole time. That is
+what made the failure appear to move around.
 
-The first was a navigation bar over its budget. An iPad mini in portrait is 744pt
-and reports the *regular* size class, so it took the iPad layout — nine bar
-items, eleven once a text layer made Edit Text and Move Text appear. UIKit
-collapsed the trailing group behind an unlabelled chevron and **Export Image left
-the bar**, which is [#227](https://github.com/CryptoJones/Photoslop/issues/227)
-again one size class up. The test that hit it was never the one that failed:
-every helper reaches Export through a query that does not care whether a button
-is on the bar or in the system overflow, so the run carried on and the *next*
-test timed out on "the editor never came up" while the editor had been up the
-whole time. That is what made the failure appear to move around.
+**Shared state.** `DocumentGroup` keeps every document a test creates, so a run
+ended with "Untitled 1" through "Untitled 15" behind it, each test starting
+somewhere different and a relaunch able to restore the previous document instead
+of the launch scene. `-PhotoslopFreshDocumentStore` empties the document
+directory at launch.
 
-The second was shared state. `DocumentGroup` keeps every document a test creates,
-so a run ended with "Untitled 1" through "Untitled 15" behind it, each test
-starting somewhere different and a relaunch able to restore the previous document
-instead of the launch scene. `-PhotoslopFreshDocumentStore` now empties the
-document directory at launch.
-
-The third was a test bug: the photo-layer test read `cells.count` once, straight
+**A racing assertion.** The photo-layer test read `cells.count` once, straight
 after the layer list appeared, while decoding the photos and inserting the layers
 is asynchronous. It waits for the count now.
 
-Two things are left, and the retry is doing real work for both.
+**Queries too expensive to snapshot.** Between Create Document and the editor the
+system document browser is on screen — another process's hierarchy, and a large
+one. Resolving a whole query across it outran XCTest's snapshot timeout on a
+loaded runner, which is not an assertion failure and so cannot be waited out.
+Every query in the shared helpers is `.firstMatch`, which stops at the first hit.
 
-XCTest raises its own infrastructure errors on a loaded runner — `Failed to get
-background assertion for target app`, `Failed to get matching snapshots: Timed
-out while evaluating UI query` — before any assertion runs, so they cannot be
-waited out, scoped away, or retried by the caller. Query cost was reduced as far
-as it goes (`.firstMatch` everywhere in the shared helpers, so XCTest stops at
-the first hit rather than enumerating the system document browser's hierarchy).
+**Cold start charged to an arbitrary test.** A freshly booted simulator
+installing the app and creating its first document took longer than the
+90-second wait, and whichever class sorted first paid for all of it. That path
+now runs once in a warm-up in `setUp`, holding no assertions at all — a warm-up
+must not be able to fail a test, and if the app is genuinely broken the real test
+says so in its own words.
 
-The second is narrower and better understood than it was: **the first UI test of
-a run** can exceed the 90-second wait for the editor. It is always the first
-class alphabetically, once per device, and it fails on "the editor never came up"
-after the launch helper's three attempts — a cold simulator creating and opening
-its first document, not a defect in the screen being tested. The next thing to
-try is a warm-up launch outside any assertion's timeout, so the cold-start cost
-is not charged to the first test that happens to run.
+Verified on **erased** simulators, the exact cold-start condition that was
+failing: an iPad mini (A17 Pro) and an iPhone 17 Pro, no retries, 13 UI tests and
+59 unit tests green on each.
 
-Two iterations covers both; keeping the number low is the point, because the
-lower it is the less room there is for the next real defect to hide as
-flakiness.
-
-Locally, with no retries at all, the suite passes on an iPad mini (A17 Pro), a
-13-inch iPad Pro (M5) and an iPhone 17 Pro — and the iPad runs got about 45%
-faster once no test was waiting out a 90-second timeout.
+If the iPadOS job goes red now, something is actually wrong. That is the point. A
+retry cannot tell a flaky test from a feature that is only sometimes there, and
+for as long as this suite had one, it was hiding the second.
 
 ## Editing workflow
 
