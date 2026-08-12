@@ -35,6 +35,14 @@ final class CropUITests: UITestCase {
     for name in ["Crop aspect", "Apply Crop", "Cancel Crop"] {
       let control = app.buttons[name].firstMatch
       XCTAssertTrue(control.exists, "\(name) is missing from the crop bar")
+      if !control.isHittable {
+        // Four fixes have been aimed at this from theory and all four missed.
+        // Dump the hierarchy so the log names whatever is actually sitting on
+        // the control, instead of another guess.
+        print("=== CROP BAR UNTAPPABLE: \(name) \(control.frame) in \(window) ===")
+        print(app.debugDescription)
+        print("=== END HIERARCHY ===")
+      }
       XCTAssertTrue(
         control.isHittable,
         """
