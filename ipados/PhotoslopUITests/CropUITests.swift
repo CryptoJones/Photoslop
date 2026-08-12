@@ -28,12 +28,18 @@ final class CropUITests: UITestCase {
     XCTAssertTrue(
       app.staticTexts["Crop size"].firstMatch.waitForExistence(timeout: 15),
       "no live pixel readout — the point of cropping by eye is knowing the size you land on")
-    XCTAssertTrue(
-      app.buttons["Crop aspect"].firstMatch.exists, "no aspect lock control")
-    XCTAssertTrue(
-      app.buttons["Apply Crop"].firstMatch.exists, "no way to confirm the crop")
-    XCTAssertTrue(
-      app.buttons["Cancel Crop"].firstMatch.exists, "no way to leave crop mode")
+    // Existence is not reachability. The crop bar's controls have to be inside
+    // the window and hittable, on the narrowest device — checking only `exists`
+    // is what let this ship with the bar 14pt below the bottom of an iPad mini.
+    let window = app.windows.firstMatch.frame
+    for name in ["Crop aspect", "Apply Crop", "Cancel Crop"] {
+      let control = app.buttons[name].firstMatch
+      XCTAssertTrue(control.exists, "\(name) is missing from the crop bar")
+      XCTAssertTrue(control.isHittable, "\(name) exists but cannot be tapped")
+      XCTAssertTrue(
+        window.contains(control.frame),
+        "\(name) is outside the window at y=\(control.frame.minY), window height \(window.height)")
+    }
 
     // Every corner and edge has to be grabbable, not just the corners.
     for handle in [

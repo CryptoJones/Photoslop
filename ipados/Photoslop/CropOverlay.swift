@@ -44,7 +44,11 @@ struct CropOverlay: View {
             Rectangle().frame(width: frame.width, height: frame.height).offset(
               x: frame.minX, y: frame.minY)
           }
-          .ignoresSafeArea()
+          // Deliberately NOT .ignoresSafeArea(). Extending the dimming past the
+          // overlay's bounds grows the layout it is attached to, which pushed
+          // the crop bar below the bottom of the window on an iPad mini — the
+          // same "control exists but cannot be reached" fault as #227, #242 and
+          // #246. The dimming only ever needs to cover the canvas.
           .allowsHitTesting(false)
 
         Rectangle()
