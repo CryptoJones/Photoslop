@@ -45,9 +45,20 @@ final class ExportDestinationUITests: UITestCase {
     app.buttons["Photos"].firstMatch.tap()
     app.buttons["Export"].firstMatch.tap()
 
-    XCTAssertTrue(
-      app.staticTexts["Saved to Photos"].waitForExistence(timeout: 60),
-      "saving to Photos gave no confirmation, so it cannot be told from doing nothing")
+    if !app.staticTexts["Saved to Photos"].waitForExistence(timeout: 60) {
+      // Distinguish "the feature is broken" from "this machine never granted the
+      // permission" — a real failure versus a missing setup step. CI grants it in
+      // the iPadOS workflow; locally it is
+      // `xcrun simctl privacy <device> grant photos-add io.ronin48.photoslop.ipad`.
+      let denied = app.staticTexts.containing(
+        NSPredicate(format: "label CONTAINS %@", "not allowed to add")
+      ).firstMatch.exists
+      XCTFail(
+        denied
+          ? "the library refused the add — grant photos-add to this simulator first"
+          : "saving to Photos gave no confirmation, so it cannot be told from doing nothing")
+      return
+    }
     app.buttons["OK"].firstMatch.tap()
   }
 

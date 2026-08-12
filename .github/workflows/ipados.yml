@@ -76,6 +76,20 @@ jobs:
       # Keep this number at two. The lower it is, the less room there is for the
       # next real defect to hide as flakiness — which is what it was doing to
       # #227 for months.
+      # The export-to-Photos tests need permission to add to the photo library.
+      # Without it the save stalls on the system consent dialog, and the test
+      # reports "no confirmation" — which is true, and nothing to do with the
+      # code under test. Granting it here is the same thing a developer does by
+      # hand with `simctl privacy` before running these locally; the alternative
+      # is an XCUITest interruption monitor racing a system alert, which is the
+      # kind of flakiness #238 spent a week removing.
+      - name: Allow the simulators to add to the photo library
+        run: |
+          for id in '${{ steps.simulator.outputs.ipad }}' '${{ steps.simulator.outputs.iphone }}'; do
+            xcrun simctl boot "$id" || true
+            xcrun simctl bootstatus "$id" -b
+            xcrun simctl privacy "$id" grant photos-add io.ronin48.photoslop.ipad
+          done
       - name: Run iPad tests
         working-directory: ipados
         run: |
