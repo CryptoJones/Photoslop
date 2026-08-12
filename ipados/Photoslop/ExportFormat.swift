@@ -54,6 +54,20 @@ enum ExportFormat: String, CaseIterable, Identifiable {
     }
   }
 
+  /// Whether the Photos library reliably accepts this encoding.
+  ///
+  /// Photos stores what it can decode as a photo asset. PNG, JPEG and HEIC are
+  /// the formats it handles without argument; BMP, GIF and TIFF are not
+  /// dependably accepted, and a rejected `addResource` fails *after* the render
+  /// with an opaque error. Narrowing the choice up front is honest about it
+  /// rather than discovering it at the end.
+  var canGoToPhotoLibrary: Bool {
+    switch self {
+    case .png, .jpeg, .heic: true
+    case .tiff, .gif, .bmp: false
+    }
+  }
+
   /// Whether `quality` affects the encoded output.
   var isLossy: Bool {
     switch self {
@@ -91,6 +105,26 @@ enum ExportFormat: String, CaseIterable, Identifiable {
       UIColor.white.setFill()
       context.fill(bounds)
       image.draw(in: bounds)
+    }
+  }
+}
+
+/// Where an export goes.
+///
+/// Files was the only destination, because `fileExporter` presents a document
+/// picker. On a phone the finished picture usually belongs in Photos, and the
+/// two share the same format, quality and rendering choices — so this is a
+/// destination on the existing sheet rather than a second export flow.
+enum ExportDestination: String, CaseIterable, Identifiable {
+  case files
+  case photos
+
+  var id: String { rawValue }
+
+  var displayName: String {
+    switch self {
+    case .files: "Files"
+    case .photos: "Photos"
     }
   }
 }

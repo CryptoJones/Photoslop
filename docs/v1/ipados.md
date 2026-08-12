@@ -167,6 +167,37 @@ generation check prevents an older background render from replacing a newer
 edit. iPad documents are capped at 16,384 px per side, 100 million pixels,
 2,048 layers, 256 MiB per layer payload, and 1 GiB per project package.
 
+### Exporting to Files or to the photo library
+
+**Export** offers a destination: **Files** or **Photos**. Both use the same
+format, quality and rendering choices, and both are handed the same encoded
+bytes, so the two cannot drift into producing different pictures from the same
+settings.
+
+Photos is the one a finished picture usually wants on a phone — it is what the
+camera roll and the share sheet mean by "my photos". Before this, export went
+only through `fileExporter`, which presents a document picker and can reach only
+the Files hierarchy; getting a picture into the library meant saving it to Files
+and importing it from the Photos app by hand.
+
+Two details are deliberate. The app asks for **add-only** access
+(`PHAccessLevel.addOnly`) rather than full library access, because saving an
+export needs permission to add one asset and nothing more — asking for the whole
+library would be asking to read every photo you own in order to perform a write.
+And the format list **narrows** when Photos is chosen: PNG, JPEG and HEIC are
+what the library reliably accepts, while BMP, GIF and TIFF are not, and a
+rejected asset fails *after* the render with an opaque error rather than at the
+moment of choosing.
+
+Saving to Photos confirms that it worked. The picture leaves for another app's
+library and nothing on the editor screen changes, so without the confirmation a
+successful export is indistinguishable from having done nothing.
+
+There is no headless mirror for this one, and that is a parity ruling rather
+than an omission: the photo library is an iOS facility with no desktop or CLI
+equivalent. `photoslop-cli --output` writes a file, which is what the Files
+destination already does.
+
 ### Importing a photo as a layer
 
 **New layer from photo**, beside Add / Duplicate / Merge in the layer list,
