@@ -157,7 +157,15 @@ struct EditorView: View {
         }
       }
       if isMovingText { placementBanner }
-      if isCropping { cropBar } else { toolStrip }
+      // Layout priority so the bar is allocated its height before the canvas
+      // takes the rest. Without it the canvas is greedy and the bar is pushed
+      // below the visible area — which is how the crop controls ended up at
+      // y=1147 on a screen 834 tall in landscape, present in the hierarchy and
+      // impossible to tap.
+      Group {
+        if isCropping { cropBar } else { toolStrip }
+      }
+      .layoutPriority(1)
     }
     // No .navigationTitle here on purpose. DocumentGroup binds the title to
     // the document's file name and drives Rename through it; setting a

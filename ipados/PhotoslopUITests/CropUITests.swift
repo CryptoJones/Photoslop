@@ -50,6 +50,30 @@ final class CropUITests: UITestCase {
     }
   }
 
+  /// Landscape is where this broke on CI and portrait never showed it.
+  ///
+  /// The crop controls rendered at y=1147 on a screen 834 tall — in the
+  /// hierarchy, outside the window, impossible to tap. Every crop test until now
+  /// ran portrait, and the reachability assertion cannot fire on a screen that
+  /// happens to be tall enough.
+  func testTheCropBarIsReachableInLandscapeToo() {
+    let app = XCUIApplication()
+    XCUIDevice.shared.orientation = .landscapeLeft
+    defer { XCUIDevice.shared.orientation = .portrait }
+
+    beginCrop(app)
+
+    let window = app.windows.firstMatch.frame
+    for name in ["Crop aspect", "Apply Crop", "Cancel Crop"] {
+      let control = app.buttons[name].firstMatch
+      XCTAssertTrue(control.waitForExistence(timeout: 15), "\(name) is missing in landscape")
+      XCTAssertTrue(control.isHittable, "\(name) cannot be tapped in landscape")
+      XCTAssertTrue(
+        window.contains(control.frame),
+        "\(name) is outside the window at y=\(control.frame.minY), window height \(window.height)")
+    }
+  }
+
   /// Cancel has to be a true no-op. A crop mode that alters the document on the
   /// way out is worse than one that does nothing.
   func testCancellingLeavesTheDocumentAlone() {
