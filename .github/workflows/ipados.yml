@@ -76,20 +76,23 @@ jobs:
       # Keep this number at two. The lower it is, the less room there is for the
       # next real defect to hide as flakiness — which is what it was doing to
       # #227 for months.
-      # The export-to-Photos tests need permission to add to the photo library.
-      # Without it the save stalls on the system consent dialog, and the test
-      # reports "no confirmation" — which is true, and nothing to do with the
-      # code under test. Granting it here is the same thing a developer does by
-      # hand with `simctl privacy` before running these locally; the alternative
-      # is an XCUITest interruption monitor racing a system alert, which is the
-      # kind of flakiness #238 spent a week removing.
-      - name: Allow the simulators to add to the photo library
+      # The export-to-Photos tests need permission to add to the photo library;
+      # without it the save stalls on the system consent dialog and the test
+      # reports "no confirmation", which is true and nothing to do with the code
+      # under test. This is the same thing a developer does by hand before
+      # running them locally.
+      #
+      # Granted per device, immediately before that device's own tests. Booting
+      # both simulators up front to do it in one step left two running for the
+      # whole job and the runner starved — unrelated tests began failing on "the
+      # editor never came up" and accessibility actions timed out. One simulator
+      # at a time is what xcodebuild would have done on its own.
+      - name: Allow the iPad simulator to add to the photo library
         run: |
-          for id in '${{ steps.simulator.outputs.ipad }}' '${{ steps.simulator.outputs.iphone }}'; do
-            xcrun simctl boot "$id" || true
-            xcrun simctl bootstatus "$id" -b
-            xcrun simctl privacy "$id" grant photos-add io.ronin48.photoslop.ipad
-          done
+          xcrun simctl boot '${{ steps.simulator.outputs.ipad }}' || true
+          xcrun simctl bootstatus '${{ steps.simulator.outputs.ipad }}' -b
+          xcrun simctl privacy '${{ steps.simulator.outputs.ipad }}' \
+            grant photos-add io.ronin48.photoslop.ipad
       - name: Run iPad tests
         working-directory: ipados
         run: |
@@ -101,6 +104,20 @@ jobs:
             -retry-tests-on-failure -test-iterations 2 \
             CODE_SIGNING_ALLOWED=NO \
             test
+      # Granted per device, immediately before its own tests. Booting both
+      # simulators up front to do this in one step left two of them running for
+      # the whole job, and the runner starved: unrelated tests started failing on
+      # "the editor never came up" and accessibility actions timed out. One
+      # simulator at a time is how xcodebuild would have done it.
+      - name: Shut down the iPad simulator
+        if: always()
+        run: xcrun simctl shutdown '${{ steps.simulator.outputs.ipad }}' || true
+      - name: Allow the iPhone simulator to add to the photo library
+        run: |
+          xcrun simctl boot '${{ steps.simulator.outputs.iphone }}' || true
+          xcrun simctl bootstatus '${{ steps.simulator.outputs.iphone }}' -b
+          xcrun simctl privacy '${{ steps.simulator.outputs.iphone }}' \
+            grant photos-add io.ronin48.photoslop.ipad
       - name: Run iPhone tests
         working-directory: ipados
         run: |
