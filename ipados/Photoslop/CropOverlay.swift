@@ -67,7 +67,7 @@ struct CropOverlay: View {
           .gesture(drag(for: .interior, scale: scale))
 
         ForEach(Array(handles.enumerated()), id: \.offset) { _, handle in
-          handleView(handle, in: frame, scale: scale)
+          handleView(handle, in: frame, bounds: proxy.size, scale: scale)
         }
 
         readout(in: frame)
@@ -95,8 +95,10 @@ struct CropOverlay: View {
     .allowsHitTesting(false)
   }
 
-  private func handleView(_ handle: CropHandle, in frame: CGRect, scale: CGFloat) -> some View {
-    let point = position(of: handle, in: frame)
+  private func handleView(
+    _ handle: CropHandle, in frame: CGRect, bounds: CGSize, scale: CGFloat
+  ) -> some View {
+    let point = position(of: handle, in: frame, bounds: bounds)
     return RoundedRectangle(cornerRadius: 3)
       .fill(.white)
       .frame(width: handleDrawSize, height: handleDrawSize)
@@ -123,12 +125,25 @@ struct CropOverlay: View {
     }
   }
 
-  private func position(of handle: CropHandle, in frame: CGRect) -> CGPoint {
+  /// Where a handle sits, kept far enough inside that its *touch target* — not
+  /// just the painted square — stays within the overlay.
+  ///
+  /// A handle centred exactly on the crop edge reaches 22pt past it, and the
+  /// bottom ones then sat on top of the crop bar: the aspect control reported
+  /// "exists but cannot be tapped" because the handle took the touch first, at
+  /// y=1147.5 with the handle's target spanning 1115–1159. `.clipped()` does not
+  /// reliably clip hit-testing in SwiftUI, so this is arithmetic rather than a
+  /// bet on clipping behaviour. The visible cost is that a handle shifts inward
+  /// by up to half its target when the crop reaches the very edge of the canvas.
+  private func position(of handle: CropHandle, in frame: CGRect, bounds: CGSize) -> CGPoint {
     let x: CGFloat =
       handle.movesLeftEdge ? frame.minX : handle.movesRightEdge ? frame.maxX : frame.midX
     let y: CGFloat =
       handle.movesTopEdge ? frame.minY : handle.movesBottomEdge ? frame.maxY : frame.midY
-    return CGPoint(x: x, y: y)
+    let inset = handleTouchSize / 2
+    return CGPoint(
+      x: min(max(inset, x), max(inset, bounds.width - inset)),
+      y: min(max(inset, y), max(inset, bounds.height - inset)))
   }
 
   private func drag(for handle: CropHandle, scale: CGFloat) -> some Gesture {
