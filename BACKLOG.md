@@ -6,6 +6,12 @@ sync — check an item here when its issue closes.
 
 ## Open
 
+- [ ] Create Document cannot be tapped in landscape on iPhone — found when a
+  rotation leaked out of one test and broke every test after it at the same
+  point. Unknown whether it affects a person or only the automation; the first
+  step is to try it by hand, not to change layout
+  ([#252](https://github.com/CryptoJones/Photoslop/issues/252))
+
 - [ ] The iPadOS job still passes `-retry-tests-on-failure -test-iterations 2`,
   for one failure mode only: the XCTest daemon failing to initialise a UI-testing
   session (`XCTDaemonErrorDomain Code=19`, `AXDisableAccessibilityOnTermination`),

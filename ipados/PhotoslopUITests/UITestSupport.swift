@@ -57,6 +57,13 @@ class UITestCase: XCTestCase {
   }
 
   override func tearDown() {
+    // Orientation is process-global and outlives the test that set it. A test
+    // that rotates the device and then fails leaves every test after it in
+    // landscape, where the iPhone launch scene cannot be tapped — which is how
+    // one landscape crop test took down two unrelated ones. Restoring here
+    // rather than in a `defer` covers the failing path too.
+    XCUIDevice.shared.orientation = .portrait
+
     // Terminating is not enough: the next test's `launch()` can race a scene
             // still being torn down, and the app then comes up on a screen nobody
     // asked for. Fifteen consecutive launches inside one test method never
