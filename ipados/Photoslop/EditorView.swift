@@ -24,6 +24,9 @@ struct EditorView: View {
   @State private var textSize = 48.0
   @State private var textColor = Color.black
   @State private var isMovingText = false
+  @State private var isCropping = false
+  @State private var cropRect = CGRect.zero
+  @State private var cropAspect = CropAspect.free
   @State private var editingTextLayerID: UUID?
   @State private var canvasPreset = CanvasPreset.standard
   @State private var customWidth = "2048"
@@ -139,8 +142,22 @@ struct EditorView: View {
         onCanvasDragged: isMovingText ? moveText : nil,
         onDrawingChanged: store.setDrawing
       )
+      // Drawing is suspended while the crop overlay is up, the same way the
+      // text move mode suspends it, so a drag positions the rectangle rather
+      // than painting a stroke underneath it.
+      .allowsHitTesting(!isCropping)
+      .overlay {
+        if isCropping {
+          CropOverlay(
+            canvas: store.canvasSize,
+            rect: $cropRect,
+            aspect: $cropAspect,
+            onCancel: cancelCrop,
+            onApply: applyCrop)
+        }
+      }
       if isMovingText { placementBanner }
-      toolStrip
+      if isCropping { cropBar } else { toolStrip }
     }
     // No .navigationTitle here on purpose. DocumentGroup binds the title to
     // the document's file name and drives Rename through it; setting a
@@ -239,6 +256,55 @@ struct EditorView: View {
     }
   }
 
+  /// The crop mode's own bar, replacing the tool strip while it is up.
+  ///
+  /// Confirm and cancel live here rather than on the navigation bar, which has
+  /// no free slot on a phone — putting them there is what #227, #242 and #246
+  /// each did in turn. A mode that owns the bottom of the screen can afford
+  /// them, and they sit next to the control that shapes the crop.
+  private var cropBar: some View {
+    HStack(spacing: 14) {
+      Button("Cancel", role: .cancel, action: cancelCrop)
+        .accessibilityIdentifier("Cancel Crop")
+
+      Spacer(minLength: 0)
+
+      // The aspect lock. Free is the default because cropping to a custom
+      // canvas size is the point; the presets are what you reach for when the
+      // destination has a shape.
+      Menu {
+        Picker("Aspect ratio", selection: $cropAspect) {
+          ForEach(CropAspect.allCases) { option in
+            Text(option.displayName).tag(option)
+          }
+        }
+        .pickerStyle(.inline)
+      } label: {
+        Label(
+          cropAspect.displayName,
+          systemImage: cropAspect.isLocked ? "lock" : "lock.open")
+      }
+      .accessibilityIdentifier("Crop aspect")
+      .accessibilityLabel("Aspect ratio, \(cropAspect.displayName)")
+      .onChange(of: cropAspect) { _, shape in
+        // Changing the lock reshapes what is already on screen rather than
+        // waiting for the next drag, so the choice is visible immediately.
+        guard let ratio = shape.ratio(canvas: store.canvasSize) else { return }
+        cropRect = CropGeometry.corrected(
+          cropRect, to: ratio, handle: .interior, canvas: store.canvasSize)
+      }
+
+      Spacer(minLength: 0)
+
+      Button("Crop", action: { applyCrop(cropRect) })
+        .buttonStyle(.borderedProminent)
+        .accessibilityIdentifier("Apply Crop")
+    }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 10)
+    .background(.bar)
+  }
+
   private var toolStrip: some View {
     ScrollView(.horizontal, showsIndicators: false) {
       HStack(spacing: 14) {
@@ -319,6 +385,7 @@ struct EditorView: View {
         Menu {
           newDocumentButton
           canvasSizeButton
+          cropButton
           textButtons
           Divider()
           importImageButton
@@ -362,6 +429,8 @@ struct EditorView: View {
         newDocumentButton
         canvasSizeButton
         Menu {
+          cropButton
+          Divider()
           textButtons
           Divider()
           importImageButton
@@ -419,6 +488,14 @@ struct EditorView: View {
   /// straight from EditorStore() when one is created in the document browser,
   /// so a size chosen only at New would never be offered for the browser's
   /// documents — which is most of them.
+  private var cropButton: some View {
+    Button {
+      beginCrop()
+    } label: {
+      Label("Crop…", systemImage: "crop")
+    }
+  }
+
   private var canvasSizeButton: some View {
     Button {
       canvasSheetMode = .resize
@@ -921,6 +998,19 @@ struct EditorView: View {
     canvasSheetMode = .sizeNewDocument
     syncCustomFieldsToCanvas()
     showNewDocumentOptions = true
+  }
+
+  private func beginCrop() {
+    cropAspect = .free
+    cropRect = CropGeometry.initialRect(canvas: store.canvasSize, aspect: .free)
+    isCropping = true
+  }
+
+  private func cancelCrop() { isCropping = false }
+
+  private func applyCrop(_ rect: CGRect) {
+    isCropping = false
+    store.crop(to: rect)
   }
 
   private func export() { showExportOptions = true }

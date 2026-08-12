@@ -167,6 +167,38 @@ generation check prevents an older background render from replacing a newer
 edit. iPad documents are capped at 16,384 px per side, 100 million pixels,
 2,048 layers, 256 MiB per layer payload, and 1 GiB per project package.
 
+### Cropping to a region you choose
+
+**Crop…**, beside Canvas Size in the actions menu, puts a rectangle over the
+canvas whose edges and corners drag. The area outside it dims, thirds guides sit
+inside it, and the resulting pixel size shows while you drag — cropping to *a
+custom canvas size* only means something if you can see the size you are landing
+on. **Crop** applies it as one undo step; **Cancel** leaves the document
+untouched.
+
+Canvas Size and Crop are two halves of the same idea and neither replaces the
+other: Canvas Size takes a size and centres what is already there, Crop takes a
+*region* and keeps what is inside it.
+
+The aspect control locks the rectangle's shape — **Free**, **Original**, **1:1**,
+**3:2**, **4:3** or **16:9**. Free is the default because a custom size is the
+point; the presets are what you reach for when the destination has a shape.
+Locking one reshapes the rectangle immediately rather than waiting for the next
+drag, and a locked drag keeps the corner opposite the handle still, so the
+rectangle does not slide out from under your finger while it corrects itself.
+
+Handles are drawn small and touched large: the hit area is 44pt though the
+painted handle is half that, because a crop handle sits under a fingertip.
+Drawing is suspended while the overlay is up, the same way the text move mode
+suspends it, so a drag positions the rectangle rather than painting a stroke
+beneath it.
+
+Cropping shares its implementation with Canvas Size — the same operation with a
+chosen origin rather than a centred one. That is deliberate: a layer is pixels
+*and* PencilKit strokes *and* possibly a text anchor, all of which have to travel
+together, and a second code path would be a second chance to forget one. The
+result agrees with `photoslop-cli --crop X,Y,W,H` for the same rectangle.
+
 ### Importing a photo as a layer
 
 **New layer from photo**, beside Add / Duplicate / Merge in the layer list,

@@ -407,3 +407,79 @@ extension EditorStoreTests {
       try ProjectArchive.encode(try store.snapshot(contentType: .photoslopProject)))
   }
 }
+
+/// Cropping is `resizeCanvas` with a chosen origin, and shares its
+/// implementation deliberately: a layer is pixels *and* PencilKit strokes *and*
+/// possibly a text anchor, and all three have to travel together.
+extension EditorStoreTests {
+  @MainActor
+  func testCropResizesTheCanvasToTheRectangle() {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 400, height: 300))
+
+    store.crop(to: CGRect(x: 50, y: 40, width: 200, height: 150))
+
+    XCTAssertEqual(store.canvasSize, CGSize(width: 200, height: 150))
+  }
+
+  @MainActor
+  func testCropIsOneUndoableStep() {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 400, height: 300))
+
+    // Attached after the document exists. UndoManager groups by run-loop event
+    // and a test performs every mutation inside one, so an undo manager present
+    // for both would revert the document's creation along with the crop and
+    // this would pass while telling us nothing about cropping.
+    let undoManager = UndoManager()
+    store.undoManager = undoManager
+
+    store.crop(to: CGRect(x: 10, y: 10, width: 100, height: 100))
+    XCTAssertEqual(store.canvasSize, CGSize(width: 100, height: 100))
+
+    XCTAssertTrue(undoManager.canUndo)
+    XCTAssertEqual(undoManager.undoActionName, "Crop")
+    undoManager.undo()
+    XCTAssertEqual(
+      store.canvasSize, CGSize(width: 400, height: 300),
+      "one undo should restore the whole canvas")
+  }
+
+  @MainActor
+  func testCropIsClampedToTheCanvas() {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 400, height: 300))
+
+    // A rectangle reaching past the edge crops to the overlap rather than
+    // inventing canvas that was never there.
+    store.crop(to: CGRect(x: 300, y: 200, width: 400, height: 400))
+
+    XCTAssertEqual(store.canvasSize, CGSize(width: 100, height: 100))
+  }
+
+  @MainActor
+  func testCroppingToTheWholeCanvasChangesNothing() {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 400, height: 300))
+    let before = store.canvasSize
+
+    store.crop(to: CGRect(x: 0, y: 0, width: 400, height: 300))
+
+    XCTAssertEqual(store.canvasSize, before)
+  }
+
+  @MainActor
+  func testCropMovesTheTextAnchorWithThePixels() {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 400, height: 300))
+    _ = store.addTextLayer(
+      "Hi", fontSize: 24, color: .black, at: CGPoint(x: 120, y: 90))
+
+    store.crop(to: CGRect(x: 20, y: 30, width: 200, height: 150))
+
+    let anchor = store.layers.compactMap(\.text).first
+    XCTAssertEqual(anchor?.x ?? 0, 100, accuracy: 1, "the text anchor did not follow the crop")
+    XCTAssertEqual(anchor?.y ?? 0, 60, accuracy: 1, "the text anchor did not follow the crop")
+  }
+}
+

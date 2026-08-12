@@ -25,6 +25,13 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] iOS had no crop — Canvas Size takes a size but not a region, so there was
+  no way to choose which part of the picture to keep or see what you were about
+  to lose. Shipped a draggable crop rectangle with edge and corner handles, a
+  dimmed surround, a live pixel readout, a Free/Original/1:1/3:2/4:3/16:9 aspect
+  lock, and a single undoable apply that agrees with `photoslop-cli --crop`
+  ([#249](https://github.com/CryptoJones/Photoslop/issues/249))
+
 - [x] Every project-side cause of the XCUITest flakiness is fixed, and the retry
   budget is down from three iterations to two. The premise that the app was
   reliable and the harness racy was wrong: six causes were hiding behind the flag
