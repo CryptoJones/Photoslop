@@ -247,35 +247,48 @@ struct EditorView: View {
         // the part of the strip that never has to be scrolled to. This is every
         // width, not just the phone: no navigation bar in the app has a spare
         // slot for them now that each one is budgeted for its narrowest device.
-        undoButton.labelStyle(.iconOnly)
-        redoButton.labelStyle(.iconOnly)
+        undoButton.labelStyle(.iconOnly).accessibilityIdentifier("Undo")
+        redoButton.labelStyle(.iconOnly).accessibilityIdentifier("Redo")
         Divider().frame(height: 24)
 
-        Picker("Tool", selection: $tool) {
-          ForEach(BrushTool.allCases) { brush in
-            Label(brush.displayName, systemImage: brush.symbolName).tag(brush)
+        // A palette, not a segmented control. The segmented picker was a fixed
+        // 240pt for four tools, which is most of a phone's strip and the reason
+        // the ink well and width slider were scrolled off the end of it. It also
+        // could not have taken a fifth tool: six in 240pt is 40pt each, under
+        // the 44pt minimum touch target. A menu costs one button's width no
+        // matter how many tools there are, so adding one stops being a layout
+        // question.
+        Menu {
+          Picker("Tool", selection: $tool) {
+            ForEach(BrushTool.allCases) { brush in
+              Label(brush.displayName, systemImage: brush.symbolName).tag(brush)
+            }
           }
+          .pickerStyle(.inline)
+        } label: {
+          Label(tool.displayName, systemImage: tool.symbolName)
         }
-        .pickerStyle(.segmented)
-        .frame(width: isCompact ? 240 : 300)
+        .accessibilityLabel("Tool, \(tool.displayName)")
 
-        ColorPicker("Ink", selection: $inkColor, supportsOpacity: true)
-          .labelsHidden()
-          .disabled(!tool.usesInk)
-          .accessibilityLabel("Ink color")
+        // Only the options this tool actually uses, which is how the desktop
+        // contextual options bar already works. The eraser has no ink or width,
+        // and showing both disabled cost ~170pt of a strip that did not have it
+        // to spare.
+        if tool.usesInk {
+          ColorPicker("Ink", selection: $inkColor, supportsOpacity: true)
+            .labelsHidden()
+            .accessibilityLabel("Ink color")
+            .accessibilityIdentifier("Ink color")
 
-        Image(systemName: "circle.fill").font(.system(size: 6))
-        Slider(value: $inkWidth, in: 1...80, step: 1)
-          .frame(width: isCompact ? 130 : 180)
-          .accessibilityLabel("Brush width")
-        Image(systemName: "circle.fill").font(.system(size: 18))
-
-        Toggle(isOn: $drawsWithFinger) {
-          Label("Finger", systemImage: "hand.draw")
+          Slider(value: $inkWidth, in: 1...80, step: 1)
+            .frame(width: isCompact ? 130 : 180)
+            .accessibilityLabel("Brush width")
+            .accessibilityIdentifier("Brush width")
+          Text("\(Int(inkWidth))")
+            .font(.caption.monospacedDigit())
+            .frame(width: 24, alignment: .leading)
+            .accessibilityHidden(true)
         }
-        .toggleStyle(.button)
-
-        Button("Clear", role: .destructive, action: store.clearActiveLayer)
       }
       .padding(.horizontal, 16)
       .padding(.vertical, 10)
@@ -310,6 +323,8 @@ struct EditorView: View {
           Divider()
           importImageButton
           photosButton
+          Divider()
+          canvasModeButtons
           Divider()
           aboutButton
         } label: {
@@ -351,6 +366,8 @@ struct EditorView: View {
           Divider()
           importImageButton
           photosButton
+          Divider()
+          canvasModeButtons
         } label: {
           Label("More Actions", systemImage: "ellipsis.circle")
         }
@@ -360,6 +377,23 @@ struct EditorView: View {
         exportButton
         aboutButton
       }
+    }
+  }
+
+  /// Drawing mode and the destructive layer action.
+  ///
+  /// These were on the tool strip, past its right edge: measured at launch the
+  /// Finger toggle was not in the accessibility tree at all and Clear had no
+  /// valid activation point on an iPad mini. Neither belongs in the hot path
+  /// anyway — Finger is a mode you set once, and Clear destroys a layer's work,
+  /// which is not something to leave under a thumb beside the brush controls.
+  @ViewBuilder
+  private var canvasModeButtons: some View {
+    Toggle(isOn: $drawsWithFinger) {
+      Label("Finger", systemImage: "hand.draw")
+    }
+    Button("Clear Layer", systemImage: "trash", role: .destructive) {
+      store.clearActiveLayer()
     }
   }
 

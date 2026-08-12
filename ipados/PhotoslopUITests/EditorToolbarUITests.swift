@@ -106,6 +106,69 @@ final class EditorToolbarUITests: UITestCase {
       app.navigationBars.buttons["Export Image"].exists, "Export left the bar once text was added")
   }
 
+  /// Every tool-strip control must be reachable without scrolling.
+  ///
+  /// The strip is a horizontal ScrollView with no indicator, so overflow does
+  /// not look like overflow — the control is simply not there. Measured before
+  /// this test existed: on a 402pt iPhone the brush width slider sat at x=415.7
+  /// and on a 744pt iPad mini at x=773.5, while the ink well was not in the
+  /// accessibility tree at all. Ink colour and brush width are the two controls
+  /// a painting app touches most, and neither was on screen on either device.
+  ///
+  /// This is the tool strip's equivalent of
+  /// `testNothingIsHandedToTheSystemOverflow`: the navigation bar grew a budget
+  /// after #227 and #242, and the strip had none. Adding a tool now either fits
+  /// or turns this red.
+  func testEveryToolStripControlIsReachableWithoutScrolling() {
+    let app = openEditor()
+    let window = app.windows.firstMatch.frame
+
+    // Ink and width belong to the inking tools, so assert against one of those
+    // rather than whatever the app happened to launch with.
+    app.selectTool("Pen")
+
+    for name in ["Undo", "Redo", "Ink color", "Brush width"] {
+      let control = app.descendants(matching: .any).matching(identifier: name).firstMatch
+      XCTAssertTrue(control.waitForExistence(timeout: 10), "\(name) is not on screen at all")
+      XCTAssertTrue(
+        control.isHittable,
+        "\(name) exists but cannot be tapped — it is scrolled out of the tool strip")
+      XCTAssertTrue(
+        window.contains(control.frame),
+        """
+        \(name) is outside the window at x=\(control.frame.minX), \
+        width \(window.width). The tool strip is over its budget for this \
+        device — move something into the More Actions menu.
+        """)
+    }
+  }
+
+  /// The tool picker must not grow with the number of tools.
+  ///
+  /// It was a segmented control at a fixed 240pt for four tools, which is most
+  /// of a phone's strip and could not have taken a fifth: six in 240pt is 40pt
+  /// each, under the 44pt minimum touch target. A palette costs one button
+  /// regardless, which is what makes adding a tool a normal change.
+  func testToolPickerCostsOneButtonRegardlessOfToolCount() {
+    let app = openEditor()
+
+    let picker = app.buttons.matching(
+      NSPredicate(format: "label BEGINSWITH %@", "Tool, ")
+    ).firstMatch
+    XCTAssertTrue(picker.waitForExistence(timeout: 10), "the tool palette is not on the strip")
+    XCTAssertLessThan(
+      picker.frame.width, 160,
+      "the tool control is wide enough to be per-tool rather than a palette")
+
+    // Every tool is still reachable through it.
+    for name in ["Pen", "Pencil", "Marker", "Eraser"] {
+      app.selectTool(name)
+      XCTAssertTrue(
+        app.buttons["Tool, \(name)"].firstMatch.waitForExistence(timeout: 10),
+        "\(name) could not be selected from the palette")
+    }
+  }
+
   /// Launch into a fresh document, past the launch scene and the canvas-size
   /// question `DocumentGroup` triggers for the document it creates.
   private func openEditor() -> XCUIApplication {

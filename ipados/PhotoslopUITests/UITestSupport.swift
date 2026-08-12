@@ -206,6 +206,29 @@ extension XCUIApplication {
       add.waitForNonExistence(timeout: 20), "the text sheet never dismissed", file: file, line: line)
   }
 
+  /// Choose a drawing tool from the palette.
+  ///
+  /// The tools are behind one menu button rather than spread across a segmented
+  /// control, so picking one is two taps and the strip's width no longer
+  /// depends on how many there are.
+  func selectTool(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
+    let palette = buttons.matching(
+      NSPredicate(format: "label BEGINSWITH %@", "Tool, ")
+    ).firstMatch
+    XCTAssertTrue(
+      palette.waitForExistence(timeout: 15), "the tool palette is not on the strip",
+      file: file, line: line)
+    if palette.label == "Tool, \(name)" { return }
+    palette.tap()
+
+    let choice = buttons[name].firstMatch
+    XCTAssertTrue(
+      choice.waitForExistence(timeout: 10), "\(name) is missing from the tool palette",
+      file: file, line: line)
+    choice.tap()
+    _ = buttons["Tool, \(name)"].firstMatch.waitForExistence(timeout: 10)
+  }
+
   /// Reach About, which sits on the bar at regular width and in the actions menu
   /// at compact width.
   @discardableResult
