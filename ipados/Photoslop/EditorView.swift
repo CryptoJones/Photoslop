@@ -164,13 +164,6 @@ struct EditorView: View {
             aspect: $cropAspect,
             onCancel: cancelCrop,
             onApply: applyCrop)
-            // Clipped to the canvas. A handle sits *on* the crop edge with a
-            // 44pt touch target, so a handle on the bottom edge reaches ~22pt
-            // below the canvas — straight over the crop bar, which then reports
-            // "exists but cannot be tapped" because the handle takes the touch
-            // first. Nothing about the overlay should be interactive outside the
-            // pixels it is cropping.
-            .clipped()
         }
       }
       if isMovingText { placementBanner }
@@ -313,6 +306,14 @@ struct EditorView: View {
           cropAspect.displayName,
           systemImage: cropAspect.isLocked ? "lock" : "lock.open")
       }
+      // SwiftUI renders a Menu as a Button wrapping a Button, and an identifier
+      // put on the Menu lands on the outer wrapper — which is not itself
+      // hittable, because a tap resolves to the inner one. Reported as "exists
+      // but cannot be tapped", which reads exactly like a covered or off-screen
+      // control and cost four fixes aimed at a fault that was never there.
+      // Combining collapses the pair into the single element it appears to be,
+      // which is also what VoiceOver should meet.
+      .accessibilityElement(children: .combine)
       .accessibilityIdentifier("Crop aspect")
       .accessibilityLabel("Aspect ratio, \(cropAspect.displayName)")
       .onChange(of: cropAspect) { _, shape in
