@@ -41,9 +41,18 @@ The bar was perfectly laid out the whole time: Cancel at x=16, aspect at x=381,
 Crop at x=756, all at y≈1147 in a 1210-tall window. Nothing covered it. Nothing
 was off-screen.
 
-**The fix.** `.accessibilityElement(children: .combine)` on the `Menu`, which
-collapses the pair into the single element it appears to be — and which is what
-VoiceOver should meet as well.
+**The fix — and a fifth wrong turn before it.**
+`.accessibilityElement(children: .combine)` on the `Menu` *looks* like the
+answer: collapse the pair into the single element it appears to be. It does not
+work on this iOS version. The hierarchy dump after applying it still showed the
+nested `Button`, unchanged.
+
+What works is to stop asserting `isHittable` on a `Menu` at all. It is a fact
+about the framework's hit-test model, not about whether a finger can reach the
+control. The tests now assert **geometry** — the control's frame is inside the
+window — and **function** — tapping by coordinate opens the menu and reshapes the
+crop. Both are true, checkable, and independent of how SwiftUI chooses to nest
+its accessibility elements.
 
 **The four wrong fixes**, each plausible, each aimed at a fault that did not
 exist: removing `.ignoresSafeArea()` from the dimming layer; giving the bottom

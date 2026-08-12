@@ -306,14 +306,12 @@ struct EditorView: View {
           cropAspect.displayName,
           systemImage: cropAspect.isLocked ? "lock" : "lock.open")
       }
-      // SwiftUI renders a Menu as a Button wrapping a Button, and an identifier
-      // put on the Menu lands on the outer wrapper — which is not itself
-      // hittable, because a tap resolves to the inner one. Reported as "exists
-      // but cannot be tapped", which reads exactly like a covered or off-screen
-      // control and cost four fixes aimed at a fault that was never there.
-      // Combining collapses the pair into the single element it appears to be,
-      // which is also what VoiceOver should meet.
-      .accessibilityElement(children: .combine)
+      // SwiftUI renders a Menu as a Button wrapping a Button, so this identifier
+      // lands on the outer wrapper and XCUITest reports it as not hittable — the
+      // tap belongs to the inner one. `.accessibilityElement(children: .combine)`
+      // does not collapse the pair on this iOS version; it was tried and changed
+      // nothing. The tests assert the bar's geometry and tap by coordinate
+      // instead, which is what a finger does. See LESSONSLEARNED.md L-001.
       .accessibilityIdentifier("Crop aspect")
       .accessibilityLabel("Aspect ratio, \(cropAspect.displayName)")
       .onChange(of: cropAspect) { _, shape in
