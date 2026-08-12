@@ -75,10 +75,14 @@ extension XCUIApplication {
   /// stands between the launch scene and the editor. Dismissing it here keeps
   /// every other test from having to know that.
   ///
-  /// Timeouts are generous on purpose. A CI runner takes about three times as
-  /// long as this machine for the same test — 75 seconds against 25 — so limits
-  /// tuned locally expire there while the app is still coming up, and the failure
-  /// reads as "the editor never came up" when the truth is that nobody waited.
+  /// Timeouts are generous on purpose, and were raised again in August 2026. A
+  /// CI runner takes about three times as long as this machine for the same
+  /// test, and under load considerably more than that, so limits tuned locally
+  /// expire there while the app is still coming up — the failure then reads as
+  /// "the editor never came up" when the truth is that nobody waited long
+  /// enough. Waiting longer costs nothing on a fast machine, where the element
+  /// arrives and the wait returns immediately; deleting coverage to make the
+  /// suite fit would cost something real.
   ///
   /// Every query here is `.firstMatch`. Without it XCTest resolves the *whole*
   /// query, and between Create Document and the editor the system document
@@ -104,10 +108,10 @@ extension XCUIApplication {
         _ = wait(for: .notRunning, timeout: 30)
       }
       launch()
-      if create.waitForExistence(timeout: 90) { break }
+      if create.waitForExistence(timeout: 150) { break }
     }
     XCTAssertTrue(
-      create.waitForExistence(timeout: 30), "launch scene never appeared", file: file, line: line)
+      create.waitForExistence(timeout: 60), "launch scene never appeared", file: file, line: line)
     create.tap()
 
     // The canvas-size question can be asked more than once, so answer it until
@@ -137,7 +141,7 @@ extension XCUIApplication {
       useThisSize.exists, "the canvas size sheet never dismissed", file: file, line: line)
 
     XCTAssertTrue(
-      navigationBars.buttons["Export Image"].firstMatch.waitForExistence(timeout: 90),
+      navigationBars.buttons["Export Image"].firstMatch.waitForExistence(timeout: 180),
       "the editor never came up", file: file, line: line)
   }
 
