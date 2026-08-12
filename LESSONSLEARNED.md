@@ -152,8 +152,9 @@ to whichever test ran first; and the canvas-size question being asked twice.
    layer is active, so the bar fitted until the user added text — and every test
    written before that step passed.
 3. **Assert reachability, not existence.** `exists` is true for a control 14pt
-   below the bottom of the screen. Assert `isHittable` *and* that the frame is
-   inside the window, on the narrowest device. See
+   below the bottom of the screen. Assert that the frame is inside the window, on
+   the narrowest device — and add `isHittable` only for plain controls, never for
+   a `Menu`, whose wrapper reports false regardless (L-001). See
    `testNothingIsHandedToTheSystemOverflow` and
    `testEveryToolStripControlIsReachableWithoutScrolling`.
 4. **Test both orientations.** A reachability assertion cannot fire on a screen
