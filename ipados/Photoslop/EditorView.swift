@@ -154,6 +154,13 @@ struct EditorView: View {
             aspect: $cropAspect,
             onCancel: cancelCrop,
             onApply: applyCrop)
+            // Clipped to the canvas. A handle sits *on* the crop edge with a
+            // 44pt touch target, so a handle on the bottom edge reaches ~22pt
+            // below the canvas — straight over the crop bar, which then reports
+            // "exists but cannot be tapped" because the handle takes the touch
+            // first. Nothing about the overlay should be interactive outside the
+            // pixels it is cropping.
+            .clipped()
         }
       }
       if isMovingText { placementBanner }
@@ -166,6 +173,10 @@ struct EditorView: View {
         if isCropping { cropBar } else { toolStrip }
       }
       .layoutPriority(1)
+      // Above the canvas in z-order as well. Belt and braces: clipping stops the
+      // overlay reaching down here, and this stops anything else that does from
+      // winning the touch.
+      .zIndex(1)
     }
     // No .navigationTitle here on purpose. DocumentGroup binds the title to
     // the document's file name and drives Rename through it; setting a

@@ -35,7 +35,13 @@ final class CropUITests: UITestCase {
     for name in ["Crop aspect", "Apply Crop", "Cancel Crop"] {
       let control = app.buttons[name].firstMatch
       XCTAssertTrue(control.exists, "\(name) is missing from the crop bar")
-      XCTAssertTrue(control.isHittable, "\(name) exists but cannot be tapped")
+      XCTAssertTrue(
+        control.isHittable,
+        """
+        \(name) exists but cannot be tapped. Its frame is \(control.frame) and the \
+        window is \(window). On screen means something is covering it; outside the \
+        window means the bar was pushed off.
+        """)
       XCTAssertTrue(
         window.contains(control.frame),
         "\(name) is outside the window at y=\(control.frame.minY), window height \(window.height)")
