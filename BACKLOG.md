@@ -6,14 +6,19 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] Ink colour and brush width are off-screen on iPhone and iPad mini — the
-  tool strip overflows its width and scrolls with no indicator, so the two
-  controls a painting app touches most are simply not there. Measured: the width
-  slider sits at x=415.7 on a 402pt iPhone and x=773.5 on a 744pt iPad mini, and
-  the ink well and Finger toggle are not in the accessibility tree at all. Third
-  instance this month of a control that exists in code, passes its tests, and
-  cannot be reached on the device
-  ([#246](https://github.com/CryptoJones/Photoslop/issues/246))
+- [ ] iOS cannot export into the Photos library — `.fileExporter` only reaches the
+  Files hierarchy, so a finished picture has to be saved to Files and imported
+  from the Photos app by hand. Needs a destination choice in the export sheet,
+  `NSPhotoLibraryAddUsageDescription`, add-only authorisation, and a format list
+  that narrows to what Photos accepts
+  ([#248](https://github.com/CryptoJones/Photoslop/issues/248))
+
+- [ ] iOS has no crop — Canvas Size takes a size but not a region, so you cannot
+  choose which part of the picture to keep or see what you are about to lose.
+  Needs a draggable crop rectangle with edge and corner handles, a dimmed
+  surround, a live pixel readout, and a single undoable apply that agrees with
+  `photoslop-cli --crop X,Y,W,H`
+  ([#249](https://github.com/CryptoJones/Photoslop/issues/249))
 
 - [ ] The iPadOS job still passes `-retry-tests-on-failure -test-iterations 2`,
   for one failure mode only: the XCTest daemon failing to initialise a UI-testing
@@ -24,6 +29,17 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] Ink colour and brush width were off-screen on iPhone and iPad mini — the
+  tool strip overflows its width and scrolls with no indicator, so the two
+  controls a painting app touches most are simply not there. Measured: the width
+  slider sits at x=415.7 on a 402pt iPhone and x=773.5 on a 744pt iPad mini, and
+  the ink well and Finger toggle are not in the accessibility tree at all. Third
+  instance this month of a control that exists in code, passes its tests, and
+  cannot be reached on the device
+  ([#246](https://github.com/CryptoJones/Photoslop/issues/246)) — the tool
+  picker is a palette now, options are contextual, Finger and Clear moved to the
+  menu, and two tests fail if any control leaves the window
 
 - [x] Every project-side cause of the XCUITest flakiness is fixed, and the retry
   budget is down from three iterations to two. The premise that the app was

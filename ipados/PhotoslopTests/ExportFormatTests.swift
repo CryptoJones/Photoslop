@@ -102,3 +102,33 @@ final class ExportFormatTests: XCTestCase {
     XCTAssertLessThan(low.count, high.count)
   }
 }
+
+/// Photos accepts fewer encodings than the Files exporter, and a rejected
+/// `addResource` fails after the render with an opaque error. The narrowing is
+/// pinned here so a new format has to state which destinations it works with.
+extension ExportFormatTests {
+  func testOnlyPhotosCompatibleFormatsAreOfferedForTheLibrary() {
+    let allowed = ExportFormat.allCases.filter(\.canGoToPhotoLibrary)
+    XCTAssertEqual(Set(allowed), Set([.png, .jpeg, .heic]))
+
+    for format in ExportFormat.allCases where !format.canGoToPhotoLibrary {
+      XCTAssertFalse(
+        allowed.contains(format),
+        "\(format.displayName) is not reliably accepted by Photos and must not be offered")
+    }
+  }
+
+  func testEveryPhotosFormatCarriesAUniformTypeIdentifier() {
+    // PHAssetResourceCreationOptions needs the UTI to store the bytes as the
+    // right kind of asset; an empty identifier silently produces a broken one.
+    for format in ExportFormat.allCases where format.canGoToPhotoLibrary {
+      XCTAssertFalse(
+        format.utType.identifier.isEmpty,
+        "\(format.displayName) has no UTI to hand to Photos")
+    }
+  }
+
+  func testBothDestinationsAreOffered() {
+    XCTAssertEqual(ExportDestination.allCases.map(\.displayName), ["Files", "Photos"])
+  }
+}

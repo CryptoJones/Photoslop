@@ -6,6 +6,21 @@ follows [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+- **Export to the photo library on iOS.** The export sheet gains a destination —
+  Files or Photos — reusing the format, quality and rendering choices already
+  there rather than growing a second flow, and handing both destinations the
+  same encoded bytes. Export previously went only through `fileExporter`, which
+  presents a document picker and reaches only the Files hierarchy, so a finished
+  picture had to be saved to Files and imported from the Photos app by hand.
+  The app asks for add-only access rather than full library access, because
+  saving needs permission to add one asset and nothing more. The format list
+  narrows to PNG, JPEG and HEIC when Photos is chosen: the library does not
+  reliably accept BMP, GIF or TIFF, and a rejected asset fails after the render
+  with an opaque error. No CLI mirror — the photo library is an iOS facility
+  with no headless equivalent, and `--output` already writes a file.
+  ([#248](https://github.com/CryptoJones/Photoslop/issues/248))
+
 ### Fixed
 - Every project-side cause of the iOS UI-test flakiness is fixed. 2.5.1 got the
   retry budget down to two iterations and named what still needed it; both of

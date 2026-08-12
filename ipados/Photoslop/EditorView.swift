@@ -15,6 +15,8 @@ struct EditorView: View {
   @State private var isAddingLayerPhotos = false
   @State private var showFileImporter = false
   @State private var showExporter = false
+  @State private var exportDestination = ExportDestination.files
+  @State private var savedToPhotos = false
   @State private var showExportOptions = false
   @State private var showNewDocumentOptions = false
   @State private var canvasSheetMode = CanvasSheetMode.newDocument
@@ -112,6 +114,14 @@ struct EditorView: View {
       Button("OK", role: .cancel) { errorMessage = nil }
     } message: {
       Text(errorMessage ?? "")
+    }
+    // Saving to Photos hands the picture to another app's library, where
+    // nothing on this screen changes to show it worked. Without this the export
+    // is indistinguishable from having done nothing.
+    .alert("Saved to Photos", isPresented: $savedToPhotos) {
+      Button("OK", role: .cancel) { savedToPhotos = false }
+    } message: {
+      Text("The picture is in your photo library.")
     }
     .onAppear {
       store.undoManager = undoManager
@@ -561,6 +571,28 @@ struct EditorView: View {
     }
   }
 
+  /// The formats this destination accepts. Photos takes fewer than Files.
+  private var availableFormats: [ExportFormat] {
+    exportDestination == .photos
+      ? ExportFormat.allCases.filter(\.canGoToPhotoLibrary)
+      : ExportFormat.allCases
+  }
+
+  private var exportFooter: String {
+    let alpha =
+      exportFormat.preservesTransparency
+      ? "keeping transparent areas."
+      : "\(exportFormat.displayName) has no alpha channel, so transparent areas are "
+        + "flattened onto white."
+    switch exportDestination {
+    case .files:
+      return "Saves as \(exportName).\(exportFormat.fileExtension), \(alpha)"
+    case .photos:
+      return "Adds the picture to your photo library, \(alpha) "
+        + "The file name is not used — Photos names its own assets."
+    }
+  }
+
   /// Name and format are chosen here rather than in the system save panel:
   /// `fileExporter` presents `UIDocumentPickerViewController`, which offers no
   /// way to add a format control beside its filename field.
@@ -571,19 +603,27 @@ struct EditorView: View {
           TextField("File name", text: $exportName)
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
+          Picker("Save to", selection: $exportDestination) {
+            ForEach(ExportDestination.allCases) { destination in
+              Text(destination.displayName).tag(destination)
+            }
+          }
+          .pickerStyle(.segmented)
+          .onChange(of: exportDestination) { _, destination in
+            // Photos takes a narrower set than the Files exporter, so a format
+            // it will not accept is corrected here rather than failing after
+            // the render with an opaque error.
+            if destination == .photos, !exportFormat.canGoToPhotoLibrary {
+              exportFormat = .png
+            }
+          }
           Picker("Format", selection: $exportFormat) {
-            ForEach(ExportFormat.allCases) { format in
+            ForEach(availableFormats) { format in
               Text(format.displayName).tag(format)
             }
           }
         } footer: {
-          Text(
-            exportFormat.preservesTransparency
-              ? "Saves as \(exportName).\(exportFormat.fileExtension), keeping transparent areas."
-              : "Saves as \(exportName).\(exportFormat.fileExtension). "
-                + "\(exportFormat.displayName) has no alpha channel, so transparent "
-                + "areas are flattened onto white."
-          )
+          Text(exportFooter)
         }
 
         if exportFormat.isLossy {
@@ -937,9 +977,25 @@ struct EditorView: View {
           "The document could not be rendered as \(exportFormat.displayName)."
         return
       }
-      exportDocument = ExportedImageDocument(data: data)
-      showExportOptions = false
-      showExporter = true
+
+      // One render, two destinations. Photos gets the same encoded bytes the
+      // Files exporter writes, so the two cannot drift into producing different
+      // pictures from the same choices.
+      switch exportDestination {
+      case .files:
+        exportDocument = ExportedImageDocument(data: data)
+        showExportOptions = false
+        showExporter = true
+      case .photos:
+        do {
+          try await PhotoLibrarySaver.save(data, format: exportFormat)
+          showExportOptions = false
+          savedToPhotos = true
+        } catch {
+          showExportOptions = false
+          errorMessage = error.localizedDescription
+        }
+      }
     }
   }
 }
