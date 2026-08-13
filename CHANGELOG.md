@@ -15,6 +15,16 @@ follows [SemVer](https://semver.org).
   seen, and the bottom of the overlay is covered by that same sheet.
 
 ### Fixed
+- **Crop took a different region than the rectangle you drew.** The overlay
+  worked out where the canvas was on screen by fitting the canvas size into its
+  own bounds and centring it, but the canvas lives in a scroll view with its own
+  zoom scale, content inset and offset. The assumption held only at the initial
+  zoom with no pan, so after any pinch or scroll the rectangle on screen mapped
+  to a different rectangle in the document — most visibly, the crop's top edge
+  came from the top of the image rather than the top of the box. The canvas now
+  publishes where it is drawn and the overlay uses that, so the two cannot
+  disagree. The engine was never wrong; it was handed the wrong rectangle.
+  ([#260](https://github.com/CryptoJones/Photoslop/issues/260))
 - **An imported photo keeps the canvas you chose.** `importImage` set
   `canvasSize` from the image, so importing a photo into a document created at
   1920x1080 silently produced a 4032x3024 one. The photo is now scaled to fit

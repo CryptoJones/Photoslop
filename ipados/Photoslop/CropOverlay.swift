@@ -13,6 +13,14 @@ import SwiftUI
 /// exactly what the readout said.
 struct CropOverlay: View {
   let canvas: CGSize
+  /// Where the canvas is drawn on screen, reported by the canvas itself.
+  ///
+  /// This used to be computed here by fitting `canvas` into the overlay's own
+  /// bounds and centring it. That is right only when the scroll view holding
+  /// the canvas is at its initial zoom and offset — after any pinch or pan, the
+  /// rectangle drawn on screen mapped to a different rectangle in the document,
+  /// and the crop took a region the person never chose (#260).
+  let canvasRect: CGRect
   @Binding var rect: CGRect
   @Binding var aspect: CropAspect
   let onCancel: () -> Void
@@ -28,8 +36,8 @@ struct CropOverlay: View {
 
   var body: some View {
     GeometryReader { proxy in
-      let scale = fittedScale(in: proxy.size)
-      let origin = fittedOrigin(in: proxy.size, scale: scale)
+      let scale = canvasRect.width > 0 ? canvasRect.width / canvas.width : 1
+      let origin = canvasRect.origin
       let frame = CGRect(
         x: origin.x + rect.minX * scale,
         y: origin.y + rect.minY * scale,
@@ -170,18 +178,6 @@ struct CropOverlay: View {
       .accessibilityLabel("Crop size \(Int(rect.width)) by \(Int(rect.height))")
   }
 
-  /// Fit the canvas into the available space the same way the editor does, so
-  /// the rectangle sits over the pixels it is actually cropping.
-  private func fittedScale(in size: CGSize) -> CGFloat {
-    guard canvas.width > 0, canvas.height > 0 else { return 1 }
-    return min(size.width / canvas.width, size.height / canvas.height)
-  }
-
-  private func fittedOrigin(in size: CGSize, scale: CGFloat) -> CGPoint {
-    CGPoint(
-      x: (size.width - canvas.width * scale) / 2,
-      y: (size.height - canvas.height * scale) / 2)
-  }
 }
 
 extension View {
