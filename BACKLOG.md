@@ -6,19 +6,18 @@ sync — check an item here when its issue closes.
 
 ## Open
 
-- [ ] iOS cannot export into the Photos library — `.fileExporter` only reaches the
-  Files hierarchy, so a finished picture has to be saved to Files and imported
-  from the Photos app by hand. Needs a destination choice in the export sheet,
-  `NSPhotoLibraryAddUsageDescription`, add-only authorisation, and a format list
-  that narrows to what Photos accepts
-  ([#248](https://github.com/CryptoJones/Photoslop/issues/248))
+- [ ] CI mints an Apple development certificate per tagged release and never
+  revokes it — the account hit its limit at 15 and the v2.6.0 TestFlight archive
+  failed with "choose a certificate to revoke", after the tests had passed and
+  the app had built. Ten `Created via API` certs were cleared by hand, which
+  buys about ten more releases
+  ([#255](https://github.com/CryptoJones/Photoslop/issues/255))
 
-- [ ] iOS has no crop — Canvas Size takes a size but not a region, so you cannot
-  choose which part of the picture to keep or see what you are about to lose.
-  Needs a draggable crop rectangle with edge and corner handles, a dimmed
-  surround, a live pixel readout, and a single undoable apply that agrees with
-  `photoslop-cli --crop X,Y,W,H`
-  ([#249](https://github.com/CryptoJones/Photoslop/issues/249))
+- [ ] Create Document cannot be tapped in landscape on iPhone — found when a
+  rotation leaked out of one test and broke every test after it at the same
+  point. Unknown whether it affects a person or only the automation; the first
+  step is to try it by hand, not to change layout
+  ([#252](https://github.com/CryptoJones/Photoslop/issues/252))
 
 - [ ] The iPadOS job still passes `-retry-tests-on-failure -test-iterations 2`,
   for one failure mode only: the XCTest daemon failing to initialise a UI-testing
@@ -30,6 +29,19 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] iOS could not export into the Photos library — `.fileExporter` only reaches the
+  Files hierarchy, so a finished picture has to be saved to Files and imported
+  from the Photos app by hand. Needs a destination choice in the export sheet,
+  `NSPhotoLibraryAddUsageDescription`, add-only authorisation, and a format list
+  that narrows to what Photos accepts
+  ([#248](https://github.com/CryptoJones/Photoslop/issues/248))
+
+- [x] iOS had no crop — Canvas Size takes a size but not a region, so there was
+  no way to choose which part of the picture to keep or see what you were about
+  to lose. Shipped a draggable crop rectangle with edge and corner handles, a
+  dimmed surround, a live pixel readout, a Free/Original/1:1/3:2/4:3/16:9 aspect
+  lock, and a single undoable apply that agrees with `photoslop-cli --crop`
+  ([#249](https://github.com/CryptoJones/Photoslop/issues/249))
 - [x] Ink colour and brush width were off-screen on iPhone and iPad mini — the
   tool strip overflows its width and scrolls with no indicator, so the two
   controls a painting app touches most are simply not there. Measured: the width

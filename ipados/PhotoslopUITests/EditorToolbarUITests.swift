@@ -160,12 +160,20 @@ final class EditorToolbarUITests: UITestCase {
       picker.frame.width, 160,
       "the tool control is wide enough to be per-tool rather than a palette")
 
-    // Every tool is still reachable through it.
+    // Every tool is still reachable through it. One open is enough: the claim is
+    // that the palette holds them all at a fixed width, not that switching works
+    // four times — and cycling all four cost enough time on a loaded runner to
+    // time out the launch of the *next* test.
+    picker.tap()
     for name in ["Pen", "Pencil", "Marker", "Eraser"] {
-      app.selectTool(name)
       XCTAssertTrue(
-        app.buttons["Tool, \(name)"].firstMatch.waitForExistence(timeout: 10),
-        "\(name) could not be selected from the palette")
+        app.buttons[name].firstMatch.waitForExistence(timeout: 10),
+        "\(name) is missing from the tool palette")
     }
+    // Leave the palette closed so the next test starts from the editor.
+    app.buttons["Eraser"].firstMatch.tap()
+    XCTAssertTrue(
+      app.buttons["Tool, Eraser"].firstMatch.waitForExistence(timeout: 10),
+      "selecting from the palette did not change the tool")
   }
 }

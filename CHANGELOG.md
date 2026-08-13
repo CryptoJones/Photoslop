@@ -7,6 +7,20 @@ follows [SemVer](https://semver.org).
 ## [2.6.0] — 2026-08-12
 
 ### Added
+- **Crop on iOS.** A new **Crop…** action puts a rectangle over the canvas whose
+  edges and corners drag, with the surround dimmed, thirds guides inside it, and
+  a live pixel readout of the size you are landing on. An aspect control locks
+  the shape — Free, Original, 1:1, 3:2, 4:3, 16:9 — and locking one reshapes the
+  rectangle immediately; a locked drag keeps the corner opposite the handle still
+  so the rectangle does not slide out from under your finger. Applying is one
+  undo step, cancelling changes nothing, and drawing is suspended while the
+  overlay is up so a drag positions rather than paints. Canvas Size took a size
+  but never a region, so there was no way to choose which part of the picture to
+  keep or to see what you were about to lose. Crop shares Canvas Size's
+  implementation — the same operation with a chosen origin rather than a centred
+  one — so a layer's pixels, PencilKit strokes and text anchor keep travelling
+  together, and it agrees with `photoslop-cli --crop X,Y,W,H`.
+  ([#249](https://github.com/CryptoJones/Photoslop/issues/249))
 - **Export to the photo library on iOS.** The export sheet gains a destination —
   Files or Photos — reusing the format, quality and rendering choices already
   there rather than growing a second flow, and handing both destinations the

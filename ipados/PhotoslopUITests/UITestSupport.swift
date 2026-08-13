@@ -147,8 +147,16 @@ class UITestCase: XCTestCase {
   /// lands on a scrim, not the canvas.
   private static func restoreEditorBaseline() -> Bool {
     let export = app.navigationBars.buttons["Export Image"].firstMatch
+    // The navigation bar alone is not enough. Crop replaces only the *bottom*
+    // bar, so Export stays put and a crop left running looks exactly like the
+    // baseline — the next test then fails on "the tool palette is not on the
+    // strip", having inherited a mode it never entered. The palette is what
+    // proves the editor's ordinary chrome is back.
+    let palette = app.buttons.matching(
+      NSPredicate(format: "label BEGINSWITH %@", "Tool, ")
+    ).firstMatch
     for _ in 1...4 {
-      if export.exists, export.isHittable { return true }
+      if export.exists, export.isHittable, palette.exists { return true }
 
       var tookAnExit = false
       for label in ["Cancel", "Done", "OK"] {
@@ -165,10 +173,19 @@ class UITestCase: XCTestCase {
       }
     }
     return export.waitForExistence(timeout: 10) && export.isHittable
+      && palette.waitForExistence(timeout: 10)
   }
 
   override func tearDown() {
     let app = Self.app
+
+    // Orientation is process-global and outlives the test that set it, and a
+    // `defer` does not restore it on a failing path. A rotated test that fails
+    // otherwise leaves every test after it in landscape, where the iPhone
+    // launch scene cannot be operated (#252) — one landscape test took down two
+    // unrelated ones that way. This matters more now that the app is shared:
+    // the next test may not relaunch at all.
+    XCUIDevice.shared.orientation = .portrait
 
     // A failed test forfeits reuse: it may have stopped anywhere, and its
     // retry (if `-retry-tests-on-failure` grants one) must inherit nothing.

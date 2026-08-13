@@ -161,8 +161,30 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
       x: ((size.width - canvasSize.width) / 2).rounded(),
       y: ((size.height - canvasSize.height) / 2).rounded()
     )
+    recanvas(to: size, offset: offset, actionName: "Canvas Size")
+  }
+
+  /// Crop to `rect`, given in canvas pixels.
+  ///
+  /// This is `resizeCanvas` with a chosen origin rather than a centred one, and
+  /// it deliberately shares that implementation: the part which is easy to get
+  /// wrong is not the arithmetic but remembering that a layer is pixels *and*
+  /// PencilKit strokes *and* possibly a text anchor, all of which have to move
+  /// together. A second code path here would be a second chance to forget one.
+  ///
+  /// Agrees with `photoslop-cli --crop X,Y,W,H` for the same rectangle.
+  func crop(to rect: CGRect) {
+    let bounded = rect.intersection(CGRect(origin: .zero, size: canvasSize)).integral
+    let size = bounded.size
+    guard ProjectArchive.isValidCanvas(size), bounded != CGRect(origin: .zero, size: canvasSize)
+    else { return }
+    recanvas(
+      to: size, offset: CGPoint(x: -bounded.origin.x, y: -bounded.origin.y), actionName: "Crop")
+  }
+
+  private func recanvas(to size: CGSize, offset: CGPoint, actionName: String) {
     let translation = CGAffineTransform(translationX: offset.x, y: offset.y)
-    mutate(actionName: "Canvas Size") {
+    mutate(actionName: actionName) {
       canvasSize = size
       layers = layers.map { layer in
         var resized = layer
