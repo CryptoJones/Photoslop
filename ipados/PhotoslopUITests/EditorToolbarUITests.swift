@@ -168,12 +168,4 @@ final class EditorToolbarUITests: UITestCase {
         "\(name) could not be selected from the palette")
     }
   }
-
-  /// Launch into a fresh document, past the launch scene and the canvas-size
-  /// question `DocumentGroup` triggers for the document it creates.
-  private func openEditor() -> XCUIApplication {
-    let app = XCUIApplication()
-    app.openNewDocument()
-    return app
-  }
 }

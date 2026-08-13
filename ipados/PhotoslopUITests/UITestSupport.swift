@@ -3,12 +3,46 @@ import XCTest
 
 /// Shared setup for the UI tests.
 ///
-/// The app is terminated after every test. XCTest launches a fresh process per
-/// test but does not tear down the previous one, so without this a test inherits
-/// whatever the last one left on screen — an open sheet, an open menu, a
-/// half-dismissed presentation. That is how a test which passes alone and passes
-/// in CI fails only when a new test class is added ahead of it in the run order.
+/// One launched app is shared across every test that only needs *the editor*,
+/// which is most of them. Launching from scratch — install, launch scene,
+/// Create Document, the canvas-size sheet, first editor — costs 20–60 seconds
+/// on a CI runner, and paying it once per test put 30+ cold launches in every
+/// run. That is where the whole class of "the editor never came up" /
+/// "Timed out while evaluating UI query" failures lived: not one broken test,
+/// but three-quarters of an hour of launch dances, any one of which could lose
+/// a race at a test-method boundary (#238).
+///
+/// The contract that makes sharing safe:
+///
+/// - `openEditor()` hands a test the running editor when the previous test
+///   left it there, and does the full launch dance only when it did not.
+/// - `tearDown` restores the baseline — every sheet, menu and alert dismissed,
+///   the editor's own Export button hittable — and *verifies* it. If the
+///   baseline cannot be proven, the app is terminated so the next test starts
+///   from a launch it owns, exactly as before. Reuse is an optimisation over
+///   the old behaviour, never a substitute for it.
+/// - A test that **fails** always tears the app down. A retried test therefore
+///   starts cold, inheriting nothing from the attempt that failed.
+/// - Tests about document *creation* (`NewDocumentUITests`) opt out through
+///   `openLaunchScene()`, which invalidates the shared editor first.
+///
+/// Tests share one document, so no test may assume the canvas is untouched:
+/// assert on deltas (a count measured before and after) or on state the test
+/// itself establishes, never on the leftovers of an assumed-fresh document.
+/// Every assertion this suite exists for — reachability of controls under real
+/// device geometry (#227, #242, #246) — is about the chrome around the canvas,
+/// which a used document does not change.
 class UITestCase: XCTestCase {
+  /// The one proxy every test drives. XCTest runs the whole target's tests
+  /// sequentially in one runner process, so a static is one app per
+  /// per-destination invocation.
+  static let app = XCUIApplication()
+
+  /// Whether the shared app is known to be sitting on the editor. Set only
+  /// after the editor's Export button has actually been seen; cleared the
+  /// moment anything casts doubt.
+  private static var editorIsUp = false
+
   private static var hasWarmedUp = false
 
   override func setUp() {
@@ -20,24 +54,22 @@ class UITestCase: XCTestCase {
   /// Pay the cold-start cost once, before any assertion can be charged for it.
   ///
   /// The first UI test of a run kept failing on CI with "the editor never came
-  /// up" — always the first class alphabetically, once per device. Nothing was
-  /// wrong with the screen under test: a freshly booted simulator installing the
-  /// app, launching it, and creating and opening its first document simply took
-  /// longer than the 90-second wait, and whichever test happened to run first
-  /// paid for all of it. Raising that timeout would only move the number; the
-  /// cost belongs outside the assertions entirely.
+  /// up" — a freshly booted simulator installing the app, launching it, and
+  /// creating its first document simply took longer than any per-test wait,
+  /// and whichever test ran first paid for all of it. So the first-document
+  /// path runs here, once per test-target invocation, deliberately without a
+  /// single assertion. If the app is genuinely broken the real tests say so in
+  /// their own words.
   ///
-  /// So the whole first-document path runs here, once per test-target
-  /// invocation, and deliberately without a single assertion — a warm-up that
-  /// cannot fail a test. If the app is genuinely broken the real test says so in
-  /// its own words, rather than the failure landing on whichever class sorted
-  /// first.
+  /// Unlike the earlier version, the warm-up no longer terminates the app: the
+  /// editor it reaches *is* the shared editor, and the first test starts on
+  /// it. Terminating only to relaunch doubled the most expensive step of the
+  /// whole run for the privilege of throwing its result away.
   private static func warmUpOnce() {
     guard !hasWarmedUp else { return }
     hasWarmedUp = true
 
-    let app = XCUIApplication()
-    app.launchArguments.append("-PhotoslopFreshDocumentStore")
+    app.launchArguments = ["-PhotoslopFreshDocumentStore"]
     app.launch()
 
     let create = app.buttons["Create Document"].firstMatch
@@ -49,21 +81,110 @@ class UITestCase: XCTestCase {
         _ = useThisSize.waitForNonExistence(timeout: 60)
       }
       // Reaching the editor is what actually warms the expensive path.
-      _ = app.navigationBars.buttons["Export Image"].firstMatch.waitForExistence(timeout: 180)
+      if app.navigationBars.buttons["Export Image"].firstMatch.waitForExistence(timeout: 180) {
+        editorIsUp = restoreEditorBaseline()
+      }
     }
 
+    if !editorIsUp {
+      app.terminate()
+      _ = app.wait(for: .notRunning, timeout: 30)
+    }
+  }
+
+  /// The editor, on an open document.
+  ///
+  /// Reuses the running app when the previous test verifiably left the editor
+  /// up; otherwise launches fresh and creates a document, exactly as every
+  /// test used to. The reused document is not fresh — see the class note.
+  @discardableResult
+  func openEditor(file: StaticString = #filePath, line: UInt = #line) -> XCUIApplication {
+    let app = Self.app
+    if Self.editorIsUp, app.state == .runningForeground, Self.restoreEditorBaseline() {
+      return app
+    }
+
+    Self.editorIsUp = false
     app.terminate()
     _ = app.wait(for: .notRunning, timeout: 30)
+    app.openNewDocument(file: file, line: line)
+    Self.editorIsUp = true
+    return app
+  }
+
+  /// A fresh launch stopped on the launch scene, for tests about document
+  /// creation itself. Invalidates the shared editor: after this, the next
+  /// `openEditor()` launches from scratch.
+  ///
+  /// Deliberately does not empty the document store — the store holding a
+  /// document is the state every launch used to inherit from the test before
+  /// it, and `NewDocumentUITests` has always passed against it.
+  func openLaunchScene(file: StaticString = #filePath, line: UInt = #line) -> XCUIApplication {
+    let app = Self.app
+    Self.editorIsUp = false
+    app.terminate()
+    _ = app.wait(for: .notRunning, timeout: 30)
+    app.launchArguments = []
+    app.launch()
+    XCTAssertTrue(
+      app.buttons["Create Document"].firstMatch.waitForExistence(timeout: 90),
+      "launch scene never appeared", file: file, line: line)
+    return app
+  }
+
+  /// Dismiss whatever a test left presented and prove the editor is back.
+  ///
+  /// Every presentation in this app carries its own way out — Cancel on the
+  /// export, canvas-size and text sheets and on the system photo picker, Done
+  /// on the layer list and About, OK on the export confirmation — and an open
+  /// `Menu` puts a scrim over everything, so a tap that reaches nothing else
+  /// closes it. The loop takes those exits until the editor's own Export
+  /// button is hittable, and reports honestly when it is not: the caller then
+  /// terminates, and the next test launches fresh rather than inheriting a
+  /// mystery.
+  ///
+  /// The blind tap runs only while the baseline is provably obscured, so it
+  /// lands on a scrim, not the canvas.
+  private static func restoreEditorBaseline() -> Bool {
+    let export = app.navigationBars.buttons["Export Image"].firstMatch
+    for _ in 1...4 {
+      if export.exists, export.isHittable { return true }
+
+      var tookAnExit = false
+      for label in ["Cancel", "Done", "OK"] {
+        let exit = app.buttons[label].firstMatch
+        if exit.exists, exit.isHittable {
+          exit.tap()
+          tookAnExit = true
+          break
+        }
+      }
+      if !tookAnExit {
+        // Nothing dismissible is on screen yet the editor is obscured: a menu.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5)).tap()
+      }
+    }
+    return export.waitForExistence(timeout: 10) && export.isHittable
   }
 
   override func tearDown() {
-    // Terminating is not enough: the next test's `launch()` can race a scene
-            // still being torn down, and the app then comes up on a screen nobody
-    // asked for. Fifteen consecutive launches inside one test method never
-    // flake; launches across method boundaries did, until this waited.
-    let app = XCUIApplication()
-    app.terminate()
-    _ = app.wait(for: .notRunning, timeout: 20)
+    let app = Self.app
+
+    // A failed test forfeits reuse: it may have stopped anywhere, and its
+    // retry (if `-retry-tests-on-failure` grants one) must inherit nothing.
+    let failed = (testRun?.totalFailureCount ?? 0) > 0
+
+    if failed || app.state != .runningForeground || !Self.restoreEditorBaseline() {
+      Self.editorIsUp = false
+      app.terminate()
+      // Terminating is not enough: the next launch can race a scene still
+      // being torn down, and the app then comes up on a screen nobody asked
+      // for. Fifteen consecutive launches inside one test method never flaked;
+      // launches across method boundaries did, until this waited.
+      _ = app.wait(for: .notRunning, timeout: 20)
+    } else {
+      Self.editorIsUp = true
+    }
     super.tearDown()
   }
 }
@@ -101,7 +222,7 @@ extension XCUIApplication {
     // — that re-runs the assertions too, so a genuine defect gets three
     // chances to look intermittent. Here every assertion below still runs
     // exactly once, and only getting to the launch scene is retried.
-    launchArguments.append("-PhotoslopFreshDocumentStore")
+    launchArguments = ["-PhotoslopFreshDocumentStore"]
     for attempt in 1...3 {
       if attempt > 1 {
         terminate()

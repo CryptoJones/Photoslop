@@ -35,8 +35,7 @@ final class LayerFromPhotoUITests: UITestCase {
 
   func testNewLayerFromPhotoOpensThePicker() throws {
     try skipUnlessCompact()
-    let app = XCUIApplication()
-    app.openNewDocument()
+    let app = openEditor()
 
     XCTAssertTrue(app.openLayerList(), "the layer list could not be reached")
 
@@ -55,8 +54,7 @@ final class LayerFromPhotoUITests: UITestCase {
   /// The whole point: photos join the document instead of replacing it.
   func testChosenPhotosBecomeLayersOverWhatIsAlreadyThere() throws {
     try skipUnlessCompact()
-    let app = XCUIApplication()
-    app.openNewDocument()
+    let app = openEditor()
 
     XCTAssertTrue(app.openLayerList(), "the layer list could not be reached")
     XCTAssertTrue(app.cells.firstMatch.waitForExistence(timeout: 15))
