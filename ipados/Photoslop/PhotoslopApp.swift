@@ -50,7 +50,86 @@ struct PhotoslopApp: App {
         // wired to DocumentGroup's own creation and browsing rather than
         // reimplemented here.
         DefaultDocumentGroupLaunchActions()
+      } background: {
+        // Deliberately here rather than on the launch *screen*. Apple's
+        // guidance is that a launch screen mimics the first real screen and
+        // carries no text, so a version string there is the sort of thing App
+        // Review flags. This scene is the app's own first screen, the one a
+        // reviewer meets before any document exists, and it is built to be
+        // branded.
+        LinearGradient(
+          colors: [
+            Color(red: 0.09, green: 0.11, blue: 0.16),
+            Color(red: 0.02, green: 0.03, blue: 0.05),
+          ],
+          startPoint: .top,
+          endPoint: .bottom
+        )
+        .ignoresSafeArea()
+      } overlayAccessoryView: { _ in
+        // Overlay, not background: the background accessory sits *behind* the
+        // system's title and actions, where the document browser's own sheet
+        // covers it — the first attempt at this compiled, ran, and showed
+        // nothing. The overlay draws above that, which is where identity
+        // belongs anyway.
+        // Anchored to the top. The system's document browser owns the bottom
+        // of this scene and draws above the overlay, so anything placed there
+        // is rendered and then covered — the second attempt at this put the
+        // mascot behind a frosted sheet.
+        VStack {
+          LaunchIdentity()
+          Spacer(minLength: 0)
+        }
       }
     }
   }
+}
+
+/// Who this is, what version, under what licence, and where the source lives.
+///
+/// The launch scene otherwise says only "Photoslop" over two buttons, which is
+/// a thin first impression and, to App Review, an app that appears to do nothing
+/// until you guess a document has to be made. Naming the licence and linking the
+/// repository also puts the Apache-2.0 terms one tap from the first screen
+/// rather than buried in About.
+private struct LaunchIdentity: View {
+  private var version: String {
+    let info = Bundle.main.infoDictionary ?? [:]
+    let short = info["CFBundleShortVersionString"] as? String ?? "unknown"
+    let build = info["CFBundleVersion"] as? String ?? "0"
+    return "\(short) (\(build))"
+  }
+
+  var body: some View {
+    // A compact bar in the strip above the system's card. The system owns the
+    // middle of this scene — its title, its Create Document button, and the
+    // document browser below — so identity goes in the margin it leaves rather
+    // than fighting it. A stacked block here straddled the card's edge and put
+    // the version above the app's own name, which read like a mistake.
+    HStack(spacing: 10) {
+      // Drawn in code by `photoslop/appicon.py` and exported into the asset
+      // catalogue by `scripts/render-ios-mascot.py`; the CI quality job fails
+      // if the committed asset drifts from the code that draws it.
+      Image("Mascot")
+        .resizable()
+        .scaledToFit()
+        .frame(width: 34, height: 34)
+        .accessibilityLabel("Le Basilisk, the Photoslop mascot")
+
+      VStack(alignment: .leading, spacing: 1) {
+        Text("Photoslop \(version) · Apache-2.0")
+        Link("github.com/CryptoJones/Photoslop", destination: Photoslop.repositoryURL)
+      }
+      .font(.caption2)
+      .foregroundStyle(.white.opacity(0.75))
+    }
+    .padding(.horizontal, 16)
+    .padding(.top, 6)
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("Launch identity")
+  }
+}
+
+enum Photoslop {
+  static let repositoryURL = URL(string: "https://github.com/CryptoJones/Photoslop")!
 }

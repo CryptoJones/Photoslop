@@ -253,7 +253,14 @@ extension EditorStoreTests {
 
   /// Aspect ratio is preserved, so a portrait photo keeps its proportions and
   /// pays for the difference in transparent edges rather than in stretching.
-  func testFittingPreservesAspectRatioAndDoesNotUpscale() {
+  ///
+  /// Fitting works in both directions. This test previously asserted the
+  /// opposite for the small case — that an image smaller than the canvas was
+  /// left alone rather than blown up (#234), on the reasoning that upscaling
+  /// invents detail. The reasoning is sound and the behaviour was still wrong:
+  /// it made one action do two different things depending on the size of the
+  /// photo someone picked. Reversed in #258.
+  func testFittingPreservesAspectRatioInBothDirections() {
     let canvas = CGSize(width: 1000, height: 1000)
 
     let wide = EditorStore.fitted(Self.image(width: 2000, height: 1000), into: canvas)
@@ -263,10 +270,18 @@ extension EditorStoreTests {
     XCTAssertTrue(Self.isTransparent(wide, at: CGPoint(x: 500, y: 10)))
     XCTAssertFalse(Self.isTransparent(wide, at: CGPoint(x: 500, y: 500)))
 
-    // Smaller than the canvas: left alone rather than blown up.
+    // Smaller than the canvas: scaled up to fill it, not left in the middle.
     let small = EditorStore.fitted(Self.image(width: 100, height: 100), into: canvas)
-    XCTAssertTrue(Self.isTransparent(small, at: CGPoint(x: 10, y: 10)))
+    XCTAssertEqual(small.size, canvas)
+    XCTAssertFalse(
+      Self.isTransparent(small, at: CGPoint(x: 10, y: 10)),
+      "a square image should fill a square canvas once fitting scales up")
     XCTAssertFalse(Self.isTransparent(small, at: CGPoint(x: 500, y: 500)))
+
+    // Aspect ratio still holds when scaling up: 2:1 into a square leaves bands.
+    let smallWide = EditorStore.fitted(Self.image(width: 200, height: 100), into: canvas)
+    XCTAssertTrue(Self.isTransparent(smallWide, at: CGPoint(x: 500, y: 10)))
+    XCTAssertFalse(Self.isTransparent(smallWide, at: CGPoint(x: 10, y: 500)))
   }
 
   func testAWholeSelectionIsOneUndoStep() throws {
@@ -480,6 +495,96 @@ extension EditorStoreTests {
     let anchor = store.layers.compactMap(\.text).first
     XCTAssertEqual(anchor?.x ?? 0, 100, accuracy: 1, "the text anchor did not follow the crop")
     XCTAssertEqual(anchor?.y ?? 0, 60, accuracy: 1, "the text anchor did not follow the crop")
+  }
+}
+
+/// Importing a photo keeps the canvas the person chose and fits the photo to it.
+extension EditorStoreTests {
+  private func photoData(_ size: CGSize, color: UIColor = .systemTeal) -> Data {
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+      color.setFill()
+      context.fill(CGRect(origin: .zero, size: size))
+    }
+    return image.pngData()!
+  }
+
+  @MainActor
+  func testImportingAPhotoKeepsTheChosenCanvas() throws {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 1920, height: 1080))
+
+    // A photo far larger, and a different shape, than the canvas.
+    try store.importImage(data: photoData(CGSize(width: 4032, height: 3024)))
+
+    XCTAssertEqual(
+      store.canvasSize, CGSize(width: 1920, height: 1080),
+      "importing took the canvas from the photo instead of keeping the chosen one")
+    XCTAssertEqual(store.layers.count, 1)
+    XCTAssertEqual(store.layers[0].image.size, CGSize(width: 1920, height: 1080))
+  }
+
+  @MainActor
+  func testAPhotoSmallerThanTheCanvasIsScaledUpToFit() throws {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 1000, height: 1000))
+
+    // 200x100 fits the width at 10x; the layer is canvas-sized either way, so
+    // the check is that the drawn content reaches the edges rather than sitting
+    // small in the middle.
+    try store.importImage(data: photoData(CGSize(width: 200, height: 100)))
+
+    let image = store.layers[0].image
+    XCTAssertEqual(image.size, CGSize(width: 1000, height: 1000))
+    // Scaled to fit width means opaque pixels at the horizontal extremes.
+    let left = image.pixelColor(at: CGPoint(x: 2, y: 500))
+    let right = image.pixelColor(at: CGPoint(x: 997, y: 500))
+    XCTAssertGreaterThan(left.alpha, 0.5, "the photo was not scaled up to the canvas width")
+    XCTAssertGreaterThan(right.alpha, 0.5, "the photo was not scaled up to the canvas width")
+  }
+
+  @MainActor
+  func testAFittedPhotoIsCentred() throws {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 1000, height: 1000))
+
+    // 2:1 fits the width and leaves equal transparent bands above and below.
+    try store.importImage(data: photoData(CGSize(width: 400, height: 200)))
+
+    let image = store.layers[0].image
+    let top = image.pixelColor(at: CGPoint(x: 500, y: 10))
+    let bottom = image.pixelColor(at: CGPoint(x: 500, y: 990))
+    let middle = image.pixelColor(at: CGPoint(x: 500, y: 500))
+    XCTAssertLessThan(top.alpha, 0.5, "content should not reach the top edge")
+    XCTAssertLessThan(bottom.alpha, 0.5, "content should not reach the bottom edge")
+    XCTAssertGreaterThan(middle.alpha, 0.5, "the centre should hold the photo")
+  }
+}
+
+extension UIImage {
+  /// Alpha and colour at a point, for asserting where fitted content landed.
+  fileprivate func pixelColor(at point: CGPoint) -> (alpha: CGFloat, color: UIColor) {
+    guard let cgImage else { return (0, .clear) }
+    var pixel = [UInt8](repeating: 0, count: 4)
+    let space = CGColorSpaceCreateDeviceRGB()
+    let info = CGImageAlphaInfo.premultipliedLast.rawValue
+    guard
+      let context = CGContext(
+        data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+        space: space, bitmapInfo: info)
+    else { return (0, .clear) }
+    context.draw(
+      cgImage,
+      in: CGRect(x: -point.x, y: -(CGFloat(cgImage.height) - point.y), 
+                 width: CGFloat(cgImage.width), height: CGFloat(cgImage.height)))
+    let alpha = CGFloat(pixel[3]) / 255
+    return (
+      alpha,
+      UIColor(
+        red: CGFloat(pixel[0]) / 255, green: CGFloat(pixel[1]) / 255,
+        blue: CGFloat(pixel[2]) / 255, alpha: alpha)
+    )
   }
 }
 
