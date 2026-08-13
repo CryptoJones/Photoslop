@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.6.0] — 2026-08-12
+## [2.7.0] — 2026-08-13
 
 ### Added
 - **Crop on iOS.** A new **Crop…** action puts a rectangle over the canvas whose
@@ -21,6 +21,22 @@ follows [SemVer](https://semver.org).
   one — so a layer's pixels, PencilKit strokes and text anchor keep travelling
   together, and it agrees with `photoslop-cli --crop X,Y,W,H`.
   ([#249](https://github.com/CryptoJones/Photoslop/issues/249))
+
+### Fixed
+- The iOS UI suite shares one launched app instead of relaunching for every
+  test. Each test paid a full cold start — launch, Create Document, the
+  canvas-size sheet, the editor — which on a CI runner is 20 to 60 seconds,
+  and roughly 36 of those per run is where the timeouts and snapshot failures
+  lived. A test now reuses the running editor only when the previous one
+  provably left it there, and any failed test tears the app down so a retry
+  inherits nothing. A full run on an iPad Pro 11-inch went from 380s to 179s,
+  and the whole iPadOS job from 30-50 minutes to about 18 with no retry
+  iterations used. No assertion was removed to get there.
+  ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
+
+## [2.6.0] — 2026-08-12
+
+### Added
 - **Export to the photo library on iOS.** The export sheet gains a destination —
   Files or Photos — reusing the format, quality and rendering choices already
   there rather than growing a second flow, and handing both destinations the
