@@ -14,8 +14,7 @@ import XCTest
 /// denied library is a different path and is reported through the error alert.
 final class ExportDestinationUITests: UITestCase {
   func testExportOffersPhotosAsWellAsFiles() {
-    let app = XCUIApplication()
-    app.openNewDocument()
+    let app = openEditor()
 
     app.navigationBars.buttons["Export Image"].firstMatch.tap()
     XCTAssertTrue(
@@ -34,8 +33,7 @@ final class ExportDestinationUITests: UITestCase {
   /// confirmation a successful export is indistinguishable from having done
   /// nothing at all.
   func testSavingToPhotosConfirmsItWorked() {
-    let app = XCUIApplication()
-    app.openNewDocument()
+    let app = openEditor()
 
     app.navigationBars.buttons["Export Image"].firstMatch.tap()
     XCTAssertTrue(
@@ -66,8 +64,7 @@ final class ExportDestinationUITests: UITestCase {
   /// `addResource` fails after the render with an opaque error. The format list
   /// narrows instead of failing late.
   func testPhotosOffersOnlyTheFormatsItAccepts() {
-    let app = XCUIApplication()
-    app.openNewDocument()
+    let app = openEditor()
 
     app.navigationBars.buttons["Export Image"].firstMatch.tap()
     XCTAssertTrue(

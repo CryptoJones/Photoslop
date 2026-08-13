@@ -9,13 +9,12 @@ import XCTest
 /// was spent on a store that never reached the screen. Only a running app can
 /// tell whether the question actually gets asked.
 final class NewDocumentUITests: UITestCase {
+  /// Both tests here are about creating a document, so neither can reuse the
+  /// shared editor: `openLaunchScene()` starts them from a fresh launch and
+  /// tells the base class its editor is gone.
   func testCreatingADocumentAsksForItsCanvasSize() {
-    let app = XCUIApplication()
-    app.launch()
-
-    let create = app.buttons["Create Document"]
-    XCTAssertTrue(create.waitForExistence(timeout: 60), "launch scene never appeared")
-    create.tap()
+    let app = openLaunchScene()
+    app.buttons["Create Document"].firstMatch.tap()
 
     XCTAssertTrue(
       app.buttons["Use This Size"].waitForExistence(timeout: 30),
@@ -25,12 +24,8 @@ final class NewDocumentUITests: UITestCase {
 
   /// Answering has to actually take effect, not just dismiss.
   func testChoosingAPresetResizesTheCanvas() {
-    let app = XCUIApplication()
-    app.launch()
-
-    let create = app.buttons["Create Document"]
-    XCTAssertTrue(create.waitForExistence(timeout: 60), "launch scene never appeared")
-    create.tap()
+    let app = openLaunchScene()
+    app.buttons["Create Document"].firstMatch.tap()
 
     let useThisSize = app.buttons["Use This Size"]
     XCTAssertTrue(useThisSize.waitForExistence(timeout: 30), "size sheet never appeared")
