@@ -6,6 +6,13 @@ sync — check an item here when its issue closes.
 
 ## Open
 
+- [ ] CI mints an Apple development certificate per tagged release and never
+  revokes it — the account hit its limit at 15 and the v2.6.0 TestFlight archive
+  failed with "choose a certificate to revoke", after the tests had passed and
+  the app had built. Ten `Created via API` certs were cleared by hand, which
+  buys about ten more releases
+  ([#255](https://github.com/CryptoJones/Photoslop/issues/255))
+
 - [ ] Create Document cannot be tapped in landscape on iPhone — found when a
   rotation leaked out of one test and broke every test after it at the same
   point. Unknown whether it affects a person or only the automation; the first

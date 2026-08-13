@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [Unreleased]
+## [2.6.0] — 2026-08-12
 
 ### Added
 - **Crop on iOS.** A new **Crop…** action puts a rectangle over the canvas whose

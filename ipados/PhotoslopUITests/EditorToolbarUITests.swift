@@ -176,12 +176,4 @@ final class EditorToolbarUITests: UITestCase {
       app.buttons["Tool, Eraser"].firstMatch.waitForExistence(timeout: 10),
       "selecting from the palette did not change the tool")
   }
-
-  /// Launch into a fresh document, past the launch scene and the canvas-size
-  /// question `DocumentGroup` triggers for the document it creates.
-  private func openEditor() -> XCUIApplication {
-    let app = XCUIApplication()
-    app.openNewDocument()
-    return app
-  }
 }

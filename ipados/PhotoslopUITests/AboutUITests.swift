@@ -10,8 +10,7 @@ import XCTest
 /// one: there is no per-device answer to get wrong.
 final class AboutUITests: UITestCase {
   func testAboutNamesNoDevice() {
-    let app = XCUIApplication()
-    app.openNewDocument()
+    let app = openEditor()
 
     XCTAssertTrue(app.openAbout(), "could not reach About")
     XCTAssertTrue(
@@ -26,8 +25,7 @@ final class AboutUITests: UITestCase {
   /// The desktop About carries a description, a licence, a repo link and the
   /// mascot. These are the same, so the two editions introduce the app alike.
   func testAboutCarriesWhatTheDesktopAboutCarries() {
-    let app = XCUIApplication()
-    app.openNewDocument()
+    let app = openEditor()
 
     XCTAssertTrue(app.openAbout(), "could not reach About")
     XCTAssertTrue(
@@ -54,8 +52,7 @@ final class AboutUITests: UITestCase {
   /// About is the one sheet whose content grows, and it was pinned to a single
   /// medium detent — half height on a phone with no way to drag up.
   func testAboutCanBeExpanded() {
-    let app = XCUIApplication()
-    app.openNewDocument()
+    let app = openEditor()
 
     XCTAssertTrue(app.openAbout(), "could not reach About")
     XCTAssertTrue(
@@ -66,8 +63,7 @@ final class AboutUITests: UITestCase {
   /// The version rows are what actually identify the build, so they carry more
   /// weight now that the headline says less.
   func testAboutReportsVersionAndBuild() {
-    let app = XCUIApplication()
-    app.openNewDocument()
+    let app = openEditor()
 
     XCTAssertTrue(app.openAbout(), "could not reach About")
     for row in ["Version", "Build"] {

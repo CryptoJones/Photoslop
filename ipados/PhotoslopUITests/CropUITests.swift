@@ -9,8 +9,11 @@ import XCTest
 /// painting a stroke underneath it, and whether the mode can be left without
 /// changing the document.
 final class CropUITests: UITestCase {
-  private func beginCrop(_ app: XCUIApplication) {
-    app.openNewDocument()
+  @discardableResult
+  private func beginCrop() -> XCUIApplication {
+    // Shared app: the editor is reused when the previous test provably left it
+    // there, so crop pays a launch only when it has to (#254).
+    let app = openEditor()
 
     let more = app.navigationBars.buttons["More Actions"].firstMatch
     XCTAssertTrue(more.waitForExistence(timeout: 15), "no More Actions menu on the bar")
@@ -19,11 +22,11 @@ final class CropUITests: UITestCase {
     let crop = app.buttons["Crop…"].firstMatch
     XCTAssertTrue(crop.waitForExistence(timeout: 10), "Crop is missing from the menu")
     crop.tap()
+    return app
   }
 
   func testCropModeOffersHandlesASizeReadoutAndAnAspectLock() {
-    let app = XCUIApplication()
-    beginCrop(app)
+    let app = beginCrop()
 
     XCTAssertTrue(
       app.staticTexts["Crop size"].firstMatch.waitForExistence(timeout: 15),
@@ -77,10 +80,8 @@ final class CropUITests: UITestCase {
       UIDevice.current.userInterfaceIdiom == .pad,
       "the phone launch scene has its own landscape fault; see the tracker")
 
-    let app = XCUIApplication()
     XCUIDevice.shared.orientation = .landscapeLeft
-
-    beginCrop(app)
+    let app = beginCrop()
 
     let window = app.windows.firstMatch.frame
     for name in ["Crop aspect", "Apply Crop", "Cancel Crop"] {
@@ -95,8 +96,7 @@ final class CropUITests: UITestCase {
   /// Cancel has to be a true no-op. A crop mode that alters the document on the
   /// way out is worse than one that does nothing.
   func testCancellingLeavesTheDocumentAlone() {
-    let app = XCUIApplication()
-    beginCrop(app)
+    let app = beginCrop()
 
     XCTAssertTrue(app.buttons["Cancel Crop"].firstMatch.waitForExistence(timeout: 15))
     app.buttons["Cancel Crop"].firstMatch.tap()
@@ -112,8 +112,7 @@ final class CropUITests: UITestCase {
   /// Locking an aspect ratio reshapes the rectangle immediately rather than
   /// waiting for the next drag, so the choice is visible when it is made.
   func testLockingAnAspectRatioReshapesTheRectangle() {
-    let app = XCUIApplication()
-    beginCrop(app)
+    let app = beginCrop()
 
     let readout = app.staticTexts["Crop size"].firstMatch
     XCTAssertTrue(readout.waitForExistence(timeout: 15))
@@ -138,8 +137,7 @@ final class CropUITests: UITestCase {
 
   /// Dragging a handle has to resize the crop, not draw on the layer under it.
   func testDraggingAHandleResizesTheCropInsteadOfDrawing() {
-    let app = XCUIApplication()
-    beginCrop(app)
+    let app = beginCrop()
 
     let readout = app.staticTexts["Crop size"].firstMatch
     XCTAssertTrue(readout.waitForExistence(timeout: 15))
