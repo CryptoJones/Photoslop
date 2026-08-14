@@ -70,12 +70,15 @@ struct CanvasBox: View {
 
       if showsReadout { readout }
     }
-    // Drawn by SwiftUI, dragged by UIKit — see `PencilCanvas.onBoxDrag`. The
-    // handles are still real accessibility elements so a test (and VoiceOver)
-    // can find them; what they no longer carry is a SwiftUI gesture, because
-    // one inside a hosted view in a scroll view is never sent a touch on
-    // iOS 18.
-    .allowsHitTesting(false)
+    // Drawn by SwiftUI, dragged by UIKit — see `PencilCanvas.onBoxDrag`. What
+    // the handles no longer carry is a SwiftUI *gesture*, because one inside a
+    // hosted view in a scroll view is never sent a touch on iOS 18.
+    //
+    // They stay hit-testable on purpose. Switching hit-testing off for the
+    // whole box does not affect the UIKit recogniser — it is on the container
+    // above — but it makes every handle report `isHittable == false`, so
+    // XCUITest refuses to drive them and VoiceOver cannot reach them either.
+    // Nothing here consumes the touch, so it still reaches the recogniser.
   }
 
   private var handles: [CropHandle] {
