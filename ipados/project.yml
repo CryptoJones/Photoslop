@@ -24,6 +24,11 @@ targets:
     productName: Photoslop
     sources:
       - path: Photoslop
+    dependencies:
+      # The QuickLook extension rides inside the app bundle; embedding it is
+      # what makes Files show document previews (#267).
+      - target: PhotoslopThumbnails
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.ronin48.photoslop.ipad
@@ -70,6 +75,40 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         ITSAppUsesNonExemptEncryption: false
+
+  # Files shows a generic icon for every .photoslop package without this: a
+  # package is a folder, and nothing tells the system which file inside it is
+  # a picture. The editor writes a flattened preview.png at save time, and
+  # this extension hands it to QuickLook (#267). Its own bundle id means its
+  # own provisioning profile at release time — automatic provisioning creates
+  # it through the same API the app's comes from.
+  PhotoslopThumbnails:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PhotoslopThumbnails
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.ronin48.photoslop.ipad.thumbnails
+        PRODUCT_NAME: PhotoslopThumbnails
+        PRODUCT_MODULE_NAME: PhotoslopThumbnails
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+    info:
+      path: PhotoslopThumbnails/Info.plist
+      properties:
+        CFBundleDisplayName: Photoslop Thumbnails
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.quicklook.thumbnail
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).ThumbnailProvider"
+          NSExtensionAttributes:
+            QLSupportedContentTypes:
+              - io.ronin48.photoslop.project
+            QLThumbnailMinimumDimension: 0
 
   PhotoslopIPadTests:
     type: bundle.unit-test

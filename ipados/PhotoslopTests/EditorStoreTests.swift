@@ -57,6 +57,33 @@ final class EditorStoreTests: XCTestCase {
     XCTAssertEqual(restored.layers.last?.isVisible, false)
   }
 
+  /// The package carries its own face for the Files app (#267): a flattened
+  /// preview, bounded to 1024 on the long side, that the QuickLook extension
+  /// reads instead of compositing layers inside an extension's memory budget.
+  func testSavingWritesABoundedPreviewIntoThePackage() throws {
+    let store = EditorStore()
+    let wrapper = try ProjectArchive.encode(try store.snapshot(contentType: .photoslopProject))
+
+    let preview = wrapper.fileWrappers?["preview.png"]?.regularFileContents
+    let image = try XCTUnwrap(preview.flatMap(UIImage.init(data:)), "no preview.png in the package")
+    XCTAssertLessThanOrEqual(
+      max(image.size.width, image.size.height) * image.scale,
+      ProjectArchive.previewMaximumDimension)
+    let canvas = store.canvasSize
+    XCTAssertEqual(
+      image.size.width / image.size.height, canvas.width / canvas.height, accuracy: 0.01,
+      "the preview does not keep the canvas's aspect ratio")
+
+    // A package carrying a preview must still open — and a package without
+    // one (anything saved before previews existed) must too.
+    _ = try ProjectArchive.decode(wrapper)
+    _ = try ProjectArchive.decode(
+      FileWrapper(directoryWithFileWrappers: [
+        "manifest.json": try XCTUnwrap(wrapper.fileWrappers?["manifest.json"]),
+        "layers": try XCTUnwrap(wrapper.fileWrappers?["layers"]),
+      ]))
+  }
+
   func testProjectResourceCapsAreHard() {
     XCTAssertTrue(ProjectArchive.isValidCanvas(CGSize(width: 4_000, height: 4_000)))
     XCTAssertFalse(ProjectArchive.isValidCanvas(CGSize(width: 16_385, height: 1)))

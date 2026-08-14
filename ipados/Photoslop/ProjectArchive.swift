@@ -162,10 +162,60 @@ enum ProjectArchive {
         "drawing.data": FileWrapper(regularFileWithContents: drawing),
       ])
     }
-    return FileWrapper(directoryWithFileWrappers: [
+    var root: [String: FileWrapper] = [
       "manifest.json": FileWrapper(regularFileWithContents: manifestData),
       "layers": FileWrapper(directoryWithFileWrappers: layerFolders),
-    ])
+    ]
+    if let preview = previewPNG(for: snapshot), total + preview.count <= maximumProjectBytes {
+      root["preview.png"] = FileWrapper(regularFileWithContents: preview)
+    }
+    return FileWrapper(directoryWithFileWrappers: root)
+  }
+
+  /// The document's face in the Files app.
+  ///
+  /// Files shows a generic icon for every `.photoslop` package because nothing
+  /// inside one is a picture a thumbnail extension could cheaply reach — the
+  /// layers are separate PNGs plus PencilKit data, and compositing them is the
+  /// editor's job, not something to do in an extension's memory budget (#267).
+  /// So the composite is flattened here, at save time, where it is already
+  /// paid for, and bounded to 1024 pixels on the long side. `decode` never
+  /// looks for it: a document without one (anything saved before 2.9.x) still
+  /// opens, and simply has no preview until its next save.
+  static let previewMaximumDimension: CGFloat = 1_024
+
+  private static func previewPNG(for snapshot: ProjectSnapshot) -> Data? {
+    let layers = snapshot.manifest.layers.compactMap { record -> RasterLayer? in
+      guard let payload = snapshot.layers[record.id] else { return nil }
+      return RasterLayer(
+        id: record.id,
+        name: record.name,
+        image: payload.image,
+        drawing: payload.drawing,
+        isVisible: record.isVisible,
+        opacity: record.opacity,
+        text: record.text
+      )
+    }
+    let size = CGSize(
+      width: CGFloat(snapshot.manifest.canvas.width),
+      height: CGFloat(snapshot.manifest.canvas.height)
+    )
+    let composite = EditorStore.render(layers: layers, size: size)
+    let scale = min(1, previewMaximumDimension / max(size.width, size.height))
+    guard scale < 1 else { return composite.pngData() }
+    let target = CGSize(
+      width: max(1, (size.width * scale).rounded()),
+      height: max(1, (size.height * scale).rounded())
+    )
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = false
+    let preview = UIGraphicsImageRenderer(size: target, format: format).image { context in
+      context.cgContext.interpolationQuality = .high
+      composite.draw(in: CGRect(origin: .zero, size: target))
+    }
+    return preview.pngData()
   }
 
   static func decode(_ wrapper: FileWrapper) throws -> EditorState {
