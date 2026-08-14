@@ -236,4 +236,60 @@ that has to be kept in sync will eventually not be.
 
 ---
 
+## L-006 — Dev testing comes before beta testing, and "locally" is not a configuration
+
+**Cost:** four consecutive CI failures on one pull request, several hours of the
+user's morning, and a release that should have shipped overnight (2026-08-14,
+#270 and friends).
+
+**The rule, in the user's words:** *"the number one rule I teach junior
+developers is dev testing first before beta testing."* Every failure below is
+that rule broken in the same way.
+
+**Symptom.** The iOS suite passed locally — repeatedly, on two device classes,
+with no retries — and failed on CI four times running. Each failure was
+diagnosed, fixed, pushed, and replaced by the next one.
+
+**What it actually was.** The local simulators were **iOS 26.5**. CI's are
+**iOS 18.5**. Everything that broke lived in the gap:
+
+- SwiftUI's `DragGesture` inside a `UIHostingController` inside a `UIScrollView`
+  is **never sent a touch** on 18.5. Instrumented, it reported `changes=0` while
+  the handle was hittable and the press registered. On 26.5 it works.
+- An element with no gesture reports `isHittable == false` to XCUITest on 18.5,
+  so the runner refuses to drag it — where a finger has no difficulty.
+
+No amount of re-running on 26.5 could find either. The runs were not weak
+evidence; they were evidence about a different system.
+
+**What made it worse.** CI selected its simulators as *"the first iPad in the
+list"*. Nobody could tell what had been tested without reading the log, and the
+mismatch with local machines was invisible by construction.
+
+**The fix, beyond the bugs.** `scripts/ci-local.sh` pins the same two devices
+and the same runtime CI uses and runs the same legs in the same order; the
+workflow now pins those models by name and warns loudly if it has to fall back.
+A green run in one place now means the same sentence in the other.
+
+### Rules this earns
+
+1. **Pin the test configuration, and share the pin between local and CI.** A
+   suite that runs on "whatever this machine has" is not a suite, it is a
+   coincidence. This is the whole lesson; everything else follows.
+2. **The OS version is part of the configuration.** So is the device model.
+   "It passes on my machine" needs a version attached before it means anything,
+   and a framework's gesture arbitration is exactly the kind of thing that moves
+   between them.
+3. **Reproduce before fixing, even when reproducing is expensive.** Downloading
+   a 9 GB runtime took less time than the two wrong fixes pushed while guessing
+   across the gap, and it turned a four-hour hunt into a single run.
+4. **Instrument the mechanism, not the symptom.** A counter on the gesture's
+   `onChanged` answered in one run — `changes=0` — what three rounds of
+   plausible reasoning could not. This is L-001 rule 2, learned again.
+5. **Test what CI tests before pushing, not after.** "I will watch the build"
+   is not a plan; nothing watches between turns. Run the same configuration
+   first, and report the result rather than the intention.
+
+---
+
 *Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

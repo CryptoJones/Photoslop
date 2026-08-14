@@ -42,14 +42,37 @@ jobs:
       - name: Select simulators
         id: simulator
         run: |
+          # Pinned by name, not "whichever iPad is first in the list".
+          #
+          # The unpinned form silently tested whatever the runner image happened
+          # to ship, so nobody could reproduce a failure without first reading
+          # the log to find out what had been tested. It also hid a worse
+          # problem: the runner's simulators are iOS 18.5 while a development
+          # machine on current Xcode has 26.x, and SwiftUI gesture delivery
+          # inside a scroll view differs between them. Four CI failures passed
+          # locally before that was noticed. `scripts/ci-local.sh` pins the same
+          # two devices and the same runtime, so a green run there means this.
           devices="$(xcrun simctl list devices available -j)"
           IPAD_ID="$(echo "$devices" | jq -r \
-            '[.devices[][] | select(.name | startswith("iPad"))][0].udid')"
+            '[.devices[][] | select(.name == "iPad Pro 11-inch (M4)")][0].udid')"
           IPHONE_ID="$(echo "$devices" | jq -r \
-            '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')"
+            '[.devices[][] | select(.name == "iPhone 16 Pro")][0].udid')"
+          # Fall back rather than fail the run if a runner image drops a model,
+          # and say so loudly, because the pin is the point.
+          if [ -z "$IPAD_ID" ] || [ "$IPAD_ID" = "null" ]; then
+            echo "::warning::pinned iPad missing from this runner; falling back"
+            IPAD_ID="$(echo "$devices" | jq -r \
+              '[.devices[][] | select(.name | startswith("iPad"))][0].udid')"
+          fi
+          if [ -z "$IPHONE_ID" ] || [ "$IPHONE_ID" = "null" ]; then
+            echo "::warning::pinned iPhone missing from this runner; falling back"
+            IPHONE_ID="$(echo "$devices" | jq -r \
+              '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')"
+          fi
           for id in "$IPAD_ID" "$IPHONE_ID"; do
             test -n "$id" -a "$id" != "null"
           done
+          xcrun simctl list devices available | grep -E "$IPAD_ID|$IPHONE_ID"
           echo "ipad=$IPAD_ID" >> "$GITHUB_OUTPUT"
           echo "iphone=$IPHONE_ID" >> "$GITHUB_OUTPUT"
       # Two iterations, and for exactly one failure mode: the XCTest daemon

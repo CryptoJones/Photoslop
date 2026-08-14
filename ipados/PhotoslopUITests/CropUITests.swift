@@ -25,6 +25,28 @@ final class CropUITests: UITestCase {
     return app
   }
 
+  private func midpoint(_ a: CGRect, _ b: CGRect) -> CGRect {
+    CGRect(x: (a.midX + b.midX) / 2, y: (a.midY + b.midY) / 2, width: 0, height: 0)
+  }
+
+  /// Drag between two points on screen, by coordinate.
+  ///
+  /// Not by element. The box's handles are drawn by SwiftUI and dragged by a
+  /// UIKit recogniser on the container above them, so a handle carries no
+  /// gesture of its own and XCUITest reports `isHittable == false` for it on
+  /// iOS 18 — it refuses to drive an element it believes cannot be touched,
+  /// while a finger has no such difficulty. This is L-001's rule again in a new
+  /// place: assert *geometry* for reachability, and *operate* by coordinate.
+  private func drag(_ app: XCUIApplication, from: CGRect, to: CGRect) {
+    let origin = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+    origin.withOffset(CGVector(dx: from.midX, dy: from.midY))
+      .press(
+        forDuration: 0.2,
+        thenDragTo: origin.withOffset(CGVector(dx: to.midX, dy: to.midY)),
+        withVelocity: .slow,
+        thenHoldForDuration: 0.2)
+  }
+
   func testCropModeOffersHandlesASizeReadoutAndAnAspectLock() {
     let app = beginCrop()
 
@@ -145,11 +167,20 @@ final class CropUITests: UITestCase {
 
     let handle = app.otherElements["Crop bottom right"].firstMatch
     XCTAssertTrue(handle.exists, "no bottom right handle to drag")
-    handle.press(
-      forDuration: 0.1,
-      thenDragTo: app.otherElements["Crop top left"].firstMatch,
-      withVelocity: .slow,
-      thenHoldForDuration: 0.1)
+    let window = app.windows.firstMatch.frame
+    XCTAssertTrue(
+      window.contains(handle.frame),
+      "the bottom right handle is outside the window at \(handle.frame)")
+    // Halfway towards the opposite corner, not all the way to it. Dragging to
+    // the far corner pins the rectangle at its 16px minimum, and a rectangle
+    // already at the minimum cannot shrink — so the test would be asserting
+    // that the box moves only when the document it inherited happens to be
+    // large. Every test here shares one document (see UITestCase).
+    let target = app.otherElements["Crop top left"].firstMatch.frame
+    XCTAssertGreaterThan(
+      handle.frame.midX - target.midX, 64,
+      "the crop box is too small to shrink further — a previous test left it at the minimum")
+    drag(app, from: handle.frame, to: midpoint(handle.frame, target))
 
     if readout.label == before {
       // Instrument on failure rather than reasoning about it from a distance.
@@ -223,12 +254,13 @@ final class CropUITests: UITestCase {
     let readout = app.staticTexts["Crop size"].firstMatch
     XCTAssertTrue(readout.waitForExistence(timeout: 15))
 
-    // Shrink the rectangle so the crop actually changes the canvas.
-    app.otherElements["Crop bottom right"].firstMatch.press(
-      forDuration: 0.1,
-      thenDragTo: app.otherElements["Crop top left"].firstMatch,
-      withVelocity: .slow,
-      thenHoldForDuration: 0.1)
+    // Shrink the rectangle, but only halfway across, so the document this test
+    // hands on is still a usable size. Cropping to the 16px minimum leaves a
+    // canvas on which the eight handles land on top of one another and nothing
+    // after this can drag anything.
+    let corner = app.otherElements["Crop bottom right"].firstMatch.frame
+    let opposite = app.otherElements["Crop top left"].firstMatch.frame
+    drag(app, from: corner, to: midpoint(corner, opposite))
     let croppedSize = readout.label
 
     app.buttons["Apply Crop"].firstMatch.tap()
