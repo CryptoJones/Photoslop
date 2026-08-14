@@ -78,6 +78,46 @@ jobs:
           name: tests-${{ runner.os }}-py${{ matrix.python }}-${{ github.sha }}
           path: reports/
 
+  # Everything above runs QT_QPA_PLATFORM=offscreen, which is exactly the gap
+  # #274 names: window creation, exposure, HiDPI scale factors and the menu
+  # bar had no coverage on the half of the app a person sees first. This job
+  # gives the windowed tests a real window system — xvfb's X server on Linux,
+  # the native window server on macOS — and only tests/test_windowed.py runs
+  # against it; the rest of the suite already has its offscreen legs above.
+  windowed:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: xcb
+            runner-prefix: xvfb-run --auto-servernum
+          - os: macos-15
+            platform: cocoa
+            runner-prefix: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Linux Qt runtime libraries, an X server, and xcb
+        if: runner.os == 'Linux'
+        run: |
+          scripts/install-ci-qt-linux.sh
+          # The offscreen platform needs none of this; the xcb platform needs
+          # all of it, and xvfb is the screen itself.
+          sudo apt-get install -y --no-install-recommends \
+            xvfb libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxkbcommon-x11-0
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.12"
+      - name: Sync locked development environment
+        run: uv sync --extra dev --locked
+      - name: Windowed tests
+        env:
+          PHOTOSLOP_WINDOWED_TESTS: "1"
+          QT_QPA_PLATFORM: ${{ matrix.platform }}
+        run: ${{ matrix.runner-prefix }} uv run pytest -q tests/test_windowed.py
+
   package:
     runs-on: ubuntu-latest
     steps:
