@@ -188,6 +188,45 @@ enum CropGeometry {
     return moved(CGRect(x: x, y: y, width: width, height: height), by: .zero, in: bounds)
   }
 
+  /// Which part of `rect` a touch at `point` has taken hold of.
+  ///
+  /// The box is dragged from UIKit rather than by a SwiftUI gesture per handle
+  /// (see `PencilCanvas.onBoxDrag`), so picking the handle is arithmetic now,
+  /// and arithmetic can be tested without a screen. Corners win over edges when
+  /// both are in range, because a corner is the more specific intent; the
+  /// interior is the fallback, and outside the rectangle nothing is grabbed.
+  ///
+  /// `tolerance` is the touch radius in the same units as `rect` — document
+  /// pixels — so the caller divides its 44pt target by the zoom scale.
+  static func handle(at point: CGPoint, in rect: CGRect, tolerance: CGFloat) -> CropHandle? {
+    let corners: [(CropHandle, CGPoint)] = [
+      (.topLeft, CGPoint(x: rect.minX, y: rect.minY)),
+      (.topRight, CGPoint(x: rect.maxX, y: rect.minY)),
+      (.bottomLeft, CGPoint(x: rect.minX, y: rect.maxY)),
+      (.bottomRight, CGPoint(x: rect.maxX, y: rect.maxY)),
+    ]
+    let edges: [(CropHandle, CGPoint)] = [
+      (.top, CGPoint(x: rect.midX, y: rect.minY)),
+      (.bottom, CGPoint(x: rect.midX, y: rect.maxY)),
+      (.left, CGPoint(x: rect.minX, y: rect.midY)),
+      (.right, CGPoint(x: rect.maxX, y: rect.midY)),
+    ]
+
+    func nearest(_ candidates: [(CropHandle, CGPoint)]) -> CropHandle? {
+      var best: (handle: CropHandle, distance: CGFloat)?
+      for (handle, centre) in candidates {
+        let distance = hypot(point.x - centre.x, point.y - centre.y)
+        guard distance <= tolerance else { continue }
+        if best == nil || distance < best!.distance { best = (handle, distance) }
+      }
+      return best?.handle
+    }
+
+    if let corner = nearest(corners) { return corner }
+    if let edge = nearest(edges) { return edge }
+    return rect.insetBy(dx: -tolerance / 4, dy: -tolerance / 4).contains(point) ? .interior : nil
+  }
+
   /// The starting rectangle when the crop mode opens: the whole canvas, or the
   /// largest centred rectangle of the locked shape that fits inside it.
   static func initialRect(canvas: CGSize, aspect: CropAspect) -> CGRect {

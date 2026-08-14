@@ -20,7 +20,7 @@ import SwiftUI
 /// are for the finger, not for the document, so they are divided by the zoom to
 /// stay the same size on screen however far in the canvas is zoomed.
 struct CanvasBox: View {
-  @Binding var rect: CGRect
+  let rect: CGRect
   /// Where the rectangle may go. The canvas, for a crop; larger, for a layer
   /// being placed, which is allowed to hang over the edge.
   let bounds: CGRect
@@ -41,8 +41,6 @@ struct CanvasBox: View {
   private var handleTouch: CGFloat { 44 / max(scale, 0.0001) }
   private var handleDraw: CGFloat { 22 / max(scale, 0.0001) }
   private var hairline: CGFloat { 2 / max(scale, 0.0001) }
-
-  @State private var dragStart: CGRect?
 
   var body: some View {
     ZStack(alignment: .topLeading) {
@@ -66,19 +64,18 @@ struct CanvasBox: View {
 
       if showsThirds { thirdsGuides }
 
-      // The interior drags the whole rectangle.
-      Color.clear
-        .contentShape(Rectangle())
-        .frame(width: rect.width, height: rect.height)
-        .offset(x: rect.minX, y: rect.minY)
-        .gesture(drag(for: .interior))
-
       ForEach(Array(handles.enumerated()), id: \.offset) { _, handle in
         handleView(handle)
       }
 
       if showsReadout { readout }
     }
+    // Drawn by SwiftUI, dragged by UIKit — see `PencilCanvas.onBoxDrag`. The
+    // handles are still real accessibility elements so a test (and VoiceOver)
+    // can find them; what they no longer carry is a SwiftUI gesture, because
+    // one inside a hosted view in a scroll view is never sent a touch on
+    // iOS 18.
+    .allowsHitTesting(false)
   }
 
   private var handles: [CropHandle] {
@@ -110,7 +107,6 @@ struct CanvasBox: View {
       .frame(width: handleTouch, height: handleTouch)
       .contentShape(Rectangle())
       .position(x: point.x, y: point.y)
-      .gesture(drag(for: handle))
       .accessibilityLabel(name(handle))
       .accessibilityIdentifier("\(identifier) \(name(handle))")
   }
@@ -142,23 +138,6 @@ struct CanvasBox: View {
     let y: CGFloat =
       handle.movesTopEdge ? rect.minY : handle.movesBottomEdge ? rect.maxY : rect.midY
     return CGPoint(x: x, y: y)
-  }
-
-  private func drag(for handle: CropHandle) -> some Gesture {
-    DragGesture(minimumDistance: 0)
-      .onChanged { value in
-        let start = dragStart ?? rect
-        if dragStart == nil { dragStart = rect }
-        // No conversion: this view's coordinate space is the document's, so a
-        // translation here is already a translation in canvas pixels.
-        rect = CropGeometry.resized(
-          start,
-          handle: handle,
-          translation: value.translation,
-          bounds: bounds,
-          ratio: ratio)
-      }
-      .onEnded { _ in dragStart = nil }
   }
 
   /// The size the rectangle describes, in pixels, while it is being chosen.

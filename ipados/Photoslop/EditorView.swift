@@ -43,6 +43,10 @@ struct EditorView: View {
   /// On by default: a non-proportional resize distorts a picture, which is
   /// occasionally what someone wants and never what they want by accident.
   @State private var constrainProportions = true
+  /// The part of the box a drag took hold of, and the rectangle it started
+  /// from. Held here rather than in the box, which is now only a renderer.
+  @State private var dragHandle: CropHandle?
+  @State private var dragOrigin = CGRect.zero
   @State private var editingTextLayerID: UUID?
   @State private var canvasPreset = CanvasPreset.standard
   @State private var customWidth = "2048"
@@ -214,6 +218,7 @@ struct EditorView: View {
         // pan keep working throughout — switching off hit-testing for the whole
         // scroll view is what took them away before (#270).
         overlayIsActive: isCropping || placement != nil,
+        onBoxDrag: handleBoxDrag,
         onDrawingChanged: store.setDrawing
       ) {
         canvasOverlay
@@ -394,7 +399,7 @@ struct EditorView: View {
   private var canvasOverlay: some View {
     if isCropping {
       CanvasBox(
-        rect: $cropRect,
+        rect: cropRect,
         bounds: CGRect(origin: .zero, size: store.canvasSize),
         ratio: cropAspect.ratio(canvas: store.canvasSize),
         scale: canvasZoom)
@@ -418,10 +423,7 @@ struct EditorView: View {
         }
 
         CanvasBox(
-          rect: Binding(
-            get: { placement?.rect ?? .zero },
-            set: { placement?.rect = $0 }
-          ),
+          rect: current.rect,
           // A layer being placed may hang over the edge — that is how you fill
           // a canvas with the middle of a photograph. A crop may not.
           bounds: placementBounds,
@@ -1412,6 +1414,55 @@ struct EditorView: View {
   }
 
   private func cancelCrop() { isCropping = false }
+
+  /// Apply a drag reported by the canvas, in document pixels.
+  ///
+  /// The box is drawn by SwiftUI and dragged by UIKit, so this is where a touch
+  /// becomes a rectangle. Which handle was taken is decided once, from where
+  /// the finger landed, and held for the rest of the gesture — deciding it
+  /// again on every sample would let the grip jump between handles as the
+  /// rectangle moves under the finger.
+  private func handleBoxDrag(from start: CGPoint, to current: CGPoint, isFinal: Bool) {
+    let translation = CGSize(width: current.x - start.x, height: current.y - start.y)
+
+    if isCropping {
+      let handle = dragHandle ?? beginBoxDrag(at: start, in: cropRect)
+      guard let handle else { return }
+      cropRect = CropGeometry.resized(
+        dragOrigin,
+        handle: handle,
+        translation: translation,
+        bounds: CGRect(origin: .zero, size: store.canvasSize),
+        ratio: cropAspect.ratio(canvas: store.canvasSize))
+    } else if let current = placement {
+      let handle = dragHandle ?? beginBoxDrag(at: start, in: current.rect)
+      guard let handle else { return }
+      placement?.rect = CropGeometry.resized(
+        dragOrigin,
+        handle: handle,
+        translation: translation,
+        bounds: placementBounds,
+        ratio: constrainProportions ? current.ratio : nil)
+    }
+
+    if isFinal {
+      dragHandle = nil
+      dragOrigin = .zero
+    }
+  }
+
+  /// Decide what a drag has taken hold of, and remember where it started.
+  private func beginBoxDrag(at point: CGPoint, in rect: CGRect) -> CropHandle? {
+    // 44pt under the finger, converted into document pixels: the box is drawn
+    // in the document's units, so the touch radius has to be too.
+    let tolerance = 44 / max(canvasZoom, 0.0001)
+    guard let handle = CropGeometry.handle(at: point, in: rect, tolerance: tolerance) else {
+      return nil
+    }
+    dragHandle = handle
+    dragOrigin = rect
+    return handle
+  }
 
   /// Open the placement box on a layer that is already in the document.
   private func beginPlacement(layerID: UUID, isNew: Bool) {

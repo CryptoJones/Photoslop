@@ -257,6 +257,33 @@ final class PlacementAndScaleTests: XCTestCase {
     XCTAssertEqual(placed.minX, -90, "a placed layer may hang over it")
   }
 
+  /// Picking the handle is arithmetic now that the box is dragged from UIKit,
+  /// so it is tested as arithmetic.
+  func testATouchPicksTheHandleItLandedOn() {
+    let rect = CGRect(x: 100, y: 100, width: 200, height: 200)
+
+    XCTAssertEqual(
+      CropGeometry.handle(at: CGPoint(x: 300, y: 300), in: rect, tolerance: 44), .bottomRight)
+    XCTAssertEqual(
+      CropGeometry.handle(at: CGPoint(x: 100, y: 100), in: rect, tolerance: 44), .topLeft)
+    XCTAssertEqual(
+      CropGeometry.handle(at: CGPoint(x: 200, y: 100), in: rect, tolerance: 44), .top,
+      "the middle of an edge is that edge, not a corner")
+    XCTAssertEqual(
+      CropGeometry.handle(at: CGPoint(x: 200, y: 200), in: rect, tolerance: 44), .interior,
+      "the middle moves the whole rectangle")
+    XCTAssertNil(
+      CropGeometry.handle(at: CGPoint(x: 600, y: 600), in: rect, tolerance: 44),
+      "a touch nowhere near the box grabs nothing")
+  }
+
+  /// A corner is the more specific intent, so it wins where both are in range.
+  func testACornerBeatsAnEdgeWhenBothAreInReach() {
+    let rect = CGRect(x: 0, y: 0, width: 60, height: 60)
+    XCTAssertEqual(
+      CropGeometry.handle(at: CGPoint(x: 58, y: 58), in: rect, tolerance: 44), .bottomRight)
+  }
+
   func testConstrainedProportionsHoldTheShape() {
     let bounds = CGRect(x: -400, y: -400, width: 1200, height: 1200)
     let start = CGRect(x: 0, y: 0, width: 200, height: 100)
