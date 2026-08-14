@@ -80,21 +80,49 @@ struct SplashScreen: View {
 enum SplashWindow {
   private static var window: UIWindow?
   private static var shown = false
+  private static var sceneObserver: NSObjectProtocol?
 
   /// Long enough to read the version, short enough not to be in the way.
-  static let hold: TimeInterval = 1.6
+  static let hold: TimeInterval = 2.5
   private static let fade: TimeInterval = 0.35
 
   static func showOnce() {
     guard !shown, !isRunningUITests else { return }
     shown = true
 
-    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-    guard let scene = scenes.first(where: { $0.activationState == .foregroundActive })
-      ?? scenes.first
-    else { return }
+    if let scene = connectedWindowScene {
+      present(in: scene)
+      return
+    }
 
-    let host = UIHostingController(rootView: SplashScreen())
+    // On iPad the first window scene routinely connects after the init-time
+    // dispatch that calls this, so no scene yet means "not yet", not "never".
+    sceneObserver = NotificationCenter.default.addObserver(
+      forName: UIScene.willConnectNotification, object: nil, queue: .main
+    ) { notification in
+      let scene = notification.object as? UIWindowScene
+      Task { @MainActor in
+        guard window == nil, let scene else { return }
+        stopWaitingForScene()
+        present(in: scene)
+      }
+    }
+  }
+
+  private static var connectedWindowScene: UIWindowScene? {
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    return scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first
+  }
+
+  private static func present(in scene: UIWindowScene) {
+    // The hold starts at the splash's first rendered frame, not here: the
+    // system launch screen keeps covering the app for a while after this
+    // window exists, and a timer started now spends that while already
+    // counting down.
+    let host = UIHostingController(
+      rootView: SplashScreen().onAppear {
+        DispatchQueue.main.asyncAfter(deadline: .now() + hold) { dismiss() }
+      })
     let splash = UIWindow(windowScene: scene)
     splash.rootViewController = host
     splash.windowLevel = .alert + 1
@@ -104,11 +132,10 @@ enum SplashWindow {
       UITapGestureRecognizer(target: SplashDismisser.shared, action: #selector(SplashDismisser.skip))
     )
     window = splash
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + hold) { dismiss() }
   }
 
   static func dismiss() {
+    stopWaitingForScene()
     guard let splash = window else { return }
     window = nil
     UIView.animate(withDuration: fade) {
@@ -116,6 +143,11 @@ enum SplashWindow {
     } completion: { _ in
       splash.isHidden = true
     }
+  }
+
+  private static func stopWaitingForScene() {
+    if let sceneObserver { NotificationCenter.default.removeObserver(sceneObserver) }
+    sceneObserver = nil
   }
 
   /// The UI tests drive the launch scene directly and would otherwise spend part
