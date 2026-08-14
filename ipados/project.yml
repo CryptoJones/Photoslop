@@ -109,6 +109,10 @@ schemes:
         PhotoslopIPadUITests: [test]
     test:
       gatherCoverageData: true
+      # keepAlways, or the store-screenshot staging run's attachments are
+      # discarded the moment the run passes — which is the only time they are
+      # wanted (#257).
+      attachmentLifetime: keepAlways
       targets:
         - PhotoslopIPadTests
         - PhotoslopIPadUITests
