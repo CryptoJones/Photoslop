@@ -37,13 +37,6 @@ sync — check an item here when its issue closes.
   the maintainer's to press
   ([#257](https://github.com/CryptoJones/Photoslop/issues/257))
 
-- [ ] CI mints an Apple development certificate per tagged release and never
-  revokes it — the account hit its limit at 15 and the v2.6.0 TestFlight archive
-  failed with "choose a certificate to revoke", after the tests had passed and
-  the app had built. Ten `Created via API` certs were cleared by hand, which
-  buys about ten more releases
-  ([#255](https://github.com/CryptoJones/Photoslop/issues/255))
-
 - [ ] The iPadOS job still passes `-retry-tests-on-failure -test-iterations 2`,
   for one failure mode only: the XCTest daemon failing to initialise a UI-testing
   session (`XCTDaemonErrorDomain Code=19`, `AXDisableAccessibilityOnTermination`),
@@ -53,6 +46,14 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] CI mints an Apple development certificate per tagged release and never
+  revokes it — two-part fix on 2026-08-14: the TestFlight archive now signs
+  with the imported Apple Distribution identity so cloud signing has nothing
+  to mint, and a post-upload step revokes any `Created via API` development
+  certificates that accumulate anyway (stdlib+openssl JWT, warnings never fail
+  a shipped release; dry-run against the live account found the expected four)
+  ([#255](https://github.com/CryptoJones/Photoslop/issues/255))
 
 - [x] Create Document cannot be tapped in landscape on iPhone — tried by hand
   on 2026-08-14, as the item asked, and it does not affect a person: in compact
