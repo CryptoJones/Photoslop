@@ -306,11 +306,19 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     )
   }
 
+  /// Replace the document's contents with an image, fitted to the canvas.
+  ///
+  /// This used to take the canvas from the image — `canvasSize = normalized.size`
+  /// — which threw away the size the person chose when they created the
+  /// document. Importing a photo into a 1920x1080 canvas silently produced a
+  /// 4032x3024 one. The canvas someone picked is the canvas they keep; the photo
+  /// is scaled to fit it and centred (#258).
   func importImage(data: Data, suggestedName: String? = nil) throws {
     let normalized = try ProjectArchive.decodeImage(data)
     mutate(actionName: "Import Image") {
-      canvasSize = normalized.size
-      let layer = RasterLayer(name: suggestedName ?? "Imported image", image: normalized)
+      let layer = RasterLayer(
+        name: suggestedName ?? "Imported image",
+        image: Self.fitted(normalized, into: canvasSize))
       layers = [layer]
       activeLayerID = layer.id
     }
@@ -359,8 +367,14 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     format.scale = 1
     format.opaque = false
     return UIGraphicsImageRenderer(size: canvas, format: format).image { _ in
-      let scale = min(
-        1, min(canvas.width / image.size.width, canvas.height / image.size.height))
+      // Fits in both directions. This was clamped with `min(1, ...)` so an
+      // image smaller than the canvas kept its own size, on the reasoning that
+      // upscaling invents detail that was never captured (#234). True, but it
+      // made one action behave two ways depending on the size of the photo
+      // picked, which is harder to predict than a rule that always fits. The
+      // cost is a softer result when scaling up; the benefit is that "scaled to
+      // fit and centred" means what it says (#258).
+      let scale = min(canvas.width / image.size.width, canvas.height / image.size.height)
       let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
       image.draw(
         in: CGRect(

@@ -29,6 +29,8 @@ struct EditorView: View {
   @State private var isCropping = false
   @State private var cropRect = CGRect.zero
   @State private var cropAspect = CropAspect.free
+  /// Where the canvas is drawn, reported by the canvas rather than guessed.
+  @State private var canvasRect = CGRect.zero
   @State private var editingTextLayerID: UUID?
   @State private var canvasPreset = CanvasPreset.standard
   @State private var customWidth = "2048"
@@ -150,6 +152,7 @@ struct EditorView: View {
           ? (store.activeLayer?.opacity ?? 1)
           : 0,
         onCanvasDragged: isMovingText ? moveText : nil,
+        onCanvasRectChanged: { canvasRect = $0 },
         onDrawingChanged: store.setDrawing
       )
       // Drawing is suspended while the crop overlay is up, the same way the
@@ -160,6 +163,7 @@ struct EditorView: View {
         if isCropping {
           CropOverlay(
             canvas: store.canvasSize,
+            canvasRect: canvasRect,
             rect: $cropRect,
             aspect: $cropAspect,
             onCancel: cancelCrop,

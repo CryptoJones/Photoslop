@@ -131,8 +131,11 @@ what it was doing to #227.
   as a white box in a grouped list and in dark mode.
 - Use the layer sidebar to add, duplicate, rename, show/hide, change opacity,
   reorder, merge down, clear, or delete raster layers.
-- Open an image from Files or Photos. Imports create a document at the image's
-  native pixel dimensions — that is how a photo *becomes* a document. To put
+- Open an image from Files or Photos. An import is fitted to the canvas the
+  document already has, scaled to fit and centred — the size chosen when the
+  document was created is the size it keeps. Importing used to take the canvas
+  from the image, so a photo dropped into a 1920x1080 document silently made it
+  4032x3024 — that is how a photo *becomes* a document. To put
   one *into* the document already open, see
   [Importing a photo as a layer](#importing-a-photo-as-a-layer) below.
 
@@ -229,6 +232,23 @@ than an omission: the photo library is an iOS facility with no desktop or CLI
 equivalent. `photoslop-cli --output` writes a file, which is what the Files
 destination already does.
 
+### The launch screen
+
+Before any document exists, the app shows its own launch scene rather than
+dropping straight into a file browser. It carries a small identity bar — the
+mascot, the version and build, the licence, and a link to the repository — above
+the system's own title and **Create Document** button.
+
+That bar is deliberately in the margin. The system owns the middle of this scene:
+its title, its actions, and the document browser below. A block placed in the
+background accessory renders behind the browser's sheet and is never seen, and
+one placed at the bottom of the overlay is covered by that same sheet — both were
+tried. The strip above the card is what the system leaves free.
+
+The version, licence and repository link are here rather than only in About
+because this is the first screen a person meets, and for App Review it is the
+screen that has to say what the app is.
+
 ### Importing a photo as a layer
 
 **New layer from photo**, beside Add / Duplicate / Merge in the layer list,
@@ -246,7 +266,12 @@ ruling the desktop **Layer ▸ New Layer from Image…** and the CLI's
 
 Photos are scaled to fit the canvas and centred, never cropped — **this is the
 one place the iOS edition deliberately differs from the desktop**, which keeps
-the source at native size and lets it overhang. A `.photoslop` layer image has
+the source at native size and lets it overhang. Fitting works in both
+directions: an image smaller than the canvas is scaled up to fill it rather than
+sitting small in the middle. That reverses an earlier ruling which left small
+images alone because upscaling invents detail. True, but it made one action
+behave two ways depending on the size of the photo picked, which is harder to
+predict than a rule that always fits. A `.photoslop` layer image has
 to be exactly canvas-sized or `ProjectArchive.snapshot` refuses it and the
 document cannot be saved at all, so a mismatched aspect ratio must lose either
 the parts outside the canvas or the space at the edges. Transparent edges are

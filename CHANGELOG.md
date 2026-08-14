@@ -4,6 +4,37 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [Unreleased]
+
+### Added
+- **The iOS launch screen carries the app's identity.** The mascot, version and
+  build, the Apache-2.0 licence and a link to the repository now sit above the
+  system's Create Document button, on the first screen a person meets. It is
+  placed in the margin the system leaves rather than the middle it owns: a
+  background accessory renders behind the document browser's sheet and is never
+  seen, and the bottom of the overlay is covered by that same sheet.
+
+### Fixed
+- **Crop took a different region than the rectangle you drew.** The overlay
+  worked out where the canvas was on screen by fitting the canvas size into its
+  own bounds and centring it, but the canvas lives in a scroll view with its own
+  zoom scale, content inset and offset. The assumption held only at the initial
+  zoom with no pan, so after any pinch or scroll the rectangle on screen mapped
+  to a different rectangle in the document — most visibly, the crop's top edge
+  came from the top of the image rather than the top of the box. The canvas now
+  publishes where it is drawn and the overlay uses that, so the two cannot
+  disagree. The engine was never wrong; it was handed the wrong rectangle.
+  ([#260](https://github.com/CryptoJones/Photoslop/issues/260))
+- **An imported photo keeps the canvas you chose.** `importImage` set
+  `canvasSize` from the image, so importing a photo into a document created at
+  1920x1080 silently produced a 4032x3024 one. The photo is now scaled to fit
+  the existing canvas and centred.
+- **Fitting works in both directions.** An image smaller than the canvas was
+  left at its own size rather than scaled up, so the same action behaved two
+  ways depending on the photo picked. This reverses the reasoning in #234 —
+  upscaling does invent detail, and an unpredictable rule costs more.
+  ([#258](https://github.com/CryptoJones/Photoslop/issues/258))
+
 ## [2.7.0] — 2026-08-13
 
 ### Added

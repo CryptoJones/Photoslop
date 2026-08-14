@@ -16,6 +16,14 @@ struct PencilCanvas: UIViewRepresentable {
   /// can be moved. `isFinal` marks the end of the gesture, which is where the
   /// undo entry belongs — one per drag rather than one per touch sample.
   var onCanvasDragged: ((CGPoint, Bool) -> Void)?
+  /// Where the canvas is actually drawn, in this view's own coordinates.
+  ///
+  /// Anything overlaid on the canvas has to be told this rather than guess it.
+  /// The canvas lives in a `UIScrollView` with its own zoom scale, content inset
+  /// and content offset, so "fit the canvas into my bounds and centre it" is
+  /// right only before the first pinch or pan — which is why the crop rectangle
+  /// cropped somewhere other than where it was drawn (#260).
+  var onCanvasRectChanged: ((CGRect) -> Void)?
   let onDrawingChanged: (PKDrawing) -> Void
 
   func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -28,6 +36,7 @@ struct PencilCanvas: UIViewRepresentable {
   }
 
   func updateUIView(_ view: CanvasHostView, context: Context) {
+    view.onCanvasRectChanged = onCanvasRectChanged
     context.coordinator.parent = self
     configure(view)
   }
@@ -84,6 +93,8 @@ struct PencilCanvas: UIViewRepresentable {
 
 final class CanvasHostView: UIView, UIScrollViewDelegate {
   let scrollView = UIScrollView()
+  var onCanvasRectChanged: ((CGRect) -> Void)?
+  private var lastReportedCanvasRect: CGRect = .null
   let contentView = UIView()
   let imageView = UIImageView()
   let canvasView = PKCanvasView()
@@ -194,7 +205,19 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
     scrollView.contentInset = UIEdgeInsets(
       top: vertical, left: horizontal, bottom: vertical, right: horizontal
     )
+    reportCanvasRect()
   }
+
+  /// Publish the canvas's on-screen rectangle, in this view's coordinates.
+  func reportCanvasRect() {
+    guard canvasSize.width > 0, canvasSize.height > 0 else { return }
+    let rect = contentView.convert(contentView.bounds, to: self)
+    guard rect != lastReportedCanvasRect else { return }
+    lastReportedCanvasRect = rect
+    onCanvasRectChanged?(rect)
+  }
+
+  func scrollViewDidScroll(_ scrollView: UIScrollView) { reportCanvasRect() }
 
   private func makeTransparent(_ view: UIView) {
     view.backgroundColor = .clear
