@@ -94,13 +94,15 @@ final class CropUITests: UITestCase {
   /// ran portrait, and the reachability assertion cannot fire on a screen that
   /// happens to be tall enough.
   func testTheCropBarIsReachableInLandscapeToo() throws {
-    // iPad only. The fault this covers was an iPad one, and on a phone the
-    // launch scene's Create Document cannot be tapped in landscape at all —
-    // a separate problem, filed rather than worked around here, and not
-    // something this test should be the one to discover.
+    // iPad only. The fault this covers was an iPad one, and on a phone in
+    // landscape the launch dance cannot be automated: compact height swaps the
+    // launch scene for the system document browser, which works fine under a
+    // finger (#252, checked by hand on 2026-08-14) but not under XCUITest —
+    // both Create Document copies report unhittable and synthesized taps
+    // misfire against the browser's remote view under rotation.
     try XCTSkipUnless(
       UIDevice.current.userInterfaceIdiom == .pad,
-      "the phone launch scene has its own landscape fault; see the tracker")
+      "the phone launch scene cannot be automated in landscape; see #252")
 
     XCUIDevice.shared.orientation = .landscapeLeft
     let app = beginCrop()
