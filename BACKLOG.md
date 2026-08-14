@@ -44,12 +44,6 @@ sync — check an item here when its issue closes.
   buys about ten more releases
   ([#255](https://github.com/CryptoJones/Photoslop/issues/255))
 
-- [ ] Create Document cannot be tapped in landscape on iPhone — found when a
-  rotation leaked out of one test and broke every test after it at the same
-  point. Unknown whether it affects a person or only the automation; the first
-  step is to try it by hand, not to change layout
-  ([#252](https://github.com/CryptoJones/Photoslop/issues/252))
-
 - [ ] The iPadOS job still passes `-retry-tests-on-failure -test-iterations 2`,
   for one failure mode only: the XCTest daemon failing to initialise a UI-testing
   session (`XCTDaemonErrorDomain Code=19`, `AXDisableAccessibilityOnTermination`),
@@ -59,6 +53,15 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] Create Document cannot be tapped in landscape on iPhone — tried by hand
+  on 2026-08-14, as the item asked, and it does not affect a person: in compact
+  height iOS 18 swaps the launch scene for the system document browser, whose
+  own + button creates a document fine under a finger. Only XCUITest is locked
+  out — both Create Document copies report unhittable and synthesized taps
+  misfire against the browser's remote view under rotation — so the landscape
+  skip stays, with its comment corrected. No layout was changed
+  ([#252](https://github.com/CryptoJones/Photoslop/issues/252))
 
 - [x] Pinch-zoom and pan died the moment a crop started, because suspending
   drawing switched off hit-testing for the whole scroll view. Fixed in 2.9.0 by
