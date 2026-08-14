@@ -151,7 +151,22 @@ final class CropUITests: UITestCase {
       withVelocity: .slow,
       thenHoldForDuration: 0.1)
 
-    XCTAssertNotEqual(readout.label, before, "dragging the corner did not resize the crop")
+    if readout.label == before {
+      // Instrument on failure rather than reasoning about it from a distance.
+      // This test failed only on CI, whose iPad runs iOS 18.5 where the local
+      // simulators run 26.5 — a gap no amount of local re-running can cross,
+      // and one that cost a wrong fix before this dump existed (L-001 rule 2).
+      XCTFail(
+        """
+        dragging the corner did not resize the crop.
+        readout=\(readout.label)
+        bottom right handle=\(handle.frame) hittable=\(handle.isHittable)
+        top left handle=\(app.otherElements["Crop top left"].firstMatch.frame)
+        window=\(app.windows.firstMatch.frame)
+        hierarchy:
+        \(app.debugDescription)
+        """)
+    }
   }
 
   /// Zooming while cropping (#270).

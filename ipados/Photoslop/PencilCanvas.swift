@@ -48,7 +48,7 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
 
   func makeUIView(context: Context) -> CanvasHostView {
     let view = CanvasHostView()
-    view.mount(context.coordinator.overlayHost.view)
+    view.mount(context.coordinator.overlayHost)
     configure(view)
     view.canvasView.delegate = context.coordinator
     return view
@@ -133,6 +133,8 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
   let contentView = UIView()
   /// Holds the SwiftUI overlay, in document pixels, above the artwork.
   private let overlayContainer = UIView()
+  /// The overlay's hosting controller, until an owning controller can adopt it.
+  private var pendingOverlayController: UIViewController?
   let imageView = UIImageView()
   let canvasView = PKCanvasView()
   private var canvasSize = CGSize.zero
@@ -217,12 +219,50 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
     centerCanvas()
   }
 
-  /// Put the overlay's hosted view into the scrolling content.
-  func mount(_ overlayView: UIView) {
-    overlayView.backgroundColor = .clear
-    overlayView.frame = overlayContainer.bounds
-    overlayView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    overlayContainer.addSubview(overlayView)
+  /// Put the overlay's hosting controller into the scrolling content.
+  ///
+  /// The **controller** is parented, not merely its view. Adding a hosting
+  /// controller's view to a hierarchy while leaving the controller out of the
+  /// view-controller hierarchy is unsupported, and what it costs is gesture
+  /// delivery: an orphaned hosting controller never joins the responder chain,
+  /// so on iOS 18 a drag inside the overlay was recognised as a press and then
+  /// went nowhere — the crop handles could be touched and would not move. It
+  /// happened to work on iOS 26, which is why five local runs passed while CI,
+  /// on 18.5, failed every time.
+  func mount(_ controller: UIViewController) {
+    controller.view.backgroundColor = .clear
+    controller.view.frame = overlayContainer.bounds
+    controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    overlayContainer.addSubview(controller.view)
+    pendingOverlayController = controller
+    adoptOverlayController()
+  }
+
+  /// Adopt the overlay controller once this view is in a window and an owning
+  /// controller exists to adopt it. `mount` runs from `makeUIView`, before the
+  /// view has a window, so the parent is not reachable yet.
+  private func adoptOverlayController() {
+    guard let controller = pendingOverlayController,
+      controller.parent == nil,
+      let owner = owningViewController
+    else { return }
+    owner.addChild(controller)
+    controller.didMove(toParent: owner)
+    pendingOverlayController = nil
+  }
+
+  private var owningViewController: UIViewController? {
+    var responder: UIResponder? = next
+    while let current = responder {
+      if let controller = current as? UIViewController { return controller }
+      responder = current.next
+    }
+    return nil
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    adoptOverlayController()
   }
 
   func setOverlayActive(_ active: Bool) {
