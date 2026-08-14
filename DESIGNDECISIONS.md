@@ -173,6 +173,62 @@ device.
 
 ---
 
+## DD-011 — Layer sources are kept as compressed bytes, not a layer cap
+
+**Status: Accepted (2026-08-13).**
+
+Resizing a placed layer on iOS ([#262](https://github.com/CryptoJones/Photoslop/issues/262))
+needs pristine source pixels, or every resize resamples the resampled result and
+detail is lost for good. The question was how to pay for that on a device, and
+whether to buy it by capping documents at four layers.
+
+**The decision: keep the source as its original compressed bytes, decode on
+demand, and do not cap the layer count.**
+
+**Why.** At the default 2048x1536 canvas the numbers decide it:
+
+| | |
+|---|---:|
+| Placed layer bitmap, decoded, canvas-sized | 12 MiB |
+| Pristine source kept as a decoded bitmap (4032x3024 photo) | 48 MiB |
+| Pristine source kept as its original compressed bytes | 2-4 MiB |
+
+The expensive reading of "spend memory per layer" is the second row — a second
+decoded bitmap, four times the cost of the layer itself. The third row costs
+less than a third of what the layer already costs, and it is what makes resize
+non-destructive: each resize re-renders from the source with a new scale rather
+than compounding on the last result.
+
+Only imported layers carry a source. A drawn layer has none, so the cost falls
+exactly on the layers that can be resized and nowhere else.
+
+**Why not the four-layer cap.** It would refuse work the app can already do — a
+background, two subjects, two speech bubbles and a caption is six layers and was
+composed on a phone before this was written. And the guard it would provide
+already exists in a better shape: `ProjectArchive` enforces 256 MiB per layer and
+1 GiB per project. Those are byte budgets, which bound what actually costs
+something. A count does not: 2048 layers is 24 GB of bitmaps and the byte cap
+stops that long before the count is reached, while a cap of four stops a
+composite that fits in 80 MiB.
+
+**The backstop, if retention needs one.** Bound the *sources*, not the layers:
+keep them until they total a fixed budget, then drop the oldest and let those
+layers resize destructively. That degrades under pressure instead of refusing a
+sixth layer, and it is consistent with DD-001 — memory is managed, not rationed
+by fiat.
+
+**Consequences.**
+- `RasterLayer` grows an optional compressed source for imported layers; the
+  `.photoslop` package carries it, so a resize is still non-destructive after a
+  document is closed and reopened.
+- A document with sources is larger on disk. The per-layer and per-project caps
+  already police that.
+- This is the iOS answer only. The desktop already solves it with smart objects
+  (`--convert-smart` / `--restore-smart`), which keep pristine pixels resident
+  because a desktop can afford it.
+
+---
+
 *New decisions get the next DD number. Reversing one requires a new entry
 that names the entry it supersedes — history is append-only.*
 
