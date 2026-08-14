@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [Unreleased]
+## [2.8.0] — 2026-08-13
 
 ### Added
 - **The iOS launch screen carries the app's identity.** The mascot, version and
