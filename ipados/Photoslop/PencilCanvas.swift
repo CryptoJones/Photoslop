@@ -148,7 +148,7 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
   }
 }
 
-final class CanvasHostView: UIView, UIScrollViewDelegate {
+final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegate {
   let scrollView = UIScrollView()
   var onZoomScaleChanged: ((CGFloat) -> Void)?
   private var lastReportedZoomScale: CGFloat = 0
@@ -228,9 +228,22 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
     let boxDrag = UIPanGestureRecognizer(target: self, action: #selector(handleBoxDrag))
     boxDrag.maximumNumberOfTouches = 1
     boxDrag.isEnabled = false
-    overlayContainer.addGestureRecognizer(boxDrag)
+    // On the scroll view, not on the overlay container. A recogniser on the
+    // container did not fire on iPad at all — measured, drags=0 — while it did
+    // on iPhone, once the SwiftUI views underneath were left hit-testable. The
+    // scroll view is an ancestor of every view a touch on the canvas can land
+    // on, so it sees the touch whichever of them wins the hit test.
+    boxDrag.delegate = self
+    scrollView.addGestureRecognizer(boxDrag)
     boxDragRecognizer = boxDrag
   }
+
+  /// Share the touch with the scroll view's own recognisers, so a two-finger
+  /// pinch still zooms while a box is being dragged with one finger.
+  func gestureRecognizer(
+    _ recognizer: UIGestureRecognizer,
+    shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+  ) -> Bool { true }
 
   @objc private func handleBoxDrag(_ recognizer: UIPanGestureRecognizer) {
     guard let onBoxDrag else { return }

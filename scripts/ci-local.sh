@@ -39,6 +39,7 @@ IPHONE_NAME="CI-iPhone-${RUNTIME_VERSION}"
 BUNDLE_ID="io.ronin48.photoslop.ipad"
 
 WHAT="${1:-all}"
+FAILED_LEGS=""
 
 say() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 
@@ -80,21 +81,38 @@ print(next((d['udid'] for runtime in devices.values() for d in runtime
 
 # One simulator at a time. Booting both up front starves the machine, which is
 # how a photo-permission fix once took down three unrelated tests (L-002).
+# A leg's exit status is the leg's verdict, and it must survive the pipe.
+#
+# The first version of this piped xcodebuild into grep and ended `|| true`, so a
+# failing leg exited 0 and the script printed "Done". A whole iPad leg failed
+# that way and was reported as green — the exact failure this script exists to
+# prevent, committed by the script itself. `PIPESTATUS` is what makes the
+# filtered output honest.
 run_leg() {
-  local label="$1" udid="$2"
+  local label="$1" udid="$2" status
   say "iOS leg: ${label} (iOS ${RUNTIME_VERSION})"
   xcrun simctl shutdown all >/dev/null 2>&1 || true
   xcrun simctl boot "$udid" >/dev/null 2>&1 || true
   sleep 10
   # The export-to-Photos test asserts the save, not the consent dialog.
   xcrun simctl privacy "$udid" grant photos-add "$BUNDLE_ID" >/dev/null 2>&1 || true
+  set +e
   xcodebuild test \
     -project ipados/Photoslop-iPadOS.xcodeproj \
     -scheme PhotoslopIPad \
     -destination "platform=iOS Simulator,id=${udid}" \
     -derivedDataPath ipados/build/ci-local \
-    | grep -E "error:|Test Case.*failed|Executed .* tests, with|\*\* TEST" || true
+    | grep -E "error:|Test Case.*failed|Executed .* tests, with|\*\* TEST"
+  status="${PIPESTATUS[0]}"
+  set -e
   xcrun simctl shutdown "$udid" >/dev/null 2>&1 || true
+  if [ "$status" -ne 0 ]; then
+    FAILED_LEGS="${FAILED_LEGS}${label} "
+    printf '\n\033[1;31m==> FAILED: %s\033[0m\n' "$label"
+  else
+    printf '\n\033[1;32m==> passed: %s\033[0m\n' "$label"
+  fi
+  return 0
 }
 
 run_ios() {
@@ -166,5 +184,11 @@ case "$WHAT" in
   all) run_python; run_desktop; run_ios ;;
   *) echo "usage: $0 [all|python|desktop|ios]" >&2; exit 2 ;;
 esac
+
+if [ -n "$FAILED_LEGS" ]; then
+  printf '\n\033[1;31m==> FAILED: %s\033[0m\n' "$FAILED_LEGS"
+  echo "Do not push. This is the configuration CI runs." >&2
+  exit 1
+fi
 
 say "Done. A green run here is the same configuration CI runs."
