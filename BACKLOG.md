@@ -9,32 +9,22 @@ sync — check an item here when its issue closes.
 ### Desktop
 
 - [ ] A user reports the desktop version "doesn't work" — no symptom, platform
-  or install method yet, and it does not reproduce: at 2.9.0 the wheel installs,
-  the GUI entry point boots Qt and round-trips an image, the CLI writes a file,
-  and the macOS app bundle builds and launches. Held open until it can be pinned
-  down; Gatekeeper quarantine on an un-notarized artifact is the leading guess
+  or install method yet, and it does not reproduce. The old leading guess is
+  dead: the shipped 2.9.0 macOS artifact is Notarized Developer ID, accepted
+  by Gatekeeper under a quarantine attribute, and launches (checked
+  2026-08-14, details on the issue). New leading suspect: **Windows**, whose
+  artifact is literally named UNSIGNED and gets a SmartScreen wall. Held open
+  until the reporter supplies platform, install route, and what "doesn't
+  work" looked like
   ([#273](https://github.com/CryptoJones/Photoslop/issues/273))
-
-- [ ] Nothing launches a real window — every desktop check runs
-  `QT_QPA_PLATFORM=offscreen`, so window creation, HiDPI scale factors and the
-  native menu bar have no coverage at all. That is the half of the app a person
-  sees first ([#274](https://github.com/CryptoJones/Photoslop/issues/274))
-
-### Found on a device, 2026-08-14
-
-- [ ] Files shows a generic Photoslop icon for every `.photoslop` document
-  instead of a preview. Wants a QuickLook thumbnail extension and a `preview.png`
-  in the package. Held back from 2.9.0 deliberately: a new app-extension target
-  needs its own bundle id and provisioning profile, and that is the signing path
-  that already fails releases (#255)
-  ([#267](https://github.com/CryptoJones/Photoslop/issues/267))
 
 ### Standing
 
-- [ ] App Store GA — what is needed beyond TestFlight: screenshots at the
-  required sizes, description and keywords, an age rating, a privacy label, and
-  the paid-agreements acceptance. The app is to be **free**. The final Submit is
-  the maintainer's to press
+- [ ] App Store GA — what is needed beyond TestFlight is now prepared in
+  `docs/appstore/` (metadata, age-rating answers, Data-Not-Collected privacy
+  label, screenshots at both required sizes, and a repeatable staging test to
+  retake them). The app is to be **free**. What remains is the maintainer's:
+  the paid-agreements acceptance and the final Submit
   ([#257](https://github.com/CryptoJones/Photoslop/issues/257))
 
 - [ ] The iPadOS job still passes `-retry-tests-on-failure -test-iterations 2`,
@@ -46,6 +36,20 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] Nothing launched a real window — a `windowed` CI job now runs
+  `tests/test_windowed.py` against xvfb's X server on Linux and the native
+  window server on macOS: real window exposure, scale factor and DPI, a
+  forced `QT_SCALE_FACTOR=2` HiDPI check, and a real menu bar. The rest of
+  the suite stays offscreen
+  ([#274](https://github.com/CryptoJones/Photoslop/issues/274))
+
+- [x] Files shows a generic icon for every `.photoslop` document — saving now
+  writes a flattened `preview.png` (≤1024 px long side) into the package and
+  a QuickLook thumbnail extension serves it to Files; pre-preview documents
+  still open and get a preview at their next save. Verified in the simulator:
+  the browser shows the canvas instead of the mascot icon
+  ([#267](https://github.com/CryptoJones/Photoslop/issues/267))
 
 - [x] CI mints an Apple development certificate per tagged release and never
   revokes it — two-part fix on 2026-08-14: the TestFlight archive now signs
