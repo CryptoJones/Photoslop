@@ -55,7 +55,10 @@ final class EditorToolbarUITests: UITestCase {
     XCTAssertTrue(more.waitForExistence(timeout: 10), "the overflow menu is not on the bar")
     more.tap()
 
-    for label in ["New", "Canvas Size", "Add Text", "Import Image", "Photos", "About Photoslop"] {
+    for label in [
+      "New", "Canvas Size", "Resize Document…", "Crop…", "Add Text", "Import Image…",
+      "About Photoslop",
+    ] {
       XCTAssertTrue(
         app.buttons[label].waitForExistence(timeout: 10), "\(label) is missing from the menu")
     }
@@ -141,6 +144,28 @@ final class EditorToolbarUITests: UITestCase {
         device — move something into the More Actions menu.
         """)
     }
+  }
+
+  /// Stroke opacity has to be reachable from the strip (#271).
+  ///
+  /// Opacity existed only as the alpha slider inside the system colour sheet,
+  /// two taps deep under a control labelled "Ink color", which is not somewhere
+  /// anybody looks for it. It could not simply become a third slider either:
+  /// the strip is budgeted for an iPad mini in portrait and overflowed there
+  /// once already (#246), so colour and opacity share one popover and one slot.
+  /// This test is what stops the next person "fixing" that by adding a control.
+  func testInkOpacityIsReachableFromTheToolStrip() {
+    let app = openEditor()
+    app.selectTool("Pen")
+
+    let ink = app.descendants(matching: .any).matching(identifier: "Ink color").firstMatch
+    XCTAssertTrue(ink.waitForExistence(timeout: 10), "the ink control is not on the strip")
+    ink.tap()
+
+    let opacity = app.descendants(matching: .any).matching(identifier: "Ink opacity").firstMatch
+    XCTAssertTrue(
+      opacity.waitForExistence(timeout: 10),
+      "there is no opacity control — a translucent stroke is unreachable")
   }
 
   /// The tool picker must not grow with the number of tools.

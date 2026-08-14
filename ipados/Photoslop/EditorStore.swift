@@ -15,6 +15,18 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
   /// Set on text layers. The image is rendered from this, so keeping it is what
   /// lets the words be re-edited and the text be moved after it is placed.
   var text: TextContent?
+  /// The imported pixels at their own resolution, kept so a layer can be
+  /// resized repeatedly without resampling a resample.
+  ///
+  /// Without this, scaling a layer down and back up again would go through the
+  /// canvas-sized bitmap twice and lose detail it never needed to lose. Held in
+  /// memory only for now — persisting it is DD-011's compressed-source work,
+  /// and a reopened document falls back to treating the layer's own pixels as
+  /// the source, which is correct but not lossless across sessions.
+  var source: UIImage?
+  /// Where `source` sits on the canvas, in canvas pixels. Nil means it fills
+  /// the canvas, which is what every layer did before layers could be placed.
+  var placement: CGRect?
 
   var isText: Bool { text != nil }
 
@@ -25,7 +37,9 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
     drawing: PKDrawing = PKDrawing(),
     isVisible: Bool = true,
     opacity: Double = 1,
-    text: TextContent? = nil
+    text: TextContent? = nil,
+    source: UIImage? = nil,
+    placement: CGRect? = nil
   ) {
     self.id = id
     self.name = name
@@ -34,6 +48,8 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
     self.isVisible = isVisible
     self.opacity = opacity
     self.text = text
+    self.source = source
+    self.placement = placement
   }
 }
 
@@ -180,6 +196,54 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     else { return }
     recanvas(
       to: size, offset: CGPoint(x: -bounded.origin.x, y: -bounded.origin.y), actionName: "Crop")
+  }
+
+  /// Scale the whole document to `size`, resampling every layer.
+  ///
+  /// The third of the three operations that change a document's dimensions, and
+  /// the one that was missing (#269). Canvas Size pads or crops around content
+  /// that keeps its pixel size; Crop takes a region and discards the rest; this
+  /// resamples, so nothing is lost and nothing is padded — the picture simply
+  /// becomes the size asked for.
+  ///
+  /// Mirrors `photoslop-cli --resize WxH`.
+  func scaleDocument(to size: CGSize) {
+    guard ProjectArchive.isValidCanvas(size), size != canvasSize else { return }
+    let sx = size.width / canvasSize.width
+    let sy = size.height / canvasSize.height
+    let transform = CGAffineTransform(scaleX: sx, y: sy)
+    mutate(actionName: "Resize Document") {
+      canvasSize = size
+      layers = layers.map { layer in
+        var scaled = layer
+        scaled.image = Self.scaled(layer.image, to: size)
+        // Strokes are vectors and have to travel with the pixels, exactly as
+        // they do for Canvas Size and Crop.
+        scaled.drawing = layer.drawing.transformed(using: transform)
+        if var text = scaled.text {
+          text.x *= Double(sx)
+          text.y *= Double(sy)
+          // Type scales with the picture, or a resized document would keep its
+          // captions at the old size and reflow.
+          text.fontSize *= Double(min(sx, sy))
+          scaled.text = text
+        }
+        if let placed = scaled.placement {
+          scaled.placement = placed.applying(transform)
+        }
+        return scaled
+      }
+    }
+  }
+
+  /// Draw `image` scaled to fill `size` exactly.
+  private static func scaled(_ image: UIImage, to size: CGSize) -> UIImage {
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = false
+    return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+      image.draw(in: CGRect(origin: .zero, size: size))
+    }
   }
 
   private func recanvas(to size: CGSize, offset: CGPoint, actionName: String) {
@@ -359,6 +423,132 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     return prepared.count
   }
 
+  /// Add one image as a layer at its **own** size, centred, ready to be placed.
+  ///
+  /// `addImageLayers` scales an import to fit the canvas, which is right when
+  /// several photos arrive at once and nobody wants to place each one. It is
+  /// wrong for a single deliberate import: the picture arrives already resized
+  /// with no way back, and choosing how big it should be is most of the point
+  /// (#266). This keeps the original pixels as the layer's `source` so the
+  /// placement box can resize it as many times as it likes without compounding
+  /// resampling loss.
+  ///
+  /// Returns the new layer's id and the rectangle it landed in, which is where
+  /// the placement box opens.
+  @discardableResult
+  func addPlaceableLayer(name: String, image: UIImage) throws -> (id: UUID, rect: CGRect) {
+    guard layers.count < ProjectArchive.maximumLayers else {
+      throw ImportError.resourceLimit(
+        "A project holds \(ProjectArchive.maximumLayers) layers and this document has "
+          + "\(layers.count).")
+    }
+    let normalized = Self.normalizedImage(image)
+    let rect = Self.centredRect(for: normalized.size, in: canvasSize)
+    let layer = RasterLayer(
+      name: uniqueName(base: name),
+      image: Self.drawn(normalized, in: rect, canvas: canvasSize),
+      source: normalized,
+      placement: rect)
+    mutate(actionName: "New Layer from Image") {
+      layers.append(layer)
+      activeLayerID = layer.id
+    }
+    return (layer.id, rect)
+  }
+
+  /// The rectangle an image occupies when it arrives at its own size, centred.
+  ///
+  /// Deliberately **not** scaled to fit: an image larger than the canvas hangs
+  /// over the edges, which is visible in the placement box and is exactly the
+  /// starting point for scaling it down by eye. What it must not do is grow the
+  /// canvas, which is the bug this replaces.
+  static func centredRect(for size: CGSize, in canvas: CGSize) -> CGRect {
+    CGRect(
+      x: ((canvas.width - size.width) / 2).rounded(),
+      y: ((canvas.height - size.height) / 2).rounded(),
+      width: size.width,
+      height: size.height)
+  }
+
+  /// Where a layer's placement box should open.
+  ///
+  /// A layer imported this session knows where its source sits. One restored
+  /// from a file does not, so its own pixels are the source and they fill the
+  /// canvas — resizing from there still works, it just starts from the whole
+  /// layer rather than from the picture inside it.
+  func placementRect(for id: UUID) -> CGRect {
+    layers.first(where: { $0.id == id })?.placement
+      ?? CGRect(origin: .zero, size: canvasSize)
+  }
+
+  /// Draw a layer's source into `rect`, as one undo step.
+  ///
+  /// This is how a placed layer is both positioned and resized — one gesture,
+  /// one operation, whether it is a brand-new import being put where it belongs
+  /// (#266) or an existing layer that came in the wrong size (#262).
+  func placeLayer(_ id: UUID, in rect: CGRect, actionName: String = "Resize Layer") {
+    guard let layer = layers.first(where: { $0.id == id }) else { return }
+    guard rect.width >= 1, rect.height >= 1 else { return }
+    // A layer restored from a file has no separate source, so its own pixels
+    // are it, and they cover the canvas.
+    let source = layer.source ?? layer.image
+    let drawn = Self.drawn(source, in: rect, canvas: canvasSize)
+    mutate(actionName: actionName) {
+      update(id) {
+        $0.image = drawn
+        $0.source = source
+        $0.placement = rect
+      }
+    }
+  }
+
+  /// Draw `image` into `rect` on a transparent canvas-sized bitmap. Anything
+  /// outside the canvas is simply not drawn, which is what "hanging over the
+  /// edge" means once it is committed.
+  static func drawn(_ image: UIImage, in rect: CGRect, canvas: CGSize) -> UIImage {
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = false
+    return UIGraphicsImageRenderer(size: canvas, format: format).image { _ in
+      image.draw(in: rect)
+    }
+  }
+
+  /// Fit a text layer to `rect`: the anchor moves to its corner and the type
+  /// scales so the words span its width.
+  ///
+  /// Text was placed and then stuck — dropped on the canvas at whatever size
+  /// the sheet asked for, with no way to fit it to what is underneath (#261).
+  /// Scaling by width rather than height is what "fit this caption across the
+  /// bottom of the picture" means in practice.
+  @discardableResult
+  func fitTextLayer(_ id: UUID, to rect: CGRect) -> Bool {
+    guard let existing = layers.first(where: { $0.id == id })?.text else { return false }
+    let measured = TextLayerRenderer.measure(
+      text: existing.string, fontSize: CGFloat(existing.fontSize))
+    guard measured.width > 1 else { return false }
+    var content = existing
+    content.fontSize = Double(max(1, CGFloat(existing.fontSize) * rect.width / measured.width))
+    content.x = Double(rect.minX)
+    content.y = Double(rect.minY)
+    guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
+    mutate(actionName: "Fit Text") {
+      update(id) {
+        $0.image = image
+        $0.text = content
+      }
+    }
+    return true
+  }
+
+  /// The box a text layer currently occupies, for the placement box to open on.
+  func textRect(for id: UUID) -> CGRect? {
+    guard let content = layers.first(where: { $0.id == id })?.text else { return nil }
+    let measured = TextLayerRenderer.measure(
+      text: content.string, fontSize: CGFloat(content.fontSize))
+    return CGRect(origin: content.anchor, size: measured)
+  }
+
   /// Draw `image` centred on a transparent canvas-sized bitmap, scaled down to
   /// fit if it is larger. Smaller images are left at their own size rather than
   /// stretched, because upscaling invents detail that was never photographed.
@@ -419,6 +609,21 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
       )
       layers.insert(copy, at: index + 1)
       activeLayerID = copy.id
+    }
+  }
+
+  /// Remove a named layer, whether or not it is the active one.
+  ///
+  /// Used when an import is cancelled from the placement box: the layer was
+  /// added so it could be seen while it was positioned, and declining the
+  /// placement declines the layer.
+  func deleteLayer(_ id: UUID) {
+    guard canDeleteLayer, let index = layers.firstIndex(where: { $0.id == id }) else { return }
+    mutate(actionName: "Delete Layer") {
+      layers.remove(at: index)
+      if activeLayerID == id {
+        activeLayerID = layers[min(index, layers.count - 1)].id
+      }
     }
   }
 
@@ -507,10 +712,20 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }.value
   }
 
+  /// A layer the composite leaves out while the placement box draws it live.
+  ///
+  /// Not part of `EditorState` and so not undoable, because it is not an edit —
+  /// it is the difference between where a layer *is* and where a finger is
+  /// currently dragging it to. Without it the layer would appear twice during a
+  /// placement: once committed underneath, once following the box.
+  @Published var previewSuppressedLayerID: UUID? {
+    didSet { if oldValue != previewSuppressedLayerID { refreshCanvas() } }
+  }
+
   func refreshCanvas() {
     renderRevision += 1
     let expectedRevision = renderRevision
-    let capturedLayers = layers
+    let capturedLayers = layers.filter { $0.id != previewSuppressedLayerID }
     let capturedSize = canvasSize
     let excludedID = activeLayerID
     Task { @MainActor [weak self] in

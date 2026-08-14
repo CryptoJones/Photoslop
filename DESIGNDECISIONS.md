@@ -229,6 +229,52 @@ by fiat.
 
 ---
 
+## DD-012 — A canvas overlay lives inside the canvas's coordinate space, not above it
+
+**Decision.** Anything drawn *about* the document — the crop rectangle, the
+placement box, and whatever comes next — is hosted inside the canvas scroll
+view's content view, in document pixels. It is not floated above the canvas in
+screen points and told where the canvas is.
+
+**The problem this ends.** `CanvasHostView`'s `contentView` is exactly the
+document: its frame is `(0, 0, canvasWidth, canvasHeight)` and the scroll view
+applies zoom and pan as a transform on top. So a view placed inside it is
+already in the document's units. A view placed *above* it is not, and has to be
+told the canvas's on-screen rectangle and convert — a conversion that depends on
+zoom scale, content inset and content offset, all of which change under the
+user's fingers and are published asynchronously from UIKit while the model
+updates synchronously.
+
+That conversion produced three separate user-visible bugs in a fortnight, each
+diagnosed and fixed on its own before the pattern was recognised:
+
+- **#260** — the crop took a region nobody chose, because the overlay guessed
+  the canvas's position by fitting and centring, which is right only before the
+  first pinch.
+- **#268** — a second crop divided the new, smaller canvas by the old, larger
+  drawn rectangle, because the two arrived out of order.
+- **#270** — pinch and zoom died during a crop, because suspending drawing meant
+  switching off hit-testing for the whole scroll view; a floating overlay is not
+  in the scroll view, so its touches never reach the scroll view's recognisers.
+
+**Consequences.**
+- `CropOverlay` became `CanvasBox`, which takes its rectangle in document pixels
+  and does no conversion at all. The readout is the truth rather than a
+  rendering of it, and the applied operation is exactly what the readout said.
+- `PencilCanvas` is generic over its overlay and hosts it through a
+  `UIHostingController` whose view sits in `contentView`.
+- The canvas publishes only its **zoom scale**, and only so an overlay can keep
+  handles and labels finger-sized: divide chrome by the zoom, leave everything
+  about the document alone. `onCanvasRectChanged` is gone.
+- Suspending drawing is now done to `PKCanvasView` alone. While a box is up, one
+  finger drags it and two fingers pan, the way two fingers already panned while
+  drawing; the pinch recogniser is never touched.
+- The cost is that a handle can be scrolled out of view, since it lives in the
+  scrolling content. That is the correct behaviour — it is attached to a place
+  in the picture — and it is why the box may be zoomed and panned at all.
+
+---
+
 *New decisions get the next DD number. Reversing one requires a new entry
 that names the entry it supersedes — history is append-only.*
 

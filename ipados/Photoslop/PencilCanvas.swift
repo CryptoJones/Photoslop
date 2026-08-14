@@ -3,7 +3,22 @@ import PencilKit
 import SwiftUI
 import UIKit
 
-struct PencilCanvas: UIViewRepresentable {
+/// The canvas, and anything drawn on top of it.
+///
+/// `Overlay` is hosted **inside** the scroll view's content rather than floated
+/// above it, which is the whole point: `contentView`'s coordinate space is the
+/// document's own pixels, so an overlay placed there needs no conversion, zooms
+/// and pans with the picture for free, and — because the touches land inside
+/// the scroll view — leaves pinch and pan working while a mode is up.
+///
+/// The overlay used to sit above the canvas in screen points, told where the
+/// canvas was by `onCanvasRectChanged`. That split coordinate space produced
+/// three bugs in a fortnight: the crop took a region nobody chose (#260), a
+/// second crop divided the new canvas by the old rectangle (#268), and
+/// suspending drawing meant switching off hit-testing for the whole scroll
+/// view, which took pinch and zoom with it (#270). All three were the same
+/// mistake, so the fix is to stop making it rather than to patch the arithmetic.
+struct PencilCanvas<Overlay: View>: UIViewRepresentable {
   let backgroundImage: UIImage
   let canvasSize: CGSize
   let drawing: PKDrawing
@@ -16,28 +31,33 @@ struct PencilCanvas: UIViewRepresentable {
   /// can be moved. `isFinal` marks the end of the gesture, which is where the
   /// undo entry belongs — one per drag rather than one per touch sample.
   var onCanvasDragged: ((CGPoint, Bool) -> Void)?
-  /// Where the canvas is actually drawn, in this view's own coordinates.
-  ///
-  /// Anything overlaid on the canvas has to be told this rather than guess it.
-  /// The canvas lives in a `UIScrollView` with its own zoom scale, content inset
-  /// and content offset, so "fit the canvas into my bounds and centre it" is
-  /// right only before the first pinch or pan — which is why the crop rectangle
-  /// cropped somewhere other than where it was drawn (#260).
-  var onCanvasRectChanged: ((CGRect) -> Void)?
+  /// The zoom scale, so an overlay can keep its chrome a constant size on
+  /// screen. Everything an overlay *draws about the document* — the rectangle,
+  /// its position — is in document pixels and scales correctly on its own; the
+  /// things it draws *for the finger*, like handles and labels, must not.
+  var onZoomScaleChanged: ((CGFloat) -> Void)?
+  /// True while an overlay owns the canvas. Drawing is suspended — a drag
+  /// positions the overlay rather than painting under it — but scrolling,
+  /// pinching and zooming are emphatically not.
+  var overlayIsActive = false
   let onDrawingChanged: (PKDrawing) -> Void
+  /// Drawn inside the scrolling content, in document pixels.
+  @ViewBuilder var overlay: () -> Overlay
 
   func makeCoordinator() -> Coordinator { Coordinator(self) }
 
   func makeUIView(context: Context) -> CanvasHostView {
     let view = CanvasHostView()
+    view.mount(context.coordinator.overlayHost.view)
     configure(view)
     view.canvasView.delegate = context.coordinator
     return view
   }
 
   func updateUIView(_ view: CanvasHostView, context: Context) {
-    view.onCanvasRectChanged = onCanvasRectChanged
+    view.onZoomScaleChanged = onZoomScaleChanged
     context.coordinator.parent = self
+    context.coordinator.overlayHost.rootView = AnyView(overlay())
     configure(view)
   }
 
@@ -64,13 +84,20 @@ struct PencilCanvas: UIViewRepresentable {
     host.onCanvasDragged = onCanvasDragged
     let isMoving = onCanvasDragged != nil
     // Moving needs the touch before PencilKit gets it, or the drag paints.
-    host.canvasView.isUserInteractionEnabled = !isMoving
+    // An overlay needs the same, for the same reason.
+    host.canvasView.isUserInteractionEnabled = !isMoving && !overlayIsActive
+    host.setOverlayActive(overlayIsActive)
     // With one-finger panning left on, the scroll view and the move gesture
     // both claim the same drag: the canvas scrolls while the text moves, so the
     // text lurches away from the finger in steps instead of following it. Give
     // the drag to the text while moving and hand panning back afterwards.
     host.scrollView.panGestureRecognizer.isEnabled = !isMoving
-    host.scrollView.panGestureRecognizer.minimumNumberOfTouches = drawsWithFinger ? 2 : 1
+    // While an overlay is up, one finger belongs to it — dragging a handle —
+    // and two fingers pan, the way two fingers already pan while drawing. The
+    // pinch recogniser is untouched throughout, which is what makes zooming
+    // work during a crop (#270).
+    host.scrollView.panGestureRecognizer.minimumNumberOfTouches =
+      (drawsWithFinger || overlayIsActive) ? 2 : 1
     if host.canvasView.drawing.dataRepresentation() != drawing.dataRepresentation() {
       let delegate = host.canvasView.delegate
       host.canvasView.delegate = nil
@@ -82,8 +109,16 @@ struct PencilCanvas: UIViewRepresentable {
 
   final class Coordinator: NSObject, PKCanvasViewDelegate {
     var parent: PencilCanvas
+    /// Retains the overlay's hosting controller. Its view lives in the scroll
+    /// view's content, so the overlay is laid out in document pixels.
+    let overlayHost = UIHostingController<AnyView>(rootView: AnyView(EmptyView()))
 
-    init(_ parent: PencilCanvas) { self.parent = parent }
+    init(_ parent: PencilCanvas) {
+      self.parent = parent
+      super.init()
+      overlayHost.view.backgroundColor = .clear
+      overlayHost.view.isOpaque = false
+    }
 
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
       parent.onDrawingChanged(canvasView.drawing)
@@ -93,9 +128,11 @@ struct PencilCanvas: UIViewRepresentable {
 
 final class CanvasHostView: UIView, UIScrollViewDelegate {
   let scrollView = UIScrollView()
-  var onCanvasRectChanged: ((CGRect) -> Void)?
-  private var lastReportedCanvasRect: CGRect = .null
+  var onZoomScaleChanged: ((CGFloat) -> Void)?
+  private var lastReportedZoomScale: CGFloat = 0
   let contentView = UIView()
+  /// Holds the SwiftUI overlay, in document pixels, above the artwork.
+  private let overlayContainer = UIView()
   let imageView = UIImageView()
   let canvasView = PKCanvasView()
   private var canvasSize = CGSize.zero
@@ -134,6 +171,10 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
     scrollView.addSubview(contentView)
     contentView.addSubview(imageView)
     contentView.addSubview(canvasView)
+    overlayContainer.backgroundColor = .clear
+    // Off until a mode is up, so an inert overlay cannot swallow a stroke.
+    overlayContainer.isUserInteractionEnabled = false
+    contentView.addSubview(overlayContainer)
 
     let drag = UIPanGestureRecognizer(target: self, action: #selector(handleMoveDrag))
     drag.maximumNumberOfTouches = 1
@@ -176,6 +217,18 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
     centerCanvas()
   }
 
+  /// Put the overlay's hosted view into the scrolling content.
+  func mount(_ overlayView: UIView) {
+    overlayView.backgroundColor = .clear
+    overlayView.frame = overlayContainer.bounds
+    overlayView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    overlayContainer.addSubview(overlayView)
+  }
+
+  func setOverlayActive(_ active: Bool) {
+    overlayContainer.isUserInteractionEnabled = active
+  }
+
   func updateCanvasSize(_ size: CGSize) {
     guard size != canvasSize else { return }
     canvasSize = size
@@ -183,6 +236,8 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
     contentView.frame = frame
     imageView.frame = frame
     canvasView.frame = frame
+    // The overlay is exactly the document, so its bounds *are* canvas pixels.
+    overlayContainer.frame = frame
     canvasView.contentSize = size
     scrollView.contentSize = size
     fitted = false
@@ -205,19 +260,25 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
     scrollView.contentInset = UIEdgeInsets(
       top: vertical, left: horizontal, bottom: vertical, right: horizontal
     )
-    reportCanvasRect()
+    reportZoomScale()
   }
 
-  /// Publish the canvas's on-screen rectangle, in this view's coordinates.
-  func reportCanvasRect() {
+  /// Publish the zoom scale so an overlay can counter-scale its handles.
+  ///
+  /// This is all an overlay now needs from the canvas. It used to be told the
+  /// canvas's rectangle on screen, because it lived in screen coordinates and
+  /// had to convert; hosted inside the content it is already in the document's
+  /// coordinates, and the only thing left that depends on zoom is how big a
+  /// handle should be under a fingertip.
+  func reportZoomScale() {
     guard canvasSize.width > 0, canvasSize.height > 0 else { return }
-    let rect = contentView.convert(contentView.bounds, to: self)
-    guard rect != lastReportedCanvasRect else { return }
-    lastReportedCanvasRect = rect
-    onCanvasRectChanged?(rect)
+    let scale = scrollView.zoomScale
+    guard abs(scale - lastReportedZoomScale) > 0.0001 else { return }
+    lastReportedZoomScale = scale
+    onZoomScaleChanged?(scale)
   }
 
-  func scrollViewDidScroll(_ scrollView: UIScrollView) { reportCanvasRect() }
+  func scrollViewDidScroll(_ scrollView: UIScrollView) { reportZoomScale() }
 
   private func makeTransparent(_ view: UIView) {
     view.backgroundColor = .clear

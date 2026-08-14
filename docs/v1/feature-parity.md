@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v2.8.0** against six
+An honest, category-by-category comparison of **Photoslop v2.9.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -24,13 +24,13 @@ client exposes it.
 | Native/third-party plugins | local opt-in | — | local opt-in | denied |
 | Network model operations | local configured endpoint | — | local configured endpoint | denied |
 | Accessibility automation | automated semantics + manual matrix required | native labels + manual matrix required | structured errors | structured tool errors |
-| Desktop distributable | v2.8.0 macOS signed/not notarized; Windows unsigned; later tags secret-gated | device signing required; no public bundle | wheel/sdist CI smoke | installed with Python package |
+| Desktop distributable | v2.9.0 macOS signed/not notarized; Windows unsigned; later tags secret-gated | device signing required; no public bundle | wheel/sdist CI smoke | installed with Python package |
 
 ## Versions compared
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 2.8.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
+| **Photoslop** | 2.9.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |

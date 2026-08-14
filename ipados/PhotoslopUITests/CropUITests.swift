@@ -153,4 +153,91 @@ final class CropUITests: UITestCase {
 
     XCTAssertNotEqual(readout.label, before, "dragging the corner did not resize the crop")
   }
+
+  /// Zooming while cropping (#270).
+  ///
+  /// The canvas froze the moment a crop began, because suspending drawing was
+  /// done by switching off hit-testing for the whole scroll view — which took
+  /// pinch, zoom and pan with it. Choosing a crop edge precisely is exactly
+  /// when you want to zoom in, and it was the one moment the app refused.
+  ///
+  /// The assertion is deliberately in two halves, because together they are
+  /// also the proof that the overlay and the document share a coordinate
+  /// space: after a pinch the rectangle must be **bigger on screen** and the
+  /// same **size in pixels**. If the readout moved, the box is being measured
+  /// against the wrong thing, which is how #260 and #268 happened.
+  func testPinchingZoomsTheCanvasWhileCropping() {
+    let app = beginCrop()
+
+    let readout = app.staticTexts["Crop size"].firstMatch
+    XCTAssertTrue(readout.waitForExistence(timeout: 15))
+    let sizeInPixels = readout.label
+
+    let handle = app.otherElements["Crop top left"].firstMatch
+    XCTAssertTrue(handle.exists, "no handle to measure")
+    let opposite = app.otherElements["Crop bottom right"].firstMatch
+    XCTAssertTrue(opposite.exists)
+    let spanBefore = opposite.frame.midX - handle.frame.midX
+    XCTAssertGreaterThan(spanBefore, 0, "the crop box has no width on screen to begin with")
+
+    app.scrollViews.firstMatch.pinch(withScale: 2.5, velocity: 2)
+
+    let spanAfter =
+      app.otherElements["Crop bottom right"].firstMatch.frame.midX
+      - app.otherElements["Crop top left"].firstMatch.frame.midX
+    XCTAssertGreaterThan(
+      spanAfter, spanBefore * 1.2,
+      """
+      pinching did not zoom the canvas during a crop: the box spans \(spanAfter)pt \
+      where it spanned \(spanBefore)pt before.
+      """)
+    XCTAssertEqual(
+      readout.label, sizeInPixels,
+      "zooming changed the crop size in pixels, so the box is measured against the screen")
+  }
+
+  /// A second crop has to start from the canvas the first one produced (#268).
+  ///
+  /// It started from the original instead, because the overlay was told the
+  /// canvas's on-screen rectangle asynchronously while the canvas size updated
+  /// synchronously — so a crop begun before the news arrived divided the new,
+  /// smaller canvas by the old, larger rectangle.
+  func testASecondCropStartsFromTheCroppedDocument() {
+    let app = beginCrop()
+
+    let readout = app.staticTexts["Crop size"].firstMatch
+    XCTAssertTrue(readout.waitForExistence(timeout: 15))
+
+    // Shrink the rectangle so the crop actually changes the canvas.
+    app.otherElements["Crop bottom right"].firstMatch.press(
+      forDuration: 0.1,
+      thenDragTo: app.otherElements["Crop top left"].firstMatch,
+      withVelocity: .slow,
+      thenHoldForDuration: 0.1)
+    let croppedSize = readout.label
+
+    app.buttons["Apply Crop"].firstMatch.tap()
+    XCTAssertTrue(
+      app.buttons["Tool, Pen"].firstMatch.waitForExistence(timeout: 15),
+      "the crop never applied")
+
+    beginCrop()
+    let reopened = app.staticTexts["Crop size"].firstMatch
+    XCTAssertTrue(reopened.waitForExistence(timeout: 15), "the crop bar did not come back")
+    XCTAssertEqual(
+      reopened.label, croppedSize,
+      """
+      the second crop opened on \(reopened.label) when the document is now \
+      \(croppedSize) — it is still working from the canvas before the first crop.
+      """)
+
+    // Put the document back. Every test in this target shares one document, and
+    // this is the only test that shrinks the canvas to its minimum — on a
+    // 16-pixel canvas the eight crop handles land on top of one another and the
+    // *next* test fails on a handle it cannot reach. A test that changes the
+    // shared document owns undoing it.
+    app.buttons["Cancel Crop"].firstMatch.tap()
+    let undo = app.buttons["Undo"].firstMatch
+    if undo.waitForExistence(timeout: 15), undo.isHittable { undo.tap() }
+  }
 }

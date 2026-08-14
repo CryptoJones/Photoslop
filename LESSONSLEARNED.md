@@ -187,4 +187,53 @@ when the truth is that nobody waited long enough.
 
 ---
 
+## L-005 — Three bugs with one cause look like three bugs until you count them
+
+**Cost:** three user-reported bugs and three separate fixes over a fortnight
+(#260, #268, #270), plus a fourth latent in each of three features that had not
+been built yet (#266, #262, #261).
+
+**Symptom.** Three unrelated-looking complaints about the crop tool:
+
+1. "instead of cropping exactly where you tell it to, the top horizontal start
+   is at the top of the image, not the top of the crop box"
+2. "when I crop a second time it tries to start at the original image size not
+   my new cropped image size"
+3. "I need to be able to scale in and out of the canvas with pinch and zoom"
+
+The first reads as arithmetic, the second as a race, the third as a missing
+feature. Each was diagnosed correctly and fixed on its own terms — publish the
+canvas rectangle; then publish it sooner; then stop switching off hit-testing.
+
+**What it actually was.** One decision: the overlay lived in screen coordinates
+while the thing it described lived in document coordinates. Every symptom above
+is a way that conversion can be wrong — stale inputs, out-of-order inputs, and
+the fact that a view floating above a scroll view is not *in* it and so cannot
+share its gestures. Deleting the conversion deleted all three at once, and the
+fix is smaller than any of the three patches it replaced.
+
+**What should have raised it earlier.** The second bug in the same conversion.
+The first fix added a published rectangle; the second fix adjusted *when* that
+rectangle was published. A fix that adjusts the timing of a previous fix is not
+a fix, it is a symptom of a design that has to be kept in sync — and anything
+that has to be kept in sync will eventually not be.
+
+### Rules this earns
+
+1. **When a second bug lands in the same conversion, stop fixing bugs and
+   question the conversion.** Two faults in one mechanism is the mechanism
+   telling you about itself.
+2. **Prefer deleting a translation to correcting it.** A coordinate space you do
+   not convert between cannot be converted wrongly. Ask what space the data is
+   *already* in and whether the view can simply live there.
+3. **Count the callers before fixing the third instance.** Three more features
+   were queued behind this one — a placement box, a layer resize, a text box —
+   and every one would have inherited the same split. Fixing it once cost less
+   than the three patches would have, before counting the three it prevented.
+4. **A user reporting a missing feature may be reporting a bug.** "I need pinch
+   and zoom while cropping" sounds like an enhancement; it was one line of
+   collateral damage from an unrelated fix.
+
+---
+
 *Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*
