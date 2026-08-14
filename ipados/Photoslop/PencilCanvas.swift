@@ -227,6 +227,24 @@ final class CanvasHostView: UIView, UIScrollViewDelegate {
 
   func setOverlayActive(_ active: Bool) {
     overlayContainer.isUserInteractionEnabled = active
+    // A scroll view holds a touch back to decide whether it is a scroll, and
+    // will cancel it outright once it decides yes. That is right for a list and
+    // wrong for a handle: a slow, careful drag — which is how anyone sizes a
+    // crop by eye — was being taken away from the box mid-gesture and given to
+    // the scroll view, so the rectangle simply did not move.
+    //
+    // The overlay only became vulnerable to this when it moved inside the
+    // scroll view (DD-012). The delay is lifted while a box is up and restored
+    // afterwards, so ordinary scrolling still feels ordinary.
+    //
+    // `canCancelContentTouches` is deliberately left alone. Switching it off as
+    // well does stop the scroll view stealing the drag — and also stops it
+    // starting a pinch, because the first finger's touch is then owned outright
+    // by the box and the second finger never gets to begin a zoom. That trade
+    // is exactly backwards: zooming while cropping is the feature this release
+    // exists for (#270). Cancellation is not the problem here anyway, since
+    // panning needs two fingers while a box is up.
+    scrollView.delaysContentTouches = !active
   }
 
   func updateCanvasSize(_ size: CGSize) {
