@@ -211,3 +211,17 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: scripts/publish-ipados-testflight.sh
+      # Cloud signing on an ephemeral keychain used to mint a fresh Apple
+      # Development certificate ("Created via API") every release and could
+      # never reuse the last one; at the account limit of 15 the archive fails
+      # with "choose a certificate to revoke" after the tests have passed
+      # (#255). The archive now signs with the imported Apple Distribution
+      # identity so nothing new should be minted, and this drains whatever
+      # still accumulates. It cannot fail the release: by now the build is on
+      # TestFlight, and the script downgrades every API problem to a warning.
+      - name: Revoke the throwaway development certificates cloud signing minted
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: python3 scripts/revoke-ci-development-certificates.py
