@@ -6,6 +6,20 @@ sync — check an item here when its issue closes.
 
 ## Open
 
+### Desktop
+
+- [ ] A user reports the desktop version "doesn't work" — no symptom, platform
+  or install method yet, and it does not reproduce: at 2.9.0 the wheel installs,
+  the GUI entry point boots Qt and round-trips an image, the CLI writes a file,
+  and the macOS app bundle builds and launches. Held open until it can be pinned
+  down; Gatekeeper quarantine on an un-notarized artifact is the leading guess
+  ([#273](https://github.com/CryptoJones/Photoslop/issues/273))
+
+- [ ] Nothing launches a real window — every desktop check runs
+  `QT_QPA_PLATFORM=offscreen`, so window creation, HiDPI scale factors and the
+  native menu bar have no coverage at all. That is the half of the app a person
+  sees first ([#274](https://github.com/CryptoJones/Photoslop/issues/274))
+
 ### Found on a device, 2026-08-14
 
 - [ ] Files shows a generic Photoslop icon for every `.photoslop` document
@@ -16,6 +30,12 @@ sync — check an item here when its issue closes.
   ([#267](https://github.com/CryptoJones/Photoslop/issues/267))
 
 ### Standing
+
+- [ ] App Store GA — what is needed beyond TestFlight: screenshots at the
+  required sizes, description and keywords, an age rating, a privacy label, and
+  the paid-agreements acceptance. The app is to be **free**. The final Submit is
+  the maintainer's to press
+  ([#257](https://github.com/CryptoJones/Photoslop/issues/257))
 
 - [ ] CI mints an Apple development certificate per tagged release and never
   revokes it — the account hit its limit at 15 and the v2.6.0 TestFlight archive
@@ -53,6 +73,11 @@ sync — check an item here when its issue closes.
 
 - [x] A second crop started from the pre-crop canvas
   ([#268](https://github.com/CryptoJones/Photoslop/issues/268))
+
+- [x] Crop took a different region than the rectangle you drew. Fixed in 2.8.0
+  by having the canvas publish where it is drawn; closed by construction in
+  2.9.0, which removed the conversion entirely rather than correcting it
+  ([#260](https://github.com/CryptoJones/Photoslop/issues/260))
 
 - [x] New layer from image scaled the layer to fill the canvas. It now arrives
   at original size in a placement box, constrain proportions on by default
