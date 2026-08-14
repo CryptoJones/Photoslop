@@ -6,6 +6,14 @@ follows [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+- **Files shows what a document looks like.** Every `.photoslop` package got
+  the generic icon, because a package is a folder and nothing told the system
+  which file inside is a picture. Saving now writes a flattened `preview.png`
+  (bounded to 1024 px on the long side) into the package, and a QuickLook
+  thumbnail extension hands it to Files. Documents saved before this have no
+  preview until their next save, and still open. (#267)
+
 ### Fixed
 - **The splash screen never appeared on iPad.** It attached itself to the first
   connected window scene one runloop turn after launch, and on iPad there
