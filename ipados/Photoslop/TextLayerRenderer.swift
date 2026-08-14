@@ -17,6 +17,25 @@ enum TextLayerRenderer {
     return trimmed.isEmpty ? "Text" : String(trimmed.prefix(24))
   }
 
+  /// How much room the words take at this size.
+  ///
+  /// The placement box needs this twice: to open around text that is already on
+  /// the canvas, and to work out what size the type must be for the words to
+  /// span a box the user has dragged.
+  static func measure(text: String, fontSize: CGFloat) -> CGSize {
+    let body = text.trimmingCharacters(in: .newlines)
+    guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .zero }
+    let attributes: [NSAttributedString.Key: Any] = [
+      .font: UIFont.systemFont(ofSize: max(1, fontSize))
+    ]
+    let bounds = NSAttributedString(string: body, attributes: attributes).boundingRect(
+      with: CGSize(
+        width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
+      options: [.usesLineFragmentOrigin, .usesFontLeading],
+      context: nil)
+    return CGSize(width: ceil(bounds.width), height: ceil(bounds.height))
+  }
+
   /// Nil when there is nothing to draw, matching the desktop returning no layer
   /// for blank input rather than adding an empty one.
   static func render(

@@ -25,6 +25,28 @@ final class CropUITests: UITestCase {
     return app
   }
 
+  private func midpoint(_ a: CGRect, _ b: CGRect) -> CGRect {
+    CGRect(x: (a.midX + b.midX) / 2, y: (a.midY + b.midY) / 2, width: 0, height: 0)
+  }
+
+  /// Drag between two points on screen, by coordinate.
+  ///
+  /// Not by element. The box's handles are drawn by SwiftUI and dragged by a
+  /// UIKit recogniser on the container above them, so a handle carries no
+  /// gesture of its own and XCUITest reports `isHittable == false` for it on
+  /// iOS 18 — it refuses to drive an element it believes cannot be touched,
+  /// while a finger has no such difficulty. This is L-001's rule again in a new
+  /// place: assert *geometry* for reachability, and *operate* by coordinate.
+  private func drag(_ app: XCUIApplication, from: CGRect, to: CGRect) {
+    let origin = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+    origin.withOffset(CGVector(dx: from.midX, dy: from.midY))
+      .press(
+        forDuration: 0.2,
+        thenDragTo: origin.withOffset(CGVector(dx: to.midX, dy: to.midY)),
+        withVelocity: .slow,
+        thenHoldForDuration: 0.2)
+  }
+
   func testCropModeOffersHandlesASizeReadoutAndAnAspectLock() {
     let app = beginCrop()
 
@@ -145,12 +167,124 @@ final class CropUITests: UITestCase {
 
     let handle = app.otherElements["Crop bottom right"].firstMatch
     XCTAssertTrue(handle.exists, "no bottom right handle to drag")
-    handle.press(
-      forDuration: 0.1,
-      thenDragTo: app.otherElements["Crop top left"].firstMatch,
-      withVelocity: .slow,
-      thenHoldForDuration: 0.1)
+    let window = app.windows.firstMatch.frame
+    XCTAssertTrue(
+      window.contains(handle.frame),
+      "the bottom right handle is outside the window at \(handle.frame)")
+    // Halfway towards the opposite corner, not all the way to it. Dragging to
+    // the far corner pins the rectangle at its 16px minimum, and a rectangle
+    // already at the minimum cannot shrink — so the test would be asserting
+    // that the box moves only when the document it inherited happens to be
+    // large. Every test here shares one document (see UITestCase).
+    let target = app.otherElements["Crop top left"].firstMatch.frame
+    XCTAssertGreaterThan(
+      handle.frame.midX - target.midX, 64,
+      "the crop box is too small to shrink further — a previous test left it at the minimum")
+    drag(app, from: handle.frame, to: midpoint(handle.frame, target))
 
-    XCTAssertNotEqual(readout.label, before, "dragging the corner did not resize the crop")
+    if readout.label == before {
+      // Instrument on failure rather than reasoning about it from a distance.
+      // This test failed only on CI, whose iPad runs iOS 18.5 where the local
+      // simulators run 26.5 — a gap no amount of local re-running can cross,
+      // and one that cost a wrong fix before this dump existed (L-001 rule 2).
+      XCTFail(
+        """
+        dragging the corner did not resize the crop.
+        readout=\(readout.label)
+        bottom right handle=\(handle.frame) hittable=\(handle.isHittable)
+        top left handle=\(app.otherElements["Crop top left"].firstMatch.frame)
+        window=\(app.windows.firstMatch.frame)
+        hierarchy:
+        \(app.debugDescription)
+        """)
+    }
+  }
+
+  /// Zooming while cropping (#270).
+  ///
+  /// The canvas froze the moment a crop began, because suspending drawing was
+  /// done by switching off hit-testing for the whole scroll view — which took
+  /// pinch, zoom and pan with it. Choosing a crop edge precisely is exactly
+  /// when you want to zoom in, and it was the one moment the app refused.
+  ///
+  /// The assertion is deliberately in two halves, because together they are
+  /// also the proof that the overlay and the document share a coordinate
+  /// space: after a pinch the rectangle must be **bigger on screen** and the
+  /// same **size in pixels**. If the readout moved, the box is being measured
+  /// against the wrong thing, which is how #260 and #268 happened.
+  func testPinchingZoomsTheCanvasWhileCropping() {
+    let app = beginCrop()
+
+    let readout = app.staticTexts["Crop size"].firstMatch
+    XCTAssertTrue(readout.waitForExistence(timeout: 15))
+    let sizeInPixels = readout.label
+
+    let handle = app.otherElements["Crop top left"].firstMatch
+    XCTAssertTrue(handle.exists, "no handle to measure")
+    let opposite = app.otherElements["Crop bottom right"].firstMatch
+    XCTAssertTrue(opposite.exists)
+    let spanBefore = opposite.frame.midX - handle.frame.midX
+    XCTAssertGreaterThan(spanBefore, 0, "the crop box has no width on screen to begin with")
+
+    app.scrollViews.firstMatch.pinch(withScale: 2.5, velocity: 2)
+
+    let spanAfter =
+      app.otherElements["Crop bottom right"].firstMatch.frame.midX
+      - app.otherElements["Crop top left"].firstMatch.frame.midX
+    XCTAssertGreaterThan(
+      spanAfter, spanBefore * 1.2,
+      """
+      pinching did not zoom the canvas during a crop: the box spans \(spanAfter)pt \
+      where it spanned \(spanBefore)pt before.
+      """)
+    XCTAssertEqual(
+      readout.label, sizeInPixels,
+      "zooming changed the crop size in pixels, so the box is measured against the screen")
+  }
+
+  /// A second crop has to start from the canvas the first one produced (#268).
+  ///
+  /// It started from the original instead, because the overlay was told the
+  /// canvas's on-screen rectangle asynchronously while the canvas size updated
+  /// synchronously — so a crop begun before the news arrived divided the new,
+  /// smaller canvas by the old, larger rectangle.
+  func testASecondCropStartsFromTheCroppedDocument() {
+    let app = beginCrop()
+
+    let readout = app.staticTexts["Crop size"].firstMatch
+    XCTAssertTrue(readout.waitForExistence(timeout: 15))
+
+    // Shrink the rectangle, but only halfway across, so the document this test
+    // hands on is still a usable size. Cropping to the 16px minimum leaves a
+    // canvas on which the eight handles land on top of one another and nothing
+    // after this can drag anything.
+    let corner = app.otherElements["Crop bottom right"].firstMatch.frame
+    let opposite = app.otherElements["Crop top left"].firstMatch.frame
+    drag(app, from: corner, to: midpoint(corner, opposite))
+    let croppedSize = readout.label
+
+    app.buttons["Apply Crop"].firstMatch.tap()
+    XCTAssertTrue(
+      app.buttons["Tool, Pen"].firstMatch.waitForExistence(timeout: 15),
+      "the crop never applied")
+
+    beginCrop()
+    let reopened = app.staticTexts["Crop size"].firstMatch
+    XCTAssertTrue(reopened.waitForExistence(timeout: 15), "the crop bar did not come back")
+    XCTAssertEqual(
+      reopened.label, croppedSize,
+      """
+      the second crop opened on \(reopened.label) when the document is now \
+      \(croppedSize) — it is still working from the canvas before the first crop.
+      """)
+
+    // Put the document back. Every test in this target shares one document, and
+    // this is the only test that shrinks the canvas to its minimum — on a
+    // 16-pixel canvas the eight crop handles land on top of one another and the
+    // *next* test fails on a handle it cannot reach. A test that changes the
+    // shared document owns undoing it.
+    app.buttons["Cancel Crop"].firstMatch.tap()
+    let undo = app.buttons["Undo"].firstMatch
+    if undo.waitForExistence(timeout: 15), undo.isHittable { undo.tap() }
   }
 }

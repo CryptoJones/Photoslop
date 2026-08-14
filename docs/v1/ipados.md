@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.8.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.9.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -20,8 +20,9 @@ device name, so an iPad in a narrow Split View gets the phone layout too.
   drawing.
 - A phone's navigation bar holds three controls beside the document title, so
   the compact layout picks them rather than leaving the choice to UIKit:
-  **Layers**, a **More Actions** menu holding New, Canvas Size, the text
-  actions, Import Image, Photos, and About, and **Export**. Undo and redo move
+  **Layers**, a **More Actions** menu holding New, Canvas Size, Resize Document,
+  Crop, Resize Layer, the text actions, Import Image, and About, and
+  **Export**. Undo and redo move
   to the leading edge of the tool strip, which never has to be scrolled to.
 - The tool strip narrows its brush picker and width slider at compact width and
   scrolls horizontally if it still does not fit.
@@ -95,7 +96,12 @@ what it was doing to #227.
   alone, so tilting the Pencil does not change its stroke. Pencil and Marker
   also read the Pencil's altitude and azimuth and broaden as it is laid over,
   which is the tool to reach for when shading. Pen remains the default.
-- Set ink color and brush width from the bottom tool strip.
+- Set ink colour, stroke opacity and brush width from the bottom tool strip.
+  Colour and opacity share one control — a swatch showing the ink as it will
+  actually paint, opening a popover with both. They share a slot deliberately:
+  the strip is budgeted for an iPad mini in portrait, where it has overflowed
+  before and put the ink controls off the edge of the screen (#246), so its item
+  count may not grow.
 - **Add Text** puts text on its own layer, on top of the stack, centred on the
   canvas and ready to move. The anchor is the text's top-left, the same
   convention as `photoslop-cli --text "X,Y,SIZE[,R,G,B]:TEXT"`.
@@ -114,6 +120,11 @@ what it was doing to #227.
   exactly as `photoslop-cli --canvas-size` does, and is undoable. Reach for it to
   change a size already in use, or after cancelling the question a new document
   asks.
+- **Resize Document** takes the same size choice and *scales* to it, resampling
+  every layer, its strokes and its text rather than padding around them. It
+  mirrors `photoslop-cli --resize WxH`. The three size operations are distinct
+  and none replaces another — see
+  [Three ways to change a size](#three-ways-to-change-a-size).
 - **About Photoslop** introduces the app the way the desktop edition does: Le
   Basilisk, the name with no platform attached, and the same one-line
   description, over the licence and repository link. It also reports the
@@ -179,9 +190,8 @@ custom canvas size* only means something if you can see the size you are landing
 on. **Crop** applies it as one undo step; **Cancel** leaves the document
 untouched.
 
-Canvas Size and Crop are two halves of the same idea and neither replaces the
-other: Canvas Size takes a size and centres what is already there, Crop takes a
-*region* and keeps what is inside it.
+See [Three ways to change a size](#three-ways-to-change-a-size) for how this
+differs from Canvas Size and Resize Document.
 
 The aspect control locks the rectangle's shape — **Free**, **Original**, **1:1**,
 **3:2**, **4:3** or **16:9**. Free is the default because a custom size is the
@@ -191,16 +201,77 @@ drag, and a locked drag keeps the corner opposite the handle still, so the
 rectangle does not slide out from under your finger while it corrects itself.
 
 Handles are drawn small and touched large: the hit area is 44pt though the
-painted handle is half that, because a crop handle sits under a fingertip.
-Drawing is suspended while the overlay is up, the same way the text move mode
-suspends it, so a drag positions the rectangle rather than painting a stroke
-beneath it.
+painted handle is half that, because a crop handle sits under a fingertip. It
+stays 44 *points* at any zoom: the box is drawn in document pixels and its
+chrome is divided by the zoom scale, so handles do not become postage stamps
+when you zoom in to place an edge exactly.
+
+Drawing is suspended while the box is up, so a drag positions the rectangle
+rather than painting a stroke beneath it — but **navigation is not**. Pinch to
+zoom and two fingers to pan work throughout, which is the point: choosing a crop
+edge precisely is exactly when you want to zoom in. One finger belongs to the
+box, two fingers to the canvas, the same division that already applied while
+drawing.
+
+### Three ways to change a size
+
+They are easy to confuse and they do different things to the picture:
+
+| Action | The canvas | The content |
+|---|---|---|
+| **Canvas Size** | becomes the chosen size | unchanged in pixels, padded or trimmed around centre |
+| **Crop** | becomes the chosen region | unchanged in pixels, everything outside discarded |
+| **Resize Document** | becomes the chosen size | resampled — nothing lost, nothing padded |
+
+Canvas Size and Crop share one implementation, differing only in whether the
+origin is centred or chosen. Resize Document is the sibling that resamples. All
+three move a layer's pixels *and* its PencilKit strokes *and* its text anchor
+together, which is the part that is easy to forget and the reason they are not
+three separate code paths.
+
+### Placing and resizing a layer
+
+A single imported picture arrives at **its own size**, centred, and stops in a
+placement box before it is committed. The box's corners and edges drag, the
+resulting pixel size shows while you drag, and **Constrain proportions** starts
+on — one tap releases it, because a non-proportional resize distorts a picture
+and is never what anyone wants by accident. **Done** applies it as one undo
+step; **Cancel** removes the layer, since declining the placement declines the
+import.
+
+The same box is reached again through **Resize Layer…** for a layer that came in
+the wrong size, and through **Fit Text…** for a text layer, where dragging the
+box scales the type to span it and moves the anchor to its corner.
+
+A layer imported in this session keeps its original pixels as a source, so
+resizing it repeatedly resamples from the original rather than compounding
+losses. A layer restored from a saved document has no separate source yet — see
+DD-011 — so its box opens on the whole canvas and its own pixels are the source.
+
+Several pictures chosen at once still arrive scaled to fit the canvas: placing
+each of twenty photos by hand is not a workflow anybody wants.
+
+The box may be dragged past the canvas edge, which is how you fill a canvas with
+the middle of a photograph. A crop rectangle may not — you cannot keep a region
+of a picture that is not in the picture.
 
 Cropping shares its implementation with Canvas Size — the same operation with a
 chosen origin rather than a centred one. That is deliberate: a layer is pixels
 *and* PencilKit strokes *and* possibly a text anchor, all of which have to travel
 together, and a second code path would be a second chance to forget one. The
 result agrees with `photoslop-cli --crop X,Y,W,H` for the same rectangle.
+### Importing from Photos or from Files
+
+**Import Image…** asks where the picture is coming from before it asks which
+one, offering **Photos** and **Files** with Photos the default. It reached the
+Files hierarchy only, which on a phone or an iPad is where pictures usually are
+not — the action named "import an image" led to the one place they generally are
+not kept. It is the same segmented control export uses for its destination,
+asking the opposite question.
+
+**New Layer from Image**, on the layer list, asks the same question, so a layer
+can now come from a file as well as from the library.
+
 ### Exporting to Files or to the photo library
 
 **Export** offers a destination: **Files** or **Photos**. Both use the same

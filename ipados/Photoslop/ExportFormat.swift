@@ -128,3 +128,26 @@ enum ExportDestination: String, CaseIterable, Identifiable {
     }
   }
 }
+
+/// Where an image is imported from.
+///
+/// The mirror of `ExportDestination`. Export asks where a picture is going;
+/// import asks where it is coming from, with the same segmented control in the
+/// same place, so the two read as a matched pair.
+///
+/// Photos leads because that is where pictures live on a phone or an iPad.
+/// Import used to reach only Files, which is the one place they usually are not.
+enum ImportSource: String, CaseIterable, Identifiable {
+  case photos
+  case files
+
+  var id: String { rawValue }
+
+  var displayName: String {
+    switch self {
+    case .photos: "Photos"
+    case .files: "Files"
+    }
+  }
+}
+

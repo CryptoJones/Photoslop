@@ -45,10 +45,22 @@ final class LayerFromPhotoUITests: UITestCase {
     XCTAssertTrue(button.isHittable, "the button is present but cannot be tapped")
     button.tap()
 
+    // The button now asks *where from* before it asks *which*. On a phone or an
+    // iPad most pictures are in the photo library and the old route led only to
+    // Files, so both are offered and Photos is the default (#265).
+    XCTAssertTrue(
+      app.buttons["Choose"].waitForExistence(timeout: 20),
+      "tapping it did not ask where the image should come from")
+    for source in ["Photos", "Files"] {
+      XCTAssertTrue(
+        app.buttons[source].firstMatch.exists, "\(source) is not offered as an import source")
+    }
+    app.buttons["Choose"].tap()
+
     let thumbnails = app.images.matching(NSPredicate(format: "label BEGINSWITH 'Photo,'"))
     XCTAssertTrue(
       thumbnails.element(boundBy: 0).waitForExistence(timeout: 25),
-      "tapping it did not raise the photo picker")
+      "choosing Photos did not raise the photo picker")
   }
 
   /// The whole point: photos join the document instead of replacing it.
@@ -61,6 +73,8 @@ final class LayerFromPhotoUITests: UITestCase {
     let before = app.cells.count
 
     app.buttons["New layer from photo"].tap()
+    XCTAssertTrue(app.buttons["Choose"].waitForExistence(timeout: 20), "no import source sheet")
+    app.buttons["Choose"].tap()
     let thumbnails = app.images.matching(NSPredicate(format: "label BEGINSWITH 'Photo,'"))
     try XCTSkipUnless(
       thumbnails.element(boundBy: 1).waitForExistence(timeout: 25),

@@ -14,7 +14,12 @@ struct EditorView: View {
   @State private var pendingLayerPhotoPick = false
   @State private var isAddingLayerPhotos = false
   @State private var showFileImporter = false
+  @State private var showLayerFileImporter = false
   @State private var showExporter = false
+  @State private var showImportOptions = false
+  @State private var showLayerImportOptions = false
+  @State private var importSource = ImportSource.photos
+  @State private var layerImportSource = ImportSource.photos
   @State private var exportDestination = ExportDestination.files
   @State private var savedToPhotos = false
   @State private var showExportOptions = false
@@ -29,8 +34,19 @@ struct EditorView: View {
   @State private var isCropping = false
   @State private var cropRect = CGRect.zero
   @State private var cropAspect = CropAspect.free
-  /// Where the canvas is drawn, reported by the canvas rather than guessed.
-  @State private var canvasRect = CGRect.zero
+  /// The zoom scale, so the overlay's handles stay finger-sized however far in
+  /// the canvas is zoomed. The overlay itself is in document pixels and needs
+  /// nothing else from the canvas.
+  @State private var canvasZoom: CGFloat = 1
+  /// The layer currently being placed and resized, if any.
+  @State private var placement: Placement?
+  /// On by default: a non-proportional resize distorts a picture, which is
+  /// occasionally what someone wants and never what they want by accident.
+  @State private var constrainProportions = true
+  /// The part of the box a drag took hold of, and the rectangle it started
+  /// from. Held here rather than in the box, which is now only a renderer.
+  @State private var dragHandle: CropHandle?
+  @State private var dragOrigin = CGRect.zero
   @State private var editingTextLayerID: UUID?
   @State private var canvasPreset = CanvasPreset.standard
   @State private var customWidth = "2048"
@@ -42,6 +58,10 @@ struct EditorView: View {
   @State private var isRenderingExport = false
   @State private var errorMessage: String?
   @State private var inkColor = Color.black
+  /// Stroke opacity, separate from the colour so the swatch can show both and
+  /// neither hides inside the other.
+  @State private var inkOpacity = 1.0
+  @State private var showInkOptions = false
   @State private var inkWidth = 8.0
   @State private var tool = BrushTool.pen
   @State private var drawsWithFinger = false
@@ -50,6 +70,24 @@ struct EditorView: View {
 
   /// A phone has no room for a permanent sidebar beside the canvas.
   private var isCompact: Bool { horizontalSizeClass == .compact }
+
+  /// A layer being positioned and sized on the canvas.
+  ///
+  /// One mode covers three things that were three separate gaps: a freshly
+  /// imported image arriving at its own size and needing to be put somewhere
+  /// (#266), a layer that came in too big or too small being fixed after the
+  /// fact (#262), and a text layer being fitted to what is underneath it
+  /// (#261). They are the same gesture, so they are the same mode.
+  struct Placement: Equatable {
+    let layerID: UUID
+    var rect: CGRect
+    /// The shape to hold when proportions are constrained.
+    let ratio: CGFloat
+    let isText: Bool
+    /// True for an import that has just landed, where Cancel means "I did not
+    /// want this layer at all" rather than "leave it where it was".
+    let isNew: Bool
+  }
 
   var body: some View {
     Group {
@@ -73,6 +111,12 @@ struct EditorView: View {
       allowsMultipleSelection: false,
       onCompletion: importFile
     )
+    .fileImporter(
+      isPresented: $showLayerFileImporter,
+      allowedContentTypes: [.image],
+      allowsMultipleSelection: false,
+      onCompletion: importLayerFile
+    )
     .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhoto, matching: .images)
     .photosPicker(
       isPresented: $showLayerPhotosPicker,
@@ -91,6 +135,22 @@ struct EditorView: View {
       defaultFilename: "\(exportName).\(exportFormat.fileExtension)"
     ) { result in
       if case .failure(let error) = result { errorMessage = error.localizedDescription }
+    }
+    .sheet(isPresented: $showImportOptions) {
+      importSourceSheet(title: "Import Image", source: $importSource) { chosen in
+        switch chosen {
+        case .photos: showPhotosPicker = true
+        case .files: showFileImporter = true
+        }
+      }
+    }
+    .sheet(isPresented: $showLayerImportOptions) {
+      importSourceSheet(title: "New Layer from Image", source: $layerImportSource) { chosen in
+        switch chosen {
+        case .photos: showLayerPhotosPicker = true
+        case .files: showLayerFileImporter = true
+        }
+      }
     }
     .sheet(isPresented: $showExportOptions) { exportOptionsSheet }
     .sheet(isPresented: $showNewDocumentOptions) { newDocumentSheet }
@@ -144,7 +204,7 @@ struct EditorView: View {
         backgroundImage: store.canvasBackground,
         canvasSize: store.canvasSize,
         drawing: store.activeLayer?.drawing ?? PKDrawing(),
-        inkColor: UIColor(inkColor),
+        inkColor: UIColor(inkColor.opacity(inkOpacity)),
         inkWidth: inkWidth,
         tool: tool,
         drawsWithFinger: drawsWithFinger,
@@ -152,23 +212,16 @@ struct EditorView: View {
           ? (store.activeLayer?.opacity ?? 1)
           : 0,
         onCanvasDragged: isMovingText ? moveText : nil,
-        onCanvasRectChanged: { canvasRect = $0 },
+        onZoomScaleChanged: { canvasZoom = $0 },
+        // Drawing is suspended while a box owns the canvas, so a drag moves the
+        // rectangle rather than painting under it. Pinch, zoom and two-finger
+        // pan keep working throughout — switching off hit-testing for the whole
+        // scroll view is what took them away before (#270).
+        overlayIsActive: isCropping || placement != nil,
+        onBoxDrag: handleBoxDrag,
         onDrawingChanged: store.setDrawing
-      )
-      // Drawing is suspended while the crop overlay is up, the same way the
-      // text move mode suspends it, so a drag positions the rectangle rather
-      // than painting a stroke underneath it.
-      .allowsHitTesting(!isCropping)
-      .overlay {
-        if isCropping {
-          CropOverlay(
-            canvas: store.canvasSize,
-            canvasRect: canvasRect,
-            rect: $cropRect,
-            aspect: $cropAspect,
-            onCancel: cancelCrop,
-            onApply: applyCrop)
-        }
+      ) {
+        canvasOverlay
       }
       if isMovingText { placementBanner }
       // Layout priority so the bar is allocated its height before the canvas
@@ -177,7 +230,13 @@ struct EditorView: View {
       // y=1147 on a screen 834 tall in landscape, present in the hierarchy and
       // impossible to tap.
       Group {
-        if isCropping { cropBar } else { toolStrip }
+        if isCropping {
+          cropBar
+        } else if placement != nil {
+          placementBar
+        } else {
+          toolStrip
+        }
       }
       .layoutPriority(1)
       // Above the canvas in z-order as well. Belt and braces: clipping stops the
@@ -194,7 +253,7 @@ struct EditorView: View {
     .sheet(isPresented: $showLayers) {
       if pendingLayerPhotoPick {
         pendingLayerPhotoPick = false
-        showLayerPhotosPicker = true
+        showLayerImportOptions = true
       }
     } content: {
       NavigationStack {
@@ -250,7 +309,7 @@ struct EditorView: View {
             pendingLayerPhotoPick = true
             showLayers = false
           } else {
-            showLayerPhotosPicker = true
+            showLayerImportOptions = true
           }
         } label: {
 
@@ -280,6 +339,160 @@ struct EditorView: View {
       .buttonStyle(.bordered)
       .padding(10)
     }
+  }
+
+  /// Colour and opacity, in one control the width of a swatch.
+  ///
+  /// Opacity had no control at all: the alpha slider inside the system colour
+  /// sheet was the only way to a translucent stroke, two taps deep under a
+  /// button labelled "Ink color", which is not somewhere anyone looks for it
+  /// (#271). A third inline slider was the obvious answer and the wrong one —
+  /// the strip is budgeted for an iPad mini in portrait, where it already
+  /// overflowed once and put the ink controls off the edge of the screen
+  /// (#246). So the two things that describe the ink share one popover and one
+  /// slot, and the strip's item count does not change.
+  private var inkButton: some View {
+    Button {
+      showInkOptions = true
+    } label: {
+      // The swatch shows the ink as it will actually paint — colour *and*
+      // opacity — over white, so a nearly transparent ink does not read as a
+      // pale one.
+      ZStack {
+        Circle().fill(.white)
+        Circle().fill(inkColor.opacity(inkOpacity))
+        Circle().strokeBorder(.secondary, lineWidth: 1)
+      }
+      .frame(width: 28, height: 28)
+    }
+    .buttonStyle(.plain)
+    .accessibilityIdentifier("Ink color")
+    .accessibilityLabel("Ink, \(Int((inkOpacity * 100).rounded())) percent opacity")
+    // A popover rather than a Menu: menu content is limited to buttons, toggles
+    // and pickers, and a Slider placed in one simply does not appear — the
+    // control was in the hierarchy and invisible to hand and test alike. A
+    // popover holds ordinary views, and its anchor stays a plain Button, which
+    // is also hittable in the way a Menu's wrapper never is (L-001).
+    .popover(isPresented: $showInkOptions) {
+      VStack(alignment: .leading, spacing: 14) {
+        ColorPicker("Colour", selection: $inkColor, supportsOpacity: false)
+
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Opacity \(Int((inkOpacity * 100).rounded()))%")
+            .font(.subheadline)
+          Slider(value: $inkOpacity, in: 0.05...1, step: 0.05)
+            .accessibilityLabel("Ink opacity")
+            .accessibilityIdentifier("Ink opacity")
+        }
+      }
+      .padding(20)
+      .frame(width: 280)
+      // Without this a popover becomes a sheet on a phone, which is a lot of
+      // screen for two controls and covers the canvas they are being judged
+      // against.
+      .presentationCompactAdaptation(.popover)
+    }
+  }
+
+  /// What is drawn on the canvas, in the canvas's own pixels.
+  @ViewBuilder
+  private var canvasOverlay: some View {
+    if isCropping {
+      CanvasBox(
+        rect: cropRect,
+        bounds: CGRect(origin: .zero, size: store.canvasSize),
+        ratio: cropAspect.ratio(canvas: store.canvasSize),
+        scale: canvasZoom)
+    } else if let current = placement {
+      ZStack(alignment: .topLeading) {
+        // The picture follows the box while it is being dragged, drawn from the
+        // layer's original pixels straight into the rectangle. The committed
+        // copy underneath is suppressed for the duration, or the layer would
+        // appear twice — once where it is, once where it is going.
+        //
+        // Text is the exception: its pixels are a canvas-sized rendering rather
+        // than a picture with a size of its own, so it stays where it is and
+        // re-renders when the box is applied.
+        if let preview = placementPreviewImage(current) {
+          Image(uiImage: preview)
+            .resizable()
+            .interpolation(.high)
+            .frame(width: current.rect.width, height: current.rect.height)
+            .offset(x: current.rect.minX, y: current.rect.minY)
+            .allowsHitTesting(false)
+        }
+
+        CanvasBox(
+          rect: current.rect,
+          // A layer being placed may hang over the edge — that is how you fill
+          // a canvas with the middle of a photograph. A crop may not.
+          bounds: placementBounds,
+          ratio: constrainProportions ? current.ratio : nil,
+          scale: canvasZoom,
+          dimsOutside: false,
+          showsThirds: false,
+          identifier: "Transform",
+          readoutLabel: "Layer size")
+      }
+    }
+  }
+
+  /// The room a placed layer is allowed to occupy: a canvas's worth of slack on
+  /// every side, so an image can be pushed mostly off the edge without being
+  /// able to wander somewhere it can never be dragged back from.
+  private var placementBounds: CGRect {
+    CGRect(origin: .zero, size: store.canvasSize).insetBy(
+      dx: -store.canvasSize.width, dy: -store.canvasSize.height)
+  }
+
+  /// The pixels the placement box is scaling, or nil when there is nothing
+  /// sensible to draw live.
+  private func placementPreviewImage(_ current: Placement) -> UIImage? {
+    guard !current.isText,
+      let layer = store.layers.first(where: { $0.id == current.layerID })
+    else { return nil }
+    return layer.source ?? layer.image
+  }
+
+  /// The placement mode's own bar.
+  ///
+  /// Constrain proportions lives here rather than in a sheet because it is a
+  /// thing you change *while* dragging — locked for most of a resize, released
+  /// for the one stretch that needs it, locked again.
+  private var placementBar: some View {
+    HStack(spacing: 14) {
+      Button("Cancel", role: .cancel, action: cancelPlacement)
+        .accessibilityIdentifier("Cancel Placement")
+
+      Spacer(minLength: 0)
+
+      Toggle(isOn: $constrainProportions) {
+        Label(
+          "Constrain",
+          systemImage: constrainProportions ? "lock" : "lock.open")
+      }
+      .toggleStyle(.button)
+      .accessibilityIdentifier("Constrain proportions")
+      .accessibilityLabel(
+        "Constrain proportions, \(constrainProportions ? "on" : "off")"
+      )
+      .onChange(of: constrainProportions) { _, locked in
+        // Re-shape what is already on screen rather than waiting for the next
+        // drag, so the choice is visible the moment it is made.
+        guard locked, let current = placement else { return }
+        placement?.rect = CropGeometry.corrected(
+          current.rect, to: current.ratio, handle: .interior, bounds: placementBounds)
+      }
+
+      Spacer(minLength: 0)
+
+      Button("Done", action: applyPlacement)
+        .buttonStyle(.borderedProminent)
+        .accessibilityIdentifier("Apply Placement")
+    }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 10)
+    .background(.bar)
   }
 
   /// The crop mode's own bar, replacing the tool strip while it is up.
@@ -373,10 +586,7 @@ struct EditorView: View {
         // and showing both disabled cost ~170pt of a strip that did not have it
         // to spare.
         if tool.usesInk {
-          ColorPicker("Ink", selection: $inkColor, supportsOpacity: true)
-            .labelsHidden()
-            .accessibilityLabel("Ink color")
-            .accessibilityIdentifier("Ink color")
+          inkButton
 
           Slider(value: $inkWidth, in: 1...80, step: 1)
             .frame(width: isCompact ? 130 : 180)
@@ -417,11 +627,13 @@ struct EditorView: View {
         Menu {
           newDocumentButton
           canvasSizeButton
+          resizeDocumentButton
           cropButton
+          Divider()
+          resizeLayerButton
           textButtons
           Divider()
           importImageButton
-          photosButton
           Divider()
           canvasModeButtons
           Divider()
@@ -462,11 +674,12 @@ struct EditorView: View {
         canvasSizeButton
         Menu {
           cropButton
+          resizeDocumentButton
           Divider()
+          resizeLayerButton
           textButtons
           Divider()
           importImageButton
-          photosButton
           Divider()
           canvasModeButtons
         } label: {
@@ -528,6 +741,30 @@ struct EditorView: View {
     }
   }
 
+  /// Scale the whole document. The third of the three size operations, and the
+  /// one that was missing: Canvas Size pads, Crop takes a region, this
+  /// resamples (#269).
+  private var resizeDocumentButton: some View {
+    Button {
+      canvasSheetMode = .scale
+      syncCustomFieldsToCanvas()
+      showNewDocumentOptions = true
+    } label: {
+      Label("Resize Document…", systemImage: "arrow.up.left.and.down.right.magnifyingglass")
+    }
+  }
+
+  /// Resize the layer that is already there — the fix for an import that came
+  /// in too big or too small to be useful (#262).
+  private var resizeLayerButton: some View {
+    Button {
+      if let id = store.activeLayerID { beginPlacement(layerID: id, isNew: false) }
+    } label: {
+      Label("Resize Layer…", systemImage: "arrow.up.backward.and.arrow.down.forward")
+    }
+    .disabled(store.activeLayerID == nil || activeTextLayer != nil)
+  }
+
   private var canvasSizeButton: some View {
     Button {
       canvasSheetMode = .resize
@@ -559,26 +796,82 @@ struct EditorView: View {
       } label: {
         Label("Move Text", systemImage: "arrow.up.and.down.and.arrow.left.and.right")
       }
+
+      // Moving was the only thing text could do once placed. Fitting is the
+      // other half: drag a box and the type scales to span it, which is what
+      // sizing a caption to the picture underneath actually requires (#261).
+      Button {
+        if let id = store.activeLayerID { beginPlacement(layerID: id, isNew: false) }
+      } label: {
+        Label("Fit Text…", systemImage: "textformat.size")
+      }
     }
   }
 
+  /// One entry point, with the source chosen in the sheet.
+  ///
+  /// This used to be two menu items — "Import Image", which reached Files only,
+  /// and "Photos", which read like a destination rather than an action. On a
+  /// phone or an iPad most pictures are in the photo library, so the action
+  /// named "import an image" led to the one place they usually are not (#265).
+  /// Export already asks where a picture is going with a segmented control; this
+  /// is the same control asking where one is coming from.
   private var importImageButton: some View {
     Button {
-      showFileImporter = true
+      showImportOptions = true
     } label: {
-      Label("Import Image", systemImage: "photo.badge.plus")
+      Label("Import Image…", systemImage: "photo.badge.plus")
     }
   }
 
-  /// A plain button driving `.photosPicker`, not a `PhotosPicker` view, because
-  /// the compact layout puts this inside a `Menu` and a picker nested in a menu
-  /// dismisses the menu without ever presenting.
-  private var photosButton: some View {
-    Button {
-      showPhotosPicker = true
-    } label: {
-      Label("Photos", systemImage: "photo.on.rectangle")
+  /// The source sheet, mirroring the export sheet's destination control.
+  ///
+  /// A plain button drives `.photosPicker` rather than a `PhotosPicker` view:
+  /// the compact layout puts these inside a `Menu`, and a picker nested in a
+  /// menu dismisses the menu without ever presenting.
+  private func importSourceSheet(
+    title: String,
+    source: Binding<ImportSource>,
+    onChoose: @escaping (ImportSource) -> Void
+  ) -> some View {
+    NavigationStack {
+      Form {
+        Section {
+          Picker("Import from", selection: source) {
+            ForEach(ImportSource.allCases) { option in
+              Text(option.displayName).tag(option)
+            }
+          }
+          .pickerStyle(.segmented)
+        } footer: {
+          Text(
+            source.wrappedValue == .photos
+              ? "Choose a picture from your photo library."
+              : "Choose an image file from Files or iCloud Drive."
+          )
+        }
+      }
+      .navigationTitle(title)
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") { dismissImportSheets() }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Choose") {
+            let chosen = source.wrappedValue
+            dismissImportSheets()
+            onChoose(chosen)
+          }
+        }
+      }
     }
+    .presentationDetents([.height(220)])
+  }
+
+  private func dismissImportSheets() {
+    showImportOptions = false
+    showLayerImportOptions = false
   }
 
   private var undoButton: some View {
@@ -644,6 +937,19 @@ struct EditorView: View {
         return
       }
 
+      // One picture is a deliberate choice and gets placed by hand at its own
+      // size; several at once are a batch, and nobody wants to place each of
+      // twenty photos in turn, so those still arrive fitted to the canvas.
+      if loaded.count == 1, unreadable == 0, let only = loaded.first {
+        do {
+          let placed = try store.addPlaceableLayer(name: only.name, image: only.image)
+          beginPlacement(layerID: placed.id, isNew: true)
+        } catch {
+          errorMessage = error.localizedDescription
+        }
+        return
+      }
+
       do {
         let added = try store.addImageLayers(loaded)
         // Say so rather than leaving a silent gap in the layer list.
@@ -655,6 +961,22 @@ struct EditorView: View {
       } catch {
         errorMessage = error.localizedDescription
       }
+    }
+  }
+
+  /// A file chosen as a new layer, which arrives at its own size and is placed
+  /// by hand — the same treatment a single photo gets.
+  private func importLayerFile(_ result: Result<[URL], Error>) {
+    do {
+      guard let url = try result.get().first else { return }
+      let access = url.startAccessingSecurityScopedResource()
+      defer { if access { url.stopAccessingSecurityScopedResource() } }
+      let image = try ProjectArchive.decodeImage(Data(contentsOf: url))
+      let placed = try store.addPlaceableLayer(
+        name: url.deletingPathExtension().lastPathComponent, image: image)
+      beginPlacement(layerID: placed.id, isNew: true)
+    } catch {
+      errorMessage = error.localizedDescription
     }
   }
 
@@ -765,7 +1087,7 @@ struct EditorView: View {
   private var newDocumentSheet: some View {
     NavigationStack {
       Form {
-        Section("Canvas Size") {
+        Section {
           Picker("Size", selection: $canvasPreset) {
             ForEach(CanvasPreset.allCases) { preset in
               VStack(alignment: .leading) {
@@ -777,6 +1099,10 @@ struct EditorView: View {
           }
           .pickerStyle(.inline)
           .labelsHidden()
+        } header: {
+          Text("Canvas Size")
+        } footer: {
+          if let explanation = canvasSheetMode.explanation { Text(explanation) }
         }
 
         if canvasPreset == .custom {
@@ -818,6 +1144,7 @@ struct EditorView: View {
             switch canvasSheetMode {
             case .newDocument: store.newDocument(size: size)
             case .sizeNewDocument, .resize: store.resizeCanvas(to: size)
+            case .scale: store.scaleDocument(to: size)
             }
             showNewDocumentOptions = false
           }
@@ -834,11 +1161,15 @@ struct EditorView: View {
     /// empty, so this resizes rather than creating a second one.
     case sizeNewDocument
     case resize
+    /// Scaling the document rather than its border. Same sheet, same presets,
+    /// different verb — and the difference between them is the whole of #269.
+    case scale
 
     var title: String {
       switch self {
       case .newDocument, .sizeNewDocument: "New Document"
       case .resize: "Canvas Size"
+      case .scale: "Resize Document"
       }
     }
 
@@ -847,6 +1178,20 @@ struct EditorView: View {
       case .newDocument: "Create"
       case .sizeNewDocument: "Use This Size"
       case .resize: "Resize"
+      case .scale: "Scale"
+      }
+    }
+
+    /// What this mode does to the picture, said plainly. The three operations
+    /// are easy to confuse and the consequences differ: one pads, one discards,
+    /// one resamples.
+    var explanation: String? {
+      switch self {
+      case .newDocument, .sizeNewDocument: nil
+      case .resize:
+        "Keeps everything at its current size and pads or trims the border around it."
+      case .scale:
+        "Scales the whole picture, and everything on it, to the new size."
       }
     }
   }
@@ -1069,6 +1414,102 @@ struct EditorView: View {
   }
 
   private func cancelCrop() { isCropping = false }
+
+  /// Apply a drag reported by the canvas, in document pixels.
+  ///
+  /// The box is drawn by SwiftUI and dragged by UIKit, so this is where a touch
+  /// becomes a rectangle. Which handle was taken is decided once, from where
+  /// the finger landed, and held for the rest of the gesture — deciding it
+  /// again on every sample would let the grip jump between handles as the
+  /// rectangle moves under the finger.
+  private func handleBoxDrag(from start: CGPoint, to current: CGPoint, isFinal: Bool) {
+    let translation = CGSize(width: current.x - start.x, height: current.y - start.y)
+
+    if isCropping {
+      let handle = dragHandle ?? beginBoxDrag(at: start, in: cropRect)
+      guard let handle else { return }
+      cropRect = CropGeometry.resized(
+        dragOrigin,
+        handle: handle,
+        translation: translation,
+        bounds: CGRect(origin: .zero, size: store.canvasSize),
+        ratio: cropAspect.ratio(canvas: store.canvasSize))
+    } else if let current = placement {
+      let handle = dragHandle ?? beginBoxDrag(at: start, in: current.rect)
+      guard let handle else { return }
+      placement?.rect = CropGeometry.resized(
+        dragOrigin,
+        handle: handle,
+        translation: translation,
+        bounds: placementBounds,
+        ratio: constrainProportions ? current.ratio : nil)
+    }
+
+    if isFinal {
+      dragHandle = nil
+      dragOrigin = .zero
+    }
+  }
+
+  /// Decide what a drag has taken hold of, and remember where it started.
+  private func beginBoxDrag(at point: CGPoint, in rect: CGRect) -> CropHandle? {
+    // 44pt under the finger, converted into document pixels: the box is drawn
+    // in the document's units, so the touch radius has to be too.
+    let tolerance = 44 / max(canvasZoom, 0.0001)
+    guard let handle = CropGeometry.handle(at: point, in: rect, tolerance: tolerance) else {
+      return nil
+    }
+    dragHandle = handle
+    dragOrigin = rect
+    return handle
+  }
+
+  /// Open the placement box on a layer that is already in the document.
+  private func beginPlacement(layerID: UUID, isNew: Bool) {
+    guard let layer = store.layers.first(where: { $0.id == layerID }) else { return }
+    let rect: CGRect
+    if layer.isText {
+      guard let measured = store.textRect(for: layerID), measured.width > 1 else { return }
+      rect = measured
+    } else {
+      rect = store.placementRect(for: layerID)
+    }
+    guard rect.width > 0, rect.height > 0 else { return }
+    store.select(layerID)
+    constrainProportions = true
+    placement = Placement(
+      layerID: layerID,
+      rect: rect,
+      ratio: rect.width / rect.height,
+      isText: layer.isText,
+      isNew: isNew)
+    // Hide the committed copy so the live preview is the only one on screen.
+    if !layer.isText { store.previewSuppressedLayerID = layerID }
+  }
+
+  private func applyPlacement() {
+    guard let current = placement else { return }
+    store.previewSuppressedLayerID = nil
+    if current.isText {
+      _ = store.fitTextLayer(current.layerID, to: current.rect)
+    } else {
+      store.placeLayer(
+        current.layerID,
+        in: current.rect,
+        actionName: current.isNew ? "Place Layer" : "Resize Layer")
+    }
+    placement = nil
+  }
+
+  /// Cancelling an import removes the layer it added: the person asked for a
+  /// picture, was shown where it would go, and said no. Leaving it behind at
+  /// some arbitrary size would be answering a different question.
+  private func cancelPlacement() {
+    guard let current = placement else { return }
+    store.previewSuppressedLayerID = nil
+    if current.isNew { store.deleteLayer(current.layerID) }
+    placement = nil
+  }
 
   private func applyCrop(_ rect: CGRect) {
     isCropping = false

@@ -4,6 +4,60 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.9.0] — 2026-08-14
+
+Everything here comes from one evening of hand-testing 2.8.0 on an iPhone and an
+iPad. Four of the faults turned out to be the same fault, and are fixed once.
+
+### Added
+- **Resize Document scales the picture.** iOS could pad a canvas and it could
+  crop one, but it could not make a picture 1920×1080 — there was no way to
+  resample. The three operations are now all present and say which is which:
+  **Canvas Size** pads or trims the border around content that keeps its pixel
+  size, **Crop** takes a region and discards the rest, and **Resize Document**
+  scales everything. It reuses the New-document size sheet and agrees with
+  `photoslop-cli --resize`. (#269)
+- **A placement box for putting things where they belong.** A single imported
+  picture now arrives at its own size and stops, in a box whose corners and
+  edges drag, with a live pixel readout and constrain-proportions on by default
+  and one tap from being released. The same box resizes a layer that came in
+  wrong, and fits a text layer to what is underneath it. (#266, #262, #261)
+- **Import Image asks where from.** It reached the Files hierarchy only, which
+  on a phone is where pictures usually are not. Photos and Files are both
+  offered, with Photos the default, matching the switch export already had.
+  New Layer from Image gained the same choice, and can now come from Files.
+  (#265)
+- **Stroke opacity.** Pen and pencil had a width slider and no way to lay down a
+  translucent stroke short of the alpha slider buried two taps inside the system
+  colour sheet. Colour and opacity now share one popover behind a swatch that
+  shows the ink as it will actually paint. They share a single slot on the tool
+  strip, because that strip is budgeted for an iPad mini in portrait and has
+  overflowed there before. (#271)
+- **A splash screen.** The mascot, the version and build, the licence and the
+  repository, full screen for a beat on launch, tap to skip.
+
+### Fixed
+- **Pinch, zoom and pan died the moment a crop began.** Suspending drawing was
+  done by switching off hit-testing for the whole scroll view, which took
+  navigation with it — so the canvas froze at whatever zoom it happened to be
+  at, exactly when zooming in matters most. Drawing alone is now suspended.
+  (#270)
+- **A second crop worked from the canvas before the first one.** (#268)
+- **A layer imported from a photo was stretched to fill the canvas**, with no
+  way back — one picture arrived too small and another grew the document. (#266)
+
+### Changed
+- **The canvas overlay moved inside the scroll view, into document
+  coordinates.** This is the single change behind the four fixes above. The crop
+  rectangle used to float above the canvas in screen points, told where the
+  canvas was through a published rectangle, and converting between the two
+  produced a wrong-region crop (#260), a stale-geometry second crop (#268) and a
+  frozen canvas (#270) inside a fortnight. Hosted inside the scrolling content,
+  the overlay is already in the document's own pixels: there is no conversion to
+  get wrong, it zooms and pans with the picture, and touches reach the scroll
+  view's own recognisers. Recorded as DD-012 and LESSONSLEARNED L-005, because
+  three more features were about to inherit the split.
+
 ## [2.8.0] — 2026-08-13
 
 ### Added

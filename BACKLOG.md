@@ -6,6 +6,17 @@ sync — check an item here when its issue closes.
 
 ## Open
 
+### Found on a device, 2026-08-14
+
+- [ ] Files shows a generic Photoslop icon for every `.photoslop` document
+  instead of a preview. Wants a QuickLook thumbnail extension and a `preview.png`
+  in the package. Held back from 2.9.0 deliberately: a new app-extension target
+  needs its own bundle id and provisioning profile, and that is the signing path
+  that already fails releases (#255)
+  ([#267](https://github.com/CryptoJones/Photoslop/issues/267))
+
+### Standing
+
 - [ ] CI mints an Apple development certificate per tagged release and never
   revokes it — the account hit its limit at 15 and the v2.6.0 TestFlight archive
   failed with "choose a certificate to revoke", after the tests had passed and
@@ -28,6 +39,40 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] Pinch-zoom and pan died the moment a crop started, because suspending
+  drawing switched off hit-testing for the whole scroll view. Fixed in 2.9.0 by
+  moving the overlay inside the scroll view's content, in document coordinates —
+  which dissolved #260 and #268 with it (DD-012, LESSONSLEARNED L-005)
+  ([#270](https://github.com/CryptoJones/Photoslop/issues/270))
+
+- [x] No way to scale a document — Canvas Size padded and Crop discarded, but
+  nothing resampled. **Resize Document** shipped in 2.9.0, reusing the New
+  document size sheet and agreeing with `photoslop-cli --resize`
+  ([#269](https://github.com/CryptoJones/Photoslop/issues/269))
+
+- [x] A second crop started from the pre-crop canvas
+  ([#268](https://github.com/CryptoJones/Photoslop/issues/268))
+
+- [x] New layer from image scaled the layer to fill the canvas. It now arrives
+  at original size in a placement box, constrain proportions on by default
+  ([#266](https://github.com/CryptoJones/Photoslop/issues/266))
+
+- [x] Import Image only reached Files, never the Photos library
+  ([#265](https://github.com/CryptoJones/Photoslop/issues/265))
+
+- [x] Placed text had no sizable box — **Fit Text…** now scales the type to span
+  a box you drag ([#261](https://github.com/CryptoJones/Photoslop/issues/261))
+
+- [x] An imported layer could not be resized after the fact — **Resize Layer…**
+  opens the same placement box
+  ([#262](https://github.com/CryptoJones/Photoslop/issues/262))
+
+- [x] Pen and pencil had a width slider but no opacity control; opacity was
+  reachable only through the alpha slider buried in the system colour sheet.
+  Colour and opacity now share one popover and one tool-strip slot
+  ([#271](https://github.com/CryptoJones/Photoslop/issues/271))
+
 
 - [x] iOS could not export into the Photos library — `.fileExporter` only reaches the
   Files hierarchy, so a finished picture has to be saved to Files and imported

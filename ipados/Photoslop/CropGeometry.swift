@@ -76,7 +76,28 @@ enum CropGeometry {
     canvas: CGSize,
     aspect: CropAspect
   ) -> CGRect {
-    let bounds = CGRect(origin: .zero, size: canvas)
+    resized(
+      rect,
+      handle: handle,
+      translation: translation,
+      bounds: CGRect(origin: .zero, size: canvas),
+      ratio: aspect.ratio(canvas: canvas))
+  }
+
+  /// The general form, in whatever coordinate space the caller is working in.
+  ///
+  /// Crop is bounded by the canvas — you cannot keep a region of a picture that
+  /// is not in the picture. Placing a layer is not: an imported image may hang
+  /// off the edge, which is how you crop *into* a canvas by moving the picture
+  /// rather than the frame. Same arithmetic, different bounds, so it is one
+  /// implementation with the bounds passed in.
+  static func resized(
+    _ rect: CGRect,
+    handle: CropHandle,
+    translation: CGSize,
+    bounds: CGRect,
+    ratio: CGFloat?
+  ) -> CGRect {
     if handle == .interior {
       return moved(rect, by: translation, in: bounds)
     }
@@ -93,14 +114,14 @@ enum CropGeometry {
       maxY = max(rect.minY + minimumSide, rect.maxY + translation.height)
     }
 
-    minX = max(0, minX)
-    minY = max(0, minY)
-    maxX = min(canvas.width, maxX)
-    maxY = min(canvas.height, maxY)
+    minX = max(bounds.minX, minX)
+    minY = max(bounds.minY, minY)
+    maxX = min(bounds.maxX, maxX)
+    maxY = min(bounds.maxY, maxY)
 
     let dragged = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
-    guard let ratio = aspect.ratio(canvas: canvas) else { return dragged.integral }
-    return corrected(dragged, to: ratio, handle: handle, canvas: canvas).integral
+    guard let ratio else { return dragged.integral }
+    return corrected(dragged, to: ratio, handle: handle, bounds: bounds).integral
   }
 
   /// Move the whole rectangle without resizing it, stopping at the canvas edge
@@ -120,6 +141,12 @@ enum CropGeometry {
   static func corrected(
     _ rect: CGRect, to ratio: CGFloat, handle: CropHandle, canvas: CGSize
   ) -> CGRect {
+    corrected(rect, to: ratio, handle: handle, bounds: CGRect(origin: .zero, size: canvas))
+  }
+
+  static func corrected(
+    _ rect: CGRect, to ratio: CGFloat, handle: CropHandle, bounds: CGRect
+  ) -> CGRect {
     var width = rect.width
     var height = rect.height
 
@@ -132,13 +159,13 @@ enum CropGeometry {
       height = width / ratio
     }
 
-    // Shrink to fit rather than overflow the canvas.
-    if width > canvas.width {
-      width = canvas.width
+    // Shrink to fit rather than overflow the bounds.
+    if width > bounds.width {
+      width = bounds.width
       height = width / ratio
     }
-    if height > canvas.height {
-      height = canvas.height
+    if height > bounds.height {
+      height = bounds.height
       width = height * ratio
     }
     if width < minimumSide {
@@ -158,10 +185,46 @@ enum CropGeometry {
     let x = (handle.movesLeftEdge || handle.movesRightEdge) ? anchorX : centredX
     let y = (handle.movesTopEdge || handle.movesBottomEdge) ? anchorY : centredY
 
-    return moved(
-      CGRect(x: x, y: y, width: width, height: height),
-      by: .zero,
-      in: CGRect(origin: .zero, size: canvas))
+    return moved(CGRect(x: x, y: y, width: width, height: height), by: .zero, in: bounds)
+  }
+
+  /// Which part of `rect` a touch at `point` has taken hold of.
+  ///
+  /// The box is dragged from UIKit rather than by a SwiftUI gesture per handle
+  /// (see `PencilCanvas.onBoxDrag`), so picking the handle is arithmetic now,
+  /// and arithmetic can be tested without a screen. Corners win over edges when
+  /// both are in range, because a corner is the more specific intent; the
+  /// interior is the fallback, and outside the rectangle nothing is grabbed.
+  ///
+  /// `tolerance` is the touch radius in the same units as `rect` — document
+  /// pixels — so the caller divides its 44pt target by the zoom scale.
+  static func handle(at point: CGPoint, in rect: CGRect, tolerance: CGFloat) -> CropHandle? {
+    let corners: [(CropHandle, CGPoint)] = [
+      (.topLeft, CGPoint(x: rect.minX, y: rect.minY)),
+      (.topRight, CGPoint(x: rect.maxX, y: rect.minY)),
+      (.bottomLeft, CGPoint(x: rect.minX, y: rect.maxY)),
+      (.bottomRight, CGPoint(x: rect.maxX, y: rect.maxY)),
+    ]
+    let edges: [(CropHandle, CGPoint)] = [
+      (.top, CGPoint(x: rect.midX, y: rect.minY)),
+      (.bottom, CGPoint(x: rect.midX, y: rect.maxY)),
+      (.left, CGPoint(x: rect.minX, y: rect.midY)),
+      (.right, CGPoint(x: rect.maxX, y: rect.midY)),
+    ]
+
+    func nearest(_ candidates: [(CropHandle, CGPoint)]) -> CropHandle? {
+      var best: (handle: CropHandle, distance: CGFloat)?
+      for (handle, centre) in candidates {
+        let distance = hypot(point.x - centre.x, point.y - centre.y)
+        guard distance <= tolerance else { continue }
+        if best == nil || distance < best!.distance { best = (handle, distance) }
+      }
+      return best?.handle
+    }
+
+    if let corner = nearest(corners) { return corner }
+    if let edge = nearest(edges) { return edge }
+    return rect.insetBy(dx: -tolerance / 4, dy: -tolerance / 4).contains(point) ? .interior : nil
   }
 
   /// The starting rectangle when the crop mode opens: the whole canvas, or the
