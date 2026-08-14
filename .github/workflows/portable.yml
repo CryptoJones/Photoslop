@@ -212,7 +212,7 @@ jobs:
           mv dist/windows/BUILD-IDENTITY.json dist/windows/Photoslop-Windows-BUILD-IDENTITY.json
           mv dist/windows/THIRD_PARTY_NOTICES.md dist/windows/Photoslop-Windows-THIRD_PARTY_NOTICES.md
       - name: Attest portable archive provenance
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: "dist/**/*.zip"
       # `gh release upload` requires the release to exist already, so a tag whose
