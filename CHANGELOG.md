@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+- **The splash screen never appeared on iPad.** It attached itself to the first
+  connected window scene one runloop turn after launch, and on iPad there
+  routinely is no scene yet at that moment — the attempt failed silently and,
+  having marked itself shown, never tried again. It now waits for the scene to
+  connect when it arrives late.
+- **The splash screen went away too quickly on iPhone.** Its dismiss timer
+  started when the window was created, while the system launch screen was still
+  covering the app, so launch time was quietly deducted from the hold. The
+  timer now starts at the splash's first rendered frame, and the hold is 2.5
+  seconds instead of 1.6.
+
 ## [2.9.0] — 2026-08-14
 
 Everything here comes from one evening of hand-testing 2.8.0 on an iPhone and an
