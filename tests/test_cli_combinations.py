@@ -81,6 +81,7 @@ PAIR_ARGS = {
     "content-aware-fill": ["--select", "3,3,6,6", "--content-aware-fill", "--deselect"],
     "feather": ["--select", "2,2,10,10", "--feather", "2"],
     "import-layer": ["--import-layer", IMPORT_FIXTURE],
+    "expand-canvas": ["--import-layer", IMPORT_FIXTURE, "--expand-canvas"],
     "duplicate-layer": ["--duplicate-layer"],
     "flatten": ["--flatten"],
     "convert-smart": ["--convert-smart"],

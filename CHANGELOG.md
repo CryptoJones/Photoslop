@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.10.2] — 2026-08-15
+
+### Fixed
+- **An oversized import looked like a silent crop.** New Layer from Image
+  never rescales and never grew the canvas, so a source larger than the
+  canvas hung off the edges and read as cropped, with no explanation. The
+  import now asks: **Expand Canvas** grows the canvas to fit every imported
+  pixel (one undo step with the import), **Keep Canvas Size** keeps the old
+  behaviour (nothing is discarded — the layer overhangs at full size), and
+  Cancel imports nothing. Headless mirror: `photoslop-cli --expand-canvas`
+  reveals every overhanging layer pixel.
+
 ## [2.10.1] — 2026-08-14
 
 ### Fixed

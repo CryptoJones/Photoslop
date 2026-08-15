@@ -66,6 +66,7 @@ CASES = {
     "content-aware-fill": (None, None),
     "feather": ("3", "-1"),
     "import-layer": ("photo.png", "no-such-file.png"),
+    "expand-canvas": (None, None),
     "duplicate-layer": (None, None),
     "flatten": (None, None),
     "convert-smart": (None, None),
@@ -727,3 +728,22 @@ def test_add_artboard_export(qapp, tmp_path):
     assert run([src, "--add-artboard", "Cover,0,0,30,20", "--export-artboards", board_dir]) == 0
     board = QImage(str(board_dir / "Cover.png"))
     assert board.size() == QSize(30, 20)
+
+
+def test_expand_canvas_reveals_an_oversized_import(qapp, tmp_path):
+    src = make_input(tmp_path)  # 60x40
+    big = QImage(200, 100, QImage.Format.Format_ARGB32_Premultiplied)
+    big.fill(QColor(200, 30, 30))
+    big_path = str(tmp_path / "big.png")
+    big.save(big_path)
+    from photoslop.io_ora import load_ora
+
+    out = tmp_path / "o.ora"
+    assert run([src, "--import-layer", big_path, "--expand-canvas", "--output", out]) == 0
+    doc = load_ora(str(out))
+    assert (doc.size.width(), doc.size.height()) == (200, 100)
+
+    # everything already fits → a documented no-op, not an error
+    assert run([src, "--expand-canvas", "--output", out]) == 0
+    doc = load_ora(str(out))
+    assert (doc.size.width(), doc.size.height()) == (60, 40)

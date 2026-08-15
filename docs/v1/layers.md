@@ -14,11 +14,16 @@ which you meant.
 
 An imported layer keeps every source pixel at its own size and is centred, so
 a photo larger than the canvas hangs off the edges rather than being
-downscaled — reach for Free Transform (`Ctrl+T`) to fit it. The canvas never
-grows to accommodate an import, and layered sources (`.ora`, `.svg`) arrive
+downscaled — reach for Free Transform (`Ctrl+T`) to fit it. When that
+happens, the import asks whether to **Expand Canvas** — grow the canvas to
+the union of itself and every imported layer, one undo step with the import —
+or **Keep Canvas Size**, which drops nothing: the layer overhangs at full
+size and only *looks* cropped. Layered sources (`.ora`, `.svg`) arrive
 flattened into the single layer.
 
 Headless mirror: `photoslop-cli in.png --import-layer photo.jpg`
+(add `--expand-canvas` for the prompt's expand choice — it reveals every
+overhanging layer pixel, and is a no-op when everything fits)
 ([CLI](cli.md)). The iOS edition has the same command as **new layer from
 photo** in the layer list, but scales each photo to fit the canvas — a
 `.photoslop` layer image must be exactly canvas-sized

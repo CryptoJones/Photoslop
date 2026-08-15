@@ -1381,15 +1381,63 @@ class MainWindow(QMainWindow):
                 imported = path
         if not layers:
             return
+        from photoslop.commands import ResizeCanvasCommand, reveal_geometry
+
+        # Import never rescales (Free Transform is how you fit), so a source
+        # larger than the canvas overhangs and looks cropped. Ask once for the
+        # whole selection rather than per file.
+        geometry = reveal_geometry(doc.size, layers)
+        expand = False
+        if geometry is not None:
+            choice = self._ask_import_overhang(len(layers))
+            if choice == "cancel":
+                return
+            expand = choice == "expand"
         doc.undo_stack.beginMacro(
             "Import Layer" if len(layers) == 1 else f"Import {len(layers)} Layers"
         )
         try:
             for layer in layers:
                 doc.undo_stack.push(InsertLayerCommand(doc, len(doc.layers), layer, "Import Layer"))
+            if expand:
+                new_size, delta = geometry
+                # Pushed after the inserts so its redo shifts the new layers
+                # too; the macro keeps import-plus-expand one undo step.
+                doc.undo_stack.push(
+                    ResizeCanvasCommand(
+                        doc, new_size, delta, "Import Layer", allow_large=allow_large
+                    )
+                )
         finally:
             doc.undo_stack.endMacro()
         self._set_last_directory(imported)
+
+    def _ask_import_overhang(self, count: int) -> str:
+        """Offer the choice an oversized import forces: grow the canvas to the
+        source's size, or keep the canvas and let the layer overhang. Kept
+        overhang loses nothing — every pixel stays and Free Transform can fit
+        it later — but on screen it reads as a crop, which is why this asks."""
+        box = QMessageBox(self)
+        box.setWindowTitle("Import Layer")
+        box.setIcon(QMessageBox.Icon.Question)
+        subject = "The imported image is" if count == 1 else "Some imported images are"
+        box.setText(
+            f"{subject} larger than the canvas.\n\n"
+            "Expand the canvas to fit every pixel, or keep the current canvas "
+            "size? A kept layer is not cropped — it hangs off the canvas edges "
+            "at full size, and Free Transform can fit it later."
+        )
+        expand = box.addButton("Expand Canvas", QMessageBox.ButtonRole.AcceptRole)
+        keep = box.addButton("Keep Canvas Size", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(expand)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is expand:
+            return "expand"
+        if clicked is keep:
+            return "keep"
+        return "cancel"
 
     def _recent_paths(self) -> list[str]:
         value = self.settings.value(RECENT_FILES_KEY, [])

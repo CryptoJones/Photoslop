@@ -1028,6 +1028,23 @@ class FlipLayerCommand(QUndoCommand):
     undo = redo
 
 
+def reveal_geometry(size: QSize, layers) -> tuple[QSize, QPoint] | None:
+    """Canvas size and layer shift that reveal every pixel of ``layers``.
+
+    Returns ``None`` when everything already fits — no resize is needed and
+    callers should not push a no-op onto the undo stack. Otherwise the result
+    plugs straight into :class:`ResizeCanvasCommand`: the new size is the
+    union of the canvas and every layer extent, and the delta shifts all
+    layers so nothing sits at a negative offset.
+    """
+    rect = QRect(QPoint(0, 0), size)
+    for layer in layers:
+        rect = rect.united(layer.bounds())
+    if rect.size() == size:
+        return None
+    return rect.size(), -rect.topLeft()
+
+
 class ResizeCanvasCommand(QUndoCommand):
     """Change canvas size and shift layers; no pixels are copied or dropped,
     which also makes crop instant and fully undoable."""
