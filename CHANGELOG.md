@@ -4,7 +4,13 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [Unreleased]
+## [2.10.0] — 2026-08-14
+
+The 2026-08-14 backlog sweep, second act: everything the morning's device
+testing left open, closed in one evening. Also under the hood, invisible in
+the app: the TestFlight archive now signs with the distribution identity and
+revokes the throwaway development certificates cloud signing used to leave
+behind (#255), and the desktop suite gained a real window system in CI (#274).
 
 ### Added
 - **Files shows what a document looks like.** Every `.photoslop` package got
