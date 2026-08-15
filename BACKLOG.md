@@ -18,6 +18,14 @@ sync — check an item here when its issue closes.
   work" looked like
   ([#273](https://github.com/CryptoJones/Photoslop/issues/273))
 
+### Windows
+
+- [ ] Sign the Windows portable bundle via SignPath Foundation's free OSS code
+  signing: policy page is in `docs/code-signing-policy.md`; apply at
+  signpath.org, then wire signing into `portable.yml` for `v*` tag builds and
+  drop `UNSIGNED` from the artifact name
+  ([#287](https://github.com/CryptoJones/Photoslop/issues/287))
+
 ### Standing
 
 - [ ] App Store GA — what is needed beyond TestFlight is now prepared in

@@ -120,6 +120,9 @@ required.
   only appears on the first launch. Verify the download against the
   published `.sha256` if you want the assurance a signature would have given.
 
+See the [code signing policy](docs/code-signing-policy.md) for what gets
+signed, by whom, and the project's privacy statement.
+
 ### iPadOS and iOS
 
 Photoslop includes a native mobile edition under [`ipados/`](ipados/) — one
