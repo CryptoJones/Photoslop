@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.10.1] — 2026-08-14
+
+### Fixed
+- **The v2.10.0 TestFlight archive never happened.** 2.10.0's attempt to pin
+  the archive to the Apple Distribution identity met Xcode's "conflicting
+  provisioning settings" under automatic signing, and the tag died at archive
+  time (exit 65) — so 2.10.0 shipped desktop artifacts only. The pin is
+  removed; the post-upload certificate cleanup remains, and is the half of
+  #255 that was ever needed.
+
 ## [2.10.0] — 2026-08-14
 
 The 2026-08-14 backlog sweep, second act: everything the morning's device

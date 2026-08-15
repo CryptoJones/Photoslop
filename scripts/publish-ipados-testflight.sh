@@ -54,14 +54,15 @@ cd "$IPADOS_DIR"
 "$XCODEGEN_BIN" generate
 rm -rf "$DERIVED_DATA" "$ARCHIVE_PATH" "$EXPORT_DIR"
 
-# CODE_SIGN_IDENTITY pins the archive to the Apple Distribution identity the
-# workflow already imported. Left to itself, automatic signing archives with
-# an Apple Development certificate instead — and since the CI keychain is
-# ephemeral it cannot reuse one, so cloud signing minted a new "Created via
-# API" certificate every release until the account hit its limit of 15 and
-# the archive died on "choose a certificate to revoke" (#255). Provisioning
-# stays automatic: the App Store profile still comes from the API, but for an
-# identity that already exists.
+# Deliberately NO CODE_SIGN_IDENTITY override here. Pinning the archive to
+# the imported Apple Distribution identity was tried for #255 and Xcode
+# refused to archive at all: an explicit identity under
+# CODE_SIGN_STYLE=Automatic is "conflicting provisioning settings" (v2.10.0,
+# exit 65, both the app and the thumbnail extension). So automatic signing
+# is left alone — it mints a throwaway "Created via API" development
+# certificate per release, and the workflow's post-upload step revokes them,
+# which is the half of #255 that actually holds the account under its
+# 15-certificate limit.
 xcodebuild \
   -project Photoslop-iPadOS.xcodeproj \
   -scheme PhotoslopIPad \
@@ -75,7 +76,6 @@ xcodebuild \
   -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
   DEVELOPMENT_TEAM="$PHOTOSLOP_IOS_TEAM_ID" \
   CODE_SIGN_STYLE=Automatic \
-  CODE_SIGN_IDENTITY="${PHOTOSLOP_IOS_SIGN_IDENTITY:-Apple Distribution}" \
   archive
 
 cat > "$EXPORT_OPTIONS" <<PLIST
