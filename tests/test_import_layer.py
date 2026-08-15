@@ -123,3 +123,65 @@ def test_the_import_action_is_registered_and_needs_a_document(qapp):
     assert not action.isEnabled()
     win.add_document(Document.new(QSize(20, 20), 72, "doc", QColor("white")))
     assert action.isEnabled()
+
+
+def test_import_that_fits_never_asks_about_the_canvas(qapp, tmp_path, monkeypatch):
+    win = _window(qapp)
+    path = _png(tmp_path, "small.png", (20, 10), (0, 160, 220))
+    monkeypatch.setattr(OpenImageDialog, "get_paths", staticmethod(lambda *a, **k: [path]))
+    asked = []
+    monkeypatch.setattr(win, "_ask_import_overhang", lambda count: asked.append(count) or "keep")
+
+    win.action_import_layer()
+
+    assert not asked, "a source inside the canvas gives the prompt nothing to ask"
+    assert [layer.name for layer in win.current_doc().layers] == ["Background", "small"]
+
+
+def test_oversized_import_can_expand_the_canvas_in_one_undo_step(qapp, tmp_path, monkeypatch):
+    win = _window(qapp)  # 80x60 canvas
+    doc = win.current_doc()
+    path = _png(tmp_path, "big.png", (200, 100), (200, 30, 30))
+    monkeypatch.setattr(OpenImageDialog, "get_paths", staticmethod(lambda *a, **k: [path]))
+    monkeypatch.setattr(win, "_ask_import_overhang", lambda count: "expand")
+
+    win.action_import_layer()
+
+    assert doc.size == QSize(200, 100)
+    # the import centred the source, so expansion shifts every layer clear of
+    # the negative offsets: the new layer starts at the origin, the old
+    # background keeps its place relative to the source
+    assert (doc.layers[1].offset.x(), doc.layers[1].offset.y()) == (0, 0)
+    assert (doc.layers[0].offset.x(), doc.layers[0].offset.y()) == (60, 20)
+    doc.undo_stack.undo()
+    assert doc.size == QSize(80, 60)
+    assert [layer.name for layer in doc.layers] == ["Background"]
+    assert (doc.layers[0].offset.x(), doc.layers[0].offset.y()) == (0, 0)
+
+
+def test_oversized_import_can_keep_the_canvas_and_overhang(qapp, tmp_path, monkeypatch):
+    win = _window(qapp)
+    doc = win.current_doc()
+    path = _png(tmp_path, "big.png", (200, 100), (200, 30, 30))
+    monkeypatch.setattr(OpenImageDialog, "get_paths", staticmethod(lambda *a, **k: [path]))
+    monkeypatch.setattr(win, "_ask_import_overhang", lambda count: "keep")
+
+    win.action_import_layer()
+
+    assert doc.size == QSize(80, 60)
+    layer = doc.layers[1]
+    assert layer.image.size() == QSize(200, 100), "keeping the canvas drops no pixels"
+    assert (layer.offset.x(), layer.offset.y()) == (-60, -20)
+
+
+def test_oversized_import_can_be_cancelled_at_the_prompt(qapp, tmp_path, monkeypatch):
+    win = _window(qapp)
+    doc = win.current_doc()
+    path = _png(tmp_path, "big.png", (200, 100), (200, 30, 30))
+    monkeypatch.setattr(OpenImageDialog, "get_paths", staticmethod(lambda *a, **k: [path]))
+    monkeypatch.setattr(win, "_ask_import_overhang", lambda count: "cancel")
+
+    win.action_import_layer()
+
+    assert [layer.name for layer in doc.layers] == ["Background"]
+    assert doc.undo_stack.count() == 0, "a cancelled import leaves no undo entry behind"

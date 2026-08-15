@@ -961,6 +961,18 @@ def _op_import_layer(ctx: Context, value: str) -> None:
     doc.active_index = len(doc.layers) - 1
 
 
+def _op_expand_canvas(ctx: Context, value: str) -> None:
+    from photoslop.commands import ResizeCanvasCommand, reveal_geometry
+
+    geometry = reveal_geometry(ctx.doc.size, ctx.doc.layers)
+    if geometry is None:
+        return
+    new_size, delta = geometry
+    ResizeCanvasCommand(
+        ctx.doc, new_size, delta, "Expand Canvas", allow_large=ctx.allow_large_document
+    ).redo()
+
+
 def _op_flatten(ctx: Context, value: str) -> None:
     from photoslop.layer import Layer
 
@@ -1128,6 +1140,12 @@ OPS: dict = {
         "add an image file to the open document as a new layer on top, "
         "centred at its own size (--input is how a file becomes the document)",
         _op_import_layer,
+    ),
+    "expand-canvas": (
+        None,
+        "grow the canvas to reveal every layer pixel that overhangs it "
+        "(the GUI import prompt's Expand Canvas choice; a no-op when all fits)",
+        _op_expand_canvas,
     ),
     "duplicate-layer": (None, "duplicate the active layer", _op_duplicate_layer),
     "flatten": (None, "collapse all layers into one", _op_flatten),

@@ -100,6 +100,7 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--content-aware-fill` | diffusion-fill the selection |
 | `--feather` `RADIUS` | feather the current selection's edge |
 | `--import-layer` `FILE` | add an image file to the open document as a new layer on top, centred at its own size (`--input` is how a file becomes the document) |
+| `--expand-canvas` | grow the canvas to reveal every layer pixel that overhangs it (the GUI import prompt's Expand Canvas choice; a no-op when all fits) |
 | `--duplicate-layer` | duplicate the active layer |
 | `--flatten` | collapse all layers into one |
 | `--convert-smart` | snapshot target layer(s) as smart objects |
