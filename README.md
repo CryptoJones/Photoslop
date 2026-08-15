@@ -10,6 +10,9 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Version](https://img.shields.io/badge/version-v2.10.2-orange)]()
 
+> **💚 Support Photoslop** — if this app saves you money or RAM, consider tossing a few bucks at the project:
+> **CashApp [`$cryptojones`](https://cash.app/$cryptojones)** · **Venmo [`@CryptoJones`](https://venmo.com/u/CryptoJones)**
+
 ---
 
 <p align="center">
@@ -116,6 +119,9 @@ required.
   signature, not the contents: click **More info**, then **Run anyway**. It
   only appears on the first launch. Verify the download against the
   published `.sha256` if you want the assurance a signature would have given.
+
+See the [code signing policy](docs/code-signing-policy.md) for what gets
+signed, by whom, and the project's privacy statement.
 
 ### iPadOS and iOS
 

@@ -3195,6 +3195,9 @@ class MainWindow(QMainWindow):
             "<p>A memory-frugal, multiplatform, layered raster image editor.</p>"
             "<p>Apache-2.0 · <a href='https://github.com/CryptoJones/Photoslop'>"
             "github.com/CryptoJones/Photoslop</a></p>"
+            "<p>Support the project: "
+            "<a href='https://cash.app/$cryptojones'>CashApp $cryptojones</a> · "
+            "<a href='https://venmo.com/u/CryptoJones'>Venmo @CryptoJones</a></p>"
             "<p>Proudly Made in Nebraska. Go Big Red! 🌽</p>"
         )
         ok = box.addButton(QMessageBox.StandardButton.Ok)
