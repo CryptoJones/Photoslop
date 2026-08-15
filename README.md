@@ -101,6 +101,22 @@ Prefer a one-command launcher? From a checkout, run **`./run.sh`**
 missing, then starts the app. Any arguments pass straight through to
 `photoslop` (e.g. `./run.sh path/to/image.png`).
 
+### Portable downloads
+
+Every release carries self-contained bundles under
+[Releases](https://github.com/CryptoJones/Photoslop/releases) — no Python
+required.
+
+- **macOS**: the zip is Developer ID **signed and notarized**; unzip and run.
+  If macOS ever claims the app "is damaged", the download was corrupted —
+  re-download and check it against the published `.sha256`.
+- **Windows**: the bundle is **unsigned** (it says so in the file name), so
+  the first launch hits Microsoft's SmartScreen wall — *"Windows protected
+  your PC"*, with no obvious way forward. That screen is about the missing
+  signature, not the contents: click **More info**, then **Run anyway**. It
+  only appears on the first launch. Verify the download against the
+  published `.sha256` if you want the assurance a signature would have given.
+
 ### iPadOS and iOS
 
 Photoslop includes a native mobile edition under [`ipados/`](ipados/) — one
