@@ -284,6 +284,27 @@ final class PlacementAndScaleTests: XCTestCase {
       CropGeometry.handle(at: CGPoint(x: 58, y: 58), in: rect, tolerance: 44), .bottomRight)
   }
 
+  /// A caption's box is shorter than a fingertip, and it still has to be
+  /// movable: with the full 44pt radius inside the rectangle, every interior
+  /// point was "near" a corner or an edge, so the box could only ever be
+  /// resized — the fit-text bug, measured on device. Inside, the handles
+  /// compete with a radius scaled to the box; outside, the full radius stays,
+  /// so the same small box's handles remain easy to take hold of.
+  func testTheMiddleOfASmallBoxIsStillItsInterior() {
+    // The measured shape of a fitted caption: 497 × 58 document pixels, with a
+    // zoomed-out touch radius far taller than the box itself.
+    let rect = CGRect(x: 1024, y: 768, width: 497, height: 58)
+    XCTAssertEqual(
+      CropGeometry.handle(at: CGPoint(x: rect.midX, y: rect.midY), in: rect, tolerance: 123),
+      .interior,
+      "the middle of a small box must move it, not resize it")
+    XCTAssertEqual(
+      CropGeometry.handle(
+        at: CGPoint(x: rect.maxX + 30, y: rect.maxY + 30), in: rect, tolerance: 123),
+      .bottomRight,
+      "outside the box the full touch radius still grabs the corner")
+  }
+
   func testConstrainedProportionsHoldTheShape() {
     let bounds = CGRect(x: -400, y: -400, width: 1200, height: 1200)
     let start = CGRect(x: 0, y: 0, width: 200, height: 100)
