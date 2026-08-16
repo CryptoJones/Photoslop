@@ -129,7 +129,9 @@ enum CropGeometry {
   static func moved(_ rect: CGRect, by translation: CGSize, in bounds: CGRect) -> CGRect {
     let x = min(max(bounds.minX, rect.minX + translation.width), bounds.maxX - rect.width)
     let y = min(max(bounds.minY, rect.minY + translation.height), bounds.maxY - rect.height)
-    return CGRect(x: x, y: y, width: rect.width, height: rect.height).integral
+    // Rounded, not `.integral`: integral expands a fractional origin outward,
+    // so merely moving a rectangle inflated it by a pixel a side.
+    return CGRect(x: x.rounded(), y: y.rounded(), width: rect.width, height: rect.height)
   }
 
   /// Force `rect` to `ratio`, keeping the edges the drag was not moving.
@@ -199,6 +201,16 @@ enum CropGeometry {
   /// `tolerance` is the touch radius in the same units as `rect` — document
   /// pixels — so the caller divides its 44pt target by the zoom scale.
   static func handle(at point: CGPoint, in rect: CGRect, tolerance: CGFloat) -> CropHandle? {
+    // Inside the rectangle the handles compete with a smaller radius. A text
+    // caption's box can be shorter than the 44pt touch radius, and with the
+    // full radius every point inside it was "near" a corner or an edge — the
+    // interior could never be taken hold of, so trying to move the box
+    // resized it instead. Outside the rectangle the full radius stays, so a
+    // small box's handles are still easy to grab from around it.
+    let tolerance =
+      rect.contains(point)
+      ? min(tolerance, max(minimumSide / 2, min(rect.width, rect.height) / 3))
+      : tolerance
     let corners: [(CropHandle, CGPoint)] = [
       (.topLeft, CGPoint(x: rect.minX, y: rect.minY)),
       (.topRight, CGPoint(x: rect.maxX, y: rect.minY)),

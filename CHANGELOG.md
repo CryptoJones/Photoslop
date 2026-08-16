@@ -4,6 +4,33 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.10.3] — 2026-08-15
+
+### Fixed
+- **Fit Text is now a control a finger can actually use** (iPad/iPhone).
+  Three faults stacked into "the fit text box can't be resized, and the text
+  doesn't follow it":
+  - *A fast drag grabbed the wrong handle, or nothing.* The pan gesture's
+    translation is measured from recognition, not from touch-down, so the
+    point that picked the handle was wherever the finger had already got to.
+    The recogniser now remembers the true touch-down.
+  - *A caption's box could not be moved, only resized.* The 44pt handle
+    radius is taller than a fitted caption's whole box, so every interior
+    touch was "near" a corner or an edge. Inside the rectangle, handles now
+    compete with a radius scaled to the box; outside, the full radius stays.
+  - *A taller box changed nothing on Done.* Type has one shape: the renderer
+    cannot stretch it, and the commit scaled by width only, so a height-only
+    drag (with constrain released) was a dead end. The fit-text box now holds
+    the words' own aspect from any handle, and the constrain toggle is shown
+    locked rather than offering a stretch that could not happen.
+- **The words now ride inside the fit-text box.** While placing, the glyphs
+  are cropped out of the layer's own rendering and scale live with the
+  rectangle, exactly like an image layer's preview — instead of the committed
+  text sitting at its old size and place until Done. They re-render sharp at
+  the new size when the box is applied.
+- **Moving a placement or crop box no longer inflates it.** `.integral` on a
+  fractionally-moved rectangle rounded it outward, growing it a pixel a side.
+
 ## [2.10.2] — 2026-08-15
 
 ### Fixed

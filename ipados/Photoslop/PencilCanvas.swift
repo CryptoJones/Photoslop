@@ -52,6 +52,14 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
   /// box *is* the feature. A UIKit recogniser on the overlay behaves the same
   /// on both.
   var onBoxDrag: ((CGPoint, CGPoint, Bool) -> Void)?
+  /// A rectangle, in document pixels, the canvas must bring fully on screen —
+  /// zooming out if it has to. Each request carries a fresh id so it applies
+  /// once rather than re-asserting itself on every update: after the reveal,
+  /// scrolling and zooming belong to the user again.
+  ///
+  /// A box opened on text that had been zoomed past put its handles somewhere
+  /// no finger could reach — a control that simply did not respond.
+  var reveal: (id: Int, rect: CGRect)? = nil
   let onDrawingChanged: (PKDrawing) -> Void
   /// Drawn inside the scrolling content, in document pixels.
   @ViewBuilder var overlay: () -> Overlay
@@ -71,6 +79,10 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
     context.coordinator.parent = self
     context.coordinator.overlayHost.rootView = overlay()
     configure(view)
+    if let reveal, reveal.id != context.coordinator.lastRevealID {
+      context.coordinator.lastRevealID = reveal.id
+      view.reveal(reveal.rect)
+    }
   }
 
   private func configure(_ host: CanvasHostView) {
@@ -122,6 +134,9 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
 
   final class Coordinator: NSObject, PKCanvasViewDelegate {
     var parent: PencilCanvas
+    /// The last reveal request applied, so a request runs once, not on every
+    /// SwiftUI update for as long as it stays set.
+    var lastRevealID = 0
     /// Retains the overlay's hosting controller. Its view lives in the scroll
     /// view's content, so the overlay is laid out in document pixels.
     ///
@@ -168,9 +183,25 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     didSet { moveDragRecognizer?.isEnabled = onCanvasDragged != nil }
   }
   private var moveDragRecognizer: UIPanGestureRecognizer?
-  private var boxDragRecognizer: UIPanGestureRecognizer?
+  private var boxDragRecognizer: BoxPanRecognizer?
   var onBoxDrag: ((CGPoint, CGPoint, Bool) -> Void)?
   private var boxDragStart: CGPoint?
+
+  /// A pan that remembers where the finger first landed.
+  ///
+  /// A pan recogniser's `translation` is measured from where the gesture was
+  /// *recognised*, not from touch-down: by then a fast drag is already well
+  /// along its path, so "backing out the translation" recovered a point off
+  /// the handle the finger actually took, and the grab picked the wrong
+  /// handle — or nothing, which is a box that ignores the drag entirely.
+  final class BoxPanRecognizer: UIPanGestureRecognizer {
+    private(set) var touchDown: CGPoint = .zero
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+      if let touch = touches.first { touchDown = touch.location(in: view) }
+      super.touchesBegan(touches, with: event)
+    }
+  }
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -225,7 +256,7 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     // The box's own drag. On `overlayContainer`, so it is live only while a box
     // is up, and reporting in `contentView` coordinates, which are the
     // document's pixels.
-    let boxDrag = UIPanGestureRecognizer(target: self, action: #selector(handleBoxDrag))
+    let boxDrag = BoxPanRecognizer(target: self, action: #selector(handleBoxDrag))
     boxDrag.maximumNumberOfTouches = 1
     boxDrag.isEnabled = false
     // On the scroll view, not on the overlay container. A recogniser on the
@@ -251,10 +282,17 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     switch recognizer.state {
     case .began:
       // The recogniser only fires once the touch has moved, so its location at
-      // .began is already off the handle. Backing out the translation recovers
-      // where the finger actually landed, which is what picks the handle.
-      let translation = recognizer.translation(in: contentView)
-      let origin = CGPoint(x: point.x - translation.x, y: point.y - translation.y)
+      // .began is already off the handle. What picks the handle is where the
+      // finger actually landed, remembered at touch-down — the translation is
+      // measured from recognition, not from touch-down, and backing it out
+      // recovered a point a fast drag had already left far behind.
+      let origin: CGPoint
+      if let box = recognizer as? BoxPanRecognizer, let inView = box.view {
+        origin = contentView.convert(box.touchDown, from: inView)
+      } else {
+        let translation = recognizer.translation(in: contentView)
+        origin = CGPoint(x: point.x - translation.x, y: point.y - translation.y)
+      }
       boxDragStart = origin
       onBoxDrag(origin, point, false)
     case .changed:
@@ -367,6 +405,30 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
   override func didMoveToWindow() {
     super.didMoveToWindow()
     adoptOverlayController()
+  }
+
+  /// Bring `rect` (document pixels) fully on screen, zooming out if the
+  /// current zoom cannot show all of it plus room around the handles.
+  ///
+  /// Zooming in is deliberately not done: someone who zoomed out to see the
+  /// whole picture and then opened a box wanted the context they had. The one
+  /// problem this solves is the opposite — a box opened somewhere the current
+  /// viewport does not show, whose handles nothing can touch.
+  func reveal(_ rect: CGRect) {
+    guard rect.width > 0, rect.height > 0, scrollView.bounds.width > 0 else { return }
+    // Handles are drawn 44pt past the edge at any zoom, so pad in points and
+    // convert at the zoom the reveal will end at.
+    let padding: CGFloat = 60
+    var scale = scrollView.zoomScale
+    let fitting = min(
+      (scrollView.bounds.width - 2 * padding) / rect.width,
+      (scrollView.bounds.height - 2 * padding) / rect.height)
+    if fitting < scale {
+      scale = max(scrollView.minimumZoomScale, fitting)
+      scrollView.setZoomScale(scale, animated: false)
+    }
+    let visible = rect.insetBy(dx: -padding / scale, dy: -padding / scale)
+    scrollView.scrollRectToVisible(contentView.convert(visible, to: scrollView), animated: false)
   }
 
   func setOverlayActive(_ active: Bool) {

@@ -26,6 +26,16 @@ sync — check an item here when its issue closes.
   drop `UNSIGNED` from the artifact name
   ([#287](https://github.com/CryptoJones/Photoslop/issues/287))
 
+### iPadOS
+
+- [ ] `NewDocumentUITests` fail on an iPad simulator when the app is **built
+  locally with Xcode 26.5** — the new-document canvas-size sheet never
+  appears — while the identical tests pass on CI's older Xcode and on the
+  iPhone leg. Deterministic on an erased simulator, present on unmodified
+  v2.10.2. Will hit CI the day its macOS image rolls to Xcode 26, and dev
+  TestFlight builds already run this configuration
+  ([#290](https://github.com/CryptoJones/Photoslop/issues/290))
+
 ### Standing
 
 - [ ] App Store GA — what is needed beyond TestFlight is now prepared in

@@ -40,6 +40,11 @@ struct EditorView: View {
   @State private var canvasZoom: CGFloat = 1
   /// The layer currently being placed and resized, if any.
   @State private var placement: Placement?
+  /// The glyphs of the text layer being fitted, cropped from its rendering
+  /// when the box opened, so the live preview can scale them into the box.
+  @State private var textPlacementPreview: UIImage?
+  /// A one-shot ask for the canvas to bring a freshly opened box on screen.
+  @State private var boxReveal: (id: Int, rect: CGRect)?
   /// On by default: a non-proportional resize distorts a picture, which is
   /// occasionally what someone wants and never what they want by accident.
   @State private var constrainProportions = true
@@ -219,6 +224,7 @@ struct EditorView: View {
         // scroll view is what took them away before (#270).
         overlayIsActive: isCropping || placement != nil,
         onBoxDrag: handleBoxDrag,
+        reveal: boxReveal,
         onDrawingChanged: store.setDrawing
       ) {
         canvasOverlay
@@ -408,11 +414,9 @@ struct EditorView: View {
         // The picture follows the box while it is being dragged, drawn from the
         // layer's original pixels straight into the rectangle. The committed
         // copy underneath is suppressed for the duration, or the layer would
-        // appear twice — once where it is, once where it is going.
-        //
-        // Text is the exception: its pixels are a canvas-sized rendering rather
-        // than a picture with a size of its own, so it stays where it is and
-        // re-renders when the box is applied.
+        // appear twice — once where it is, once where it is going. Text rides
+        // along as the glyphs cropped from its own rendering, re-rendered
+        // sharp at the new size when the box is applied.
         if let preview = placementPreviewImage(current) {
           Image(uiImage: preview)
             .resizable()
@@ -427,7 +431,7 @@ struct EditorView: View {
           // A layer being placed may hang over the edge — that is how you fill
           // a canvas with the middle of a photograph. A crop may not.
           bounds: placementBounds,
-          ratio: constrainProportions ? current.ratio : nil,
+          ratio: placementRatio(current),
           scale: canvasZoom,
           dimsOutside: false,
           showsThirds: false,
@@ -445,11 +449,27 @@ struct EditorView: View {
       dx: -store.canvasSize.width, dy: -store.canvasSize.height)
   }
 
+  /// The shape the box is held to while this layer is placed.
+  ///
+  /// Text never goes free: the renderer draws type at one size, so a box that
+  /// left the words' own aspect would promise a stretch the Done button cannot
+  /// deliver — which read as "fit text can't be resized", because the natural
+  /// drag on a wide caption is the bottom edge, and a height-only change left
+  /// the font width, and therefore the font, exactly as it was.
+  private func placementRatio(_ current: Placement) -> CGFloat? {
+    if current.isText { return current.ratio }
+    return constrainProportions ? current.ratio : nil
+  }
+
   /// The pixels the placement box is scaling, or nil when there is nothing
   /// sensible to draw live.
+  ///
+  /// For text this is the glyphs cropped out of the layer's own rendering when
+  /// the box opened, so the words visibly follow and fill the rectangle being
+  /// dragged instead of sitting behind it at their old size and place.
   private func placementPreviewImage(_ current: Placement) -> UIImage? {
-    guard !current.isText,
-      let layer = store.layers.first(where: { $0.id == current.layerID })
+    if current.isText { return textPlacementPreview }
+    guard let layer = store.layers.first(where: { $0.id == current.layerID })
     else { return nil }
     return layer.source ?? layer.image
   }
@@ -472,6 +492,10 @@ struct EditorView: View {
           systemImage: constrainProportions ? "lock" : "lock.open")
       }
       .toggleStyle(.button)
+      // Type has one shape. A toggle that promised a stretch the renderer
+      // cannot draw made the whole control feel broken (a taller box changed
+      // nothing), so for text the lock is shown but not offered.
+      .disabled(placement?.isText == true)
       .accessibilityIdentifier("Constrain proportions")
       .accessibilityLabel(
         "Constrain proportions, \(constrainProportions ? "on" : "off")"
@@ -1442,7 +1466,7 @@ struct EditorView: View {
         handle: handle,
         translation: translation,
         bounds: placementBounds,
-        ratio: constrainProportions ? current.ratio : nil)
+        ratio: placementRatio(current))
     }
 
     if isFinal {
@@ -1484,7 +1508,18 @@ struct EditorView: View {
       isText: layer.isText,
       isNew: isNew)
     // Hide the committed copy so the live preview is the only one on screen.
-    if !layer.isText { store.previewSuppressedLayerID = layerID }
+    // Text gets its preview by cropping the glyphs out of its own rendering:
+    // the layer image is canvas-sized, but the words inside it are not.
+    if layer.isText {
+      let visible = rect.intersection(CGRect(origin: .zero, size: store.canvasSize))
+      if !visible.isEmpty, let glyphs = layer.image.cgImage?.cropping(to: visible) {
+        textPlacementPreview = UIImage(cgImage: glyphs)
+      }
+    }
+    store.previewSuppressedLayerID = layerID
+    // The box is only a control if its handles are somewhere a finger can
+    // reach; whatever the canvas was showing before, it now shows the box.
+    boxReveal = (id: (boxReveal?.id ?? 0) + 1, rect: rect)
   }
 
   private func applyPlacement() {
@@ -1499,6 +1534,7 @@ struct EditorView: View {
         actionName: current.isNew ? "Place Layer" : "Resize Layer")
     }
     placement = nil
+    textPlacementPreview = nil
   }
 
   /// Cancelling an import removes the layer it added: the person asked for a
@@ -1509,6 +1545,7 @@ struct EditorView: View {
     store.previewSuppressedLayerID = nil
     if current.isNew { store.deleteLayer(current.layerID) }
     placement = nil
+    textPlacementPreview = nil
   }
 
   private func applyCrop(_ rect: CGRect) {
