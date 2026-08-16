@@ -59,7 +59,7 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
   ///
   /// A box opened on text that had been zoomed past put its handles somewhere
   /// no finger could reach — a control that simply did not respond.
-  var reveal: (id: Int, rect: CGRect)? = nil
+  var reveal: (id: Int, rect: CGRect, zooms: Bool)? = nil
   let onDrawingChanged: (PKDrawing) -> Void
   /// Drawn inside the scrolling content, in document pixels.
   @ViewBuilder var overlay: () -> Overlay
@@ -81,7 +81,7 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
     configure(view)
     if let reveal, reveal.id != context.coordinator.lastRevealID {
       context.coordinator.lastRevealID = reveal.id
-      view.reveal(reveal.rect)
+      view.reveal(reveal.rect, zooming: reveal.zooms)
     }
   }
 
@@ -414,7 +414,13 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
   /// whole picture and then opened a box wanted the context they had. The one
   /// problem this solves is the opposite — a box opened somewhere the current
   /// viewport does not show, whose handles nothing can touch.
-  func reveal(_ rect: CGRect) {
+  /// `zooming` distinguishes the two callers. Opening a box may zoom out —
+  /// the box must be reachable wherever the canvas was. After a drag it may
+  /// only scroll: a handle pulled off screen comes back into reach, but the
+  /// zoom someone chose to work at is theirs (#298 — the right edge "kept
+  /// moving the box" because the edge had left the screen, and a touch where
+  /// it seemed to be landed inside the box).
+  func reveal(_ rect: CGRect, zooming: Bool) {
     guard rect.width > 0, rect.height > 0, scrollView.bounds.width > 0 else { return }
     // Handles are drawn 44pt past the edge at any zoom, so pad in points and
     // convert at the zoom the reveal will end at.
@@ -424,6 +430,9 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
       (scrollView.bounds.width - 2 * padding) / rect.width,
       (scrollView.bounds.height - 2 * padding) / rect.height)
     if fitting < scale {
+      // Scroll-only mode leaves a box too large for the viewport alone
+      // rather than fighting the zoom mid-gesture.
+      guard zooming else { return }
       scale = max(scrollView.minimumZoomScale, fitting)
       scrollView.setZoomScale(scale, animated: false)
     }

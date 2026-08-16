@@ -322,7 +322,10 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
       string: string, fontSize: fontSize, color: color, anchor: existing.anchor,
       fontFamily: fontFamily)
     // The wrap survives an edit: the words still live in their fitted box.
-    // The size chosen in the sheet is explicit and wins over the fit.
+    // The size chosen in the sheet is explicit and is honoured exactly, even
+    // past the canvas edge — whether to accept the cut-off or shrink to fit
+    // is asked in the sheet before this is called (#298), because a store
+    // that silently second-guesses an explicit size is a different foot-gun.
     content.wrapWidth = existing.wrapWidth
     guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
     mutate(actionName: "Edit Text") {

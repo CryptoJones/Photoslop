@@ -43,8 +43,9 @@ struct EditorView: View {
   /// The glyphs of the text layer being fitted, cropped from its rendering
   /// when the box opened, so the live preview can scale them into the box.
   @State private var textPlacementPreview: UIImage?
-  /// A one-shot ask for the canvas to bring a freshly opened box on screen.
-  @State private var boxReveal: (id: Int, rect: CGRect)?
+  /// A one-shot ask for the canvas to bring a freshly opened box on screen —
+  /// or, after a drag, back on screen without touching the zoom.
+  @State private var boxReveal: (id: Int, rect: CGRect, zooms: Bool)?
   /// Nil is the system font; kept across uses so the next caption starts from
   /// the last face chosen, the way size and colour already behave.
   @State private var textFontFamily: String?
@@ -60,6 +61,14 @@ struct EditorView: View {
     let name: String
     let size: CGSize
   }
+
+  /// An edited size that wraps past the canvas edge, waiting on the person to
+  /// shrink it, keep it knowing words will be cut, or keep editing (#298).
+  struct TextOverflow: Equatable {
+    let chosen: Double
+    let fitting: Double
+  }
+  @State private var pendingTextOverflow: TextOverflow?
   /// On by default: a non-proportional resize distorts a picture, which is
   /// occasionally what someone wants and never what they want by accident.
   @State private var constrainProportions = true
@@ -1453,11 +1462,17 @@ struct EditorView: View {
         }
         ToolbarItem(placement: .confirmationAction) {
           Button(editingTextLayerID == nil ? "Add" : "Save") {
-            showTextOptions = false
-            if editingTextLayerID == nil {
-              addTextCentred()
+            // A fitted layer's words must never be cut off without consent:
+            // if this size wraps past the canvas edge, ask before saving.
+            if editingTextLayerID != nil, let overflow = editedTextOverflow() {
+              pendingTextOverflow = overflow
             } else {
-              commitTextEdit()
+              showTextOptions = false
+              if editingTextLayerID == nil {
+                addTextCentred()
+              } else {
+                commitTextEdit()
+              }
             }
           }
           .disabled(textBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -1465,6 +1480,50 @@ struct EditorView: View {
       }
     }
     .presentationDetents([.medium])
+    .confirmationDialog(
+      "That size runs past the canvas",
+      isPresented: Binding(
+        get: { pendingTextOverflow != nil },
+        set: { if !$0 { pendingTextOverflow = nil } }
+      ),
+      titleVisibility: .visible,
+      presenting: pendingTextOverflow
+    ) { overflow in
+      Button("Shrink to Fit (\(Int(overflow.fitting)) pt)") {
+        textSize = overflow.fitting
+        showTextOptions = false
+        commitTextEdit()
+      }
+      Button("Keep \(Int(overflow.chosen)) pt — Cut Off the Overflow", role: .destructive) {
+        showTextOptions = false
+        commitTextEdit()
+      }
+      Button("Keep Editing", role: .cancel) {}
+    } message: { overflow in
+      Text(
+        "At \(Int(overflow.chosen)) pt the words wrap past the bottom of the canvas, "
+          + "and whatever does not fit will be cut off the picture.")
+    }
+  }
+
+  /// The overflow this edit would cause, or nil when everything fits — only a
+  /// fitted layer knows its container, so only fitted layers are checked.
+  private func editedTextOverflow() -> TextOverflow? {
+    guard let id = editingTextLayerID,
+      let content = store.layers.first(where: { $0.id == id })?.text,
+      let wrap = content.wrapWidth
+    else { return nil }
+    let available = CGSize(
+      width: CGFloat(wrap),
+      height: max(1, store.canvasSize.height - CGFloat(content.y)))
+    let wrapped = TextLayerRenderer.measure(
+      text: textBody, fontSize: textSize, fontFamily: textFontFamily,
+      wrapWidth: CGFloat(wrap))
+    guard wrapped.height > available.height else { return nil }
+    let fitting =
+      TextLayerRenderer.fittingFontSize(
+        text: textBody, fontFamily: textFontFamily, in: available) ?? 1
+    return TextOverflow(chosen: textSize, fitting: Double(fitting))
   }
 
   /// Add the layer straight away, centred and on top of the stack.
@@ -1581,6 +1640,12 @@ struct EditorView: View {
       if let current = placement, current.isText {
         refreshTextPlacementPreview(layerID: current.layerID, box: current.rect.size)
       }
+      // And keep its handles reachable: a drag that pushed an edge off the
+      // screen made that edge ungrabbable — the touch landed inside the box
+      // and moved it instead (#298). Scroll only; the zoom stays the user's.
+      if let current = placement {
+        boxReveal = (id: (boxReveal?.id ?? 0) + 1, rect: current.rect, zooms: false)
+      }
     }
   }
 
@@ -1650,7 +1715,7 @@ struct EditorView: View {
     store.previewSuppressedLayerID = layerID
     // The box is only a control if its handles are somewhere a finger can
     // reach; whatever the canvas was showing before, it now shows the box.
-    boxReveal = (id: (boxReveal?.id ?? 0) + 1, rect: rect)
+    boxReveal = (id: (boxReveal?.id ?? 0) + 1, rect: rect, zooms: true)
   }
 
   private func applyPlacement() {

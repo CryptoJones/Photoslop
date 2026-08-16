@@ -148,6 +148,30 @@ final class ImportSizingAndFontTests: XCTestCase {
       "the chosen face is part of the document")
   }
 
+  /// The store honours an explicit edited size exactly — even past the
+  /// canvas edge. Whether to accept the cut-off or shrink to fit is the
+  /// sheet's question (#298), asked before the store is called; a store that
+  /// silently second-guessed the size was its own foot-gun.
+  func testAnExplicitEditedSizeIsHonouredExactly() {
+    let text = "Why are people so afraid of being a minority in America somehow"
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 1000, height: 1000))
+    XCTAssertTrue(store.addTextLayer(text, fontSize: 20, color: .black, at: .zero))
+    guard let id = store.activeLayerID else { return XCTFail("no text layer") }
+    XCTAssertTrue(store.fitTextLayer(id, to: CGRect(x: 100, y: 400, width: 800, height: 500)))
+
+    XCTAssertTrue(store.updateTextLayer(id, string: text, fontSize: 600, color: .black))
+    XCTAssertEqual(
+      store.layers.last?.text?.fontSize ?? 0, 600, accuracy: 0.001,
+      "a confirmed oversize is kept as chosen")
+    XCTAssertEqual(
+      store.layers.last?.text?.wrapWidth ?? 0, 800, accuracy: 0.001,
+      "the wrap survives the edit")
+
+    XCTAssertTrue(store.updateTextLayer(id, string: text, fontSize: 24, color: .black))
+    XCTAssertEqual(store.layers.last?.text?.fontSize ?? 0, 24, accuracy: 0.001)
+  }
+
   func testDocumentsWithoutAFontFamilyStillDecodeAsSystem() throws {
     let store = EditorStore()
     store.newDocument(size: CGSize(width: 400, height: 300))
