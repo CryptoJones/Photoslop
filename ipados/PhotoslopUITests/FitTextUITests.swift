@@ -73,22 +73,21 @@ final class FitTextUITests: UITestCase {
     app.buttons["Cancel Placement"].tap()
   }
 
-  /// Type has one shape, so the constrain toggle is locked while fitting text:
-  /// a free box would promise a stretch the renderer cannot draw, which is how
-  /// "fit text can't be resized" was experienced in the first place.
-  func testConstrainProportionsIsLockedForText() {
+  /// The box is a container: unchecking constrain must free its shape, and
+  /// the two axes must then move separately. A version that greyed the toggle
+  /// out for text was reported straight back as the bug not being fixed.
+  func testUnconstrainedResizeChangesHeightIndependently() {
     let app = openFitText()
 
     let constrain = app.descendants(matching: .any)
       .matching(identifier: "Constrain proportions").firstMatch
     XCTAssertTrue(constrain.exists, "there is no constrain-proportions control")
-    XCTAssertFalse(constrain.isEnabled, "the constrain toggle must be locked for text")
+    XCTAssertTrue(constrain.isEnabled, "the constrain toggle must be usable for text")
+    constrain.tap()
     XCTAssertEqual(
-      constrain.label, "Constrain proportions, on",
-      "text placement must open with proportions held")
+      constrain.label, "Constrain proportions, off",
+      "tapping the toggle did not release the proportions")
 
-    // An edge drag must still resize — proportionally — rather than dead-end
-    // the way the old height-only drag did.
     guard let before = boxSize(app) else {
       return XCTFail("no Layer size readout while fitting text")
     }
@@ -102,10 +101,10 @@ final class FitTextUITests: UITestCase {
     }
     XCTAssertNotEqual(
       before.height, after.height,
-      "dragging the bottom edge did not resize the fit-text box")
-    XCTAssertNotEqual(
+      "with constrain off, dragging the bottom edge did not change the height")
+    XCTAssertEqual(
       before.width, after.width,
-      "an edge drag on locked proportions must scale both sides, not dead-end")
+      "with constrain off, a bottom-edge drag must leave the width alone")
 
     app.buttons["Cancel Placement"].tap()
   }

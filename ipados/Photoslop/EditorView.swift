@@ -414,16 +414,33 @@ struct EditorView: View {
         // The picture follows the box while it is being dragged, drawn from the
         // layer's original pixels straight into the rectangle. The committed
         // copy underneath is suppressed for the duration, or the layer would
-        // appear twice — once where it is, once where it is going. Text rides
-        // along as the glyphs cropped from its own rendering, re-rendered
-        // sharp at the new size when the box is applied.
+        // appear twice — once where it is, once where it is going.
+        //
+        // An image fills the box — distorting is what a free resize means for
+        // pixels. Text rides along as the glyphs cropped from its own
+        // rendering, and the box is its *container*: type keeps its shape, so
+        // the preview scales to fit from the top-left corner, showing the
+        // exact size Done will commit — including that a drag which grows the
+        // box past the words' shape grows the words only as far as they fit.
         if let preview = placementPreviewImage(current) {
-          Image(uiImage: preview)
-            .resizable()
-            .interpolation(.high)
-            .frame(width: current.rect.width, height: current.rect.height)
-            .offset(x: current.rect.minX, y: current.rect.minY)
-            .allowsHitTesting(false)
+          if current.isText {
+            Image(uiImage: preview)
+              .resizable()
+              .interpolation(.high)
+              .scaledToFit()
+              .frame(
+                width: current.rect.width, height: current.rect.height,
+                alignment: .topLeading)
+              .offset(x: current.rect.minX, y: current.rect.minY)
+              .allowsHitTesting(false)
+          } else {
+            Image(uiImage: preview)
+              .resizable()
+              .interpolation(.high)
+              .frame(width: current.rect.width, height: current.rect.height)
+              .offset(x: current.rect.minX, y: current.rect.minY)
+              .allowsHitTesting(false)
+          }
         }
 
         CanvasBox(
@@ -449,24 +466,19 @@ struct EditorView: View {
       dx: -store.canvasSize.width, dy: -store.canvasSize.height)
   }
 
-  /// The shape the box is held to while this layer is placed.
-  ///
-  /// Text never goes free: the renderer draws type at one size, so a box that
-  /// left the words' own aspect would promise a stretch the Done button cannot
-  /// deliver — which read as "fit text can't be resized", because the natural
-  /// drag on a wide caption is the bottom edge, and a height-only change left
-  /// the font width, and therefore the font, exactly as it was.
+  /// The shape the box is held to while this layer is placed. The toggle
+  /// rules for text too: the box is a container the type scales to fit
+  /// inside, so its shape is free even though the type's own is not.
   private func placementRatio(_ current: Placement) -> CGFloat? {
-    if current.isText { return current.ratio }
-    return constrainProportions ? current.ratio : nil
+    constrainProportions ? current.ratio : nil
   }
 
   /// The pixels the placement box is scaling, or nil when there is nothing
   /// sensible to draw live.
   ///
   /// For text this is the glyphs cropped out of the layer's own rendering when
-  /// the box opened, so the words visibly follow and fill the rectangle being
-  /// dragged instead of sitting behind it at their old size and place.
+  /// the box opened, so the words visibly follow the rectangle being dragged
+  /// instead of sitting behind it at their old size and place.
   private func placementPreviewImage(_ current: Placement) -> UIImage? {
     if current.isText { return textPlacementPreview }
     guard let layer = store.layers.first(where: { $0.id == current.layerID })
@@ -492,10 +504,6 @@ struct EditorView: View {
           systemImage: constrainProportions ? "lock" : "lock.open")
       }
       .toggleStyle(.button)
-      // Type has one shape. A toggle that promised a stretch the renderer
-      // cannot draw made the whole control feel broken (a taller box changed
-      // nothing), so for text the lock is shown but not offered.
-      .disabled(placement?.isText == true)
       .accessibilityIdentifier("Constrain proportions")
       .accessibilityLabel(
         "Constrain proportions, \(constrainProportions ? "on" : "off")"

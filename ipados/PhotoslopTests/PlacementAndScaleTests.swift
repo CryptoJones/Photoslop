@@ -230,6 +230,26 @@ final class PlacementAndScaleTests: XCTestCase {
     XCTAssertEqual(content.y, 100, accuracy: 0.001)
   }
 
+  /// The box is a container, so an off-shape box scales the type by whichever
+  /// axis runs out first — a box three times as wide but only twice as tall
+  /// doubles the words rather than tripling them into the ceiling.
+  func testFittingTextIntoAnOffShapeBoxIsLimitedByTheTightAxis() {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 800, height: 600))
+    XCTAssertTrue(
+      store.addTextLayer("Caption", fontSize: 20, color: .black, at: CGPoint(x: 10, y: 10)))
+    guard let id = store.activeLayerID, let opened = store.textRect(for: id) else {
+      return XCTFail("no text box")
+    }
+
+    let wide = CGRect(x: 50, y: 50, width: opened.width * 3, height: opened.height * 2)
+    XCTAssertTrue(store.fitTextLayer(id, to: wide))
+    guard let content = store.layers.last?.text else { return XCTFail("text lost") }
+    XCTAssertEqual(
+      content.fontSize, 40, accuracy: 1.5,
+      "the height ran out at 2x, so 2x is the fit — width had room to spare")
+  }
+
   func testFittingRefusesALayerThatIsNotText() throws {
     let store = EditorStore()
     store.newDocument(size: CGSize(width: 400, height: 400))
