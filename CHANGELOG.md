@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.10.4] — 2026-08-16
+
+### Fixed
+- **The fit-text box is a container again — 2.10.3 locked the wrong thing.**
+  Device testing came straight back: constrain proportions was greyed out
+  and the type still would not scale to the box. 2.10.3 held the *box* to
+  the words' shape; what fitting text means is the opposite — the box's
+  shape is free, and the type scales to the largest size that fits inside
+  it, limited by whichever axis runs out first. The constrain toggle works
+  for text again, a taller box now genuinely grows the words (the height
+  used to be ignored entirely), and the live preview shows the words at the
+  exact size Done will commit, anchored to the box's top-left, instead of
+  stretching them to fill it.
+
 ## [2.10.3] — 2026-08-15
 
 ### Fixed

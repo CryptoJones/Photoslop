@@ -515,20 +515,23 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   }
 
   /// Fit a text layer to `rect`: the anchor moves to its corner and the type
-  /// scales so the words span its width.
+  /// scales to the largest size that still fits inside the box.
   ///
   /// Text was placed and then stuck — dropped on the canvas at whatever size
   /// the sheet asked for, with no way to fit it to what is underneath (#261).
-  /// Scaling by width rather than height is what "fit this caption across the
-  /// bottom of the picture" means in practice.
+  /// The box is a container: type keeps its own shape, so it scales by
+  /// whichever axis of the box runs out first. A first version scaled by
+  /// width alone, which made a box dragged taller a silent no-op — reported
+  /// as "fit text can't be resized".
   @discardableResult
   func fitTextLayer(_ id: UUID, to rect: CGRect) -> Bool {
     guard let existing = layers.first(where: { $0.id == id })?.text else { return false }
     let measured = TextLayerRenderer.measure(
       text: existing.string, fontSize: CGFloat(existing.fontSize))
-    guard measured.width > 1 else { return false }
+    guard measured.width > 1, measured.height > 1 else { return false }
     var content = existing
-    content.fontSize = Double(max(1, CGFloat(existing.fontSize) * rect.width / measured.width))
+    let scale = min(rect.width / measured.width, rect.height / measured.height)
+    content.fontSize = Double(max(1, CGFloat(existing.fontSize) * scale))
     content.x = Double(rect.minX)
     content.y = Double(rect.minY)
     guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
