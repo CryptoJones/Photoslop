@@ -109,6 +109,44 @@ final class FitTextUITests: UITestCase {
     app.buttons["Cancel Placement"].tap()
   }
 
+  /// While the box is up, the words themselves must be visible inside it —
+  /// device testing caught a preview that never appeared, leaving nothing to
+  /// judge the size by until Done.
+  func testTheWordsAreVisibleInsideTheBox() {
+    let app = openFitText()
+    let preview = app.descendants(matching: .any).matching(identifier: "Text preview").firstMatch
+    XCTAssertTrue(preview.exists, "no live text preview inside the fit-text box")
+    XCTAssertGreaterThan(preview.frame.width, 1, "the text preview has no size")
+    app.buttons["Cancel Placement"].tap()
+  }
+
+  /// The face is part of the text sheet: every family the OS offers, plus the
+  /// system font, chosen where the words are typed.
+  func testTheTextSheetOffersAFontChoice() {
+    let app = openEditor()
+    // Add Text lives on the bar where there is room and in More Actions where
+    // there is not — the same route `addText` takes.
+    let barButton = app.navigationBars.buttons["Add Text"].firstMatch
+    if barButton.waitForExistence(timeout: 10), barButton.isHittable {
+      barButton.tap()
+    } else {
+      let more = app.navigationBars.buttons["More Actions"].firstMatch
+      XCTAssertTrue(more.waitForExistence(timeout: 15), "no More Actions menu")
+      more.tap()
+      let addText = app.buttons["Add Text"].firstMatch
+      XCTAssertTrue(addText.waitForExistence(timeout: 10), "Add Text is missing from the menu")
+      addText.tap()
+    }
+
+    XCTAssertTrue(
+      app.textFields["Type something"].waitForExistence(timeout: 20),
+      "the text sheet never appeared")
+    XCTAssertTrue(
+      app.descendants(matching: .any).matching(identifier: "Font").firstMatch.exists,
+      "the text sheet has no font control")
+    app.buttons["Cancel"].firstMatch.tap()
+  }
+
   /// Dragging the interior moves the box without resizing it — even though a
   /// caption's box is far shorter than the 44pt handle radius.
   func testDraggingTheInteriorMovesTheBox() {
