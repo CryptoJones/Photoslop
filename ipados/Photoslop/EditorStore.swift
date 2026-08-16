@@ -288,9 +288,11 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     _ text: String,
     fontSize: CGFloat,
     color: UIColor,
-    at anchor: CGPoint
+    at anchor: CGPoint,
+    fontFamily: String? = nil
   ) -> Bool {
-    let content = TextContent(string: text, fontSize: fontSize, color: color, anchor: anchor)
+    let content = TextContent(
+      string: text, fontSize: fontSize, color: color, anchor: anchor, fontFamily: fontFamily)
     guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
     mutate(actionName: "Add Text") {
       let layer = RasterLayer(
@@ -312,11 +314,13 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     _ id: UUID,
     string: String,
     fontSize: CGFloat,
-    color: UIColor
+    color: UIColor,
+    fontFamily: String? = nil
   ) -> Bool {
     guard let existing = layers.first(where: { $0.id == id })?.text else { return false }
     let content = TextContent(
-      string: string, fontSize: fontSize, color: color, anchor: existing.anchor)
+      string: string, fontSize: fontSize, color: color, anchor: existing.anchor,
+      fontFamily: fontFamily)
     guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
     mutate(actionName: "Edit Text") {
       update(id) {
@@ -366,7 +370,8 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
       fontSize: CGFloat(content.fontSize),
       color: content.color,
       at: content.anchor,
-      canvasSize: canvasSize
+      canvasSize: canvasSize,
+      fontFamily: content.fontFamily
     )
   }
 
@@ -377,15 +382,63 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   /// document. Importing a photo into a 1920x1080 canvas silently produced a
   /// 4032x3024 one. The canvas someone picked is the canvas they keep; the photo
   /// is scaled to fit it and centred (#258).
-  func importImage(data: Data, suggestedName: String? = nil) throws {
+  /// How an image whose size disagrees with the canvas becomes the document.
+  ///
+  /// Nothing here decides silently — the choice belongs to the person
+  /// importing, asked in a dialog when the sizes differ (#293). `fit` is what
+  /// every import used to do without asking.
+  enum ImportSizing {
+    /// The canvas becomes the image's own size; every pixel arrives.
+    case expandCanvas
+    /// The image lands centred at its own size; whatever overhangs is cut.
+    case cropToCanvas
+    /// The image is scaled to fit inside the canvas, losing nothing but scale.
+    case fit
+  }
+
+  func importImage(
+    data: Data, suggestedName: String? = nil, sizing: ImportSizing = .fit
+  ) throws {
     let normalized = try ProjectArchive.decodeImage(data)
-    mutate(actionName: "Import Image") {
-      let layer = RasterLayer(
-        name: suggestedName ?? "Imported image",
-        image: Self.fitted(normalized, into: canvasSize))
-      layers = [layer]
-      activeLayerID = layer.id
+    let name = suggestedName ?? "Imported image"
+    switch sizing {
+    case .expandCanvas:
+      guard ProjectArchive.isValidCanvas(normalized.size) else {
+        throw ImportError.resourceLimit(
+          "That image is \(Int(normalized.size.width)) × \(Int(normalized.size.height)) px, "
+            + "which is more than a canvas can be.")
+      }
+      mutate(actionName: "Import Image") {
+        canvasSize = normalized.size
+        let layer = RasterLayer(name: name, image: normalized)
+        layers = [layer]
+        activeLayerID = layer.id
+      }
+    case .cropToCanvas:
+      mutate(actionName: "Import Image") {
+        let offset = CGRect(
+          origin: CGPoint(
+            x: ((canvasSize.width - normalized.size.width) / 2).rounded(),
+            y: ((canvasSize.height - normalized.size.height) / 2).rounded()),
+          size: normalized.size)
+        let layer = RasterLayer(
+          name: name, image: Self.drawn(normalized, in: offset, canvas: canvasSize))
+        layers = [layer]
+        activeLayerID = layer.id
+      }
+    case .fit:
+      mutate(actionName: "Import Image") {
+        let layer = RasterLayer(name: name, image: Self.fitted(normalized, into: canvasSize))
+        layers = [layer]
+        activeLayerID = layer.id
+      }
     }
+  }
+
+  /// The decoded size of an image about to be imported, so the caller can ask
+  /// how to handle a size disagreement before anything is committed.
+  static func importedImageSize(of data: Data) -> CGSize? {
+    (try? ProjectArchive.decodeImage(data))?.size
   }
 
   /// Add each image as its own layer, on top of the stack, as one undo step.
@@ -502,6 +555,48 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }
   }
 
+  /// Place a layer whose rectangle overhangs the canvas by growing the canvas
+  /// to hold every pixel — placement and expansion as one undo step (#293).
+  ///
+  /// The canvas grows to the union of itself and the rectangle; everything
+  /// already in the document shifts by the union's origin so nothing moves on
+  /// screen, and the placed layer lands at the shifted rectangle in full.
+  @discardableResult
+  func placeLayerExpandingCanvas(_ id: UUID, in rect: CGRect) -> Bool {
+    guard let layer = layers.first(where: { $0.id == id }) else { return false }
+    guard rect.width >= 1, rect.height >= 1 else { return false }
+    let union = rect.union(CGRect(origin: .zero, size: canvasSize)).integral
+    guard ProjectArchive.isValidCanvas(union.size) else { return false }
+    let offset = CGPoint(x: -union.origin.x, y: -union.origin.y)
+    let translation = CGAffineTransform(translationX: offset.x, y: offset.y)
+    let source = layer.source ?? layer.image
+    let target = rect.offsetBy(dx: offset.x, dy: offset.y)
+    mutate(actionName: "Expand Canvas") {
+      canvasSize = union.size
+      layers = layers.map { existing in
+        var moved = existing
+        if existing.id == id {
+          moved.image = Self.drawn(source, in: target, canvas: union.size)
+          moved.source = source
+          moved.placement = target
+          return moved
+        }
+        moved.image = Self.recanvased(existing.image, to: union.size, offset: offset)
+        moved.drawing = existing.drawing.transformed(using: translation)
+        if var text = moved.text {
+          text.x += Double(offset.x)
+          text.y += Double(offset.y)
+          moved.text = text
+        }
+        if let placed = moved.placement {
+          moved.placement = placed.applying(translation)
+        }
+        return moved
+      }
+    }
+    return true
+  }
+
   /// Draw `image` into `rect` on a transparent canvas-sized bitmap. Anything
   /// outside the canvas is simply not drawn, which is what "hanging over the
   /// edge" means once it is committed.
@@ -527,7 +622,8 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   func fitTextLayer(_ id: UUID, to rect: CGRect) -> Bool {
     guard let existing = layers.first(where: { $0.id == id })?.text else { return false }
     let measured = TextLayerRenderer.measure(
-      text: existing.string, fontSize: CGFloat(existing.fontSize))
+      text: existing.string, fontSize: CGFloat(existing.fontSize),
+      fontFamily: existing.fontFamily)
     guard measured.width > 1, measured.height > 1 else { return false }
     var content = existing
     let scale = min(rect.width / measured.width, rect.height / measured.height)
@@ -548,7 +644,8 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   func textRect(for id: UUID) -> CGRect? {
     guard let content = layers.first(where: { $0.id == id })?.text else { return nil }
     let measured = TextLayerRenderer.measure(
-      text: content.string, fontSize: CGFloat(content.fontSize))
+      text: content.string, fontSize: CGFloat(content.fontSize),
+      fontFamily: content.fontFamily)
     return CGRect(origin: content.anchor, size: measured)
   }
 

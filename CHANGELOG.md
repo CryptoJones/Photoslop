@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.11.0] — 2026-08-16
+
+### Added
+- **Importing asks instead of deciding** (iPad/iPhone, #293). Importing an
+  image whose size disagrees with the canvas used to scale it to fit without
+  a word — which read as auto-cropping. Both import routes (Files and
+  Photos) now ask: **Expand Canvas** to the image's own size, **Crop to
+  Canvas** (centred at full size, overhang cut), or **Scale to Fit** (the
+  old behaviour). The same question appears when a placed layer is applied
+  hanging over the edge: **Expand Canvas to Fit** grows the document around
+  every pixel — placement and expansion in one undo step — or **Crop to
+  Canvas** keeps today's behaviour.
+- **Typeface selection for text** (iPad/iPhone). The text sheet gained a
+  Font picker — every family on the device, each shown in its own face,
+  plus the system font. The choice is saved with the document; documents
+  from before this field decode as the system font, and a family the OS no
+  longer has degrades to the system font rather than failing to render.
+
+### Fixed
+- **The fit-text preview actually shows the words now.** 2.10.4 cropped the
+  glyphs out of the layer's canvas-sized rendering, and on device that
+  produced nothing to show. The preview is now rendered directly from the
+  words in their current face and colour, scaled live inside the box at the
+  exact size Done will commit.
+
 ## [2.10.4] — 2026-08-16
 
 ### Fixed

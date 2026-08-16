@@ -18,6 +18,10 @@ extension UTType {
 struct TextContent: Codable, Equatable {
   var string: String
   var fontSize: Double
+  /// Nil means the system font — which is also what every document written
+  /// before this field existed decodes to, the optional itself being the
+  /// version gate, exactly as `LayerRecord.text` was for manifest v2.
+  var fontFamily: String?
   var red: Double
   var green: Double
   var blue: Double
@@ -30,7 +34,11 @@ struct TextContent: Codable, Equatable {
     UIColor(red: red, green: green, blue: blue, alpha: alpha)
   }
 
-  init(string: String, fontSize: CGFloat, color: UIColor, anchor: CGPoint) {
+  init(
+    string: String, fontSize: CGFloat, color: UIColor, anchor: CGPoint,
+    fontFamily: String? = nil
+  ) {
+    self.fontFamily = fontFamily
     var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 1
     color.getRed(&r, green: &g, blue: &b, alpha: &a)
     self.string = string

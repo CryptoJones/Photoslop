@@ -45,6 +45,21 @@ struct EditorView: View {
   @State private var textPlacementPreview: UIImage?
   /// A one-shot ask for the canvas to bring a freshly opened box on screen.
   @State private var boxReveal: (id: Int, rect: CGRect)?
+  /// Nil is the system font; kept across uses so the next caption starts from
+  /// the last face chosen, the way size and colour already behave.
+  @State private var textFontFamily: String?
+  /// An import whose size disagrees with the canvas, waiting on the person to
+  /// choose between expanding the canvas, cropping, and scaling (#293).
+  @State private var pendingImport: PendingImport?
+  /// A committed placement that hangs over the canvas edge, waiting on the
+  /// same expand-or-crop choice (#293).
+  @State private var overhangPlacement: Placement?
+
+  struct PendingImport: Equatable {
+    let data: Data
+    let name: String
+    let size: CGSize
+  }
   /// On by default: a non-proportional resize distorts a picture, which is
   /// occasionally what someone wants and never what they want by accident.
   @State private var constrainProportions = true
@@ -168,11 +183,56 @@ struct EditorView: View {
           guard let data = try await item.loadTransferable(type: Data.self) else {
             throw EditorStore.ImportError.invalidImage
           }
-          try store.importImage(data: data, suggestedName: "Photo")
+          offerImport(data: data, name: "Photo")
         } catch {
           errorMessage = error.localizedDescription
         }
       }
+    }
+    // The import-size question (#293). The old importer scaled to fit without
+    // asking, which read as auto-cropping to the canvas.
+    .confirmationDialog(
+      "This image is a different size",
+      isPresented: Binding(
+        get: { pendingImport != nil },
+        set: { if !$0 { pendingImport = nil } }
+      ),
+      titleVisibility: .visible,
+      presenting: pendingImport
+    ) { request in
+      Button("Expand Canvas to \(Int(request.size.width)) × \(Int(request.size.height))") {
+        finishImport(request, sizing: .expandCanvas)
+      }
+      Button("Crop to Canvas") { finishImport(request, sizing: .cropToCanvas) }
+      Button("Scale to Fit") { finishImport(request, sizing: .fit) }
+      Button("Cancel", role: .cancel) {}
+    } message: { request in
+      Text(
+        "The image is \(Int(request.size.width)) × \(Int(request.size.height)) px; "
+          + "the canvas is \(Int(store.canvasSize.width)) × "
+          + "\(Int(store.canvasSize.height)) px.")
+    }
+    // The same question at placement time, for a layer dragged over the edge.
+    .confirmationDialog(
+      "The image hangs over the canvas",
+      isPresented: Binding(
+        get: { overhangPlacement != nil },
+        set: { if !$0 { overhangPlacement = nil } }
+      ),
+      titleVisibility: .visible,
+      presenting: overhangPlacement
+    ) { pending in
+      Button("Expand Canvas to Fit") {
+        commitPlacement(pending, expandingCanvas: true)
+      }
+      Button("Crop to Canvas") {
+        commitPlacement(pending, expandingCanvas: false)
+      }
+      Button("Keep Placing", role: .cancel) {}
+    } message: { _ in
+      Text(
+        "Expand Canvas keeps every pixel and grows the document; "
+          + "Crop to Canvas cuts whatever hangs over the edge.")
     }
     .alert(
       "Photoslop",
@@ -433,6 +493,7 @@ struct EditorView: View {
                 alignment: .topLeading)
               .offset(x: current.rect.minX, y: current.rect.minY)
               .allowsHitTesting(false)
+              .accessibilityIdentifier("Text preview")
           } else {
             Image(uiImage: preview)
               .resizable()
@@ -1017,8 +1078,32 @@ struct EditorView: View {
       guard let url = try result.get().first else { return }
       let access = url.startAccessingSecurityScopedResource()
       defer { if access { url.stopAccessingSecurityScopedResource() } }
-      try store.importImage(
-        data: Data(contentsOf: url), suggestedName: url.deletingPathExtension().lastPathComponent)
+      offerImport(
+        data: try Data(contentsOf: url), name: url.deletingPathExtension().lastPathComponent)
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  /// Import now when the sizes agree; otherwise put up the question (#293).
+  ///
+  /// The old behaviour scaled every import to fit without asking, which read
+  /// as "importing an image is still auto cropping to canvas size".
+  private func offerImport(data: Data, name: String) {
+    guard let size = EditorStore.importedImageSize(of: data), size != store.canvasSize else {
+      do {
+        try store.importImage(data: data, suggestedName: name)
+      } catch {
+        errorMessage = error.localizedDescription
+      }
+      return
+    }
+    pendingImport = PendingImport(data: data, name: name, size: size)
+  }
+
+  private func finishImport(_ request: PendingImport, sizing: EditorStore.ImportSizing) {
+    do {
+      try store.importImage(data: request.data, suggestedName: request.name, sizing: sizing)
     } catch {
       errorMessage = error.localizedDescription
     }
@@ -1340,6 +1425,14 @@ struct EditorView: View {
               Text("\(Int(textSize)) pt").monospacedDigit().frame(width: 64, alignment: .trailing)
             }
           }
+          Picker("Font", selection: $textFontFamily) {
+            Text("System").tag(String?.none)
+            ForEach(UIFont.familyNames.sorted(), id: \.self) { family in
+              // Each family shown in its own face — the name alone says
+              // nothing about what the type looks like.
+              Text(family).font(.custom(family, size: 17)).tag(String?.some(family))
+            }
+          }
           ColorPicker("Color", selection: $textColor, supportsOpacity: true)
         } footer: {
           Text(
@@ -1384,7 +1477,8 @@ struct EditorView: View {
   private func addTextCentred() {
     let anchor = CGPoint(x: store.canvasSize.width / 2, y: store.canvasSize.height / 2)
     let added = store.addTextLayer(
-      textBody, fontSize: textSize, color: UIColor(textColor), at: anchor)
+      textBody, fontSize: textSize, color: UIColor(textColor), at: anchor,
+      fontFamily: textFontFamily)
     if added {
       isMovingText = true
     } else {
@@ -1405,6 +1499,7 @@ struct EditorView: View {
     textBody = content.string
     textSize = content.fontSize
     textColor = Color(content.color)
+    textFontFamily = content.fontFamily
     showTextOptions = true
   }
 
@@ -1412,7 +1507,8 @@ struct EditorView: View {
     guard let id = editingTextLayerID else { return }
     editingTextLayerID = nil
     let updated = store.updateTextLayer(
-      id, string: textBody, fontSize: textSize, color: UIColor(textColor))
+      id, string: textBody, fontSize: textSize, color: UIColor(textColor),
+      fontFamily: textFontFamily)
     if !updated {
       errorMessage = "There was nothing to render as text."
     }
@@ -1516,13 +1612,15 @@ struct EditorView: View {
       isText: layer.isText,
       isNew: isNew)
     // Hide the committed copy so the live preview is the only one on screen.
-    // Text gets its preview by cropping the glyphs out of its own rendering:
-    // the layer image is canvas-sized, but the words inside it are not.
-    if layer.isText {
-      let visible = rect.intersection(CGRect(origin: .zero, size: store.canvasSize))
-      if !visible.isEmpty, let glyphs = layer.image.cgImage?.cropping(to: visible) {
-        textPlacementPreview = UIImage(cgImage: glyphs)
-      }
+    // Text gets its preview rendered fresh from its own words, face and
+    // colour — cropping the canvas-sized rendering produced nothing to show
+    // on device, and a preview that can silently vanish is not a preview.
+    if layer.isText, let content = layer.text {
+      textPlacementPreview = TextLayerRenderer.glyphs(
+        text: content.string,
+        fontSize: CGFloat(content.fontSize),
+        color: content.color,
+        fontFamily: content.fontFamily)
     }
     store.previewSuppressedLayerID = layerID
     // The box is only a control if its handles are somewhere a finger can
@@ -1532,9 +1630,28 @@ struct EditorView: View {
 
   private func applyPlacement() {
     guard let current = placement else { return }
+    // An image hanging over the edge is a question, not a decision: expand
+    // the canvas to hold every pixel, or cut to the canvas (#293). Text is
+    // never asked — fitting words to a region is the whole gesture.
+    if !current.isText,
+      !CGRect(origin: .zero, size: store.canvasSize).contains(current.rect)
+    {
+      overhangPlacement = current
+      return
+    }
+    commitPlacement(current, expandingCanvas: false)
+  }
+
+  private func commitPlacement(_ current: Placement, expandingCanvas: Bool) {
     store.previewSuppressedLayerID = nil
     if current.isText {
       _ = store.fitTextLayer(current.layerID, to: current.rect)
+    } else if expandingCanvas {
+      if !store.placeLayerExpandingCanvas(current.layerID, in: current.rect) {
+        errorMessage = "The canvas cannot grow that large."
+        store.previewSuppressedLayerID = current.layerID
+        return
+      }
     } else {
       store.placeLayer(
         current.layerID,

@@ -26,6 +26,16 @@ sync — check an item here when its issue closes.
   drop `UNSIGNED` from the artifact name
   ([#287](https://github.com/CryptoJones/Photoslop/issues/287))
 
+### Parity
+
+- [ ] Cross-platform parity asymmetries remaining after 2.11.0: desktop's
+  import dialog lacks the centred-crop choice and iPad's document import
+  lacks a lossless keep-overhang choice; desktop Free Transform rasterises
+  text layers instead of re-rendering from `text_data` the way iPad Fit Text
+  does; `--text` has no plain FAMILY field (family needs `--text-rich`).
+  Parity across desktop GUI / CLI / iPad is a standing requirement
+  ([#294](https://github.com/CryptoJones/Photoslop/issues/294))
+
 ### iPadOS
 
 - [ ] `NewDocumentUITests` fail on an iPad simulator when the app is **built
