@@ -297,6 +297,49 @@ final class PlacementAndScaleTests: XCTestCase {
       "a touch nowhere near the box grabs nothing")
   }
 
+  /// The whole edge line grabs that edge — a touch on the lower third of a
+  /// large box's left edge must scale the horizontal plane, not move the box,
+  /// which is what falling through to the interior did (#296).
+  func testAnEdgeIsGrabbableAlongItsWholeLine() {
+    let rect = CGRect(x: 100, y: 100, width: 200, height: 200)
+    XCTAssertEqual(
+      CropGeometry.handle(at: CGPoint(x: 105, y: 170), in: rect, tolerance: 44), .left,
+      "a touch on the edge line, away from its midpoint, still takes the edge")
+    XCTAssertEqual(
+      CropGeometry.handle(at: CGPoint(x: 240, y: 296), in: rect, tolerance: 44), .bottom,
+      "the bottom edge is the bottom edge anywhere along it")
+    XCTAssertEqual(
+      CropGeometry.handle(at: CGPoint(x: 200, y: 200), in: rect, tolerance: 44), .interior,
+      "the middle is still the interior — the segments do not reach it")
+  }
+
+  /// Fitting is wrap-aware (#296): a long caption fitted to a tall box wraps
+  /// into lines and the type grows, instead of staying one tiny strip whose
+  /// width was the only thing consulted.
+  func testFittingWrapsALongCaptionIntoTheBox() {
+    let text = "Why are people so afraid of being a minority in America somehow"
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 2000, height: 2000))
+    XCTAssertTrue(store.addTextLayer(text, fontSize: 20, color: .black, at: .zero))
+    guard let id = store.activeLayerID else { return XCTFail("no text layer") }
+
+    let box = CGRect(x: 100, y: 100, width: 1000, height: 1000)
+    XCTAssertTrue(store.fitTextLayer(id, to: box))
+    guard let content = store.layers.last?.text else { return XCTFail("text lost") }
+
+    XCTAssertEqual(content.wrapWidth ?? 0, 1000, accuracy: 0.001, "the wrap is part of the fit")
+    let singleLine =
+      TextLayerRenderer.fittingFontSize(text: text, in: CGSize(width: 1000, height: 40)) ?? 1
+    XCTAssertGreaterThan(
+      content.fontSize, Double(singleLine) * 3,
+      "a square box holds several wrapped lines, so the type must be far larger "
+        + "than the one-line fit")
+    let wrapped = TextLayerRenderer.measure(
+      text: text, fontSize: CGFloat(content.fontSize), wrapWidth: 1000)
+    XCTAssertLessThanOrEqual(wrapped.height, 1000, "the wrapped layout fits the box's height")
+    XCTAssertLessThanOrEqual(wrapped.width, 1000, "and its width")
+  }
+
   /// A corner is the more specific intent, so it wins where both are in range.
   func testACornerBeatsAnEdgeWhenBothAreInReach() {
     let rect = CGRect(x: 0, y: 0, width: 60, height: 60)

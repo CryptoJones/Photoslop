@@ -217,11 +217,19 @@ enum CropGeometry {
       (.bottomLeft, CGPoint(x: rect.minX, y: rect.maxY)),
       (.bottomRight, CGPoint(x: rect.maxX, y: rect.maxY)),
     ]
+    // An edge is grabbable along its whole line, not only at its midpoint.
+    // Measured against midpoints only, a touch on the lower third of a large
+    // box's left edge was "near" nothing and fell through to the interior —
+    // grabbing an edge to scale one plane moved the box instead. Distance is
+    // to the segment: the touch projected onto the edge, clamped to its ends
+    // (which the corners have already claimed).
+    let clampedX = min(max(point.x, rect.minX), rect.maxX)
+    let clampedY = min(max(point.y, rect.minY), rect.maxY)
     let edges: [(CropHandle, CGPoint)] = [
-      (.top, CGPoint(x: rect.midX, y: rect.minY)),
-      (.bottom, CGPoint(x: rect.midX, y: rect.maxY)),
-      (.left, CGPoint(x: rect.minX, y: rect.midY)),
-      (.right, CGPoint(x: rect.maxX, y: rect.midY)),
+      (.top, CGPoint(x: clampedX, y: rect.minY)),
+      (.bottom, CGPoint(x: clampedX, y: rect.maxY)),
+      (.left, CGPoint(x: rect.minX, y: clampedY)),
+      (.right, CGPoint(x: rect.maxX, y: clampedY)),
     ]
 
     func nearest(_ candidates: [(CropHandle, CGPoint)]) -> CropHandle? {

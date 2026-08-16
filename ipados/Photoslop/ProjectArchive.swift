@@ -22,6 +22,9 @@ struct TextContent: Codable, Equatable {
   /// before this field existed decodes to, the optional itself being the
   /// version gate, exactly as `LayerRecord.text` was for manifest v2.
   var fontFamily: String?
+  /// The width the words wrap at, set when the layer has been fitted to a
+  /// box (#296). Nil — every earlier document — lays out to the canvas edge.
+  var wrapWidth: Double?
   var red: Double
   var green: Double
   var blue: Double
