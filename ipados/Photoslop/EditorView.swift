@@ -1576,6 +1576,32 @@ struct EditorView: View {
     if isFinal {
       dragHandle = nil
       dragOrigin = .zero
+      // The box has settled: re-render the words wrapped to it, so what sits
+      // inside the rectangle is the layout Done will commit.
+      if let current = placement, current.isText {
+        refreshTextPlacementPreview(layerID: current.layerID, box: current.rect.size)
+      }
+    }
+  }
+
+  /// Render the fit-text preview for the box as it stands: the words wrapped
+  /// at the box's width, at the largest size the box can hold — the exact
+  /// layout Done will commit (#296). Re-rendered when a drag ends rather than
+  /// per sample; between renders the last image scales with the box.
+  private func refreshTextPlacementPreview(layerID: UUID, box: CGSize) {
+    guard let content = store.layers.first(where: { $0.id == layerID })?.text else { return }
+    let fitted =
+      TextLayerRenderer.fittingFontSize(
+        text: content.string, fontFamily: content.fontFamily, in: box)
+      ?? CGFloat(content.fontSize)
+    if let rendered = TextLayerRenderer.glyphs(
+      text: content.string,
+      fontSize: fitted,
+      color: content.color,
+      fontFamily: content.fontFamily,
+      wrapWidth: box.width)
+    {
+      textPlacementPreview = rendered
     }
   }
 
@@ -1604,7 +1630,10 @@ struct EditorView: View {
     }
     guard rect.width > 0, rect.height > 0 else { return }
     store.select(layerID)
-    constrainProportions = true
+    // An image opens locked — a distorted picture is never the default. A
+    // text box is a free container the type wraps and scales into, so each
+    // handle moves only its own plane unless the lock is chosen (#296).
+    constrainProportions = !layer.isText
     placement = Placement(
       layerID: layerID,
       rect: rect,
@@ -1615,12 +1644,8 @@ struct EditorView: View {
     // Text gets its preview rendered fresh from its own words, face and
     // colour — cropping the canvas-sized rendering produced nothing to show
     // on device, and a preview that can silently vanish is not a preview.
-    if layer.isText, let content = layer.text {
-      textPlacementPreview = TextLayerRenderer.glyphs(
-        text: content.string,
-        fontSize: CGFloat(content.fontSize),
-        color: content.color,
-        fontFamily: content.fontFamily)
+    if layer.isText {
+      refreshTextPlacementPreview(layerID: layerID, box: rect.size)
     }
     store.previewSuppressedLayerID = layerID
     // The box is only a control if its handles are somewhere a finger can

@@ -318,9 +318,12 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     fontFamily: String? = nil
   ) -> Bool {
     guard let existing = layers.first(where: { $0.id == id })?.text else { return false }
-    let content = TextContent(
+    var content = TextContent(
       string: string, fontSize: fontSize, color: color, anchor: existing.anchor,
       fontFamily: fontFamily)
+    // The wrap survives an edit: the words still live in their fitted box.
+    // The size chosen in the sheet is explicit and wins over the fit.
+    content.wrapWidth = existing.wrapWidth
     guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
     mutate(actionName: "Edit Text") {
       update(id) {
@@ -371,7 +374,8 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
       color: content.color,
       at: content.anchor,
       canvasSize: canvasSize,
-      fontFamily: content.fontFamily
+      fontFamily: content.fontFamily,
+      wrapWidth: content.wrapWidth.map { CGFloat($0) }
     )
   }
 
@@ -609,25 +613,26 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }
   }
 
-  /// Fit a text layer to `rect`: the anchor moves to its corner and the type
-  /// scales to the largest size that still fits inside the box.
+  /// Fit a text layer to `rect`: the anchor moves to its corner, the words
+  /// wrap at the box's width, and the type takes the largest size whose
+  /// wrapped layout fits the box (#261, #296).
   ///
   /// Text was placed and then stuck — dropped on the canvas at whatever size
-  /// the sheet asked for, with no way to fit it to what is underneath (#261).
-  /// The box is a container: type keeps its own shape, so it scales by
-  /// whichever axis of the box runs out first. A first version scaled by
-  /// width alone, which made a box dragged taller a silent no-op — reported
-  /// as "fit text can't be resized".
+  /// the sheet asked for, with no way to fit it to what is underneath. Two
+  /// earlier attempts under-delivered: scaling by width alone made a taller
+  /// box a no-op, and scaling without wrapping kept a long caption as one
+  /// tiny strip across a box that had room for five lines. The explicit size
+  /// in the Edit Text sheet still overrides a fit afterwards.
   @discardableResult
   func fitTextLayer(_ id: UUID, to rect: CGRect) -> Bool {
     guard let existing = layers.first(where: { $0.id == id })?.text else { return false }
-    let measured = TextLayerRenderer.measure(
-      text: existing.string, fontSize: CGFloat(existing.fontSize),
-      fontFamily: existing.fontFamily)
-    guard measured.width > 1, measured.height > 1 else { return false }
+    guard
+      let fitted = TextLayerRenderer.fittingFontSize(
+        text: existing.string, fontFamily: existing.fontFamily, in: rect.size)
+    else { return false }
     var content = existing
-    let scale = min(rect.width / measured.width, rect.height / measured.height)
-    content.fontSize = Double(max(1, CGFloat(existing.fontSize) * scale))
+    content.fontSize = Double(fitted)
+    content.wrapWidth = Double(rect.width)
     content.x = Double(rect.minX)
     content.y = Double(rect.minY)
     guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
@@ -645,7 +650,8 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     guard let content = layers.first(where: { $0.id == id })?.text else { return nil }
     let measured = TextLayerRenderer.measure(
       text: content.string, fontSize: CGFloat(content.fontSize),
-      fontFamily: content.fontFamily)
+      fontFamily: content.fontFamily,
+      wrapWidth: content.wrapWidth.map { CGFloat($0) })
     return CGRect(origin: content.anchor, size: measured)
   }
 

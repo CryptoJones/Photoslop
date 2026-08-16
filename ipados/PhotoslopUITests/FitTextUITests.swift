@@ -64,18 +64,16 @@ final class FitTextUITests: UITestCase {
     XCTAssertNotEqual(
       before.width, after.width,
       "dragging the corner handle did not resize the fit-text box")
-    // The readout rounds to whole pixels, so on a short box the ratio wobbles
-    // by a few tenths without the shape actually drifting.
-    XCTAssertEqual(
-      before.width / before.height, after.width / after.height, accuracy: 0.5,
-      "resizing the fit-text box did not hold the words' own shape")
+    XCTAssertNotEqual(
+      before.height, after.height,
+      "a corner drag scales both of its planes")
 
     app.buttons["Cancel Placement"].tap()
   }
 
-  /// The box is a container: unchecking constrain must free its shape, and
-  /// the two axes must then move separately. A version that greyed the toggle
-  /// out for text was reported straight back as the bug not being fixed.
+  /// The box is a free container for text, so it opens unconstrained: each
+  /// of the eight handles moves only its own plane unless the lock is chosen
+  /// (#296). A version that opened locked made edge drags move both planes.
   func testUnconstrainedResizeChangesHeightIndependently() {
     let app = openFitText()
 
@@ -83,10 +81,9 @@ final class FitTextUITests: UITestCase {
       .matching(identifier: "Constrain proportions").firstMatch
     XCTAssertTrue(constrain.exists, "there is no constrain-proportions control")
     XCTAssertTrue(constrain.isEnabled, "the constrain toggle must be usable for text")
-    constrain.tap()
     XCTAssertEqual(
       constrain.label, "Constrain proportions, off",
-      "tapping the toggle did not release the proportions")
+      "a text box opens free — each handle moves only its own plane")
 
     guard let before = boxSize(app) else {
       return XCTFail("no Layer size readout while fitting text")

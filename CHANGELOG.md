@@ -4,6 +4,28 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.11.1] — 2026-08-16
+
+### Fixed
+- **Fit Text wraps now** (#296). Fitting measured the caption as one line,
+  so a box drawn around the whole picture was "width-limited" instantly and
+  the words stayed a tiny strip across it. The words now wrap at the box's
+  width and the type takes the largest size whose wrapped layout fits the
+  box — both constraints, width *and* height. The wrap is saved with the
+  layer; the explicit size in the Edit Text sheet still overrides a fit.
+- **Every point on an edge grabs that edge** (#296). Edge handles were
+  hit-tested at their midpoints only, so touching the lower third of a large
+  box's left edge grabbed nothing and fell through to moving the box.
+  Distance is now measured to the whole edge segment: each of the eight
+  handles scales exactly the plane it sits on, corners still winning at the
+  corners and the middle still moving the box.
+- **A text box opens unconstrained.** The box is a free container the type
+  wraps into, so edge drags move one plane by default; the lock is still one
+  tap away. Image placements still open locked — a distorted photo is never
+  the default.
+- The fit-text preview re-renders at each drag's end with the wrapped
+  layout the box would commit, rather than only scaling the initial image.
+
 ## [2.11.0] — 2026-08-16
 
 ### Added

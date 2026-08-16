@@ -32,7 +32,12 @@ enum TextLayerRenderer {
   /// The placement box needs this twice: to open around text that is already on
   /// the canvas, and to work out what size the type must be for the words to
   /// span a box the user has dragged.
-  static func measure(text: String, fontSize: CGFloat, fontFamily: String? = nil) -> CGSize {
+  /// `wrapWidth` constrains layout: lines break to stay inside it, and the
+  /// height grows instead. Nil is the historical single-line-per-newline
+  /// behaviour.
+  static func measure(
+    text: String, fontSize: CGFloat, fontFamily: String? = nil, wrapWidth: CGFloat? = nil
+  ) -> CGSize {
     let body = text.trimmingCharacters(in: .newlines)
     guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .zero }
     let attributes: [NSAttributedString.Key: Any] = [
@@ -40,10 +45,36 @@ enum TextLayerRenderer {
     ]
     let bounds = NSAttributedString(string: body, attributes: attributes).boundingRect(
       with: CGSize(
-        width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
+        width: wrapWidth ?? CGFloat.greatestFiniteMagnitude,
+        height: CGFloat.greatestFiniteMagnitude),
       options: [.usesLineFragmentOrigin, .usesFontLeading],
       context: nil)
     return CGSize(width: ceil(bounds.width), height: ceil(bounds.height))
+  }
+
+  /// The largest font size whose wrapped layout fits inside `box` — what
+  /// "fit this text to the region I dragged" means (#296). The words wrap at
+  /// the box's width and the type grows until width or height runs out; the
+  /// first version measured a single line, so a caption fitted to a square
+  /// stayed one long tiny strip across it.
+  static func fittingFontSize(
+    text: String, fontFamily: String? = nil, in box: CGSize
+  ) -> CGFloat? {
+    guard box.width > 4, box.height > 4,
+      !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    else { return nil }
+    var low: CGFloat = 1
+    var high: CGFloat = 1024
+    for _ in 0..<24 {
+      let mid = (low + high) / 2
+      let measured = measure(text: text, fontSize: mid, fontFamily: fontFamily, wrapWidth: box.width)
+      if measured.width <= box.width, measured.height <= box.height {
+        low = mid
+      } else {
+        high = mid
+      }
+    }
+    return max(1, low.rounded(.down))
   }
 
   /// Nil when there is nothing to draw, matching the desktop returning no layer
@@ -54,7 +85,8 @@ enum TextLayerRenderer {
     color: UIColor,
     at anchor: CGPoint,
     canvasSize: CGSize,
-    fontFamily: String? = nil
+    fontFamily: String? = nil,
+    wrapWidth: CGFloat? = nil
   ) -> UIImage? {
     let body = text.trimmingCharacters(in: .newlines)
     guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -77,8 +109,10 @@ enum TextLayerRenderer {
       // not clipped at the anchor.
       let pad: CGFloat = 2
       let origin = CGPoint(x: anchor.x + pad, y: anchor.y + pad)
+      // A fitted layer wraps at its box's width wherever the box sits; an
+      // unfitted one lays out to the canvas edge, as it always has.
       let available = CGSize(
-        width: max(1, canvasSize.width - origin.x),
+        width: wrapWidth ?? max(1, canvasSize.width - origin.x),
         height: max(1, canvasSize.height - origin.y)
       )
       NSAttributedString(string: body, attributes: attributes)
@@ -99,9 +133,11 @@ enum TextLayerRenderer {
     text: String,
     fontSize: CGFloat,
     color: UIColor,
-    fontFamily: String? = nil
+    fontFamily: String? = nil,
+    wrapWidth: CGFloat? = nil
   ) -> UIImage? {
-    let measured = measure(text: text, fontSize: fontSize, fontFamily: fontFamily)
+    let measured = measure(
+      text: text, fontSize: fontSize, fontFamily: fontFamily, wrapWidth: wrapWidth)
     guard measured.width > 0, measured.height > 0 else { return nil }
 
     let pad: CGFloat = 2
