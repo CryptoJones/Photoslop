@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.11.2] — 2026-08-16
+
+### Fixed
+- **Editing a fitted text layer can no longer cut words off silently**
+  (#298). A face or size chosen in Edit Text that wrapped taller than the
+  room below the anchor rendered with its last words cut — a whole word
+  gone from the picture with nothing said. Saving such an edit now asks:
+  **Shrink to Fit** (the largest size that keeps every word visible),
+  **Keep the chosen size** — cutting the overflow, knowingly — or **Keep
+  Editing**. A size that fits saves without a word, exactly as chosen.
+- **A drag cannot carry a handle out of reach** (#298). Growing the box
+  pushed its far edge off screen; a touch where the edge seemed to be
+  landed inside the box and moved it — "the right middle point kept moving
+  the box instead of scaling it". After every drag the canvas now scrolls
+  (never zooms — the zoom stays yours) to keep the whole box's handles on
+  screen when they fit.
+
 ## [2.11.1] — 2026-08-16
 
 ### Fixed

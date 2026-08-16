@@ -144,6 +144,89 @@ final class FitTextUITests: UITestCase {
     app.buttons["Cancel"].firstMatch.tap()
   }
 
+  /// The right edge scales the box on the very first grab (#298) — on device
+  /// it "kept moving the box instead of scaling it" when the edge had been
+  /// carried off screen, so the first touch after opening must already work.
+  func testTheRightEdgeScalesOnTheFirstGrab() {
+    let app = openFitText()
+    guard let before = boxSize(app) else {
+      return XCTFail("no Layer size readout while fitting text")
+    }
+
+    let right = app.otherElements["Transform right"].firstMatch
+    XCTAssertTrue(right.exists, "the fit-text box has no right edge handle")
+    let start = right.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 70, dy: 0)))
+
+    guard let after = boxSize(app) else {
+      return XCTFail("the Layer size readout vanished during the drag")
+    }
+    XCTAssertNotEqual(
+      before.width, after.width, "the first grab of the right edge must scale, not move")
+    // A caption's box is shorter than the corner-priority radius, so this
+    // grab may land a right corner instead of the edge — still a scale of
+    // the horizontal plane, with only drag wobble on the vertical.
+    XCTAssertEqual(
+      before.height, after.height, accuracy: 3,
+      "a right-side drag must not meaningfully change the vertical plane")
+
+    app.buttons["Cancel Placement"].tap()
+  }
+
+  /// A size that runs past the canvas asks before it cuts words off (#298):
+  /// Shrink to Fit, keep it knowing the overflow is cut, or keep editing.
+  func testAnOverflowingEditAsksBeforeCuttingWordsOff() {
+    let app = openFitText()
+
+    // Fit the caption to the box as it opened, so the layer has a container.
+    app.buttons["Apply Placement"].tap()
+    XCTAssertTrue(
+      app.buttons["Apply Placement"].firstMatch.waitForNonExistence(timeout: 20),
+      "applying the fit did not close the placement bar")
+
+    // Adding text leaves Move Text mode running; leave it the way a person
+    // would, or the editor is not in its resting state for the menu.
+    let doneMoving = app.buttons["Done"].firstMatch
+    if doneMoving.exists, doneMoving.isHittable { doneMoving.tap() }
+
+    let more = app.navigationBars.buttons["More Actions"].firstMatch
+    XCTAssertTrue(more.waitForExistence(timeout: 15), "no More Actions menu")
+    more.tap()
+    let edit = app.buttons["Edit Text"].firstMatch
+    XCTAssertTrue(edit.waitForExistence(timeout: 10), "Edit Text is missing from the menu")
+    edit.tap()
+
+    XCTAssertTrue(
+      app.navigationBars["Edit Text"].waitForExistence(timeout: 20),
+      "the text sheet never appeared")
+    // A filled multi-line TextField is exposed as a text view, unlike the
+    // empty one the Add flow queries. Enough words typed into it that,
+    // wrapped at the fitted box's width, the layout runs far past the
+    // canvas bottom at the current size.
+    // Once filled, the field keeps neither its placeholder identifier nor a
+    // label — it is simply the sheet's one text field.
+    var field = app.textFields["Type something"].firstMatch
+    if !field.waitForExistence(timeout: 5) { field = app.textFields.firstMatch }
+    XCTAssertTrue(field.waitForExistence(timeout: 5), "the text sheet has no editable words")
+    field.tap()
+    field.typeText(
+      String(repeating: " why are we all so afraid of being a minority in america", count: 25))
+
+    app.buttons["Save"].firstMatch.tap()
+    // On iPad the dialog is a popover, which drops the cancel-role button —
+    // the offer itself is what must exist. Shrinking commits and closes.
+    let shrink = app.buttons.matching(
+      NSPredicate(format: "label BEGINSWITH %@", "Shrink to Fit")
+    ).firstMatch
+    XCTAssertTrue(
+      shrink.waitForExistence(timeout: 10),
+      "an edit that runs past the canvas must ask before cutting words off")
+    shrink.tap()
+    XCTAssertTrue(
+      app.navigationBars["Edit Text"].waitForNonExistence(timeout: 10),
+      "choosing Shrink to Fit should save and close the sheet")
+  }
+
   /// Dragging the interior moves the box without resizing it — even though a
   /// caption's box is far shorter than the 44pt handle radius.
   func testDraggingTheInteriorMovesTheBox() {
