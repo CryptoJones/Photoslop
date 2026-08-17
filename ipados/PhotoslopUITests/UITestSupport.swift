@@ -116,15 +116,20 @@ class UITestCase: XCTestCase {
   /// creation itself. Invalidates the shared editor: after this, the next
   /// `openEditor()` launches from scratch.
   ///
-  /// Deliberately does not empty the document store — the store holding a
-  /// document is the state every launch used to inherit from the test before
-  /// it, and `NewDocumentUITests` has always passed against it.
+  /// The document store IS emptied now. It deliberately was not — the held
+  /// documents were the state every launch inherited, and these tests passed
+  /// against it for as long as the SDK showed the launch scene regardless.
+  /// Under the iOS 26 SDK, state restoration of a held document races the
+  /// launch scene: Create Document opens an editor that restoration then
+  /// tears down, and the app lands back on the launch scene with the new
+  /// document stranded in the browser (#290, bisected on makemake). An empty
+  /// store has nothing to restore, which is the screen these tests are about.
   func openLaunchScene(file: StaticString = #filePath, line: UInt = #line) -> XCUIApplication {
     let app = Self.app
     Self.editorIsUp = false
     app.terminate()
     _ = app.wait(for: .notRunning, timeout: 30)
-    app.launchArguments = []
+    app.launchArguments = ["-PhotoslopFreshDocumentStore"]
     app.launch()
     XCTAssertTrue(
       app.buttons["Create Document"].firstMatch.waitForExistence(timeout: 90),
