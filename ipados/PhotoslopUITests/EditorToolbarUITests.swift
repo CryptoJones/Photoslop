@@ -56,8 +56,8 @@ final class EditorToolbarUITests: UITestCase {
     more.tap()
 
     for label in [
-      "New", "Canvas Size", "Resize Document…", "Crop…", "Add Text", "Import Image…",
-      "About Photoslop",
+      "New", "Canvas Size", "Resize Document…", "Crop…", "Flatten Image", "Add Text",
+      "Import Image…", "About Photoslop",
     ] {
       XCTAssertTrue(
         app.buttons[label].waitForExistence(timeout: 10), "\(label) is missing from the menu")

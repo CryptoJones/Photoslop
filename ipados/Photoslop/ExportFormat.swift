@@ -76,9 +76,11 @@ enum ExportFormat: String, CaseIterable, Identifiable {
     }
   }
 
-  /// Encode `image`, flattening it first when the format cannot store alpha.
-  func encode(_ image: UIImage, quality: CGFloat = 0.9) -> Data? {
-    let source = preservesTransparency ? image : Self.flattenedOntoWhite(image)
+  /// Encode `image`, flattening it first when the format cannot store alpha
+  /// or the person exporting asked for an opaque picture.
+  func encode(_ image: UIImage, quality: CGFloat = 0.9, flattenToWhite: Bool = false) -> Data? {
+    let source =
+      preservesTransparency && !flattenToWhite ? image : Self.flattenedOntoWhite(image)
     guard let cgImage = source.cgImage else { return nil }
 
     let container = NSMutableData()

@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v2.11.2** against six
+An honest, category-by-category comparison of **Photoslop v2.12.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -30,7 +30,7 @@ client exposes it.
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 2.11.2 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
+| **Photoslop** | 2.12.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
