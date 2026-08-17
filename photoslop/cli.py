@@ -797,14 +797,32 @@ def _op_text(ctx: Context, value: str) -> None:
 
     head, sep, body = value.partition(":")
     if not sep or not body.strip():
-        raise _ValueError('--text expects "x,y,size[,r,g,b]:the text"')
-    if len(head.split(",")) == 6:
-        x, y, size, r, g, b = _ints(head, 6, "--text position/colour")
+        raise _ValueError('--text expects "x,y,size[,r,g,b][,family]:the text"')
+    # Numeric fields first, then an optional font family: everything after the
+    # last numeric token, joined back together so families with commas keep
+    # them. Mirrors the iPad text sheet's Font picker (#294) — plain --text
+    # used to be system-font only, with families locked behind --text-rich.
+    tokens = [token.strip() for token in head.split(",")]
+    numeric = 0
+    for token in tokens:
+        try:
+            int(token)
+        except ValueError:
+            break
+        numeric += 1
+    family = ",".join(tokens[numeric:]).strip() or None
+    numeric_head = ",".join(tokens[:numeric])
+    if numeric == 6:
+        x, y, size, r, g, b = _ints(numeric_head, 6, "--text position/colour")
         color = QColor(r, g, b)
-    else:
-        x, y, size = _ints(head, 3, "--text position")
+    elif numeric == 3:
+        x, y, size = _ints(numeric_head, 3, "--text position")
         color = QColor(0, 0, 0)
+    else:
+        raise _ValueError('--text expects "x,y,size[,r,g,b][,family]:the text"')
     font = QFont()
+    if family:
+        font.setFamily(family)
     font.setPointSize(max(1, size))
     layer = render_text_layer(body, font, color, QPoint(x, y))
     if layer is None:
@@ -1118,8 +1136,8 @@ OPS: dict = {
     "flip": ("h|v", "mirror the target layer(s)", _op_flip),
     "fill": ("R,G,B", "fill the whole target layer with a colour", _op_fill),
     "text": (
-        '"X,Y,SIZE[,R,G,B]:TEXT"',
-        "rasterise text onto a new layer (default colour black)",
+        '"X,Y,SIZE[,R,G,B][,FAMILY]:TEXT"',
+        "rasterise text onto a new layer (default colour black, system font)",
         _op_text,
     ),
     "text-rich": (
