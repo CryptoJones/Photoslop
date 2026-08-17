@@ -26,16 +26,6 @@ sync — check an item here when its issue closes.
   drop `UNSIGNED` from the artifact name
   ([#287](https://github.com/CryptoJones/Photoslop/issues/287))
 
-### iPadOS
-
-- [ ] `NewDocumentUITests` fail on an iPad simulator when the app is **built
-  locally with Xcode 26.5** — the new-document canvas-size sheet never
-  appears — while the identical tests pass on CI's older Xcode and on the
-  iPhone leg. Deterministic on an erased simulator, present on unmodified
-  v2.10.2. Will hit CI the day its macOS image rolls to Xcode 26, and dev
-  TestFlight builds already run this configuration
-  ([#290](https://github.com/CryptoJones/Photoslop/issues/290))
-
 ### Standing
 
 - [ ] App Store GA — what is needed beyond TestFlight is now prepared in
@@ -54,6 +44,14 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] `NewDocumentUITests` under local Xcode 26.5 — bisected on makemake:
+  the iOS 26 SDK's state restoration of held documents raced the launch
+  scene and tore down the editor Create Document had just opened; the sheet
+  itself always presented. Launch-scene tests now start from an empty store
+  (`-PhotoslopFreshDocumentStore`), 6/6 green where 3/3 failed. Residual
+  dirty-store user-flow risk noted on the issue for when CI's Xcode rolls
+  forward ([#290](https://github.com/CryptoJones/Photoslop/issues/290))
 
 - [x] Cross-platform parity asymmetries after 2.11.0 — all three closed:
   `--text` FAMILY field and desktop Centre on Canvas import in 2.13.0;
