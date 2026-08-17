@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.13.1] — 2026-08-17
+
+### Fixed
+- **Scaling a text layer keeps it sharp — and keeps it text** (desktop,
+  closes #294). Free Transform resampled a text layer's pixels like any
+  raster, so scaled type went soft while `text_data` knew better. A pure
+  uniform scale now re-renders the type at the transformed size — the
+  simple path scales its stored size, the rich path scales the default font
+  *and* every per-letter size in the HTML — and the layer stays editable,
+  with undo restoring both pixels and stored size. Transforms type cannot
+  absorb (rotation, stretch, distort, warp) still rasterise, and now
+  honestly drop `text_data` so a later edit cannot silently discard the
+  transform; undo brings the editable text back. Masked text layers keep
+  the raster path so the mask stays in register.
+
 ## [2.13.0] — 2026-08-17
 
 The #294 parity sweep: capabilities that existed on one platform and not the
