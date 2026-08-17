@@ -109,3 +109,93 @@ def test_identity_commit_pushes_nothing(qapp):
     win.action_free_transform()
     win.tools["transform"].commit(editor.canvas)
     assert doc.undo_stack.count() == 0
+
+
+def _text_window(qapp):
+    from PySide6.QtGui import QFont
+
+    from photoslop.textdialog import render_text_layer
+
+    win = MainWindow()
+    doc = Document.new(QSize(400, 300), 72.0, "t", QColor(0, 0, 0, 0))
+    font = QFont()
+    font.setPointSize(20)
+    text = render_text_layer("Crisp", font, QColor(0, 0, 0), QPoint(50, 50))
+    doc.layers.append(text)
+    doc.active_index = 1
+    win.add_document(doc)
+    return win, doc, text
+
+
+def test_uniform_scale_rerenders_text_instead_of_resampling(qapp):
+    """#294: a uniformly scaled text layer re-renders its type from
+    `text_data` instead of resampling pixels — the stored size doubles, the
+    layer stays editable, and undo restores both."""
+    win, doc, layer = _text_window(qapp)
+    base_size = layer.text_data["size"]
+    editor = win.current_editor()
+
+    win.action_free_transform()
+    tool = win.tools["transform"]
+    session = tool.session
+    session.scale_x = 2.0
+    session.scale_y = 2.0
+    tool.commit(editor.canvas)
+
+    assert layer.text_data is not None, "a scaled text layer is still text"
+    assert abs(layer.text_data["size"] - base_size * 2) <= 1
+    # Re-rendered, not resampled: the new raster is the tight extent of the
+    # doubled type, roughly double each side of the original.
+    assert layer.image.width() > 1.5 * 60  # original "Crisp" at 20pt is ~60px wide
+
+    doc.undo_stack.undo()
+    assert layer.text_data["size"] == base_size
+
+
+def test_rotation_rasterises_text_and_drops_text_data(qapp):
+    """A transform the type cannot absorb rasterises the layer: stale
+    text_data would let a later edit silently discard the rotation, so it is
+    dropped — and restored by undo."""
+    win, doc, layer = _text_window(qapp)
+    editor = win.current_editor()
+
+    win.action_free_transform()
+    tool = win.tools["transform"]
+    tool.session.rotation = 45.0
+    tool.commit(editor.canvas)
+
+    assert layer.text_data is None, "a rotated text layer is honestly raster"
+    doc.undo_stack.undo()
+    assert layer.text_data is not None, "undo brings the editable text back"
+
+
+def test_uniform_scale_rerenders_rich_text_per_letter_sizes(qapp):
+    """The GUI's text tool writes rich HTML with per-letter styling — the
+    re-render path must scale every explicit size, not just the default."""
+    from PySide6.QtGui import QTextDocument
+
+    from photoslop.textdialog import render_text_document
+
+    win = MainWindow()
+    doc = Document.new(QSize(600, 400), 72.0, "t", QColor(0, 0, 0, 0))
+    source = QTextDocument()
+    source.setHtml(
+        '<span style="font-size:16pt">small</span>'
+        '<span style="font-size:32pt; color:#ff0000">BIG</span>'
+    )
+    layer = render_text_document(source, QPoint(40, 40))
+    doc.layers.append(layer)
+    doc.active_index = 1
+    win.add_document(doc)
+    base_width = layer.image.width()
+    editor = win.current_editor()
+
+    win.action_free_transform()
+    tool = win.tools["transform"]
+    tool.session.scale_x = 2.0
+    tool.session.scale_y = 2.0
+    tool.commit(editor.canvas)
+
+    assert layer.text_data is not None and layer.text_data.get("html")
+    assert layer.image.width() > 1.6 * base_width, "the type itself doubled"
+    assert "32pt" not in layer.text_data["html"] or "64pt" in layer.text_data["html"]

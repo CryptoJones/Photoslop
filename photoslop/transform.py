@@ -9,7 +9,16 @@ import math
 
 import numpy as np
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPolygonF, QTransform, QUndoCommand
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QImage,
+    QPainter,
+    QPen,
+    QPolygonF,
+    QTransform,
+    QUndoCommand,
+)
 
 from photoslop.cursors import CursorIntent
 from photoslop.layer import mask_to_alpha
@@ -27,6 +36,8 @@ class TransformLayerCommand(QUndoCommand):
         new_offset: QPoint,
         old_mask: QImage | None = None,
         new_mask: QImage | None = None,
+        old_text_data: dict | None = None,
+        new_text_data: dict | None = None,
     ):
         super().__init__("Free Transform")
         self.doc, self.layer = doc, layer
@@ -34,23 +45,32 @@ class TransformLayerCommand(QUndoCommand):
         self.new_image, self.new_offset = new_image, QPoint(new_offset)
         self.old_mask = old_mask
         self.new_mask = new_mask
+        # A re-rendered text layer's size travels with its pixels: undoing the
+        # transform must also restore the type's stored size, or the next edit
+        # would re-render at the new size in the old box.
+        self.old_text_data = old_text_data
+        self.new_text_data = new_text_data
         self._applied = True
 
-    def _swap(self, image: QImage, offset: QPoint, mask: QImage | None) -> None:
+    def _swap(
+        self, image: QImage, offset: QPoint, mask: QImage | None, text_data: dict | None
+    ) -> None:
         dirty = self.layer.bounds()
         self.layer.image = QImage(image)
         self.layer.offset = QPoint(offset)
         self.layer.mask = QImage(mask) if mask is not None else None
+        if text_data is not None or self.old_text_data is not None:
+            self.layer.text_data = dict(text_data) if text_data is not None else None
         self.doc.notify_pixels(dirty.united(self.layer.bounds()))
 
     def redo(self) -> None:
         if self._applied:
             self._applied = False
             return
-        self._swap(self.new_image, self.new_offset, self.new_mask)
+        self._swap(self.new_image, self.new_offset, self.new_mask, self.new_text_data)
 
     def undo(self) -> None:
-        self._swap(self.old_image, self.old_offset, self.old_mask)
+        self._swap(self.old_image, self.old_offset, self.old_mask, self.old_text_data)
 
 
 class TransformSession:
@@ -63,6 +83,7 @@ class TransformSession:
         self.base_image = QImage(layer.image)  # COW reference
         self.base_offset = QPoint(layer.offset)
         self.base_mask = QImage(layer.mask) if layer.mask is not None else None
+        self.base_text_data = dict(layer.text_data) if layer.text_data else None
         self.scale_x = 1.0
         self.scale_y = 1.0
         self.rotation = 0.0  # degrees
@@ -230,6 +251,15 @@ class TransformSession:
             new_offset = QPoint(round(bounds.left()), round(bounds.top()))
             self._push(new_image, new_offset, new_mask)
             return
+        rendered = self._rerendered_text()
+        if rendered is not None:
+            new_image = rendered.image
+            c = self.center
+            new_offset = QPoint(
+                round(c.x() - new_image.width() / 2.0), round(c.y() - new_image.height() / 2.0)
+            )
+            self._push(new_image, new_offset, None, rendered.text_data)
+            return
         new_image = self.base_image.transformed(
             self.matrix(), Qt.TransformationMode.SmoothTransformation
         )
@@ -307,7 +337,76 @@ class TransformSession:
         mp.end()
         return new_mask
 
-    def _push(self, new_image: QImage, new_offset: QPoint, new_mask: QImage | None = None) -> None:
+    def _rerendered_text(self):
+        """The layer re-rendered at its transformed size, or None when the
+        transform is not one type can absorb.
+
+        A uniformly scaled text layer used to be resampled like any raster and
+        went soft (#294); its `text_data` knows better. Only the pure uniform
+        scale qualifies: rotation, stretch, quad and warp fall through to the
+        raster path, whose result they genuinely are, and a masked layer keeps
+        the raster path so the mask stays in register with the pixels.
+        """
+        data = self.layer.text_data
+        if not data:
+            return None
+        if self.quad is not None or self.warp_grid is not None:
+            return None
+        if self.rotation != 0 or self.base_mask is not None:
+            return None
+        if self.scale_x <= 0 or abs(self.scale_x - self.scale_y) > 0.01:
+            return None
+        scale = self.scale_x
+        if abs(scale - 1.0) < 1e-6:
+            return None
+        from photoslop.textdialog import render_text_document, render_text_layer
+
+        if data.get("html"):
+            from PySide6.QtGui import QTextCursor, QTextDocument
+
+            document = QTextDocument()
+            document.setHtml(data["html"])
+            base = document.defaultFont()
+            if base.pointSizeF() > 0:
+                base.setPointSizeF(base.pointSizeF() * scale)
+                document.setDefaultFont(base)
+            # Every explicit per-letter size scales too; fragments without one
+            # follow the default font scaled above.
+            cursor = QTextCursor(document)
+            block = document.begin()
+            while block.isValid():
+                fragment_iter = block.begin()
+                while not fragment_iter.atEnd():
+                    fragment = fragment_iter.fragment()
+                    fmt = fragment.charFormat()
+                    size = fmt.fontPointSize()
+                    if size > 0:
+                        fmt.setFontPointSize(size * scale)
+                        cursor.setPosition(fragment.position())
+                        cursor.setPosition(
+                            fragment.position() + fragment.length(), QTextCursor.MoveMode.KeepAnchor
+                        )
+                        cursor.setCharFormat(fmt)
+                    fragment_iter += 1
+                block = block.next()
+            return render_text_document(document, QPoint(0, 0))
+
+        font = QFont(data.get("family") or "")
+        size = data.get("size") or 12
+        font.setPointSizeF(max(1.0, float(size) * scale))
+        color_values = data.get("color") or [0, 0, 0, 255]
+        rendered = render_text_layer(
+            data.get("text", ""), font, QColor(*color_values), QPoint(0, 0)
+        )
+        return rendered
+
+    def _push(
+        self,
+        new_image: QImage,
+        new_offset: QPoint,
+        new_mask: QImage | None = None,
+        new_text_data: dict | None = None,
+    ) -> None:
         self.layer.image = new_image
         self.layer.offset = new_offset
         self.layer.mask = QImage(new_mask) if new_mask is not None else None
@@ -321,8 +420,18 @@ class TransformSession:
                 new_offset,
                 QImage(self.base_mask) if self.base_mask is not None else None,
                 QImage(new_mask) if new_mask is not None else None,
+                dict(self.base_text_data) if self.base_text_data else None,
+                dict(new_text_data) if new_text_data else None,
             )
         )
+        if new_text_data is not None:
+            self.layer.text_data = dict(new_text_data)
+        elif self.base_text_data:
+            # A transform type cannot absorb (rotate, stretch, quad, warp)
+            # rasterises the layer: stale text_data would let a later edit
+            # silently re-render without the transform, so it is dropped —
+            # and restored by undo.
+            self.layer.text_data = None
 
     def restore(self) -> None:
         self.layer.image = QImage(self.base_image)
