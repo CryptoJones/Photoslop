@@ -26,16 +26,6 @@ sync — check an item here when its issue closes.
   drop `UNSIGNED` from the artifact name
   ([#287](https://github.com/CryptoJones/Photoslop/issues/287))
 
-### Parity
-
-- [ ] Cross-platform parity asymmetries remaining after 2.11.0: desktop's
-  import dialog lacks the centred-crop choice and iPad's document import
-  lacks a lossless keep-overhang choice; desktop Free Transform rasterises
-  text layers instead of re-rendering from `text_data` the way iPad Fit Text
-  does; `--text` has no plain FAMILY field (family needs `--text-rich`).
-  Parity across desktop GUI / CLI / iPad is a standing requirement
-  ([#294](https://github.com/CryptoJones/Photoslop/issues/294))
-
 ### iPadOS
 
 - [ ] `NewDocumentUITests` fail on an iPad simulator when the app is **built
@@ -64,6 +54,12 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] Cross-platform parity asymmetries after 2.11.0 — all three closed:
+  `--text` FAMILY field and desktop Centre on Canvas import in 2.13.0;
+  desktop Free Transform re-rendering scaled text from `text_data` (and
+  honestly rasterising what type cannot absorb) in 2.13.1
+  ([#294](https://github.com/CryptoJones/Photoslop/issues/294))
 
 - [x] Nothing launched a real window — a `windowed` CI job now runs
   `tests/test_windowed.py` against xvfb's X server on Linux and the native
