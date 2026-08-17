@@ -517,10 +517,31 @@ def test_text_color(qapp, tmp_path):
     assert text_layer.text_data["text"] == "Hi"
     assert text_layer.text_data["color"] == [255, 0, 0, 255]
 
-    # a head that is neither 3 nor 6 values is a usage error
+    # a head whose numerics are neither 3 nor 6 is a usage error — a fourth
+    # numeric token is not a font family
     with pytest.raises(SystemExit) as exc:
         run([src, "--text", "5,5,14,255:Hi", "--output", tmp_path / "bad.png"])
     assert exc.value.code == 2
+
+
+def test_text_family(qapp, tmp_path):
+    """A trailing non-numeric field is the font family (#294): the CLI mirror
+    of the iPad text sheet's Font picker. Works with and without a colour,
+    and families keep their spaces."""
+    src = make_input(tmp_path, QColor(255, 255, 255))
+    assert run([src, "--text", "5,5,14,Helvetica:Hi", "--output", tmp_path / "fam.ora"]) == 0
+    from photoslop.io_ora import load_ora
+
+    loaded = load_ora(str(tmp_path / "fam.ora"))
+    assert loaded.layers[1].text_data["family"] == "Helvetica"
+
+    assert (
+        run([src, "--text", "5,5,14,255,0,0,Times New Roman:Hi", "--output", tmp_path / "fc.ora"])
+        == 0
+    )
+    loaded = load_ora(str(tmp_path / "fc.ora"))
+    assert loaded.layers[1].text_data["family"] == "Times New Roman"
+    assert loaded.layers[1].text_data["color"] == [255, 0, 0, 255]
 
 
 def test_text_rich_per_letter_colour(qapp, tmp_path):

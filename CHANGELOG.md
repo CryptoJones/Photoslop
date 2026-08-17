@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.13.0] — 2026-08-17
+
+The #294 parity sweep: capabilities that existed on one platform and not the
+others, closed in both directions.
+
+### Added
+- **`--text` takes a font family** (CLI). A trailing non-numeric field names
+  the face: `--text "X,Y,SIZE[,R,G,B][,FAMILY]:TEXT"`, families with spaces
+  included. The headless mirror of the iPad text sheet's Font picker; plain
+  `--text` was system-font only, with families locked behind `--text-rich`.
+- **Centre on Canvas** (desktop import). The oversized-import question
+  gained the iPad importer's centred choice, in this app's lossless idiom:
+  the layer is centred so the middle shows, the overhang stays off-canvas at
+  full size, and Free Transform still has every pixel.
+
 ## [2.12.0] — 2026-08-17
 
 ### Added

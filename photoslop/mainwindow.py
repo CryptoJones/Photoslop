@@ -1393,6 +1393,16 @@ class MainWindow(QMainWindow):
             if choice == "cancel":
                 return
             expand = choice == "expand"
+            if choice == "centre":
+                # The iPad importer's Crop to Canvas, in this app's lossless
+                # idiom (#294): the layer is centred so the middle shows and
+                # the overhang stays off-canvas at full size — it reads as a
+                # centred crop, and Free Transform still has every pixel.
+                for layer in layers:
+                    layer.offset = QPoint(
+                        (doc.size.width() - layer.image.width()) // 2,
+                        (doc.size.height() - layer.image.height()) // 2,
+                    )
         doc.undo_stack.beginMacro(
             "Import Layer" if len(layers) == 1 else f"Import {len(layers)} Layers"
         )
@@ -1423,12 +1433,14 @@ class MainWindow(QMainWindow):
         subject = "The imported image is" if count == 1 else "Some imported images are"
         box.setText(
             f"{subject} larger than the canvas.\n\n"
-            "Expand the canvas to fit every pixel, or keep the current canvas "
-            "size? A kept layer is not cropped — it hangs off the canvas edges "
-            "at full size, and Free Transform can fit it later."
+            "Expand the canvas to fit every pixel, keep the current canvas "
+            "size, or centre the image on it? Nothing is ever cropped — a kept "
+            "or centred layer hangs off the canvas edges at full size, and "
+            "Free Transform can fit it later."
         )
         expand = box.addButton("Expand Canvas", QMessageBox.ButtonRole.AcceptRole)
         keep = box.addButton("Keep Canvas Size", QMessageBox.ButtonRole.ActionRole)
+        centre = box.addButton("Centre on Canvas", QMessageBox.ButtonRole.ActionRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(expand)
         box.exec()
@@ -1437,6 +1449,8 @@ class MainWindow(QMainWindow):
             return "expand"
         if clicked is keep:
             return "keep"
+        if clicked is centre:
+            return "centre"
         return "cancel"
 
     def _recent_paths(self) -> list[str]:
