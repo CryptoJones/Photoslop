@@ -81,6 +81,12 @@ struct EditorView: View {
   @State private var customWidth = "2048"
   @State private var customHeight = "1536"
   @State private var exportDocument = ExportedImageDocument()
+  /// Keep transparent areas, or flatten them onto white. In Photoslop a
+  /// transparent region sat over the window's own light backdrop and read as
+  /// white; a PNG carried it as real transparency, which other viewers show
+  /// as black — "what it looks like in Photoslop vs what it looks like when
+  /// exported" (#300).
+  @State private var exportOnWhite = false
   @State private var exportName = "Photoslop Export"
   @State private var exportFormat = ExportFormat.png
   @State private var exportQuality = 0.9
@@ -733,6 +739,7 @@ struct EditorView: View {
           cropButton
           Divider()
           resizeLayerButton
+          flattenImageButton
           textButtons
           Divider()
           importImageButton
@@ -779,6 +786,7 @@ struct EditorView: View {
           resizeDocumentButton
           Divider()
           resizeLayerButton
+          flattenImageButton
           textButtons
           Divider()
           importImageButton
@@ -865,6 +873,16 @@ struct EditorView: View {
       Label("Resize Layer…", systemImage: "arrow.up.backward.and.arrow.down.forward")
     }
     .disabled(store.activeLayerID == nil || activeTextLayer != nil)
+  }
+
+  private var flattenImageButton: some View {
+    Button {
+      store.flattenImage()
+    } label: {
+      Label("Flatten Image", systemImage: "square.3.layers.3d.down.right")
+    }
+    // One layer is already flat; flattening it would only lose its name.
+    .disabled(store.layers.count < 2)
   }
 
   private var canvasSizeButton: some View {
@@ -1168,6 +1186,13 @@ struct EditorView: View {
             ForEach(availableFormats) { format in
               Text(format.displayName).tag(format)
             }
+          }
+          if exportFormat.preservesTransparency {
+            Picker("Background", selection: $exportOnWhite) {
+              Text("Keep Transparency").tag(false)
+              Text("Flatten to White").tag(true)
+            }
+            .accessibilityIdentifier("Export background")
           }
         } footer: {
           Text(exportFooter)
@@ -1775,7 +1800,9 @@ struct EditorView: View {
     Task {
       defer { isRenderingExport = false }
       guard
-        let data = await store.exportImage(format: exportFormat, quality: exportQuality)
+        let data = await store.exportImage(
+          format: exportFormat, quality: exportQuality,
+          onWhite: exportOnWhite && exportFormat.preservesTransparency)
       else {
         showExportOptions = false
         errorMessage =

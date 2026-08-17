@@ -812,13 +812,36 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
 
   /// Render the flattened composite and encode it in `format`, off the main
   /// actor so a large canvas does not stall the UI.
-  func exportImage(format: ExportFormat, quality: CGFloat = 0.9) async -> Data? {
+  ///
+  /// `onWhite` flattens transparent areas onto white even for formats that
+  /// could keep them — chosen in the export sheet, because a PNG whose
+  /// transparency silently became black in another viewer read as "the export
+  /// doesn't look like Photoslop" (#300).
+  func exportImage(
+    format: ExportFormat, quality: CGFloat = 0.9, onWhite: Bool = false
+  ) async -> Data? {
     let capturedLayers = layers
     let capturedSize = canvasSize
     return await Task.detached(priority: .userInitiated) {
       format.encode(
-        Self.render(layers: capturedLayers, size: capturedSize), quality: quality)
+        Self.render(layers: capturedLayers, size: capturedSize), quality: quality,
+        flattenToWhite: onWhite)
     }.value
+  }
+
+  /// Collapse every visible layer into one, exactly as the canvas composites
+  /// them — opacity applied, strokes baked in, transparency kept. The iPad
+  /// mirror of `photoslop-cli --flatten` and the desktop's Document.flatten
+  /// (#300): "I couldn't make the text and background with opacity one image
+  /// manually."
+  func flattenImage() {
+    guard layers.count > 1 else { return }
+    let flattened = Self.render(layers: layers, size: canvasSize)
+    mutate(actionName: "Flatten Image") {
+      let layer = RasterLayer(name: "Flattened", image: flattened)
+      layers = [layer]
+      activeLayerID = layer.id
+    }
   }
 
   /// A layer the composite leaves out while the placement box draws it live.

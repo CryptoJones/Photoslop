@@ -173,6 +173,27 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
   /// The overlay's hosting controller, until an owning controller can adopt it.
   private var pendingOverlayController: UIViewController?
   let imageView = UIImageView()
+
+  /// The classic checkerboard, so a transparent region looks transparent.
+  /// It used to show the window's own light backdrop, which read as white in
+  /// the editor and then exported as real transparency — black in most other
+  /// viewers (#300). Sixteen-pixel squares in document space, zooming with
+  /// the picture the way the pixels themselves do.
+  static let transparencyPattern: UIColor = {
+    let tile: CGFloat = 32
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    let image = UIGraphicsImageRenderer(
+      size: CGSize(width: tile, height: tile), format: format
+    ).image { context in
+      UIColor(white: 1.0, alpha: 1).setFill()
+      context.fill(CGRect(x: 0, y: 0, width: tile, height: tile))
+      UIColor(white: 0.85, alpha: 1).setFill()
+      context.fill(CGRect(x: 0, y: 0, width: tile / 2, height: tile / 2))
+      context.fill(CGRect(x: tile / 2, y: tile / 2, width: tile / 2, height: tile / 2))
+    }
+    return UIColor(patternImage: image)
+  }()
   let canvasView = PKCanvasView()
   private var canvasSize = CGSize.zero
   private var fitted = false
@@ -207,6 +228,7 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     super.init(frame: frame)
     backgroundColor = UIColor.secondarySystemBackground
     scrollView.delegate = self
+    imageView.backgroundColor = Self.transparencyPattern
     scrollView.minimumZoomScale = 0.05
     scrollView.maximumZoomScale = 16
     scrollView.bouncesZoom = true

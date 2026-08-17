@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.12.0] — 2026-08-17
+
+### Added
+- **Flatten Image** (iPad/iPhone, #300). Collapses every visible layer into
+  one, exactly as the canvas composites them — opacity applied, strokes
+  baked in, transparency kept — as one undo step. The iPad mirror of
+  `photoslop-cli --flatten` and the desktop's flatten; there was no way to
+  merge a text layer with opacity onto its background by hand.
+- **Export background choice** (#300). Formats that can carry transparency
+  (PNG, HEIC, TIFF) now offer **Keep Transparency** (the default — what the
+  document really contains) or **Flatten to White**. Formats without alpha
+  still flatten to white automatically, as before.
+
+### Fixed
+- **Transparent areas look transparent in the editor** (#300). They used to
+  sit over the window's own light backdrop and read as solid white — and
+  then export as real transparency, which most other viewers show as black:
+  "what it looks like in Photoslop vs what it looks like when exported."
+  The canvas now shows the classic checkerboard behind genuinely
+  transparent pixels, so the screen and the export finally agree.
+
 ## [2.11.2] — 2026-08-16
 
 ### Fixed
