@@ -5,6 +5,9 @@ import SwiftUI
 struct PhotoslopApp: App {
   init() {
     PhotoslopApp.emptyDocumentStoreIfAskedTo()
+    // Read before arming: `begin` sets the marker for THIS session, so the
+    // previous session's verdict has to be taken first (#311).
+    SessionLifecycle.shared.begin()
     // After the first runloop turn, so a window scene exists to attach to.
     DispatchQueue.main.async { SplashWindow.showOnce() }
   }

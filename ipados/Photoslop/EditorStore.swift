@@ -191,6 +191,13 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }
   }
 
+  /// Set when memory had to be given back, so the editor can say so (#311).
+  ///
+  /// Silently dropping undo history is worse than it sounds: the next tap on
+  /// Undo does nothing, with no explanation, and the app looks broken rather
+  /// than careful.
+  @Published var memoryPressureNotice: String?
+
   /// Give back everything that is not the document itself.
   ///
   /// Undo history is the largest droppable thing the store owns: each step pins
@@ -198,7 +205,14 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   /// smaller one than losing the document to a kill.
   func shedMemory() {
     renderTask?.cancel()
+    let hadHistory = undoManager?.canUndo ?? false
     undoManager?.removeAllActions()
+    memoryPressureNotice =
+      hadHistory
+      ? "This device is low on memory, so undo history was released to keep "
+        + "the document open. The picture itself is untouched."
+      : "This device is low on memory. Adding more or larger layers may not "
+        + "be possible until something else is closed."
   }
 
   /// Bytes this process may still allocate before jetsam takes an interest.

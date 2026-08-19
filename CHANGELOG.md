@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.15.0] — 2026-08-19
+
+### Added
+- **The app now explains itself when the device runs out of memory**
+  (iPadOS/iOS, closes #311). A jetsam kill is `SIGKILL`: nothing can be
+  caught, no dialog can be shown, and no crash report is written under the
+  app's name — the only record is a system-wide `JetsamEvent` listing hundreds
+  of processes. From the user's side the app simply stops existing mid-tap,
+  which is how #309 went undiagnosed long enough for its reporter to wonder
+  whether he had imagined it. The app cannot speak at the moment it is killed,
+  so it now speaks either side of that moment:
+  - When iOS sends its low-memory warning, releasing undo history is announced
+    rather than done in silence — including that the picture itself is
+    untouched, so a suddenly-empty Undo does not read as damage.
+  - A marker set while running and cleared on backgrounding means an app that
+    was killed can say so at its next launch, and name low memory as the
+    likely cause without overclaiming it.
+
 ## [2.14.0] — 2026-08-19
 
 ### Fixed
