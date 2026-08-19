@@ -4,6 +4,43 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.14.0] — 2026-08-19
+
+### Fixed
+- **Importing several photos at once no longer kills the app** (iPadOS/iOS,
+  closes #309). On a 6 GB iPhone a batch import ended with iOS killing
+  Photoslop while it was frontmost — the device's `JetsamEvent` names it the
+  system's largest process, terminated for `vm-pageshortage` at 1.65 GB
+  resident with a 2.44 GB lifetime peak. Measured on an iPhone 13 Pro Max,
+  the import cost a dead-linear **48.9 MB per photo** (24 photos: +1.17 GB).
+  The layers were never the problem: every source was decoded at full
+  resolution — 48.8 MB for a 12 MP photo — purely to be scaled down into a
+  12.6 MB canvas-sized layer, with two arrays of them alive at once. Imports
+  now decode straight to the size the canvas needs, and stream one photo at a
+  time. Re-verified on the reporting device with its own photo library: no
+  jetsam event, process never restarted.
+
+### Added
+- **An import stops before it runs the device out of memory**, rather than
+  after. The budget comes from `os_proc_available_memory()` at run time
+  instead of a fixed photo count, so a 6 GB phone and a 12–16 GB M5 iPad each
+  get their own honest ceiling. Skipped photos are reported, not silently
+  dropped.
+- **The low-memory warning is now handled.** iOS sends one notification before
+  it resorts to killing an app; nothing in the iPad target had ever listened
+  for it. Undo history is released when it arrives.
+
+### Changed
+- **A layer carries an origin, and only has to fit the canvas rather than be
+  it** — document format version 3. A text layer was stored as a full-canvas
+  bitmap: 12.58 MB for a few words, against the ~72 KB the desktop build
+  spends on the same caption at its own extent, which is also what ORA has
+  always done. Measured after the change: 370×119 = **176 KB, 71× smaller**.
+  Documents written by earlier versions open unchanged.
+- Undo depth on iPadOS/iOS is capped at 32 steps. `UndoManager` defaults to
+  unlimited, and every step pins the layer array it replaced. (The desktop
+  build has capped its stack at 64 all along.)
+
 ## [2.13.1] — 2026-08-17
 
 ### Fixed
