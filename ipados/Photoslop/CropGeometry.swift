@@ -247,6 +247,44 @@ enum CropGeometry {
     return rect.insetBy(dx: -tolerance / 4, dy: -tolerance / 4).contains(point) ? .interior : nil
   }
 
+  /// `rect` brought inside `bounds`: scaled down about its centre if it is too
+  /// big, then slid in if it merely hangs over an edge. Its shape is preserved.
+  ///
+  /// A text box opens at whatever size the words measure, and type set large
+  /// enough — 400 pt on a phone-sized canvas — measures wider than the canvas.
+  /// The box then opened with its corner handles beyond the artwork, drawn but
+  /// out of reach, so it could be dragged and never resized (#315). Holding the
+  /// box inside the canvas from the moment it opens makes that unreachable
+  /// state impossible rather than merely recoverable.
+  ///
+  /// Shape is preserved because text placement locks the box to the words'
+  /// aspect: squashing it here would change the type's proportions on open.
+  static func contained(_ rect: CGRect, within bounds: CGRect) -> CGRect {
+    guard rect.width > 0, rect.height > 0, bounds.width > 0, bounds.height > 0 else {
+      return rect
+    }
+    var result = rect
+    let scale = min(bounds.width / rect.width, bounds.height / rect.height, 1)
+    if scale < 1 {
+      let size = CGSize(
+        width: (rect.width * scale).rounded(.down),
+        height: (rect.height * scale).rounded(.down))
+      result = CGRect(
+        x: rect.midX - size.width / 2,
+        y: rect.midY - size.height / 2,
+        width: max(minimumSide, size.width),
+        height: max(minimumSide, size.height))
+    }
+    // Slide, do not squash: the shape survives, only the position moves.
+    result.origin.x = min(max(result.minX, bounds.minX), bounds.maxX - result.width)
+    result.origin.y = min(max(result.minY, bounds.minY), bounds.maxY - result.height)
+    return CGRect(
+      x: result.origin.x.rounded(),
+      y: result.origin.y.rounded(),
+      width: result.width.rounded(),
+      height: result.height.rounded())
+  }
+
   /// The starting rectangle when the crop mode opens: the whole canvas, or the
   /// largest centred rectangle of the locked shape that fits inside it.
   static func initialRect(canvas: CGSize, aspect: CropAspect) -> CGRect {

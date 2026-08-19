@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.15.1] — 2026-08-19
+
+### Fixed
+- **A text box bigger than the canvas can be resized again** (iPadOS/iOS,
+  closes #315). Type set large enough — 400 pt on a phone-sized canvas will do
+  it — opened a placement box wider than the artwork, and its corner handles
+  went out past the canvas with it: drawn, but nowhere a finger could reach, so
+  the box could only ever be dragged around. A placed **image** still gets a
+  canvas of slack on every side, because hanging over the edge is how you fill
+  a canvas with the middle of a photograph; **text** is now held inside the
+  canvas, where the overhang only ever cost you the handles and words outside
+  it would not be in the picture anyway. A box that opens too large is scaled
+  to fit about its centre, keeping the words' proportions.
+
 ## [2.15.0] — 2026-08-19
 
 ### Added
