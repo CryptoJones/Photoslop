@@ -36,9 +36,26 @@ final class SessionLifecycle {
   /// run before this one and does not change underfoot.
   private(set) var previousSessionEndedUnexpectedly = false
 
-  init(defaults: UserDefaults) {
+  /// `-PhotoslopSuppressSessionNotice` stops the report being raised. Only the
+  /// UI tests pass it.
+  ///
+  /// XCUITest terminates the app without a background transition, which *is* an
+  /// abnormal exit and is correctly detected as one — so every launch after the
+  /// first opened on the "closed unexpectedly" alert, and a modal sitting over
+  /// the UI made `AboutUITests` fail with "could not reach About". The
+  /// detection is right; it is the reporting that has no place in a test run.
+  ///
+  /// Deliberately a launch argument rather than loosening what counts as a
+  /// clean exit. Widening that would make the feature miss the real kills it
+  /// exists to catch, which is the whole point of it.
+  static var isReportSuppressed: Bool {
+    ProcessInfo.processInfo.arguments.contains("-PhotoslopSuppressSessionNotice")
+  }
+
+  init(defaults: UserDefaults, suppressReport: Bool = SessionLifecycle.isReportSuppressed) {
     self.defaults = defaults
-    previousSessionEndedUnexpectedly = defaults.bool(forKey: Key.running)
+    previousSessionEndedUnexpectedly =
+      suppressReport ? false : defaults.bool(forKey: Key.running)
   }
 
   /// Arm the marker for this session and clear it on an orderly exit.

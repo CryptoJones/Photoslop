@@ -82,6 +82,29 @@ final class SessionLifecycleTests: XCTestCase {
       "swiping the app away from the switcher is not a crash")
   }
 
+  /// A UI test run must not open on the report.
+  ///
+  /// XCUITest terminates the app without a background transition, so the
+  /// detection fires correctly and every launch after the first would greet the
+  /// test with a modal — which is exactly how `AboutUITests` started failing
+  /// with "could not reach About". The suppression is explicit rather than a
+  /// loosening of what counts as a clean exit, because widening that would make
+  /// the feature miss the real kills it exists to catch.
+  func testTheReportIsSuppressedForUITests() {
+    let first = SessionLifecycle(defaults: defaults, suppressReport: false)
+    first.begin(notificationCenter: NotificationCenter())
+    // No markClean() — the harness killed it, exactly as XCUITest does.
+
+    XCTAssertTrue(
+      SessionLifecycle(defaults: defaults, suppressReport: false)
+        .previousSessionEndedUnexpectedly,
+      "precondition: this really does look like a kill")
+    XCTAssertFalse(
+      SessionLifecycle(defaults: defaults, suppressReport: true)
+        .previousSessionEndedUnexpectedly,
+      "a suppressed launch must not raise the alert over the test's UI")
+  }
+
   /// The message must name the likely cause without overclaiming it.
   func testTheMessageOffersACauseWithoutAssertingIt() {
     let message = SessionLifecycle.unexpectedExitMessage
