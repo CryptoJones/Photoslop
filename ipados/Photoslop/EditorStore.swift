@@ -4,6 +4,7 @@ import PencilKit
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import os
 
 struct RasterLayer: Identifiable, @unchecked Sendable {
   let id: UUID
@@ -27,8 +28,49 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
   /// Where `source` sits on the canvas, in canvas pixels. Nil means it fills
   /// the canvas, which is what every layer did before layers could be placed.
   var placement: CGRect?
+  /// Where this layer's `image` sits on the canvas, in canvas pixels.
+  ///
+  /// `.zero` with a canvas-sized image is what every layer was until #309: the
+  /// archive required `image.size == canvasSize` exactly, so a caption costing
+  /// four words was stored as a full-canvas bitmap — 12.58 MB on the standard
+  /// canvas, against the ~72 KB the desktop build spends on the same words at
+  /// its own extent. ORA stores per-layer offsets too; iOS was the odd one out.
+  ///
+  /// Only text layers are produced at a bounded extent today. Raster operations
+  /// that have not been taught about origins call `expandedToCanvas` first, so
+  /// a bounded layer is always safe to hand to them.
+  var origin: CGPoint = .zero
 
   var isText: Bool { text != nil }
+
+  /// The rectangle this layer occupies on the canvas.
+  var frame: CGRect { CGRect(origin: origin, size: image.size) }
+
+  /// True when the layer already fills the canvas from the top-left, which is
+  /// the shape every raster operation in this file expects.
+  func fillsCanvas(_ canvas: CGSize) -> Bool {
+    origin == .zero && image.size == canvas
+  }
+
+  /// The same layer as a canvas-sized bitmap anchored at the origin.
+  ///
+  /// The compatibility shim for #309's bounded extents: any operation that has
+  /// not been taught to respect `origin` — resize, canvas resize, transform,
+  /// masks, painting — calls this first and then works on the familiar shape.
+  /// It costs a full-canvas allocation, which is exactly what bounded extents
+  /// avoid, so it is deliberately not on the compositing path.
+  func expandedToCanvas(_ canvas: CGSize) -> RasterLayer {
+    guard !fillsCanvas(canvas) else { return self }
+    var copy = self
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = false
+    copy.image = UIGraphicsImageRenderer(size: canvas, format: format).image { _ in
+      image.draw(at: origin)
+    }
+    copy.origin = .zero
+    return copy
+  }
 
   init(
     id: UUID = UUID(),
@@ -39,7 +81,8 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
     opacity: Double = 1,
     text: TextContent? = nil,
     source: UIImage? = nil,
-    placement: CGRect? = nil
+    placement: CGRect? = nil,
+    origin: CGPoint = .zero
   ) {
     self.id = id
     self.name = name
@@ -50,6 +93,7 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
     self.text = text
     self.source = source
     self.placement = placement
+    self.origin = origin
   }
 }
 
@@ -70,11 +114,44 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   @Published private(set) var canvasSize = EditorStore.defaultCanvasSize
   @Published private(set) var canvasBackground = UIImage()
 
-  weak var undoManager: UndoManager?
+  weak var undoManager: UndoManager? {
+    didSet { undoManager?.levelsOfUndo = Self.undoDepth }
+  }
   private var mutationRevision = 0
   /// State from before the current drag, so the gesture undoes as one step.
   private var textMoveOrigin: EditorState?
   private var renderRevision = 0
+  private var renderTask: Task<Void, Never>?
+  private let renderGeneration = RenderGeneration()
+
+  /// How many steps of undo a document keeps.
+  ///
+  /// `UndoManager` defaults to 0, which means *unlimited*. Every step pins the
+  /// `[RasterLayer]` array it superseded, so a deleted layer's bitmap stays
+  /// resident for as long as the step that removed it does — without a bound,
+  /// for the life of the document. 32 is deep enough that nobody reaches the
+  /// end by hand and shallow enough to bound the worst case (#309).
+  static let undoDepth = 32
+
+  /// A generation counter the off-main render can read.
+  ///
+  /// Deliberately tiny: `Task.detached` inherits neither actor nor
+  /// cancellation, so this is the only channel through which queued render work
+  /// can learn that it has already been superseded.
+  final class RenderGeneration: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func set(_ new: Int) {
+      lock.lock()
+      value = new
+      lock.unlock()
+    }
+    func get() -> Int {
+      lock.lock()
+      defer { lock.unlock() }
+      return value
+    }
+  }
 
   /// The size a document starts at when nobody has said otherwise.
   static let defaultCanvasSize = CGSize(width: 2048, height: 1536)
@@ -87,6 +164,64 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   init() {
     installNewDocument(size: Self.defaultCanvasSize)
     awaitingCanvasSizeChoice = true
+    observeMemoryPressure()
+  }
+
+  deinit {
+    renderTask?.cancel()
+    if let memoryWarningObserver {
+      NotificationCenter.default.removeObserver(memoryWarningObserver)
+    }
+  }
+
+  private var memoryWarningObserver: NSObjectProtocol?
+
+  /// Listen for the one warning iOS gives before jetsam.
+  ///
+  /// Nothing in the target observed it (#309). That notification is the app's
+  /// only chance to give memory back voluntarily; ignoring it means the first
+  /// thing the app learns about memory pressure is `SIGKILL`.
+  private func observeMemoryPressure() {
+    memoryWarningObserver = NotificationCenter.default.addObserver(
+      forName: UIApplication.didReceiveMemoryWarningNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.shedMemory() }
+    }
+  }
+
+  /// Give back everything that is not the document itself.
+  ///
+  /// Undo history is the largest droppable thing the store owns: each step pins
+  /// the layer array it replaced. Losing history is a real cost, and it is a
+  /// smaller one than losing the document to a kill.
+  func shedMemory() {
+    renderTask?.cancel()
+    undoManager?.removeAllActions()
+  }
+
+  /// Bytes this process may still allocate before jetsam takes an interest.
+  ///
+  /// The honest number, measured at runtime, instead of a hardcoded device cap:
+  /// the phone in #309 has 6 GB and an M5 iPad has 12-16 GB, so any constant is
+  /// wrong on one of them, and wrong again on the next device Apple ships.
+  static func availableMemoryBytes() -> Int {
+    Int(os_proc_available_memory())
+  }
+
+  /// Whether one more canvas-sized layer is affordable right now.
+  ///
+  /// Doubled because a layer costs its own bitmap plus the transient the
+  /// compositor builds, and reserved above that so the app still has room to
+  /// composite, save, and show the user why it stopped rather than dying while
+  /// explaining itself.
+  static func canAffordLayer(canvas: CGSize, reserve: Int = 192 * 1_024 * 1_024) -> Bool {
+    let available = availableMemoryBytes()
+    // 0 means the platform declined to answer; do not refuse work over that.
+    guard available > 0 else { return true }
+    let layerBytes = Int(canvas.width.rounded()) * Int(canvas.height.rounded()) * 4
+    return available > layerBytes * 2 + reserve
   }
 
   /// Called once the choice has been offered, so it is not asked again when the
@@ -96,6 +231,7 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   }
 
   required init(configuration: ReadConfiguration) throws {
+    defer { observeMemoryPressure() }
     let state = try ProjectArchive.decode(configuration.file)
     layers = state.layers
     activeLayerID = state.activeLayerID
@@ -212,9 +348,13 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     let sx = size.width / canvasSize.width
     let sy = size.height / canvasSize.height
     let transform = CGAffineTransform(scaleX: sx, y: sy)
+    let previousCanvas = canvasSize
     mutate(actionName: "Resize Document") {
       canvasSize = size
-      layers = layers.map { layer in
+      layers = layers.map { original in
+        // Geometry works on canvas-sized pixels; a bounded layer (#309) is
+        // expanded first so this arithmetic stays the arithmetic it always was.
+        let layer = original.expandedToCanvas(previousCanvas)
         var scaled = layer
         scaled.image = Self.scaled(layer.image, to: size)
         // Strokes are vectors and have to travel with the pixels, exactly as
@@ -248,9 +388,11 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
 
   private func recanvas(to size: CGSize, offset: CGPoint, actionName: String) {
     let translation = CGAffineTransform(translationX: offset.x, y: offset.y)
+    let previousCanvas = canvasSize
     mutate(actionName: actionName) {
       canvasSize = size
-      layers = layers.map { layer in
+      layers = layers.map { original in
+        let layer = original.expandedToCanvas(previousCanvas)
         var resized = layer
         resized.image = Self.recanvased(layer.image, to: size, offset: offset)
         resized.drawing = layer.drawing.transformed(using: translation)
@@ -293,10 +435,11 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   ) -> Bool {
     let content = TextContent(
       string: text, fontSize: fontSize, color: color, anchor: anchor, fontFamily: fontFamily)
-    guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
+    guard let rendered = Self.renderTextLayer(content, canvasSize: canvasSize) else { return false }
     mutate(actionName: "Add Text") {
       let layer = RasterLayer(
-        name: TextLayerRenderer.layerName(for: text), image: image, text: content)
+        name: TextLayerRenderer.layerName(for: text), image: rendered.image, text: content,
+        origin: rendered.origin)
       layers.append(layer)
       activeLayerID = layer.id
     }
@@ -327,10 +470,11 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     // is asked in the sheet before this is called (#298), because a store
     // that silently second-guesses an explicit size is a different foot-gun.
     content.wrapWidth = existing.wrapWidth
-    guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
+    guard let rendered = Self.renderTextLayer(content, canvasSize: canvasSize) else { return false }
     mutate(actionName: "Edit Text") {
       update(id) {
-        $0.image = image
+        $0.image = rendered.image
+        $0.origin = rendered.origin
         $0.text = content
         $0.name = TextLayerRenderer.layerName(for: string)
       }
@@ -348,7 +492,7 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     var content = existing
     content.x = Double(anchor.x)
     content.y = Double(anchor.y)
-    guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
+    guard let rendered = Self.renderTextLayer(content, canvasSize: canvasSize) else { return false }
 
     // One undo step for the whole gesture, which means the state to return to
     // is the one from before the *first* sample. Registering on the last sample
@@ -358,7 +502,8 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
 
     objectWillChange.send()
     update(id) {
-      $0.image = image
+      $0.image = rendered.image
+      $0.origin = rendered.origin
       $0.text = content
     }
     mutationRevision += 1
@@ -380,6 +525,32 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
       fontFamily: content.fontFamily,
       wrapWidth: content.wrapWidth.map { CGFloat($0) }
     )
+  }
+
+  /// A text layer's bitmap and where it sits, at the extent the words need.
+  ///
+  /// The whole point of #309's format change: the same caption that cost a
+  /// full canvas-sized bitmap (12.58 MB on the standard canvas) costs the box
+  /// around the glyphs. Falls back to the canvas-sized rendering when the tight
+  /// one cannot be produced or would not fit, so a text layer always renders.
+  private static func renderTextLayer(
+    _ content: TextContent, canvasSize: CGSize
+  ) -> (image: UIImage, origin: CGPoint)? {
+    let anchor = CGPoint(x: content.anchor.x.rounded(), y: content.anchor.y.rounded())
+    if let tight = TextLayerRenderer.glyphs(
+      text: content.string,
+      fontSize: CGFloat(content.fontSize),
+      color: content.color,
+      fontFamily: content.fontFamily,
+      wrapWidth: content.wrapWidth.map { CGFloat($0) }
+    ),
+      ProjectArchive.isLayerFrameValid(
+        CGRect(origin: anchor, size: tight.size), canvas: canvasSize)
+    {
+      return (tight, anchor)
+    }
+    guard let full = renderText(content, canvasSize: canvasSize) else { return nil }
+    return (full, .zero)
   }
 
   /// Replace the document's contents with an image, fitted to the canvas.
@@ -445,7 +616,10 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   /// The decoded size of an image about to be imported, so the caller can ask
   /// how to handle a size disagreement before anything is committed.
   static func importedImageSize(of data: Data) -> CGSize? {
-    (try? ProjectArchive.decodeImage(data))?.size
+    // Read the header rather than decoding the picture: this is asked before
+    // anything is committed, and the old path materialised a full-resolution
+    // bitmap just to read `.size` off it (#309).
+    ProjectArchive.imageSize(of: data)
   }
 
   /// Add each image as its own layer, on top of the stack, as one undo step.
@@ -470,8 +644,12 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }
 
     let canvas = canvasSize
+    // An image that is already canvas-sized is one the caller fitted while
+    // streaming the import, and re-fitting it would allocate a second
+    // canvas-sized bitmap per photo for no change in pixels (#309). Callers
+    // that hand over raw sources still get fitted here, as they always did.
     let prepared = images.map {
-      (name: $0.name, image: Self.fitted($0.image, into: canvas))
+      (name: $0.name, image: $0.image.size == canvas ? $0.image : Self.fitted($0.image, into: canvas))
     }
     mutate(actionName: prepared.count == 1 ? "New Layer from Photo" : "New Layers from Photos") {
       for entry in prepared {
@@ -556,6 +734,9 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     mutate(actionName: actionName) {
       update(id) {
         $0.image = drawn
+        // `drawn` is canvas-sized, so a layer that had been bounded (#309) is
+        // back to filling the canvas and must stop claiming an offset.
+        $0.origin = .zero
         $0.source = source
         $0.placement = rect
       }
@@ -578,9 +759,11 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     let translation = CGAffineTransform(translationX: offset.x, y: offset.y)
     let source = layer.source ?? layer.image
     let target = rect.offsetBy(dx: offset.x, dy: offset.y)
+    let previousCanvas = canvasSize
     mutate(actionName: "Expand Canvas") {
       canvasSize = union.size
-      layers = layers.map { existing in
+      layers = layers.map { original in
+        let existing = original.expandedToCanvas(previousCanvas)
         var moved = existing
         if existing.id == id {
           moved.image = Self.drawn(source, in: target, canvas: union.size)
@@ -638,10 +821,11 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     content.wrapWidth = Double(rect.width)
     content.x = Double(rect.minX)
     content.y = Double(rect.minY)
-    guard let image = Self.renderText(content, canvasSize: canvasSize) else { return false }
+    guard let rendered = Self.renderTextLayer(content, canvasSize: canvasSize) else { return false }
     mutate(actionName: "Fit Text") {
       update(id) {
-        $0.image = image
+        $0.image = rendered.image
+        $0.origin = rendered.origin
         $0.text = content
       }
     }
@@ -750,6 +934,7 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     mutate(actionName: "Clear Layer") {
       updateActive { layer in
         layer.image = Self.solidImage(size: canvasSize, color: .clear)
+        layer.origin = .zero
         layer.drawing = PKDrawing()
       }
     }
@@ -860,15 +1045,31 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     let capturedLayers = layers.filter { $0.id != previewSuppressedLayerID }
     let capturedSize = canvasSize
     let excludedID = activeLayerID
-    Task { @MainActor [weak self] in
-      let image = await Task.detached(priority: .userInitiated) {
-        Self.render(
+
+    // Publish the generation *before* the work is queued, so a render that has
+    // already been superseded can decline to start.
+    //
+    // The revision guard below always dropped stale results, but only after the
+    // render had run and allocated a canvas-sized bitmap. A burst of mutations
+    // therefore stacked concurrent full-canvas renders, each holding the whole
+    // layer array alive for its duration (#309). `Task.detached` does not
+    // inherit cancellation from its parent, so cancelling `renderTask` alone
+    // would not stop the render — the generation box is what the detached work
+    // can actually see.
+    let generation = renderGeneration
+    generation.set(expectedRevision)
+
+    renderTask?.cancel()
+    renderTask = Task { @MainActor [weak self] in
+      let image = await Task.detached(priority: .userInitiated) { () -> UIImage? in
+        guard generation.get() == expectedRevision else { return nil }
+        return Self.render(
           layers: capturedLayers,
           size: capturedSize,
           excludingDrawingFor: excludedID
         )
       }.value
-      guard let self, renderRevision == expectedRevision else { return }
+      guard let self, let image, renderRevision == expectedRevision else { return }
       canvasBackground = image
     }
   }
@@ -885,7 +1086,11 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     return UIGraphicsImageRenderer(size: size, format: format).image { context in
       context.cgContext.interpolationQuality = .high
       for layer in layers where layer.isVisible && layer.opacity > 0 {
-        layer.image.draw(in: bounds, blendMode: .normal, alpha: layer.opacity)
+        // A layer occupies its own frame, which is the whole canvas for every
+        // layer that predates bounded extents (#309) and a tight box around the
+        // glyphs for a text layer. Drawing into `bounds` unconditionally would
+        // stretch a bounded layer across the canvas.
+        layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
         if layer.id != excludedID, !layer.drawing.strokes.isEmpty {
           layer.drawing.image(from: bounds, scale: 1).draw(
             in: bounds,

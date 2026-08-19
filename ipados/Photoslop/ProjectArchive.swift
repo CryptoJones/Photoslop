@@ -60,7 +60,12 @@ struct ProjectManifest: Codable {
   /// field is optional, so they decode with no text layers, which is exactly
   /// what they had. Readers accept anything up to this; a bump that rejected
   /// older files would strand every project already on a device.
-  static let currentVersion = 2
+  ///
+  /// Version 3 added `LayerRecord.origin` and relaxed the rule that every layer
+  /// image is exactly canvas-sized (#309). A version 1 or 2 layer has no origin
+  /// and must still fill the canvas, which is precisely what those files
+  /// contain, so they decode unchanged.
+  static let currentVersion = 3
   static let oldestReadableVersion = 1
 
   var version: Int
@@ -73,6 +78,11 @@ struct ProjectManifest: Codable {
     var height: Int
   }
 
+  struct PixelPoint: Codable {
+    var x: Int
+    var y: Int
+  }
+
   struct LayerRecord: Codable {
     var id: UUID
     var name: String
@@ -80,6 +90,10 @@ struct ProjectManifest: Codable {
     var opacity: Double
     /// Present only on text layers. Absent in version 1 documents.
     var text: TextContent?
+    /// Where the layer's image sits on the canvas. Absent before version 3,
+    /// where every layer image was required to be exactly canvas-sized and so
+    /// always sat at the top-left.
+    var origin: PixelPoint?
   }
 }
 
@@ -121,7 +135,10 @@ enum ProjectArchive {
       state.layers.count <= maximumLayers, ids.count == state.layers.count,
       state.activeLayerID.map(ids.contains) ?? false,
       state.layers.allSatisfy({
-        $0.image.size == state.canvasSize && $0.name.count <= 4_096
+        // A layer no longer has to BE the canvas — it has to FIT it (#309).
+        // The bound is what keeps a corrupt or hostile document from
+        // describing a layer far outside the canvas it claims to belong to.
+        isLayerFrameValid($0.frame, canvas: state.canvasSize) && $0.name.count <= 4_096
           && $0.opacity.isFinite && (0...1).contains($0.opacity)
       })
     else {
@@ -137,7 +154,10 @@ enum ProjectArchive {
           name: $0.name,
           isVisible: $0.isVisible,
           opacity: $0.opacity,
-          text: $0.text
+          text: $0.text,
+          origin: $0.origin == .zero
+            ? nil
+            : .init(x: Int($0.origin.x.rounded()), y: Int($0.origin.y.rounded()))
         )
       }
     )
@@ -263,7 +283,18 @@ enum ProjectArchive {
         throw ProjectArchiveError.resourceLimit("The project exceeds the 1 GiB limit.")
       }
       let image = try decodeImage(imageData)
-      guard image.size == size else { throw CocoaError(.fileReadCorruptFile) }
+      // Before version 3 a layer image WAS the canvas, and a file claiming
+      // otherwise is corrupt. From version 3 a layer carries an origin and only
+      // has to fit (#309).
+      let origin: CGPoint
+      if let recorded = record.origin, manifest.version >= 3 {
+        origin = CGPoint(x: CGFloat(recorded.x), y: CGFloat(recorded.y))
+      } else {
+        origin = .zero
+      }
+      guard manifest.version >= 3 ? true : image.size == size,
+        isLayerFrameValid(CGRect(origin: origin, size: image.size), canvas: size)
+      else { throw CocoaError(.fileReadCorruptFile) }
       let drawing = try PKDrawing(data: drawingData)
       layers.append(RasterLayer(
         id: record.id,
@@ -272,7 +303,8 @@ enum ProjectArchive {
         drawing: drawing,
         isVisible: record.isVisible,
         opacity: record.opacity,
-        text: record.text
+        text: record.text,
+        origin: origin
       ))
     }
     if let activeLayerID = manifest.activeLayerID, !seen.contains(activeLayerID) {
@@ -295,6 +327,95 @@ enum ProjectArchive {
       let image = UIImage(data: data)
     else { throw ProjectArchiveError.invalidImage }
     return EditorStore.normalizedImage(image)
+  }
+
+  /// Decode `data` no larger than it needs to be to fill `canvas`.
+  ///
+  /// The batch importer fits every photo to the canvas, so decoding a source at
+  /// full resolution and *then* scaling it down is pure waste — and it is the
+  /// waste that killed the app (#309). A 12 MP phone photo costs 48.8 MB as a
+  /// bitmap; the canvas-sized layer it becomes costs 12.6 MB. On device the
+  /// full-size intermediates for a batch reached a 2.44 GB footprint and jetsam
+  /// killed the frontmost process with `vm-pageshortage`.
+  ///
+  /// ImageIO can decode straight to the size we want, so the 12 MP bitmap is
+  /// never created at all. Three details matter and each is a bug if missed:
+  ///
+  /// * `kCGImageSourceThumbnailMaxPixelSize` bounds the **longest side**. Sizing
+  ///   it to the canvas's longest side would leave an aspect-mismatched photo
+  ///   smaller than the canvas, and `fitted` would then upscale it — softer
+  ///   output than today. So the bound is computed from the fitted extent.
+  /// * `...WithTransform` applies the EXIF orientation. Without it a photo taken
+  ///   in portrait decodes on its side, which the old `UIImage(data:)` path
+  ///   handled for us.
+  /// * The scale is clamped at 1, because a source smaller than the canvas
+  ///   should be decoded at its own size and left for `fitted` to enlarge —
+  ///   decoding "up" would allocate more than the file contains.
+  static func decodeImage(_ data: Data, fittingInto canvas: CGSize) throws -> UIImage {
+    guard data.count <= maximumLayerBytes,
+      let source = CGImageSourceCreateWithData(data as CFData, nil),
+      let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+      let width = properties[kCGImagePropertyPixelWidth] as? Int,
+      let height = properties[kCGImagePropertyPixelHeight] as? Int,
+      width > 0, height > 0,
+      isValidCanvas(CGSize(width: width, height: height)),
+      canvas.width > 0, canvas.height > 0
+    else { throw ProjectArchiveError.invalidImage }
+
+    let fit = min(canvas.width / CGFloat(width), canvas.height / CGFloat(height))
+    let longestSide = CGFloat(max(width, height)) * min(fit, 1)
+    let limit = max(1, Int(longestSide.rounded(.up)))
+
+    guard
+      let thumbnail = CGImageSourceCreateThumbnailAtIndex(
+        source, 0,
+        [
+          kCGImageSourceCreateThumbnailFromImageAlways: true,
+          kCGImageSourceThumbnailMaxPixelSize: limit,
+          kCGImageSourceCreateThumbnailWithTransform: true,
+          kCGImageSourceShouldCacheImmediately: true,
+        ] as CFDictionary)
+    else { throw ProjectArchiveError.invalidImage }
+    return UIImage(cgImage: thumbnail)
+  }
+
+  /// The pixel dimensions of an encoded image, without decoding it.
+  ///
+  /// `CGImageSourceCopyPropertiesAtIndex` reads the header. The old path built
+  /// a whole `UIImage` — a full-resolution bitmap — purely to ask for `.size`,
+  /// which on a 12 MP photo is 48.8 MB to answer a question the first few bytes
+  /// of the file already contain.
+  static func imageSize(of data: Data) -> CGSize? {
+    guard data.count <= maximumLayerBytes,
+      let source = CGImageSourceCreateWithData(data as CFData, nil),
+      let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+      let width = properties[kCGImagePropertyPixelWidth] as? Int,
+      let height = properties[kCGImagePropertyPixelHeight] as? Int
+    else { return nil }
+    // EXIF orientations 5-8 swap the axes; the decoded image is the transpose.
+    let orientation = properties[kCGImagePropertyOrientation] as? Int ?? 1
+    let swapped = (5...8).contains(orientation)
+    return CGSize(
+      width: swapped ? CGFloat(height) : CGFloat(width),
+      height: swapped ? CGFloat(width) : CGFloat(height))
+  }
+
+  /// Whether a layer's frame is a sane place to be on `canvas`.
+  ///
+  /// A bounded layer may hang over an edge — that is what placement has always
+  /// allowed — but it must intersect the canvas, be finite, sit on whole
+  /// pixels, and stay within the same pixel budget a canvas does. Without this
+  /// a document could describe a layer at an absurd offset and cost an
+  /// unbounded allocation on open.
+  static func isLayerFrameValid(_ frame: CGRect, canvas: CGSize) -> Bool {
+    guard frame.origin.x.isFinite, frame.origin.y.isFinite,
+      frame.width >= 1, frame.height >= 1,
+      frame.origin.x.rounded() == frame.origin.x,
+      frame.origin.y.rounded() == frame.origin.y,
+      frame.width <= CGFloat(maximumDimension), frame.height <= CGFloat(maximumDimension),
+      Int(frame.width) * Int(frame.height) <= maximumPixels
+    else { return false }
+    return frame.intersects(CGRect(origin: .zero, size: canvas))
   }
 
   static func isValidCanvas(_ size: CGSize) -> Bool {
