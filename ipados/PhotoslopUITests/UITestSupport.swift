@@ -69,7 +69,7 @@ class UITestCase: XCTestCase {
     guard !hasWarmedUp else { return }
     hasWarmedUp = true
 
-    app.launchArguments = ["-PhotoslopFreshDocumentStore"]
+    app.launchArguments = ["-PhotoslopFreshDocumentStore", "-PhotoslopSuppressSessionNotice"]
     app.launch()
 
     let create = app.buttons["Create Document"].firstMatch
@@ -129,7 +129,7 @@ class UITestCase: XCTestCase {
     Self.editorIsUp = false
     app.terminate()
     _ = app.wait(for: .notRunning, timeout: 30)
-    app.launchArguments = ["-PhotoslopFreshDocumentStore"]
+    app.launchArguments = ["-PhotoslopFreshDocumentStore", "-PhotoslopSuppressSessionNotice"]
     app.launch()
     XCTAssertTrue(
       app.buttons["Create Document"].firstMatch.waitForExistence(timeout: 90),
@@ -244,7 +244,7 @@ extension XCUIApplication {
     // — that re-runs the assertions too, so a genuine defect gets three
     // chances to look intermittent. Here every assertion below still runs
     // exactly once, and only getting to the launch scene is retried.
-    launchArguments = ["-PhotoslopFreshDocumentStore"]
+    launchArguments = ["-PhotoslopFreshDocumentStore", "-PhotoslopSuppressSessionNotice"]
     for attempt in 1...3 {
       if attempt > 1 {
         terminate()

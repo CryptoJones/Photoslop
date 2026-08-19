@@ -92,6 +92,7 @@ struct EditorView: View {
   @State private var exportQuality = 0.9
   @State private var isRenderingExport = false
   @State private var errorMessage: String?
+  @State private var explainUnexpectedExit = false
   @State private var inkColor = Color.black
   /// Stroke opacity, separate from the colour so the swatch can show both and
   /// neither hides inside the other.
@@ -268,9 +269,14 @@ struct EditorView: View {
     } message: {
       Text("The picture is in your photo library.")
     }
+    .modifier(MemoryMessageAlerts(store: store, explainUnexpectedExit: $explainUnexpectedExit))
     .onAppear {
       store.undoManager = undoManager
       offerCanvasSizeForNewDocument()
+      if SessionLifecycle.shared.previousSessionEndedUnexpectedly {
+        SessionLifecycle.shared.acknowledgePreviousSession()
+        explainUnexpectedExit = true
+      }
     }
     .onChange(of: store.awaitingCanvasSizeChoice) { _, _ in
       offerCanvasSizeForNewDocument()
@@ -1947,5 +1953,38 @@ struct ExportedImageDocument: FileDocument {
 
   func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
     FileWrapper(regularFileWithContents: data)
+  }
+}
+
+/// The two things the app says about memory, kept out of `EditorView.body`.
+///
+/// Not a style choice: adding these inline tipped the body over the Swift
+/// type-checker's limit ("unable to type-check this expression in reasonable
+/// time"). A modifier gives the chain a fixed, already-resolved type.
+private struct MemoryMessageAlerts: ViewModifier {
+  @ObservedObject var store: EditorStore
+  @Binding var explainUnexpectedExit: Bool
+
+  func body(content: Content) -> some View {
+    content
+      // Low memory, said out loud rather than handled in silence (#311).
+      .alert(
+        "Low Memory",
+        isPresented: Binding(
+          get: { store.memoryPressureNotice != nil },
+          set: { if !$0 { store.memoryPressureNotice = nil } }
+        )
+      ) {
+        Button("OK", role: .cancel) { store.memoryPressureNotice = nil }
+      } message: {
+        Text(store.memoryPressureNotice ?? "")
+      }
+      // A jetsam kill leaves no crash report and no message of its own, so the
+      // explanation has to come from the next launch (#311).
+      .alert("Photoslop Closed Unexpectedly", isPresented: $explainUnexpectedExit) {
+        Button("OK", role: .cancel) { explainUnexpectedExit = false }
+      } message: {
+        Text(SessionLifecycle.unexpectedExitMessage)
+      }
   }
 }

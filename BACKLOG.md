@@ -8,18 +8,12 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
-- [ ] Multi-photo import kills the app on a 6 GB phone. Confirmed on device:
-  a `JetsamEvent` shows Photoslop `active, frontmost`, killed for
-  `vm-pageshortage` as the system's largest process, 1.65 GB resident with a
-  2.44 GB lifetime peak. Measured cost on an iPhone 13 Pro Max simulator was a
-  dead-linear 48.9 MB per photo, because each source was decoded at full
-  resolution only to be scaled down to a canvas-sized layer. Fixed on
-  `fix/309-import-memory`: decode straight to the fitted size, stream the batch
-  one photo at a time, budget against `os_proc_available_memory()`, cap undo,
-  handle memory warnings, cancel superseded canvas renders, and — format
-  version 3 — let a layer carry an origin instead of having to be exactly
-  canvas-sized, which takes a text layer from 12.6 MB to 176 KB
-  ([#309](https://github.com/CryptoJones/Photoslop/issues/309))
+- [ ] Tell the user when the device runs out of memory, and explain the app
+  disappearing. A jetsam kill is `SIGKILL` — nothing can be caught, no dialog
+  shown, and no crash report is written under the app's name, so the app
+  simply vanishes mid-tap. Nothing can be said at the moment of the kill, but
+  the low-memory warning and the next launch are both usable
+  ([#311](https://github.com/CryptoJones/Photoslop/issues/311))
 
 ### Desktop
 
@@ -59,6 +53,21 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] Multi-photo import killed the app on a 6 GB phone. Confirmed on device:
+  a `JetsamEvent` showed Photoslop `active, frontmost`, killed for
+  `vm-pageshortage` as the system's largest process, 1.65 GB resident with a
+  2.44 GB lifetime peak. Measured at a dead-linear 48.9 MB per photo, because
+  each source was decoded at full resolution only to be scaled down into a
+  canvas-sized layer. Now decodes straight to the fitted size, streams the
+  batch one photo at a time, budgets against `os_proc_available_memory()`,
+  caps undo, handles the memory warning, and lets a superseded canvas render
+  decline to start. Document format version 3 lets a layer carry an origin
+  rather than having to be exactly canvas-sized, taking a text layer from
+  12.58 MB to 176 KB. Re-verified on the reporting device with its own photo
+  library: no new jetsam event, process never restarted. Shipped in 2.14.0
+  ([#309](https://github.com/CryptoJones/Photoslop/issues/309), closed by
+  [#310](https://github.com/CryptoJones/Photoslop/pull/310))
 
 - [x] `NewDocumentUITests` under local Xcode 26.5 — bisected on makemake:
   the iOS 26 SDK's state restoration of held documents raced the launch
