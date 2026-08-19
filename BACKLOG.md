@@ -6,6 +6,21 @@ sync — check an item here when its issue closes.
 
 ## Open
 
+### iPadOS / iOS
+
+- [ ] Multi-photo import kills the app on a 6 GB phone. Confirmed on device:
+  a `JetsamEvent` shows Photoslop `active, frontmost`, killed for
+  `vm-pageshortage` as the system's largest process, 1.65 GB resident with a
+  2.44 GB lifetime peak. Measured cost on an iPhone 13 Pro Max simulator was a
+  dead-linear 48.9 MB per photo, because each source was decoded at full
+  resolution only to be scaled down to a canvas-sized layer. Fixed on
+  `fix/309-import-memory`: decode straight to the fitted size, stream the batch
+  one photo at a time, budget against `os_proc_available_memory()`, cap undo,
+  handle memory warnings, cancel superseded canvas renders, and — format
+  version 3 — let a layer carry an origin instead of having to be exactly
+  canvas-sized, which takes a text layer from 12.6 MB to 176 KB
+  ([#309](https://github.com/CryptoJones/Photoslop/issues/309))
+
 ### Desktop
 
 - [ ] A user reports the desktop version "doesn't work" — no symptom, platform

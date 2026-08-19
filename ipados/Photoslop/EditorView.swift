@@ -1040,20 +1040,55 @@ struct EditorView: View {
       }
       var loaded: [(name: String, image: UIImage)] = []
       var unreadable = 0
+      var unaffordable = 0
+      let canvas = store.canvasSize
+      let single = items.count == 1
       for item in items {
-        guard let data = try? await item.loadTransferable(type: Data.self),
-          let image = try? ProjectArchive.decodeImage(data)
-        else {
+        // Stop before the allocation that would end the process, not after.
+        // Budgeting against what this device actually has left means the same
+        // code refuses at a different point on a 6 GB phone and a 16 GB iPad,
+        // which is the honest behaviour — a fixed count would be wrong on both.
+        guard EditorStore.canAffordLayer(canvas: canvas) else {
+          unaffordable = items.count - loaded.count - unreadable
+          break
+        }
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
           unreadable += 1
           continue
         }
-        loaded.append((name: "Photo", image: image))
+        // One photo is placed by hand at its own size, so it still decodes in
+        // full — the placement box needs every pixel. A batch is fitted to the
+        // canvas anyway, so each one decodes straight to that size and is fitted
+        // and released before the next is touched (#309).
+        //
+        // The `await` sits outside the pool deliberately: `autoreleasepool`
+        // cannot span a suspension point, and Swift's async tasks do not drain
+        // a thread's pool across one — so without this the CoreGraphics
+        // intermediates for every photo in the batch pile up until the whole
+        // loop ends, which is the behaviour that got the app killed.
+        let prepared: UIImage? = autoreleasepool {
+          if single { return try? ProjectArchive.decodeImage(data) }
+          guard let decoded = try? ProjectArchive.decodeImage(data, fittingInto: canvas)
+          else { return nil }
+          return EditorStore.fitted(decoded, into: canvas)
+        }
+        guard let prepared else {
+          unreadable += 1
+          continue
+        }
+        loaded.append((name: "Photo", image: prepared))
       }
 
       guard !loaded.isEmpty else {
-        errorMessage =
-          unreadable == 0
-          ? "Nothing was chosen." : "Those photos could not be read as images."
+        if unaffordable > 0 {
+          errorMessage =
+            "There is not enough free memory to add a layer this size. "
+            + "Close another document or free some space and try again."
+        } else {
+          errorMessage =
+            unreadable == 0
+            ? "Nothing was chosen." : "Those photos could not be read as images."
+        }
         return
       }
 
@@ -1073,10 +1108,15 @@ struct EditorView: View {
       do {
         let added = try store.addImageLayers(loaded)
         // Say so rather than leaving a silent gap in the layer list.
-        if unreadable > 0 {
+        if unreadable > 0 || unaffordable > 0 {
+          var reasons: [String] = []
+          if unreadable > 0 { reasons.append("\(unreadable) could not be read as images") }
+          if unaffordable > 0 {
+            reasons.append("\(unaffordable) were skipped — not enough free memory")
+          }
           errorMessage =
-            "Added \(added) of \(added + unreadable). "
-            + "\(unreadable) could not be read as images."
+            "Added \(added) of \(added + unreadable + unaffordable). "
+            + reasons.joined(separator: "; ") + "."
         }
       } catch {
         errorMessage = error.localizedDescription

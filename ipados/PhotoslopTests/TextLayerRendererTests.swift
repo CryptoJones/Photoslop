@@ -133,7 +133,14 @@ extension EditorStoreTests {
     XCTAssertEqual(store.layers.count, before + 1)
     XCTAssertEqual(store.layers.last?.name, "Sign here")
     XCTAssertEqual(store.activeLayerID, store.layers.last?.id)
-    XCTAssertEqual(store.layers.last?.image.size, store.canvasSize)
+    // A text layer is now stored at the extent of its words, not as a
+    // full-canvas bitmap (#309). What must hold is that it sits where it was
+    // anchored and stays inside the canvas — not that it IS the canvas.
+    let layer = try? XCTUnwrap(store.layers.last)
+    XCTAssertEqual(layer?.origin, CGPoint(x: 40, y: 40))
+    XCTAssertLessThan(layer?.image.size.width ?? .infinity, store.canvasSize.width)
+    XCTAssertTrue(
+      CGRect(origin: .zero, size: store.canvasSize).intersects(layer?.frame ?? .null))
   }
 
   func testAddTextLayerRefusesBlankTextInsteadOfAddingAnEmptyLayer() {
@@ -300,7 +307,11 @@ extension EditorStoreTests {
     XCTAssertEqual(store.layers.count, 2, "the text layer was not added")
     let top = try XCTUnwrap(store.layers.last)
     XCTAssertTrue(top.isText, "text must go on top of the existing stack")
-    XCTAssertEqual(top.image.size, store.canvasSize)
+    // Bounded extent (#309): the words cost their own box, anchored where they
+    // were placed, rather than a canvas-sized bitmap that is mostly empty.
+    XCTAssertEqual(top.origin, centre)
+    XCTAssertLessThanOrEqual(top.image.size.width, store.canvasSize.width)
+    XCTAssertTrue(CGRect(origin: .zero, size: store.canvasSize).intersects(top.frame))
     XCTAssertEqual(store.activeLayerID, top.id, "the new text should be selected")
   }
 
