@@ -528,8 +528,9 @@ struct EditorView: View {
         CanvasBox(
           rect: current.rect,
           // A layer being placed may hang over the edge — that is how you fill
-          // a canvas with the middle of a photograph. A crop may not.
-          bounds: placementBounds,
+          // a canvas with the middle of a photograph. A crop may not, and
+          // neither may text (#315).
+          bounds: placementBounds(isText: current.isText),
           ratio: placementRatio(current),
           scale: canvasZoom,
           dimsOutside: false,
@@ -540,12 +541,24 @@ struct EditorView: View {
     }
   }
 
-  /// The room a placed layer is allowed to occupy: a canvas's worth of slack on
-  /// every side, so an image can be pushed mostly off the edge without being
-  /// able to wander somewhere it can never be dragged back from.
-  private var placementBounds: CGRect {
-    CGRect(origin: .zero, size: store.canvasSize).insetBy(
-      dx: -store.canvasSize.width, dy: -store.canvasSize.height)
+  /// The room a placed layer is allowed to occupy.
+  ///
+  /// An **image** gets a canvas's worth of slack on every side, so it can be
+  /// pushed mostly off the edge without being able to wander somewhere it can
+  /// never be dragged back from. That is how you fill a canvas with the middle
+  /// of a photograph.
+  ///
+  /// **Text** is held inside the canvas (#315). Type set large enough — 400 pt
+  /// on a phone-sized canvas will do it — grew a box past the canvas edge, and
+  /// its corner handles went with it: drawn, but off the artwork and out of
+  /// reach, so the box could only be dragged around and never resized. Slack
+  /// earns its keep for a photograph, where the overhang is the point. For text
+  /// the overhang is just a way to lose the handles, and words placed outside
+  /// the canvas would not be in the picture anyway.
+  private func placementBounds(isText: Bool) -> CGRect {
+    let canvas = CGRect(origin: .zero, size: store.canvasSize)
+    guard !isText else { return canvas }
+    return canvas.insetBy(dx: -store.canvasSize.width, dy: -store.canvasSize.height)
   }
 
   /// The shape the box is held to while this layer is placed. The toggle
@@ -595,7 +608,8 @@ struct EditorView: View {
         // drag, so the choice is visible the moment it is made.
         guard locked, let current = placement else { return }
         placement?.rect = CropGeometry.corrected(
-          current.rect, to: current.ratio, handle: .interior, bounds: placementBounds)
+          current.rect, to: current.ratio, handle: .interior,
+          bounds: placementBounds(isText: current.isText))
       }
 
       Spacer(minLength: 0)
@@ -1699,7 +1713,7 @@ struct EditorView: View {
         dragOrigin,
         handle: handle,
         translation: translation,
-        bounds: placementBounds,
+        bounds: placementBounds(isText: current.isText),
         ratio: placementRatio(current))
     }
 
@@ -1760,7 +1774,12 @@ struct EditorView: View {
     let rect: CGRect
     if layer.isText {
       guard let measured = store.textRect(for: layerID), measured.width > 1 else { return }
-      rect = measured
+      // Held inside the canvas from the moment it opens (#315). Type large
+      // enough measures wider than the canvas, and the box's corner handles
+      // went out past the artwork with it — drawn, but nowhere a finger could
+      // reach, so the box could be dragged and never resized.
+      rect = CropGeometry.contained(
+        measured, within: CGRect(origin: .zero, size: store.canvasSize))
     } else {
       rect = store.placementRect(for: layerID)
     }

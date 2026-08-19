@@ -8,6 +8,17 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
+- [ ] The ⋯ More Actions menu on iPhone holds 15 actions and scrolls, with
+  nothing to say that it scrolls — the Finger toggle and everything below the
+  fold are effectively invisible. It is a system `UIMenu`, so no scroll
+  affordance can be added; the menu has to get shorter
+  ([#313](https://github.com/CryptoJones/Photoslop/issues/313))
+- [ ] The default brush is invisible on the default canvas: width is a
+  hardcoded 8 px that never scales with canvas size, so at fit zoom on a phone
+  a stroke lands about 1.5 pt wide
+  ([#314](https://github.com/CryptoJones/Photoslop/issues/314))
+- [ ] Coloured drop shadows and embossing on text layers
+  ([#316](https://github.com/CryptoJones/Photoslop/issues/316))
 - [ ] Tell the user when the device runs out of memory, and explain the app
   disappearing. A jetsam kill is `SIGKILL` — nothing can be caught, no dialog
   shown, and no crash report is written under the app's name, so the app
@@ -53,6 +64,14 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] A text box larger than the canvas could not be resized — its corner
+  handles were drawn out past the artwork where no finger could reach them, so
+  the box could only be dragged around. Diagnosed by CryptoJones on iPhone
+  (400 pt type on a phone-sized canvas). Placed images keep their canvas of
+  slack; text is now held inside the canvas, and a box that opens too large is
+  scaled to fit about its centre with the words' proportions preserved. Shipped
+  in 2.15.1 ([#315](https://github.com/CryptoJones/Photoslop/issues/315))
 
 - [x] Multi-photo import killed the app on a 6 GB phone. Confirmed on device:
   a `JetsamEvent` showed Photoslop `active, frontmost`, killed for
