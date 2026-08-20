@@ -382,7 +382,6 @@ class PixelSortFilter(Filter):
 def _mosh_blocks(arr: np.ndarray, block: int, amount: float, drift: int, seed: int) -> None:
     """Displace macroblocks by motion vectors that accumulate down the rows."""
     h, w = arr.shape
-    rng = np.random.default_rng(seed)
     nby = (h + block - 1) // block
     nbx = (w + block - 1) // block
     vx = np.zeros(nbx, dtype=np.int64)
@@ -390,12 +389,21 @@ def _mosh_blocks(arr: np.ndarray, block: int, amount: float, drift: int, seed: i
     ydrift = max(1, drift // 2)  # sideways smear reads as motion, vertical as tearing
     src = arr.copy()  # the single "previous frame" every block samples from
     for i in range(nby):
+        # Three independent streams keyed by (seed, row, draw) rather than one
+        # running stream. Size then cannot shift the sequence: a wider image
+        # takes a longer *prefix* of each stream, a taller one only adds rows,
+        # and every block keeps the values its position earns. One seed can
+        # therefore lay the same glitch over a whole set of images (#319) —
+        # which a single stream cannot do, because the first draw's length
+        # would displace every draw after it.
+        seq = np.random.SeedSequence([seed, i])
+        rf, rx, ry = (np.random.default_rng(c) for c in seq.spawn(3))
         # a fresh vector on some blocks; every other block keeps the one
         # above it, and that inheritance is the P-frame chain that makes
         # this read as datamosh rather than as block noise
-        fresh = rng.random(nbx) < amount
-        vx += np.where(fresh, rng.integers(-drift, drift + 1, nbx), 0)
-        vy += np.where(fresh, rng.integers(-ydrift, ydrift + 1, nbx), 0)
+        fresh = rf.random(nbx) < amount
+        vx += np.where(fresh, rx.integers(-drift, drift + 1, nbx), 0)
+        vy += np.where(fresh, ry.integers(-ydrift, ydrift + 1, nbx), 0)
         y0 = i * block
         y1 = min(y0 + block, h)
         bh = y1 - y0
@@ -466,8 +474,13 @@ class DatamoshFilter(Filter):
     lens artifact the look is conventionally paired with. Set ``aberration``
     to 0 for the mosh alone, or ``amount`` to 0 for the fringe alone.
 
-    Deterministic by ``seed``, so actions and smart-filter replay reproduce
-    the same glitch on the same input; change the seed to reroll it."""
+    Deterministic by ``seed``, and deterministic *by block position* rather
+    than by draw order — so one seed lays the same glitch over a whole set of
+    images, whatever their sizes, and actions and smart-filter replay
+    reproduce it exactly. The one limit is the canvas edge: displacement is
+    clamped to the image, so a drift large enough to run a block off a small
+    picture cannot land identically on a larger one. Change the seed to
+    reroll."""
 
     name = "datamosh"
     label = "Datamosh + Chromatic Aberration"

@@ -214,6 +214,47 @@ def test_chromatic_aberration_leaves_the_centre_alone(qapp):
     assert view_u32(img)[32, 32] == before[32, 32]
 
 
+def _moshed(w, h, seed, drift=2, amount=30):
+    """Mosh a coordinate-encoded image and return a COPY of the result.
+
+    Each pixel carries its own (x, y), so the output *is* the displacement
+    field. The copy matters: a view_u32 view dies with the QImage backing it."""
+    img = QImage(w, h, QImage.Format.Format_ARGB32_Premultiplied)
+    arr = view_u32(img)
+    ys, xs = np.mgrid[0:h, 0:w]
+    arr[...] = (
+        (np.uint32(255) << np.uint32(24))
+        | (ys.astype(np.uint32) << np.uint32(8))
+        | xs.astype(np.uint32)
+    )
+    DatamoshFilter().apply(
+        img,
+        {"block": 8, "amount": amount, "drift": drift, "aberration": 0.0, "seed": seed},
+    )
+    return view_u32(img).copy()
+
+
+@pytest.mark.parametrize("size", [(512, 256), (256, 512), (512, 512), (1024, 768)])
+def test_datamosh_seed_reproduces_across_image_sizes(qapp, size):
+    """One seed must lay the same glitch over a whole set of images.
+
+    The motion field is keyed by block position, not by draw order, so
+    neither width nor height may shift it. Regression test for the bug where
+    a single RNG stream made the vectors depend on the image's block count."""
+    base = _moshed(256, 256, seed=42)
+    other = _moshed(*size, seed=42)
+    assert np.array_equal(base[:200, :200], other[:200, :200])
+
+
+def test_datamosh_seed_survives_a_size_change_but_not_the_canvas_edge(qapp):
+    """The honest limit: displacement is clamped to the canvas, so a drift
+    big enough to run off a small image cannot land the same way on a large
+    one. Same field, different boundary — not a reproducibility bug."""
+    near = _moshed(256, 256, seed=42, drift=24, amount=60)
+    wide = _moshed(512, 256, seed=42, drift=24, amount=60)
+    assert not np.array_equal(near[:200, :200], wide[:200, :200])
+
+
 def test_datamosh_handles_a_tiny_image(qapp):
     """Blocks bigger than the image must not walk off the buffer."""
     img = _noise(w=3, h=2)

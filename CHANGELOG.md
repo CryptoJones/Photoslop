@@ -29,7 +29,11 @@ follows [SemVer](https://semver.org).
     inheritance is what makes it read as datamosh rather than as block noise.
     Blocks are copied whole from one snapshot; a radial colour fringe follows,
     leaving alpha unshifted so it cannot eat a cutout edge. The glitch is
-    **seeded**, so replaying an action reproduces it exactly.
+    **seeded by block position rather than draw order**, so one seed lays the
+    same glitch over a whole set of images whatever their sizes — and actions
+    and smart-filter replay reproduce it exactly. Displacement is still
+    clamped to the canvas, so a drift large enough to run a block off a small
+    picture cannot land identically on a larger one.
 
 ## [2.15.1] — 2026-08-19
 

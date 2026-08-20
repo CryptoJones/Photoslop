@@ -28,10 +28,17 @@ liquefies the frame; a narrow one picks out edges.
 **Datamosh** cuts the image into a macroblock grid, hands a fraction of blocks
 a random motion vector, and lets every other block inherit the vector above
 it — displacement accumulates down the frame the way a P-frame chain does with
-no keyframe to reset it, which is what separates a mosh from block noise. It
-is **seeded**: actions and smart-filter replay reproduce the same glitch, and
-changing `seed` rerolls it. `aberration=0` gives the mosh alone; `amount=0`
-gives the radial colour fringe alone.
+no keyframe to reset it, which is what separates a mosh from block noise.
+`aberration=0` gives the mosh alone; `amount=0` gives the radial colour fringe
+alone.
+
+`seed` is what makes the glitch **reusable across a set of images**. The motion
+field is keyed by block *position*, not by draw order, so the same seed puts the
+same glitch on every image you apply it to regardless of their sizes — batch a
+folder through the CLI and the whole set matches. Actions and smart-filter
+replay reproduce it exactly for the same reason. The one limit is the canvas
+edge: displacement is clamped to the image, so a `drift` big enough to run a
+block off a small picture cannot land identically on a larger one.
 
 Native packs and third-party Python entry points are disabled by default. Enable
 them locally under **Preferences → Security** (restart required), or pass
