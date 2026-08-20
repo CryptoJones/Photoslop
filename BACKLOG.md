@@ -26,6 +26,23 @@ sync — check an item here when its issue closes.
   the low-memory warning and the next launch are both usable
   ([#311](https://github.com/CryptoJones/Photoslop/issues/311))
 
+- [ ] A mutable pixel-buffer layer for iOS — the missing foundation under the
+  paint bucket, the magic wand and the filter library. Drawing is PencilKit
+  (vector strokes) and layers are `UIImage`; the only pixel access in
+  `ipados/` is `.cgImage` for export, so no pixel operation is expressible
+  today ([#324](https://github.com/CryptoJones/Photoslop/issues/324))
+- [ ] iOS paint bucket — port the desktop's iterative scanline `flood_fill`;
+  first real user of the pixel seam
+  ([#325](https://github.com/CryptoJones/Photoslop/issues/325))
+- [ ] iOS magic wand, and the selection model it needs. The wand is the flood
+  with the write swapped for a mask; the expensive half is that iOS has no
+  image-selection concept at all, and a mask nothing honours is a toy
+  ([#326](https://github.com/CryptoJones/Photoslop/issues/326))
+- [ ] Port the six filters to Swift — Sepia, Pixelate, Denoise, Retro Console,
+  Pixel Sort, Datamosh. Datamosh must keep its seeded position-keyed field or
+  it loses parity with the desktop and the CLI
+  ([#327](https://github.com/CryptoJones/Photoslop/issues/327))
+
 ### Desktop
 
 - [ ] A user reports the desktop version "doesn't work" — no symptom, platform
