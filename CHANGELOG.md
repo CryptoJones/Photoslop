@@ -35,6 +35,29 @@ follows [SemVer](https://semver.org).
     clamped to the canvas, so a drift large enough to run a block off a small
     picture cannot land identically on a larger one.
 
+### Fixed
+- **The brush now scales with the canvas** (iPadOS/iOS, closes #314). Width was
+  a hardcoded 8 px that never considered the document it painted on. That is
+  sensible on a small canvas and invisible on a large one: on the default
+  2048x1536 canvas fitted to a phone — about 0.19x — an 8 px stroke lands
+  roughly 1.5 pt wide, and the slider's old ceiling of 80 reached only about
+  15 pt. The reporter concluded finger drawing was broken; the strokes had been
+  landing the whole time, too thin to see.
+  - Default width and the slider's ceiling are now fractions of the canvas's
+    shorter side — the side a stroke has to be visible against. Both fractions
+    are the old constants generalised, reproducing 8 and 80 almost exactly at
+    the default canvas, so a default document behaves as it always did and only
+    larger canvases change. A small canvas is never offered a *narrower* range
+    than the app shipped with, so fixing large canvases cannot regress small.
+  - A width carried across a canvas resize is scaled to keep its apparent
+    weight against the picture, rather than silently becoming a hairline on a
+    bigger canvas — the very failure this fixes.
+  - Width stays measured in **document pixels**. Scaling it to the view was
+    considered and rejected: zooming in would enlarge the brush in document
+    terms by exactly what the zoom shrank it, so detail work by zooming — the
+    main reason to zoom — would become impossible. Document-space sizing is
+    what makes zoom the fine-tuning mechanism.
+
 ## [2.15.1] — 2026-08-19
 
 ### Fixed
