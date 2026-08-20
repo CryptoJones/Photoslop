@@ -98,7 +98,13 @@ struct EditorView: View {
   /// neither hides inside the other.
   @State private var inkOpacity = 1.0
   @State private var showInkOptions = false
+  /// Sized from the canvas on first appearance rather than hardcoded (#314);
+  /// 8 is what the old constant was, and what a default canvas still resolves
+  /// to, so this initial value is only ever seen before the canvas is known.
   @State private var inkWidth = 8.0
+  /// Set once the canvas has had its say, so reappearing does not overwrite a
+  /// width the user chose.
+  @State private var inkWidthEstablished = false
   @State private var tool = BrushTool.pen
   @State private var drawsWithFinger = false
   @State private var showLayers = false
@@ -270,6 +276,9 @@ struct EditorView: View {
       Text("The picture is in your photo library.")
     }
     .modifier(MemoryMessageAlerts(store: store, explainUnexpectedExit: $explainUnexpectedExit))
+    .modifier(
+      BrushWidthForCanvas(
+        store: store, inkWidth: $inkWidth, established: $inkWidthEstablished))
     .onAppear {
       store.undoManager = undoManager
       offerCanvasSizeForNewDocument()
@@ -716,7 +725,10 @@ struct EditorView: View {
         if tool.usesInk {
           inkButton
 
-          Slider(value: $inkWidth, in: 1...80, step: 1)
+          Slider(
+            value: $inkWidth,
+            in: BrushMetrics.minimumWidth...BrushMetrics.maximumWidth(for: store.canvasSize),
+            step: 1)
             .frame(width: isCompact ? 130 : 180)
             .accessibilityLabel("Brush width")
             .accessibilityIdentifier("Brush width")
@@ -2004,6 +2016,32 @@ private struct MemoryMessageAlerts: ViewModifier {
         Button("OK", role: .cancel) { explainUnexpectedExit = false }
       } message: {
         Text(SessionLifecycle.unexpectedExitMessage)
+      }
+  }
+}
+
+/// Keeps the brush in proportion to the canvas (#314).
+///
+/// A modifier rather than inline, for the same reason the memory alerts are
+/// one: adding this to `EditorView.body` tipped it past the Swift type-checker
+/// ("unable to type-check this expression in reasonable time").
+private struct BrushWidthForCanvas: ViewModifier {
+  @ObservedObject var store: EditorStore
+  @Binding var inkWidth: Double
+  @Binding var established: Bool
+
+  func body(content: Content) -> some View {
+    content
+      .onChange(of: store.canvasSize) { previous, current in
+        // Carry the brush across a resize so it keeps its apparent weight
+        // against the picture, rather than silently becoming a hairline on a
+        // bigger canvas — which is the failure this issue is about.
+        inkWidth = BrushMetrics.rescaled(inkWidth, from: previous, to: current)
+      }
+      .onAppear {
+        guard !established else { return }
+        inkWidth = BrushMetrics.defaultWidth(for: store.canvasSize)
+        established = true
       }
   }
 }

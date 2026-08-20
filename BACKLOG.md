@@ -13,10 +13,6 @@ sync — check an item here when its issue closes.
   fold are effectively invisible. It is a system `UIMenu`, so no scroll
   affordance can be added; the menu has to get shorter
   ([#313](https://github.com/CryptoJones/Photoslop/issues/313))
-- [ ] The default brush is invisible on the default canvas: width is a
-  hardcoded 8 px that never scales with canvas size, so at fit zoom on a phone
-  a stroke lands about 1.5 pt wide
-  ([#314](https://github.com/CryptoJones/Photoslop/issues/314))
 - [ ] Coloured drop shadows and embossing on text layers
   ([#316](https://github.com/CryptoJones/Photoslop/issues/316))
 - [ ] Tell the user when the device runs out of memory, and explain the app
@@ -92,6 +88,11 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] The default brush was invisible on the default canvas — a hardcoded 8 px
+  width that never scaled, landing about 1.5 pt wide at fit zoom on a phone.
+  Default and ceiling are now fractions of the canvas's shorter side, and a
+  width carried across a resize keeps its apparent weight
+  ([#314](https://github.com/CryptoJones/Photoslop/issues/314))
 - [x] Every job ran on GitHub's default six-hour timeout, so a stuck runner
   burned an afternoon instead of failing fast: the `v2.15.1` push had five
   jobs sitting at the 6h ceiling while the same commit passed on its PR
