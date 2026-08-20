@@ -16,6 +16,7 @@ per-layer copies (DD-001)."""
 
 from __future__ import annotations
 
+import math
 import traceback
 from dataclasses import dataclass
 from typing import NamedTuple
@@ -23,6 +24,7 @@ from typing import NamedTuple
 import numpy as np
 from PySide6.QtGui import QImage
 
+from photoslop.adjust import CHUNK_ROWS
 from photoslop.npimage import view_u32
 
 
@@ -305,4 +307,195 @@ class RetroConsoleFilter(Filter):
         view_u32(image)[...] = view_u32(big)
 
 
-_BUILT_INS = (*_BUILT_INS, DenoiseFilter, RetroConsoleFilter)
+def _sort_runs(work: np.ndarray, low: int, high: int, reverse: bool) -> None:
+    """Sort each contiguous in-band run of every row of ``work`` by luma.
+
+    ``work`` is a C-contiguous (h, w) uint32 array of premultiplied ARGB
+    pixels, edited in place. Whole pixels are permuted — never recombined —
+    so colour and alpha travel together and no value is invented."""
+    a = (work >> np.uint32(24)).astype(np.float32)
+    r = ((work >> np.uint32(16)) & 0xFF).astype(np.float32)
+    g = ((work >> np.uint32(8)) & 0xFF).astype(np.float32)
+    b = (work & 0xFF).astype(np.float32)
+    # straight colour, so a threshold band means the same thing at any alpha
+    unpm = np.where(a > 0, 255.0 / np.maximum(a, 1.0), 0.0)
+    luma = (0.299 * r + 0.587 * g + 0.114 * b) * unpm
+
+    mask = (luma >= low) & (luma <= high)
+    if not mask.any():
+        return
+    # a run starts at any in-band pixel whose left neighbour is out of band;
+    # column 0 always starts one, which is what keeps runs inside their row
+    starts = mask.copy()
+    starts[:, 1:] &= ~mask[:, :-1]
+    run_id = np.cumsum(starts.reshape(-1), dtype=np.int64)
+
+    idx = np.flatnonzero(mask.reshape(-1))
+    key = luma.reshape(-1)[idx]
+    if reverse:
+        key = -key
+    # primary key run, secondary key luma: one pass sorts every run at once
+    order = np.lexsort((key, run_id[idx]))
+    flat = work.reshape(-1)
+    flat[idx] = flat[idx][order]
+
+
+class PixelSortFilter(Filter):
+    """Pixel sorting — the glitch-art staple, and the effect behind the
+    Cyberpunk 2077 cyberspace dive and The Peripheral's title sequence.
+
+    Pixels whose brightness falls inside a threshold band are gathered into
+    contiguous runs along each row (or column) and sorted by luma within the
+    run. Everything outside the band stays exactly where it is, and that is
+    the whole trick: untouched darks and highlights bound the smear, so the
+    image stays legible while the midtones melt into ribbons. A wide band
+    (0..255) liquefies the frame; a narrow one picks out edges.
+
+    Vectorised — one lexsort over the masked positions keyed by (run, luma),
+    so a full-frame sort costs no per-pixel Python."""
+
+    name = "pixel-sort"
+    label = "Pixel Sort (Glitch)"
+    params = (
+        ParamSpec("low", "Threshold low", "int", 0, 255, 60),
+        ParamSpec("high", "Threshold high", "int", 0, 255, 200),
+        ParamSpec("vertical", "Vertical (0=rows, 1=columns)", "int", 0, 1, 0),
+        ParamSpec("reverse", "Reverse (0=dark first, 1=bright first)", "int", 0, 1, 0),
+    )
+
+    def apply(self, image: QImage, params: dict) -> None:
+        low = int(params.get("low", 60))
+        high = int(params.get("high", 200))
+        if low > high:  # a band given backwards is still a band
+            low, high = high, low
+        reverse = bool(int(params.get("reverse", 0)))
+        arr = view_u32(image)
+        if int(params.get("vertical", 0)):
+            # the transpose is a non-contiguous view; sort a compact copy
+            work = np.ascontiguousarray(arr.T)
+            _sort_runs(work, low, high, reverse)
+            arr[...] = work.T
+        else:
+            _sort_runs(arr, low, high, reverse)
+
+
+def _mosh_blocks(arr: np.ndarray, block: int, amount: float, drift: int, seed: int) -> None:
+    """Displace macroblocks by motion vectors that accumulate down the rows."""
+    h, w = arr.shape
+    rng = np.random.default_rng(seed)
+    nby = (h + block - 1) // block
+    nbx = (w + block - 1) // block
+    vx = np.zeros(nbx, dtype=np.int64)
+    vy = np.zeros(nbx, dtype=np.int64)
+    ydrift = max(1, drift // 2)  # sideways smear reads as motion, vertical as tearing
+    src = arr.copy()  # the single "previous frame" every block samples from
+    for i in range(nby):
+        # a fresh vector on some blocks; every other block keeps the one
+        # above it, and that inheritance is the P-frame chain that makes
+        # this read as datamosh rather than as block noise
+        fresh = rng.random(nbx) < amount
+        vx += np.where(fresh, rng.integers(-drift, drift + 1, nbx), 0)
+        vy += np.where(fresh, rng.integers(-ydrift, ydrift + 1, nbx), 0)
+        y0 = i * block
+        y1 = min(y0 + block, h)
+        bh = y1 - y0
+        for j in range(nbx):
+            x0 = j * block
+            x1 = min(x0 + block, w)
+            bw = x1 - x0
+            sy = int(np.clip(y0 + vy[j], 0, h - bh))
+            sx = int(np.clip(x0 + vx[j], 0, w - bw))
+            arr[y0:y1, x0:x1] = src[sy : sy + bh, sx : sx + bw]
+
+
+def _radial_sample(chan: np.ndarray, scale: float, cx: float, cy: float) -> np.ndarray:
+    """Nearest-neighbour resample of one float plane about (cx, cy)."""
+    h, w = chan.shape
+    out = np.empty_like(chan)
+    xs = np.arange(w, dtype=np.float32)
+    sx = np.clip(cx + (xs - cx) / scale, 0, w - 1).astype(np.int32)[None, :]
+    for y0 in range(0, h, CHUNK_ROWS):  # house pattern: chunk the per-pixel work
+        y1 = min(y0 + CHUNK_ROWS, h)
+        ys = np.arange(y0, y1, dtype=np.float32)
+        sy = np.clip(cy + (ys - cy) / scale, 0, h - 1).astype(np.int32)[:, None]
+        out[y0:y1] = chan[sy, sx]
+    return out
+
+
+def _chromatic_aberration(arr: np.ndarray, px: float) -> None:
+    """Scale R out and B in about the centre — the lens fringe, radial."""
+    h, w = arr.shape
+    cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
+    rmax = math.hypot(cx, cy) or 1.0
+    k = min(px / rmax, 0.9)  # px is the fringe width at the far corner
+    a = (arr >> np.uint32(24)).astype(np.uint32)
+    af = a.astype(np.float32)
+    unpm = np.where(af > 0, 255.0 / np.maximum(af, 1.0), 0.0).astype(np.float32)
+    r = ((arr >> np.uint32(16)) & 0xFF).astype(np.float32) * unpm
+    g = ((arr >> np.uint32(8)) & 0xFF).astype(np.float32) * unpm
+    b = (arr & 0xFF).astype(np.float32) * unpm
+    r = _radial_sample(r, 1.0 + k, cx, cy)
+    b = _radial_sample(b, 1.0 - k, cx, cy)
+    # alpha is deliberately not shifted: fringing the cutout would eat edges
+    af /= 255.0
+    arr[...] = (
+        (a << np.uint32(24))
+        | (np.clip(r * af, 0, 255).astype(np.uint32) << np.uint32(16))
+        | (np.clip(g * af, 0, 255).astype(np.uint32) << np.uint32(8))
+        | np.clip(b * af, 0, 255).astype(np.uint32)
+    )
+
+
+class DatamoshFilter(Filter):
+    """Datamosh + chromatic aberration — the Neuromancer-trailer glitch.
+
+    Real datamoshing is an *interframe* artifact: drop a video's I-frames and
+    the surviving P-frames keep applying their motion vectors to whatever
+    pixels happen to be underneath, so motion from one shot smears across the
+    image of another. A still has no frames to mosh, so this reproduces the
+    mechanism rather than the file corruption. The image is cut into a
+    macroblock grid and a fraction of blocks are handed a random motion
+    vector; every other block inherits the vector of the block above it, so
+    displacement accumulates down the frame exactly as a P-frame chain does
+    with no keyframe to reset it. That inheritance is what separates a mosh
+    from mere block noise, and keeping ``block`` near a codec's real 16 px
+    macroblock is what keeps it reading as compression rather than mosaic.
+
+    Blocks are copied whole from one source snapshot, so no pixel value is
+    invented. Chromatic aberration then fringes the result radially — the
+    lens artifact the look is conventionally paired with. Set ``aberration``
+    to 0 for the mosh alone, or ``amount`` to 0 for the fringe alone.
+
+    Deterministic by ``seed``, so actions and smart-filter replay reproduce
+    the same glitch on the same input; change the seed to reroll it."""
+
+    name = "datamosh"
+    label = "Datamosh + Chromatic Aberration"
+    params = (
+        ParamSpec("block", "Macroblock size", "int", 4, 64, 16),
+        ParamSpec("amount", "Corrupted blocks (%)", "int", 0, 100, 35),
+        ParamSpec("drift", "Motion drift (px)", "int", 0, 64, 12),
+        ParamSpec("aberration", "Chromatic aberration (px)", "float", 0, 20, 3.0),
+        ParamSpec("seed", "Seed", "int", 0, 9999, 7),
+    )
+
+    def apply(self, image: QImage, params: dict) -> None:
+        block = max(4, int(params.get("block", 16)))
+        amount = float(params.get("amount", 35)) / 100.0
+        drift = int(params.get("drift", 12))
+        aberration = float(params.get("aberration", 3.0))
+        seed = int(params.get("seed", 7))
+        arr = view_u32(image)
+        if amount > 0 and drift > 0:
+            _mosh_blocks(arr, block, amount, drift, seed)
+        if aberration > 0:
+            _chromatic_aberration(arr, aberration)
+
+
+_BUILT_INS = (
+    *_BUILT_INS,
+    DenoiseFilter,
+    RetroConsoleFilter,
+    PixelSortFilter,
+    DatamoshFilter,
+)
