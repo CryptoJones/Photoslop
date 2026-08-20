@@ -56,6 +56,16 @@ sync — check an item here when its issue closes.
   drop `UNSIGNED` from the artifact name
   ([#287](https://github.com/CryptoJones/Photoslop/issues/287))
 
+### CI
+
+- [ ] Every job ran on GitHub's default six-hour timeout, so a stuck runner
+  burned an afternoon instead of failing fast: the `v2.15.1` push had five
+  jobs sitting at the 6h ceiling while the same commit passed on its PR
+  branch in 21m, and the `portable` release gate failed waiting on the run
+  that was hung. Cap each job at its real runtime, and say what a gate
+  timeout now implies
+  ([#321](https://github.com/CryptoJones/Photoslop/issues/321))
+
 ### Standing
 
 - [ ] App Store GA — what is needed beyond TestFlight is now prepared in

@@ -173,7 +173,7 @@ jobs:
               break
             fi
             if [ "${SECONDS}" -ge "${deadline}" ]; then
-              echo "::error::timed out after 30m waiting for:${pending}"
+              echo "::error::timed out after 30m waiting for:${pending} — a job in it is probably hung; every job in those workflows is capped below 30m, so check for a cancelled or stuck runner rather than assuming slowness"
               exit 1
             fi
             echo "waiting for:${pending}"
