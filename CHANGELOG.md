@@ -4,6 +4,37 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [Unreleased]
+
+### Added
+- **Two glitch filters, Pixel Sort and Datamosh + Chromatic Aberration**
+  (closes #318, #319). Both are built-ins — pure numpy, no new dependency, so
+  neither needs the unsafe-plugin opt-in — and both arrive in the Filter menu,
+  the CLI, actions and smart-filter replay from one class each.
+  - **Pixel Sort (Glitch)** (`pixel-sort`) gathers pixels whose luma falls
+    inside a threshold band into contiguous runs along each row or column and
+    sorts each run by brightness. Everything outside the band stays exactly
+    where it is, and that is the whole trick: the untouched darks and
+    highlights bound the smear, so the picture stays legible while the
+    midtones melt into ribbons. Whole premultiplied pixels are permuted,
+    never recombined, so colour and alpha travel together and no pixel value
+    is invented. One `lexsort` sorts every run at once, so a full-frame sort
+    costs no per-pixel Python.
+  - **Datamosh + Chromatic Aberration** (`datamosh`) reproduces the mechanism
+    behind the effect rather than the file corruption, because a still has no
+    frames to mosh: the image is cut into a macroblock grid, a fraction of
+    blocks are handed a random motion vector, and every other block inherits
+    the vector of the block above it — so displacement accumulates down the
+    frame exactly as a P-frame chain does with no keyframe to reset it. That
+    inheritance is what makes it read as datamosh rather than as block noise.
+    Blocks are copied whole from one snapshot; a radial colour fringe follows,
+    leaving alpha unshifted so it cannot eat a cutout edge. The glitch is
+    **seeded by block position rather than draw order**, so one seed lays the
+    same glitch over a whole set of images whatever their sizes — and actions
+    and smart-filter replay reproduce it exactly. Displacement is still
+    clamped to the canvas, so a drift large enough to run a block off a small
+    picture cannot land identically on a larger one.
+
 ## [2.15.1] — 2026-08-19
 
 ### Fixed

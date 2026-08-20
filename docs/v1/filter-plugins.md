@@ -7,8 +7,38 @@ parameter dialog), works in the **CLI** as `--filter "name:key=val,..."`,
 respects **selections and feathering**, participates in **actions** and
 **smart-filter replay** — all from one class and one entry point.
 
-Two built-ins ship in the box and double as living documentation:
-**Sepia** (`sepia:amount=0..100`) and **Pixelate** (`pixelate:size=2..128`).
+Six built-ins ship in the box and double as living documentation — all pure
+numpy, so none of them needs the unsafe-plugin opt-in below:
+
+| Filter | CLI name | Params |
+|---|---|---|
+| Sepia | `sepia` | `amount` 0–100 |
+| Pixelate | `pixelate` | `size` 2–128 |
+| Denoise (Chroma) | `denoise` | `strength` 1–100 |
+| Retro Console (8-Bit) | `retro-console` | `size` 1–64, `levels` 2–8, `dither` 0/1 |
+| Pixel Sort (Glitch) | `pixel-sort` | `low`/`high` 0–255, `vertical` 0/1, `reverse` 0/1 |
+| Datamosh + Chromatic Aberration | `datamosh` | `block` 4–64, `amount` 0–100, `drift` 0–64, `aberration` 0–20, `seed` 0–9999 |
+
+**Pixel Sort** gathers pixels whose luma falls inside the `low`..`high` band
+into contiguous runs along each row (or column) and sorts each run by
+brightness; everything outside the band stays put, and those untouched darks
+and highlights are what bound the smear. A full band (`low=0,high=255`)
+liquefies the frame; a narrow one picks out edges.
+
+**Datamosh** cuts the image into a macroblock grid, hands a fraction of blocks
+a random motion vector, and lets every other block inherit the vector above
+it — displacement accumulates down the frame the way a P-frame chain does with
+no keyframe to reset it, which is what separates a mosh from block noise.
+`aberration=0` gives the mosh alone; `amount=0` gives the radial colour fringe
+alone.
+
+`seed` is what makes the glitch **reusable across a set of images**. The motion
+field is keyed by block *position*, not by draw order, so the same seed puts the
+same glitch on every image you apply it to regardless of their sizes — batch a
+folder through the CLI and the whole set matches. Actions and smart-filter
+replay reproduce it exactly for the same reason. The one limit is the canvas
+edge: displacement is clamped to the image, so a `drift` big enough to run a
+block off a small picture cannot land identically on a larger one.
 
 Native packs and third-party Python entry points are disabled by default. Enable
 them locally under **Preferences → Security** (restart required), or pass

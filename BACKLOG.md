@@ -38,6 +38,16 @@ sync — check an item here when its issue closes.
   work" looked like
   ([#273](https://github.com/CryptoJones/Photoslop/issues/273))
 
+### Filters
+
+- [ ] Pixel Sort (Glitch) filter — luma-band runs sorted along rows or
+  columns, the glitch-art staple behind the Cyberpunk 2077 cyberspace dive
+  ([#318](https://github.com/CryptoJones/Photoslop/issues/318))
+- [ ] Datamosh + Chromatic Aberration filter — macroblock motion vectors that
+  accumulate down the frame like a P-frame chain with no keyframe, plus a
+  radial colour fringe; seeded so smart-filter replay reproduces the glitch
+  ([#319](https://github.com/CryptoJones/Photoslop/issues/319))
+
 ### Windows
 
 - [ ] Sign the Windows portable bundle via SignPath Foundation's free OSS code
