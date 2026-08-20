@@ -32,6 +32,7 @@ permissions:
 jobs:
   macos:
     runs-on: macos-15
+    timeout-minutes: 45
     env:
       PHOTOSLOP_REQUIRE_SIGNING: ${{ (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.verify_macos_signing)) && '1' || '0' }}
       # v1.30.0 shipped Developer ID signed but not notarized, before notary
@@ -79,6 +80,7 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    timeout-minutes: 30
     env:
       # There is no Authenticode certificate for this project, so demanding one
       # on a tag cannot ever succeed — it only fails the release. Windows tags
@@ -128,6 +130,7 @@ jobs:
   verify-checks:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     permissions:
       contents: read
       # `actions: read` is what lets `gh api .../actions/workflows/.../runs`
@@ -184,6 +187,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [macos, windows, verify-checks]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
       id-token: write
