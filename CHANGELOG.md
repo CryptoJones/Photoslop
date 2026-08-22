@@ -4,6 +4,76 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.17.0] — unreleased
+
+### Added
+- **Crop one layer without touching the canvas** (closes #331). The Crop tool
+  (`C`) resizes the *document*: the canvas shrinks to the box and every layer
+  keeps all of its pixels, shifted — nothing is discarded, which is exactly
+  what makes it instant. There was no way to say the other thing: trim *this
+  layer* back and leave the document alone. Tick **Layer only** in the crop
+  tool's options and the same rectangle does that — the active layer is cut to
+  the box, its pixels outside are discarded, and the canvas size and every
+  other layer are untouched.
+  - The two crops stay separate commands rather than one with a flag, because
+    they trade opposite things: `ResizeCanvasCommand` copies no pixels and
+    loses none, while `CropLayerCommand` keeps only the box. Undo stores the
+    pre-crop image, offset and mask as copy-on-write refs, so undoing restores
+    the exact pixels rather than re-deriving them. That is a whole-layer
+    reference rather than the tile delta the undo rule prefers, for the same
+    reason `ArbitraryRotateCommand` and Free Transform hold one: the buffer
+    changes *size*, and a delta cannot describe that. It costs nothing until
+    something writes to the buffer.
+  - A cropped Shape, Pen or Text layer drops to plain raster, the same way an
+    arbitrary-angle layer rotation does: a cropped shape is no longer the shape
+    its parameters describe, and leaving the record in place would let the next
+    geometry edit silently re-render the whole uncropped thing over the crop.
+    Undo brings the parametric record back with the pixels.
+  - A box that misses the active layer entirely is refused instead of cropping
+    it to nothing — the rectangle stays on screen to be redrawn. Cropping to an
+    empty layer is never what was meant, and it is the one input that would
+    otherwise destroy a layer in a single gesture.
+  - **Layer ▸ Crop Layer…** (`Ctrl+Alt+Shift+C`) is the menu route, sitting
+    with the other layer-local geometry commands — the Layer menu is where you
+    look for something that acts on a layer, and a tool-options checkbox is
+    not discoverable from there. It takes whichever rectangle already exists:
+    a selection, or a box drawn with the crop tool. With neither it does not
+    dead-end — it switches to the crop tool with **Layer only** already ticked
+    so the box can be drawn, because someone who just asked to crop a layer
+    should be handed the tool that crops it, not a message. A crop-tool box is
+    private tool state rather than a selection, so honouring it closes the trap
+    where the menu silently found nothing and the `Enter` that followed
+    committed a whole-document crop instead. A committed box is cleared for the
+    same reason.
+  - Headless mirror: `photoslop-cli in.png --crop-layer X,Y,W,H`, honouring
+    `--layer N` / `--all-layers`, and erroring when the rectangle misses every
+    target layer.
+- **Every pull request now bumps the version, and CI enforces it.** Two builds
+  that report the same number cannot be told apart once they are running: the
+  title bar, the About box and `photoslop-cli --version` all name a release
+  that no longer describes the binary under test, which is exactly what makes
+  "does this build have the fix in it?" unanswerable. `scripts/check-version.py`
+  gained a `--base-ref` check that fails a pull request whose version does not
+  advance the base branch's; the `quality` job now clones full history so the
+  base commit is actually there to compare against. A base ref that cannot be
+  read — shallow clone, fork, local checkout with no remote — skips the check
+  rather than failing it, because a missing base is not a policy violation.
+  Tagging and dating the CHANGELOG heading remain a separate release commit;
+  this rule only owns the number going up. The rule is written down in the
+  README's Development section alongside the six declarations that have to
+  agree with `photoslop/__about__.py`.
+
+- **The layer stack's operations are on the layer stack** (closes #332). Right-
+  clicking the Layers panel did nothing, so **New Layer from Image…** — the
+  command that brings image files in as layers — was reachable only from the
+  Layer menu, which is not where anyone looks while already pointing at the
+  layer list. The list now has a context menu carrying New Layer, New Layer
+  from Image…, Duplicate Layer, Delete Layer and Merge Down, with the
+  destructive entries disabled exactly where the panel buttons already refuse
+  them (the last layer cannot be deleted, the bottom layer has nothing to merge
+  into). The import goes back out through a signal to the window's existing
+  action, so both routes are the one code path and cannot drift.
+
 ## [2.16.0] — 2026-08-20
 
 ### Added

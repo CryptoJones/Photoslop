@@ -235,6 +235,7 @@ class MainWindow(QMainWindow):
         self.tabifyDockWidget(self._layers_dock, self._properties_dock)
         self.tabifyDockWidget(self._layers_dock, self._appearance_dock)
         self.layer_panel.appearanceRequested.connect(self._appearance_dock.raise_)
+        self.layer_panel.importRequested.connect(self.action_import_layer)
 
         self.history_view = QUndoView(self.undo_group)
         self.history_view.setEmptyLabel("Document opened")
@@ -515,6 +516,16 @@ class MainWindow(QMainWindow):
         contiguous.toggled.connect(lambda v: setattr(self.options, "contiguous", v))
         contig_act = bar.addWidget(contiguous)
 
+        crop_layer = QCheckBox("Layer only")
+        crop_layer.setChecked(self.options.crop_layer_only)
+        crop_layer.setToolTip(
+            "On: the crop trims the active layer and discards the pixels "
+            "outside the box. Off: it crops the whole document."
+        )
+        crop_layer.setAccessibleName("Crop the active layer only")
+        crop_layer.toggled.connect(lambda v: setattr(self.options, "crop_layer_only", v))
+        crop_layer_act = bar.addWidget(crop_layer)
+
         self._option_actions = {
             "brush": [
                 color_act,
@@ -552,7 +563,7 @@ class MainWindow(QMainWindow):
             "pen": [color_act, size_act],
             "dodge": [size_act, hard_act, opacity_act, spacing_act],
             "burn": [size_act, hard_act, opacity_act, spacing_act],
-            "crop": [],
+            "crop": [crop_layer_act],
             "move": [],
             "hand": [],
             "zoom": [],
@@ -572,6 +583,7 @@ class MainWindow(QMainWindow):
             flow_act,
             spacing_act,
             scatter_act,
+            crop_layer_act,
         ]
         self._option_widgets = {
             "size": size,
@@ -585,6 +597,7 @@ class MainWindow(QMainWindow):
             "fill_source": fill_source,
             "contiguous": contiguous,
             "eraser": eraser,
+            "crop_layer_only": crop_layer,
         }
 
         # PS-style bracket shortcuts; window-level, invisible in menus
@@ -829,6 +842,10 @@ class MainWindow(QMainWindow):
         m_layer.addAction(self._act("Delete La&yer", None, lambda: self.layer_panel.delete_layer()))
         m_layer.addAction(self._act("Merge Do&wn", "Ctrl+E", lambda: self.layer_panel.merge_down()))
         m_layer.addAction(self._act("Merge &Visible", "Ctrl+Shift+E", self.action_merge_visible))
+        # High in the menu rather than down with the other layer-geometry
+        # commands: it is reached far more often than rotate or flip, and menu
+        # order is about reach, not taxonomy.
+        m_layer.addAction(self._act("Cro&p Layer…", "Ctrl+Alt+Shift+C", self.action_crop_layer))
         m_layer.addAction(
             self._act("S&tamp Visible", "Ctrl+Shift+Alt+E", self.action_stamp_visible)
         )
@@ -2939,6 +2956,53 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Crop needs a selection", 4000)
             return
         doc.undo_stack.push(ResizeCanvasCommand(doc, region.size(), -region.topLeft(), "Crop"))
+
+    def action_crop_layer(self) -> None:
+        """Trim the active layer to the selection, leaving the canvas alone.
+
+        The menu counterpart to the crop tool's *Layer only* option: the same
+        CropLayerCommand, driven by an existing selection rather than a fresh
+        drag — mirroring how Image ▸ Crop to Selection sits beside the crop
+        tool's document crop.
+        """
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        # A crop rectangle dragged with the crop tool is private tool state, not
+        # a selection — without this fallback the menu would silently do nothing
+        # for anyone who drew a box and then reached for the Layer menu, and the
+        # Enter that followed would commit a whole-document crop instead.
+        region = doc.selection_bounds()
+        if region is None:
+            crop_rect = getattr(self.tools.get("crop"), "rect", None)
+            region = crop_rect if crop_rect is not None and not crop_rect.isEmpty() else None
+        if region is None:
+            # Nothing to crop to yet. A dead-end message is useless here: the
+            # user asked to crop this layer, so hand them the tool that draws
+            # the box, already switched to layer mode, instead of making them
+            # go find it.
+            self._option_widgets["crop_layer_only"].setChecked(True)
+            self._set_tool("crop")
+            self.statusBar().showMessage(
+                "Crop Layer: drag a rectangle on the canvas, then press Enter "
+                "(only this layer is trimmed)",
+                8000,
+            )
+            return
+        from photoslop.commands import CropLayerCommand
+
+        try:
+            command = CropLayerCommand(doc, doc.active_layer, region)
+        except ValueError:
+            self.statusBar().showMessage("The selection misses the active layer", 6000)
+            return
+        doc.undo_stack.push(command)
+        crop = self.tools.get("crop")
+        if crop is not None and crop.rect is not None:
+            crop.rect = None  # consumed; a stale box would re-commit on Enter
+            editor = self.current_editor()
+            if editor is not None:
+                editor.canvas.update()
 
     def action_levels(self) -> None:
         doc = self.current_doc()

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QPushButton,
     QSlider,
     QVBoxLayout,
@@ -34,6 +35,7 @@ _THUMB = 36
 
 class LayerPanel(QWidget):
     appearanceRequested = Signal()
+    importRequested = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -51,6 +53,8 @@ class LayerPanel(QWidget):
         self.list.currentRowChanged.connect(self._on_row)
         self.list.itemChanged.connect(self._on_item_changed)
         self.list.itemDoubleClicked.connect(self._on_double_click)
+        self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list.customContextMenuRequested.connect(self._show_context_menu)
 
         self.blend = QComboBox()
         self.blend.setAccessibleName("Active layer blend mode")
@@ -216,6 +220,34 @@ class LayerPanel(QWidget):
             if cached is None or cached[0] != self._thumb_key(layer):
                 self.list.item(row).setIcon(self._thumb(layer))
         self._updating = False
+
+    def context_menu(self) -> QMenu | None:
+        """The stack operations where the stack is — including the import that
+        otherwise lives only under the Layer menu, which is not where anyone
+        looks when they are already pointing at the layer list.
+
+        Built separately from showing it so the entries and their enabled
+        states are checkable without a modal exec().
+        """
+        if self.doc is None:
+            return None
+        menu = QMenu(self)
+        menu.addAction("New Layer", self.add_layer)
+        menu.addAction("New Layer from Image\u2026", self.importRequested.emit)
+        menu.addSeparator()
+        duplicate = menu.addAction("Duplicate Layer", self.duplicate_layer)
+        delete = menu.addAction("Delete Layer", self.delete_layer)
+        merge = menu.addAction("Merge Down", self.merge_down)
+        has_layer = self.doc.active_layer is not None
+        duplicate.setEnabled(has_layer)
+        delete.setEnabled(has_layer and len(self.doc.layers) > 1)
+        merge.setEnabled(self.doc.active_index > 0)
+        return menu
+
+    def _show_context_menu(self, pos) -> None:
+        menu = self.context_menu()
+        if menu is not None:
+            menu.exec(self.list.viewport().mapToGlobal(pos))
 
     # -- user edits --
 

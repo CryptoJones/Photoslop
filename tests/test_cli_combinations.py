@@ -38,6 +38,7 @@ PAIR_ARGS = {
     "resize": ["--resize", "48x32"],
     "canvas-size": ["--canvas-size", "64x44"],
     "crop": ["--crop", "2,2,40,28"],
+    "crop-layer": ["--crop-layer", "0,0,24,18"],
     "rotate": ["--rotate", "10"],
     "rotate-layer": ["--rotate-layer", "90"],
     "content-aware-scale": ["--content-aware-scale", "36x26"],

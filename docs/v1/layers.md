@@ -21,6 +21,10 @@ or **Keep Canvas Size**, which drops nothing: the layer overhangs at full
 size and only *looks* cropped. Layered sources (`.ora`, `.svg`) arrive
 flattened into the single layer.
 
+The same command sits on the layer list's own **right-click menu**, next to
+New Layer, Duplicate, Delete and Merge Down — the stack operations reachable
+where the stack already is, rather than only up in the Layer menu.
+
 Headless mirror: `photoslop-cli in.png --import-layer photo.jpg`
 (add `--expand-canvas` for the prompt's expand choice — it reveals every
 overhanging layer pixel, and is a no-op when everything fits)
@@ -28,6 +32,34 @@ overhanging layer pixel, and is a no-op when everything fits)
 photo** in the layer list, but scales each photo to fit the canvas — a
 `.photoslop` layer image must be exactly canvas-sized
 ([iPadOS](ipados.md#importing-a-photo-as-a-layer)).
+
+## Cropping one layer
+The Crop tool (`C`) resizes the *document* by default: the canvas shrinks to
+the box and every layer keeps all of its pixels, shifted (nothing is thrown
+away, which is what makes it instant). Tick **Layer only** in the tool options
+and the same rectangle does the opposite — it trims the **active layer** to
+the box and discards the pixels outside it, while the canvas size and every
+other layer stay exactly as they were.
+
+**Layer ▸ Crop Layer…** (`Ctrl+Alt+Shift+C`) is the menu route to the same
+command, and it takes whichever rectangle you already have: a selection if
+there is one, otherwise a box drawn with the crop tool. With neither, it is
+not a dead end — it switches you to the crop tool with **Layer only** already
+ticked, so you can draw the box and press `Enter`. A selection always wins
+over a leftover crop box, and a committed box is cleared so a later `Enter`
+cannot crop the document by surprise.
+
+Because it is a layer-local geometry change, a cropped Shape, Pen or Text
+layer drops to plain raster, the same way an arbitrary-angle layer rotation
+does — a cropped shape is no longer the shape its parameters describe. Undo
+restores the pixels *and* the parametric record. A box that misses the active
+layer entirely is refused rather than cropping it to nothing; the rectangle
+stays up so you can redraw it.
+
+Headless mirror: `photoslop-cli in.png --crop-layer X,Y,W,H` (add
+`--all-layers` to trim every visible layer, `--layer N` to pick one) — the
+rectangle is in document coordinates, exactly like `--crop`
+([CLI](cli.md)).
 
 ## Vector layers (parametric Shape and Pen)
 Shape and Pen layers remember their geometry (`vector_data`, saved in .ora

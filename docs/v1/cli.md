@@ -53,6 +53,7 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--resize` `WxH` | rescale the whole image |
 | `--canvas-size` `WxH` | grow/shrink the canvas (content centred) |
 | `--crop` `X,Y,W,H` | crop the canvas to a rectangle |
+| `--crop-layer` `X,Y,W,H` | trim the target layer(s) to a rectangle, canvas untouched |
 | `--rotate` `DEG` | rotate the whole image by any angle |
 | `--rotate-layer` `DEG` | rotate the target layer(s) about their centre |
 | `--content-aware-scale` `WxH` | seam-carve the target layer(s) |
@@ -117,6 +118,12 @@ Notes:
   what comes after.
 - `--content-aware-scale` retargets the canvas; in multi-layer documents each
   targeted layer carves by the canvas ratio.
+- `--crop` and `--crop-layer` are opposites: `--crop` resizes the canvas and
+  keeps every pixel (offsets shift), `--crop-layer` keeps the canvas and
+  discards the target layer's pixels outside the rectangle. Both take the
+  rectangle in document coordinates. `--crop-layer` fails if the rectangle
+  misses every target layer, and drops a cropped Shape/Pen/Text layer to
+  raster.
 - `--curves` points are in 0–255 space (`0:20,255:235` lifts blacks, dims
   whites).
 - Model ops need `--model-url` first — see
