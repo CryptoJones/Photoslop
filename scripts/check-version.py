@@ -8,6 +8,7 @@ import argparse
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -58,7 +59,13 @@ def _check_version_was_bumped(version: str, base_ref: str) -> None:
     """
     base = _base_version(base_ref)
     if base is None:
-        print(f"version {version}: base {base_ref} unreadable, bump check skipped")
+        # stderr, never stdout: this script's stdout IS its output — the bare
+        # version string that callers and tests parse. Diagnostics belong on
+        # the other stream or they corrupt it.
+        print(
+            f"version {version}: base {base_ref} unreadable, bump check skipped",
+            file=sys.stderr,
+        )
         return
     ours = tuple(int(part) for part in version.split("."))
     theirs = tuple(int(part) for part in base.split("."))

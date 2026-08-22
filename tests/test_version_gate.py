@@ -2,10 +2,13 @@
 """One release version drives packaging, runtime, docs, and bundles."""
 
 import importlib.metadata
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 from photoslop import __version__
 
@@ -59,13 +62,14 @@ def _assert_pinned_checkouts(portable: str) -> None:
     assert release.count("persist-credentials: false") == 1
 
 
-def _check(*args: str) -> subprocess.CompletedProcess:
+def _check(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, "scripts/check-version.py", *args],
         cwd=ROOT,
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
 
 
@@ -74,6 +78,57 @@ def test_runtime_distribution_and_release_declarations_agree():
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == __version__
     assert importlib.metadata.version("photoslop") == __version__
+
+
+def test_diagnostics_never_pollute_the_version_on_stdout():
+    """stdout IS this script's output — the bare version other tooling parses.
+
+    CI sets GITHUB_BASE_REF on every pull-request job, including the shallow
+    test clones where the base commit is absent, so the bump check's "skipped"
+    line is emitted on exactly the runs that also parse stdout. It has to go to
+    stderr, and this is the case that proves it.
+    """
+    env = {**os.environ, "GITHUB_BASE_REF": "no-such-base-branch"}
+    result = _check(env=env)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == __version__
+    assert "skipped" in result.stderr
+
+
+def _gate_module():
+    """Import check-version.py by path; its hyphen makes it unimportable."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "photoslop_check_version", ROOT / "scripts" / "check-version.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize(
+    ("base", "rejected"),
+    [
+        ("2.17.0", True),  # unchanged — the case the rule exists to catch
+        ("2.18.0", True),  # gone backwards
+        ("2.16.9", False),  # patch bump, the minimum the rule asks for
+        ("2.16.0", False),  # minor bump
+        ("1.99.99", False),  # major bump
+    ],
+)
+def test_bump_gate_compares_versions_not_strings(base, rejected):
+    """Stubbed base rather than a real ref: the comparison is the thing under
+    test, and a test that reads HEAD would fail for anyone who bumps the
+    version before committing it — which the rule now asks everyone to do."""
+    gate = _gate_module()
+    gate._base_version = lambda _ref: base
+    if rejected:
+        with pytest.raises(SystemExit) as exc:
+            gate._check_version_was_bumped("2.17.0", "main")
+        assert "does not advance" in str(exc.value)
+    else:
+        gate._check_version_was_bumped("2.17.0", "main")  # no raise
 
 
 def test_release_gate_rejects_wrong_tag():
