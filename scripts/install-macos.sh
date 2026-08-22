@@ -24,7 +24,14 @@ BUNDLE_ID="net.thenetwerk.photoslop"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Read the version straight out of pyproject.toml so the bundle never drifts.
+# Read the version only to name it in the build log. It is deliberately NOT
+# stamped into Info.plist: this bundle is a pointer, not a build. Its executable
+# execs the repo's run.sh, so the code it launches changes every time the repo
+# does, while a stamped plist freezes at install time and lies from then on —
+# the installed bundle sat at 1.15.0 for seven weeks while the app itself
+# reported 2.16. The app states its real version at runtime (title bar, About
+# box, --version); a launcher with no version of its own is honest where a
+# stale one is not.
 VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$REPO/photoslop/__about__.py" | head -1)"
 VERSION="${VERSION:-0.0.0}"
 
@@ -37,7 +44,7 @@ if [ ! -x "$REPO/run.sh" ]; then
   exit 1
 fi
 
-echo "Building $APP_NAME.app (v$VERSION) -> $DEST"
+echo "Building $APP_NAME.app -> $DEST (launcher for v$VERSION, unstamped)"
 
 # --- build the bundle in a temp dir, then swap it in atomically -------------
 WORK="$(mktemp -d)"
@@ -54,8 +61,6 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>$APP_NAME</string>
   <key>CFBundleDisplayName</key><string>$APP_NAME</string>
   <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
-  <key>CFBundleVersion</key><string>$VERSION</string>
-  <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>$APP_NAME</string>
   <key>CFBundleIconFile</key><string>$APP_NAME</string>

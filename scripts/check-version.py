@@ -48,7 +48,10 @@ def _base_version(base_ref: str) -> str | None:
     return None
 
 
-def _check_version_was_bumped(version: str, base_ref: str) -> None:
+RELEASE_BRANCH_PREFIX = "release/"
+
+
+def _check_version_was_bumped(version: str, base_ref: str, head_ref: str = "") -> None:
     """Every pull request raises the version — at minimum the patch.
 
     Two builds that report the same number are indistinguishable, so a change
@@ -57,6 +60,16 @@ def _check_version_was_bumped(version: str, base_ref: str) -> None:
     no longer describes the binary. The release commit still owns the tag and
     the CHANGELOG date; this only owns the number going up.
     """
+    if head_ref.startswith(RELEASE_BRANCH_PREFIX):
+        # The one honest exception. A release branch cuts the version that is
+        # already on main — it dates the CHANGELOG heading and tags it. Asking
+        # it to bump as well would mean tagging a version main never carried,
+        # so the rule would make the release wrong rather than keep it honest.
+        print(
+            f"version {version}: {head_ref} is a release branch, bump check skipped",
+            file=sys.stderr,
+        )
+        return
     base = _base_version(base_ref)
     if base is None:
         # stderr, never stdout: this script's stdout IS its output — the bare
@@ -121,6 +134,12 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag", help="Expected release tag, for example v1.30.0")
     parser.add_argument(
+        "--head-ref",
+        default=os.environ.get("GITHUB_HEAD_REF", ""),
+        help="Branch this change comes from. A 'release/' branch is exempt from the "
+        "bump rule. Defaults to $GITHUB_HEAD_REF, which GitHub sets on pull requests.",
+    )
+    parser.add_argument(
         "--base-ref",
         default=os.environ.get("GITHUB_BASE_REF"),
         help="Branch this change merges into; its version must be lower than ours. "
@@ -155,7 +174,7 @@ def main() -> int:
         raise SystemExit(f"iPad build {actual_build} should be {expected_build} for {version}")
 
     if args.base_ref:
-        _check_version_was_bumped(version, args.base_ref)
+        _check_version_was_bumped(version, args.base_ref, args.head_ref or "")
 
     _check_release_inputs()
 

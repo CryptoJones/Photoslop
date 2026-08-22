@@ -131,6 +131,29 @@ def test_bump_gate_compares_versions_not_strings(base, rejected):
         gate._check_version_was_bumped("2.17.0", "main")  # no raise
 
 
+@pytest.mark.parametrize(
+    ("head_ref", "exempt"),
+    [
+        ("release/v2.17.0", True),
+        ("release/anything", True),
+        ("feat/crop-layer", False),
+        ("", False),
+        ("not-a-release/v1", False),  # prefix must be at the start
+    ],
+)
+def test_release_branches_are_exempt_from_the_bump_rule(head_ref, exempt):
+    """A release branch cuts the version already on main — it dates the
+    CHANGELOG and tags it. Making it bump too would tag a version main never
+    carried, so the rule would break the release instead of protecting it."""
+    gate = _gate_module()
+    gate._base_version = lambda _ref: "2.17.0"  # identical: normally rejected
+    if exempt:
+        gate._check_version_was_bumped("2.17.0", "main", head_ref)  # no raise
+    else:
+        with pytest.raises(SystemExit):
+            gate._check_version_was_bumped("2.17.0", "main", head_ref)
+
+
 def test_release_gate_rejects_wrong_tag():
     result = _check("--tag", "v0.0.0")
     assert result.returncode != 0
