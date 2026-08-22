@@ -4,7 +4,23 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.17.0] — unreleased
+## [2.17.0] — 2026-08-22
+
+### Fixed
+- **The macOS launcher bundle no longer claims a version.** `install-macos.sh`
+  stamped `CFBundleVersion` into `Info.plist` from `__about__.py`, with a
+  comment saying this kept the bundle from drifting. It did the opposite. The
+  bundle is a *pointer*, not a build: its executable `exec`s the repo's
+  `run.sh`, so the code it launches changes every time the repo does, while the
+  stamped plist freezes at install time. The installed bundle sat at `1.15.0`
+  for seven weeks while the app it launched reported `2.16`, so Finder's Get
+  Info contradicted the title bar. A launcher has no version of its own — the
+  keys are gone, and the app states its real version at runtime (title bar,
+  About box, `photoslop-cli --version`).
+- **Release branches are exempt from the every-PR bump rule.** A `release/…`
+  branch cuts the version already on main: it dates the CHANGELOG heading and
+  tags it. Requiring a bump there would tag a version main never carried, so
+  the rule would have broken the first release after it landed — this one.
 
 ### Added
 - **Crop one layer without touching the canvas** (closes #331). The Crop tool
