@@ -51,6 +51,15 @@ sync — check an item here when its issue closes.
   work" looked like
   ([#273](https://github.com/CryptoJones/Photoslop/issues/273))
 
+### CI
+
+- [ ] The Windows test job runs about twice as slow as macOS for identical work
+  (25m10s vs 13m09s, measured 2026-08-22) and had been sitting within four
+  minutes of its 25-minute cap, so twenty new tests pushed it over and turned
+  `main` red on a green diff. Cap raised to 40 minutes as the unblock; the
+  slowness itself, and a cap that does not go stale every time the suite grows,
+  are unexamined ([#335](https://github.com/CryptoJones/Photoslop/issues/335))
+
 ### Filters
 
 - [ ] Pixel Sort (Glitch) filter — luma-band runs sorted along rows or

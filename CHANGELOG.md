@@ -17,6 +17,16 @@ follows [SemVer](https://semver.org).
   Info contradicted the title bar. A launcher has no version of its own — the
   keys are gone, and the app states its real version at runtime (title bar,
   About box, `photoslop-cli --version`).
+- **The Windows CI job no longer dies at its own timeout** (refs #335). The
+  test job's 25-minute cap was sized from run history in #322/#323, but the
+  suite grew and the cap did not: Windows had been running within four minutes
+  of the ceiling, and the tests added in #333 pushed it past. `main` went red
+  on a diff that was green on every other platform, and it read as a Windows
+  test failure when the Tests step had actually passed and the *job* had been
+  killed during cache cleanup. Raised to 40 minutes, which keeps the point of
+  the cap — a hung runner fails in minutes, not the six-hour default — while
+  leaving real headroom. Why Windows takes twice as long as macOS for the same
+  work is filed separately.
 - **Release branches are exempt from the every-PR bump rule.** A `release/…`
   branch cuts the version already on main: it dates the CHANGELOG heading and
   tags it. Requiring a bump there would tag a version main never carried, so
