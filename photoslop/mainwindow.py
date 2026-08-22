@@ -842,6 +842,10 @@ class MainWindow(QMainWindow):
         m_layer.addAction(self._act("Delete La&yer", None, lambda: self.layer_panel.delete_layer()))
         m_layer.addAction(self._act("Merge Do&wn", "Ctrl+E", lambda: self.layer_panel.merge_down()))
         m_layer.addAction(self._act("Merge &Visible", "Ctrl+Shift+E", self.action_merge_visible))
+        # High in the menu rather than down with the other layer-geometry
+        # commands: it is reached far more often than rotate or flip, and menu
+        # order is about reach, not taxonomy.
+        m_layer.addAction(self._act("Cro&p Layer…", "Ctrl+Alt+Shift+C", self.action_crop_layer))
         m_layer.addAction(
             self._act("S&tamp Visible", "Ctrl+Shift+Alt+E", self.action_stamp_visible)
         )
@@ -890,9 +894,6 @@ class MainWindow(QMainWindow):
             self._act("Lower Layer", "Ctrl+[", lambda: self.layer_panel.shift_layer(-1))
         )
         m_layer.addSeparator()
-        m_layer.addAction(
-            self._act("Cro&p Layer…", "Ctrl+Alt+Shift+C", self.action_crop_layer)
-        )
         m_layer.addAction(
             self._act("Rotate Layer 90° CW", None, lambda: self._layer_cmd(RotateLayerCommand, 90))
         )

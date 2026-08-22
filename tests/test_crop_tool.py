@@ -272,3 +272,18 @@ def test_selection_still_wins_over_a_stale_crop_box(qapp):
 
     assert doc.layers[0].image.size() == QSize(30, 20)
     assert doc.layers[0].offset == QPoint(10, 10)
+
+
+def test_crop_layer_sits_high_in_the_layer_menu(qapp):
+    """Placement is a feature here, not decoration: this is a frequently
+    reached command, so it lives in the top block rather than down with the
+    rotate/flip geometry commands."""
+    from PySide6.QtWidgets import QMenu
+
+    win = make_window(qapp)
+    layer_menu = next(
+        m for m in win.menuBar().findChildren(QMenu) if m.title().replace("&", "") == "Layer"
+    )
+    labels = [a.text().replace("&", "") for a in layer_menu.actions() if not a.isSeparator()]
+    assert labels.index("Crop Layer…") < labels.index("Stamp Visible")
+    assert labels.index("Crop Layer…") < labels.index("Rotate Layer 90° CW")
