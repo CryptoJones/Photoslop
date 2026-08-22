@@ -19,6 +19,7 @@ CASES = {
     "resize": ("30x20", "banana"),
     "canvas-size": ("80x60", "80"),
     "crop": ("5,5,20,15", "5,5"),
+    "crop-layer": ("5,5,20,15", "5,5"),
     "rotate": ("15", "sideways"),
     "rotate-layer": ("90", "sideways"),
     "content-aware-scale": ("40x30", "40"),
@@ -132,6 +133,24 @@ def test_canvas_size_and_crop(qapp, tmp_path):
     assert out_image(tmp_path).size() == QSize(80, 60)
     assert run([src, "--crop", "5,5,20,15", "--output", tmp_path / "out.png"]) == 0
     assert out_image(tmp_path).size() == QSize(20, 15)
+
+
+def test_crop_layer_trims_the_layer_and_keeps_the_canvas(qapp, tmp_path):
+    src = make_input(tmp_path)  # 60x40 layer on a 60x40 canvas
+    assert run([src, "--crop-layer", "5,5,20,15", "--output", tmp_path / "out.ora"]) == 0
+    loaded = load_ora(str(tmp_path / "out.ora"))
+    layer = loaded.layers[0]
+    assert layer.image.size() == QSize(20, 15)
+    assert (layer.offset.x(), layer.offset.y()) == (5, 5)
+    # the canvas is untouched, which is the whole difference from --crop
+    assert loaded.size == QSize(60, 40)
+
+
+def test_crop_layer_rejects_a_rectangle_that_misses_every_layer(qapp, tmp_path):
+    src = make_input(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--crop-layer", "500,500,20,15", "--output", tmp_path / "out.png"])
+    assert exc.value.code != 0
 
 
 def test_rotate_grows_bounding_box(qapp, tmp_path):

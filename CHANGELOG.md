@@ -4,6 +4,49 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [Unreleased]
+
+### Added
+- **Crop one layer without touching the canvas** (closes #331). The Crop tool
+  (`C`) resizes the *document*: the canvas shrinks to the box and every layer
+  keeps all of its pixels, shifted — nothing is discarded, which is exactly
+  what makes it instant. There was no way to say the other thing: trim *this
+  layer* back and leave the document alone. Tick **Layer only** in the crop
+  tool's options and the same rectangle does that — the active layer is cut to
+  the box, its pixels outside are discarded, and the canvas size and every
+  other layer are untouched.
+  - The two crops stay separate commands rather than one with a flag, because
+    they trade opposite things: `ResizeCanvasCommand` copies no pixels and
+    loses none, while `CropLayerCommand` keeps only the box. Undo stores the
+    pre-crop image, offset and mask as copy-on-write refs, so undoing restores
+    the exact pixels rather than re-deriving them. That is a whole-layer
+    reference rather than the tile delta the undo rule prefers, for the same
+    reason `ArbitraryRotateCommand` and Free Transform hold one: the buffer
+    changes *size*, and a delta cannot describe that. It costs nothing until
+    something writes to the buffer.
+  - A cropped Shape, Pen or Text layer drops to plain raster, the same way an
+    arbitrary-angle layer rotation does: a cropped shape is no longer the shape
+    its parameters describe, and leaving the record in place would let the next
+    geometry edit silently re-render the whole uncropped thing over the crop.
+    Undo brings the parametric record back with the pixels.
+  - A box that misses the active layer entirely is refused instead of cropping
+    it to nothing — the rectangle stays on screen to be redrawn. Cropping to an
+    empty layer is never what was meant, and it is the one input that would
+    otherwise destroy a layer in a single gesture.
+  - Headless mirror: `photoslop-cli in.png --crop-layer X,Y,W,H`, honouring
+    `--layer N` / `--all-layers`, and erroring when the rectangle misses every
+    target layer.
+- **The layer stack's operations are on the layer stack** (closes #332). Right-
+  clicking the Layers panel did nothing, so **New Layer from Image…** — the
+  command that brings image files in as layers — was reachable only from the
+  Layer menu, which is not where anyone looks while already pointing at the
+  layer list. The list now has a context menu carrying New Layer, New Layer
+  from Image…, Duplicate Layer, Delete Layer and Merge Down, with the
+  destructive entries disabled exactly where the panel buttons already refuse
+  them (the last layer cannot be deleted, the bottom layer has nothing to merge
+  into). The import goes back out through a signal to the window's existing
+  action, so both routes are the one code path and cannot drift.
+
 ## [2.16.0] — 2026-08-20
 
 ### Added

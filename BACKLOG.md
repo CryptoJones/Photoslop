@@ -88,6 +88,21 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] Cropping always resized the whole document — the Crop tool and Crop to
+  Selection both shrink the canvas and keep every layer's pixels, so there was
+  no way to trim one layer back and leave the document alone. The crop tool
+  gained a **Layer only** option, and a `CropLayerCommand` that discards the
+  active layer's pixels outside the box; cropped Shape/Pen/Text layers drop to
+  raster, and a box that misses the layer is refused. Mirrored as
+  `--crop-layer X,Y,W,H`
+  ([#331](https://github.com/CryptoJones/Photoslop/issues/331))
+- [x] The Layers panel had no context menu, so **New Layer from Image…** — the
+  command that imports image files as layers — was reachable only from the
+  Layer menu, never from the layer list you were already pointing at. The list
+  now carries New Layer, New Layer from Image…, Duplicate, Delete and Merge
+  Down, with the destructive entries disabled where the panel buttons already
+  refuse them
+  ([#332](https://github.com/CryptoJones/Photoslop/issues/332))
 - [x] The default brush was invisible on the default canvas — a hardcoded 8 px
   width that never scaled, landing about 1.5 pt wide at fit zoom on a phone.
   Default and ceiling are now fractions of the canvas's shorter side, and a

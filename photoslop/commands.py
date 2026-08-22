@@ -1087,3 +1087,50 @@ class ResizeCanvasCommand(QUndoCommand):
 
     def undo(self) -> None:
         self._apply(self.old_size, -self.delta)
+
+
+class CropLayerCommand(QUndoCommand):
+    """Trim one layer to a rectangle, leaving the canvas and every other
+    layer untouched.
+
+    The document crop (:class:`ResizeCanvasCommand`) shifts offsets and drops
+    nothing; this one is the opposite trade — it discards the pixels outside
+    the rectangle so a single layer can be cut back without resizing the
+    document. Undo restores the stored pre-crop refs exactly.
+    """
+
+    def __init__(self, doc: Document, layer: Layer, rect: QRect):
+        super().__init__("Crop Layer")
+        self.doc, self.layer = doc, layer
+        keep = QRect(rect).intersected(layer.bounds())
+        if keep.isEmpty():
+            raise ValueError("Crop Layer: the rectangle misses the layer entirely")
+        self.old_image = QImage(layer.image)
+        self.old_offset = QPoint(layer.offset)
+        self.old_mask = QImage(layer.mask) if layer.mask is not None else None
+        # Layer-local geometry changes invalidate doc-space parametric data,
+        # exactly as RotateLayerCommand does: a cropped shape is no longer the
+        # shape its vector/text record describes, so it drops to raster.
+        self.old_vector = deepcopy(layer.vector_data) if layer.vector_data else None
+        self.old_text = deepcopy(layer.text_data) if layer.text_data else None
+        local = keep.translated(-layer.offset)
+        self.new_image = layer.image.copy(local)
+        self.new_offset = keep.topLeft()
+        self.new_mask = layer.mask.copy(local) if layer.mask is not None else None
+
+    def _swap(self, image, offset, mask, vector, text) -> None:
+        layer = self.layer
+        dirty = layer.bounds()
+        layer.image = QImage(image)
+        layer.offset = QPoint(offset)
+        layer.mask = QImage(mask) if mask is not None else None
+        layer.vector_data = deepcopy(vector) if vector else None
+        layer.text_data = deepcopy(text) if text else None
+        layer.fx_cache = None
+        self.doc.notify_pixels(dirty.united(layer.bounds()))
+
+    def redo(self) -> None:
+        self._swap(self.new_image, self.new_offset, self.new_mask, None, None)
+
+    def undo(self) -> None:
+        self._swap(self.old_image, self.old_offset, self.old_mask, self.old_vector, self.old_text)

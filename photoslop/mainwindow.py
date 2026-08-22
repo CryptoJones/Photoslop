@@ -235,6 +235,7 @@ class MainWindow(QMainWindow):
         self.tabifyDockWidget(self._layers_dock, self._properties_dock)
         self.tabifyDockWidget(self._layers_dock, self._appearance_dock)
         self.layer_panel.appearanceRequested.connect(self._appearance_dock.raise_)
+        self.layer_panel.importRequested.connect(self.action_import_layer)
 
         self.history_view = QUndoView(self.undo_group)
         self.history_view.setEmptyLabel("Document opened")
@@ -515,6 +516,16 @@ class MainWindow(QMainWindow):
         contiguous.toggled.connect(lambda v: setattr(self.options, "contiguous", v))
         contig_act = bar.addWidget(contiguous)
 
+        crop_layer = QCheckBox("Layer only")
+        crop_layer.setChecked(self.options.crop_layer_only)
+        crop_layer.setToolTip(
+            "On: the crop trims the active layer and discards the pixels "
+            "outside the box. Off: it crops the whole document."
+        )
+        crop_layer.setAccessibleName("Crop the active layer only")
+        crop_layer.toggled.connect(lambda v: setattr(self.options, "crop_layer_only", v))
+        crop_layer_act = bar.addWidget(crop_layer)
+
         self._option_actions = {
             "brush": [
                 color_act,
@@ -552,7 +563,7 @@ class MainWindow(QMainWindow):
             "pen": [color_act, size_act],
             "dodge": [size_act, hard_act, opacity_act, spacing_act],
             "burn": [size_act, hard_act, opacity_act, spacing_act],
-            "crop": [],
+            "crop": [crop_layer_act],
             "move": [],
             "hand": [],
             "zoom": [],
@@ -572,6 +583,7 @@ class MainWindow(QMainWindow):
             flow_act,
             spacing_act,
             scatter_act,
+            crop_layer_act,
         ]
         self._option_widgets = {
             "size": size,
@@ -585,6 +597,7 @@ class MainWindow(QMainWindow):
             "fill_source": fill_source,
             "contiguous": contiguous,
             "eraser": eraser,
+            "crop_layer_only": crop_layer,
         }
 
         # PS-style bracket shortcuts; window-level, invisible in menus

@@ -170,6 +170,26 @@ def _op_crop_real(ctx: Context, value: str) -> None:
     ).redo()
 
 
+def _op_crop_layer(ctx: Context, value: str) -> None:
+    from PySide6.QtCore import QRect
+
+    from photoslop.commands import CropLayerCommand
+
+    x, y, w, h = _ints(value, 4, "--crop-layer")
+    if w < 1 or h < 1:
+        raise _ValueError("--crop-layer: width and height must be positive")
+    rect = QRect(x, y, w, h)
+    cropped = 0
+    for layer in _target_layers(ctx):
+        try:
+            CropLayerCommand(ctx.doc, layer, rect).redo()
+        except ValueError:
+            continue  # the box misses this layer; others may still overlap
+        cropped += 1
+    if not cropped:
+        raise _ValueError("--crop-layer: the rectangle misses every target layer")
+
+
 def _op_rotate(ctx: Context, value: str) -> None:
     from photoslop.commands import ArbitraryRotateCommand
 
@@ -1046,6 +1066,11 @@ OPS: dict = {
     "resize": ("WxH", "rescale the whole image", _op_resize),
     "canvas-size": ("WxH", "grow/shrink the canvas (content centred)", _op_canvas_size),
     "crop": ("X,Y,W,H", "crop the canvas to a rectangle", _op_crop_real),
+    "crop-layer": (
+        "X,Y,W,H",
+        "trim the target layer(s) to a rectangle, canvas untouched",
+        _op_crop_layer,
+    ),
     "rotate": ("DEG", "rotate the whole image by any angle", _op_rotate),
     "rotate-layer": ("DEG", "rotate the target layer(s) about their centre", _op_rotate_layer),
     "content-aware-scale": ("WxH", "seam-carve the target layer(s)", _op_cas),

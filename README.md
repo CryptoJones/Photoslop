@@ -44,7 +44,8 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
   selection, paste as new layer.
 - **Cross-image workflow** — multiple documents in tabs; copy a layer (or a
   selection) in one image and paste it into another.
-- **Geometry** — crop to selection, image resize (resamples every layer), canvas
+- **Geometry** — crop to selection, crop one layer without touching the canvas,
+  image resize (resamples every layer), canvas
   resize with 9-way anchor; rotate the image 90°/180° or flip it (layers and
   guides come along), rotate/flip individual layers about their centre, and
   Free Transform (`Ctrl+T`) for freehand scale/rotate/move with live preview
@@ -174,6 +175,7 @@ boundary, and Xcode instructions.
 | Zoom in / out / fit  | `Ctrl++` / `Ctrl+-` / `Ctrl+0` |
 | Free Transform       | `Ctrl+T` (Enter commits, Esc cancels) |
 | Crop tool            | `C` (drag, Enter commits) |
+| Crop the active layer | `C` with **Layer only** ticked in the tool options |
 | Crop to selection    | `Ctrl+Alt+C` |
 
 ## Design decisions

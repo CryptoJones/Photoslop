@@ -50,6 +50,7 @@ class ToolOptions:
         self.flow = 100  # per-stamp paint amount; opacity is the stroke ceiling
         self.scatter = 0  # random stamp offset, % of brush size
         self.pattern = None  # QImage tile from Edit > Define Pattern
+        self.crop_layer_only = False  # crop trims the active layer, not the canvas
 
     def swap_colors(self) -> None:
         self.foreground, self.background = self.background, self.foreground
@@ -357,7 +358,11 @@ class PencilTool(BrushTool):
 class CropTool(Tool):
     """Drag a crop rectangle; Enter or double-click commits (offset-shift
     crop, no pixel copies), Escape clears. The overlay shields the discard
-    area and shows a rule-of-thirds grid."""
+    area and shows a rule-of-thirds grid.
+
+    With the toolbar's *Layer only* option the same rectangle trims the active
+    layer instead of the document: the canvas and every other layer are left
+    alone, and the pixels outside the box are discarded."""
 
     name = "crop"
 
@@ -392,13 +397,25 @@ class CropTool(Tool):
         self.rect = None
 
     def commit(self, canvas) -> None:
-        from photoslop.commands import ResizeCanvasCommand
+        from photoslop.commands import CropLayerCommand, ResizeCanvasCommand
 
         rect = self.rect
         if canvas is None or rect is None or rect.isEmpty():
             return
         doc = canvas.doc
-        doc.undo_stack.push(ResizeCanvasCommand(doc, rect.size(), -rect.topLeft(), "Crop"))
+        if self.opts.crop_layer_only:
+            layer = doc.active_layer
+            if layer is None:
+                return
+            try:
+                command = CropLayerCommand(doc, layer, rect)
+            except ValueError:
+                # The box misses the layer entirely: cropping it to nothing is
+                # never what was meant, so the rectangle stays up to be redrawn.
+                return
+            doc.undo_stack.push(command)
+        else:
+            doc.undo_stack.push(ResizeCanvasCommand(doc, rect.size(), -rect.topLeft(), "Crop"))
         self.rect = None
         canvas.update()
 
@@ -408,7 +425,14 @@ class CropTool(Tool):
             return
         z = canvas.zoom
         r = QRectF(rect.x() * z, rect.y() * z, rect.width() * z, rect.height() * z)
-        full = QRectF(0, 0, doc.size.width() * z, doc.size.height() * z)
+        # The shield covers what the commit will throw away, so in layer-only
+        # mode it darkens the layer's own extent, not the whole document.
+        layer = doc.active_layer if self.opts.crop_layer_only else None
+        if layer is not None:
+            b = layer.bounds()
+            full = QRectF(b.x() * z, b.y() * z, b.width() * z, b.height() * z)
+        else:
+            full = QRectF(0, 0, doc.size.width() * z, doc.size.height() * z)
         shield = QPainterPath()
         shield.addRect(full)
         inner = QPainterPath()
