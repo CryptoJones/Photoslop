@@ -6,6 +6,15 @@ from photoslop.document import Document
 from photoslop.mainwindow import MainWindow
 
 
+def rect_path(x, y, w, h):
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QPainterPath
+
+    path = QPainterPath()
+    path.addRect(QRectF(x, y, w, h))
+    return path
+
+
 def make_window(qapp) -> MainWindow:
     win = MainWindow()
     win.add_document(Document.new(QSize(100, 80), 72.0, "c", QColor(255, 255, 255)))
@@ -181,3 +190,85 @@ def test_layer_only_checkbox_is_wired_and_shown_only_for_crop(qapp):
     assert crop_act.isVisible() is True
     win._set_tool("brush")
     assert crop_act.isVisible() is False
+
+
+def test_layer_menu_crops_the_active_layer_to_the_selection(qapp):
+    """The menu route: same command as the tool's Layer only option, driven by
+    an existing selection instead of a drag."""
+    from photoslop.layer import Layer
+
+    win = make_window(qapp)
+    doc = win.current_doc()
+    doc.layers.append(Layer.blank("Second", QSize(100, 80)))
+    doc.active_index = 1
+
+    doc.set_selection(rect_path(15, 10, 40, 30))
+    win.action_crop_layer()
+
+    assert doc.size == QSize(100, 80)  # canvas untouched
+    assert doc.layers[1].image.size() == QSize(40, 30)
+    assert doc.layers[1].offset == QPoint(15, 10)
+    assert doc.layers[0].image.size() == QSize(100, 80)
+    assert doc.undo_stack.command(0).text() == "Crop Layer"
+
+    doc.undo_stack.undo()
+    assert doc.layers[1].image.size() == QSize(100, 80)
+
+
+def test_layer_menu_crop_refuses_a_selection_that_misses_the_layer(qapp):
+    win = make_window(qapp)
+    doc = win.current_doc()
+    doc.layers[0].offset = QPoint(200, 200)
+    doc.set_selection(rect_path(0, 0, 20, 20))
+    win.action_crop_layer()
+    assert doc.undo_stack.count() == 0
+    assert "misses the active layer" in win.statusBar().currentMessage()
+
+
+def test_menu_crop_without_a_selection_arms_the_layer_crop_tool(qapp):
+    """No selection is not a dead end: the menu hands over the tool that draws
+    the box, already in layer-only mode, rather than doing nothing."""
+    win = make_window(qapp)
+    doc = win.current_doc()
+    doc.set_selection(None)
+    win._set_tool("brush")
+
+    win.action_crop_layer()
+
+    assert win._active_tool_name == "crop"
+    assert win.options.crop_layer_only is True
+    assert win._option_widgets["crop_layer_only"].isChecked() is True
+    assert doc.undo_stack.count() == 0  # nothing cropped yet — the drag decides
+    assert "drag a rectangle" in win.statusBar().currentMessage()
+
+
+def test_menu_crop_uses_a_crop_box_when_there_is_no_selection(qapp):
+    """A rectangle drawn with the crop tool is private tool state, not a
+    selection; the menu honours it rather than silently finding nothing."""
+    win = make_window(qapp)
+    editor = win.current_editor()
+    doc = editor.doc
+    doc.set_selection(None)
+    tool = win.tools["crop"]
+
+    drag(tool, doc, editor.canvas, QPointF(20, 10), QPointF(70, 60))
+    win.action_crop_layer()
+
+    assert doc.size == QSize(100, 80)  # canvas untouched
+    assert doc.layers[0].image.size() == QSize(50, 50)
+    assert doc.undo_stack.command(0).text() == "Crop Layer"
+    assert tool.rect is None  # consumed, so Enter cannot re-crop the document
+
+
+def test_selection_still_wins_over_a_stale_crop_box(qapp):
+    win = make_window(qapp)
+    editor = win.current_editor()
+    doc = editor.doc
+    tool = win.tools["crop"]
+
+    drag(tool, doc, editor.canvas, QPointF(0, 0), QPointF(90, 70))
+    doc.set_selection(rect_path(10, 10, 30, 20))
+    win.action_crop_layer()
+
+    assert doc.layers[0].image.size() == QSize(30, 20)
+    assert doc.layers[0].offset == QPoint(10, 10)

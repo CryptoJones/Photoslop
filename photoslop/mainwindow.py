@@ -891,6 +891,9 @@ class MainWindow(QMainWindow):
         )
         m_layer.addSeparator()
         m_layer.addAction(
+            self._act("Cro&p Layer…", "Ctrl+Alt+Shift+C", self.action_crop_layer)
+        )
+        m_layer.addAction(
             self._act("Rotate Layer 90° CW", None, lambda: self._layer_cmd(RotateLayerCommand, 90))
         )
         m_layer.addAction(
@@ -2952,6 +2955,53 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Crop needs a selection", 4000)
             return
         doc.undo_stack.push(ResizeCanvasCommand(doc, region.size(), -region.topLeft(), "Crop"))
+
+    def action_crop_layer(self) -> None:
+        """Trim the active layer to the selection, leaving the canvas alone.
+
+        The menu counterpart to the crop tool's *Layer only* option: the same
+        CropLayerCommand, driven by an existing selection rather than a fresh
+        drag — mirroring how Image ▸ Crop to Selection sits beside the crop
+        tool's document crop.
+        """
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        # A crop rectangle dragged with the crop tool is private tool state, not
+        # a selection — without this fallback the menu would silently do nothing
+        # for anyone who drew a box and then reached for the Layer menu, and the
+        # Enter that followed would commit a whole-document crop instead.
+        region = doc.selection_bounds()
+        if region is None:
+            crop_rect = getattr(self.tools.get("crop"), "rect", None)
+            region = crop_rect if crop_rect is not None and not crop_rect.isEmpty() else None
+        if region is None:
+            # Nothing to crop to yet. A dead-end message is useless here: the
+            # user asked to crop this layer, so hand them the tool that draws
+            # the box, already switched to layer mode, instead of making them
+            # go find it.
+            self._option_widgets["crop_layer_only"].setChecked(True)
+            self._set_tool("crop")
+            self.statusBar().showMessage(
+                "Crop Layer: drag a rectangle on the canvas, then press Enter "
+                "(only this layer is trimmed)",
+                8000,
+            )
+            return
+        from photoslop.commands import CropLayerCommand
+
+        try:
+            command = CropLayerCommand(doc, doc.active_layer, region)
+        except ValueError:
+            self.statusBar().showMessage("The selection misses the active layer", 6000)
+            return
+        doc.undo_stack.push(command)
+        crop = self.tools.get("crop")
+        if crop is not None and crop.rect is not None:
+            crop.rect = None  # consumed; a stale box would re-commit on Enter
+            editor = self.current_editor()
+            if editor is not None:
+                editor.canvas.update()
 
     def action_levels(self) -> None:
         doc = self.current_doc()

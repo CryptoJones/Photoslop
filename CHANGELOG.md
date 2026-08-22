@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [Unreleased]
+## [2.17.0] — unreleased
 
 ### Added
 - **Crop one layer without touching the canvas** (closes #331). The Crop tool
@@ -33,9 +33,36 @@ follows [SemVer](https://semver.org).
     it to nothing — the rectangle stays on screen to be redrawn. Cropping to an
     empty layer is never what was meant, and it is the one input that would
     otherwise destroy a layer in a single gesture.
+  - **Layer ▸ Crop Layer…** (`Ctrl+Alt+Shift+C`) is the menu route, sitting
+    with the other layer-local geometry commands — the Layer menu is where you
+    look for something that acts on a layer, and a tool-options checkbox is
+    not discoverable from there. It takes whichever rectangle already exists:
+    a selection, or a box drawn with the crop tool. With neither it does not
+    dead-end — it switches to the crop tool with **Layer only** already ticked
+    so the box can be drawn, because someone who just asked to crop a layer
+    should be handed the tool that crops it, not a message. A crop-tool box is
+    private tool state rather than a selection, so honouring it closes the trap
+    where the menu silently found nothing and the `Enter` that followed
+    committed a whole-document crop instead. A committed box is cleared for the
+    same reason.
   - Headless mirror: `photoslop-cli in.png --crop-layer X,Y,W,H`, honouring
     `--layer N` / `--all-layers`, and erroring when the rectangle misses every
     target layer.
+- **Every pull request now bumps the version, and CI enforces it.** Two builds
+  that report the same number cannot be told apart once they are running: the
+  title bar, the About box and `photoslop-cli --version` all name a release
+  that no longer describes the binary under test, which is exactly what makes
+  "does this build have the fix in it?" unanswerable. `scripts/check-version.py`
+  gained a `--base-ref` check that fails a pull request whose version does not
+  advance the base branch's; the `quality` job now clones full history so the
+  base commit is actually there to compare against. A base ref that cannot be
+  read — shallow clone, fork, local checkout with no remote — skips the check
+  rather than failing it, because a missing base is not a policy violation.
+  Tagging and dating the CHANGELOG heading remain a separate release commit;
+  this rule only owns the number going up. The rule is written down in the
+  README's Development section alongside the six declarations that have to
+  agree with `photoslop/__about__.py`.
+
 - **The layer stack's operations are on the layer stack** (closes #332). Right-
   clicking the Layers panel did nothing, so **New Layer from Image…** — the
   command that brings image files in as layers — was reachable only from the

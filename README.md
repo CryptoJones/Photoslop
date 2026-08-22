@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v2.16.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v2.17.0-orange)]()
 
 > **💚 Support Photoslop** — if this app saves you money or RAM, consider tossing a few bucks at the project:
 > **CashApp [`$cryptojones`](https://cash.app/$cryptojones)** · **Venmo [`@CryptoJones`](https://venmo.com/u/CryptoJones)**
@@ -176,6 +176,7 @@ boundary, and Xcode instructions.
 | Free Transform       | `Ctrl+T` (Enter commits, Esc cancels) |
 | Crop tool            | `C` (drag, Enter commits) |
 | Crop the active layer | `C` with **Layer only** ticked in the tool options |
+| Crop Layer… (menu route) | `Ctrl+Alt+Shift+C` |
 | Crop to selection    | `Ctrl+Alt+C` |
 
 ## Design decisions
@@ -191,6 +192,23 @@ uv sync --extra dev
 uv run ruff check .
 QT_QPA_PLATFORM=offscreen uv run pytest
 ```
+
+### Every pull request bumps the version
+
+At minimum the patch. Two builds that report the same number cannot be told
+apart once they are running — the title bar, the About box and
+`photoslop-cli --version` would all name a release that no longer describes
+the binary you are testing. CI enforces it: `scripts/check-version.py` fails a
+pull request whose version does not advance the base branch's.
+
+The number lives in `photoslop/__about__.py` and is mirrored in six places
+that must agree with it — the `CHANGELOG.md` heading, the README badge above,
+`docs/v1/README.md`, `docs/v1/ipados.md`, `docs/v1/feature-parity.md`, and
+both `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `ipados/project.yml`
+(the iPad build number is `major * 10000 + minor * 100 + patch`). Run
+`uv run python scripts/check-version.py --base-ref main` to check all of it at
+once. Tagging the release and dating the CHANGELOG heading stay a separate
+commit; this rule only owns the number going up.
 
 ## Documentation
 

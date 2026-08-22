@@ -41,6 +41,14 @@ and the same rectangle does the opposite — it trims the **active layer** to
 the box and discards the pixels outside it, while the canvas size and every
 other layer stay exactly as they were.
 
+**Layer ▸ Crop Layer…** (`Ctrl+Alt+Shift+C`) is the menu route to the same
+command, and it takes whichever rectangle you already have: a selection if
+there is one, otherwise a box drawn with the crop tool. With neither, it is
+not a dead end — it switches you to the crop tool with **Layer only** already
+ticked, so you can draw the box and press `Enter`. A selection always wins
+over a leftover crop box, and a committed box is cleared so a later `Enter`
+cannot crop the document by surprise.
+
 Because it is a layer-local geometry change, a cropped Shape, Pen or Text
 layer drops to plain raster, the same way an arbitrary-angle layer rotation
 does — a cropped shape is no longer the shape its parameters describe. Undo

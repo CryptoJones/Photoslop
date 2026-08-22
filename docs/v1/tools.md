@@ -73,7 +73,7 @@ See [Selections](selections.md) for refine, feather, and content-aware fill.
 | Move | `V` | Move layers (or whole groups); snaps to guides/grid. |
 | Vector Selection | `A` | Select native vector objects; Shift-click builds a multi-selection and drag applies one undoable transform. |
 | Direct Selection | `Shift+A` | Select an anchor in the current native vector selection for node editing. |
-| Crop | `C` | Drag, `Enter` commits (offset-shift crop — instant, no pixel copies). Tick **Layer only** in the tool options to trim the *active layer* to the box instead, leaving the canvas and every other layer alone — see [Layers](layers.md#cropping-one-layer). |
+| Crop | `C` | Drag, `Enter` commits (offset-shift crop — instant, no pixel copies). Tick **Layer only** in the tool options to trim the *active layer* to the box instead, leaving the canvas and every other layer alone — see [Layers](layers.md#cropping-one-layer). **Layer ▸ Crop Layer…** (`Ctrl+Alt+Shift+C`) is the menu route, and arms this tool in layer mode when nothing is selected yet. |
 | Free Transform | `Ctrl+T` | Scale/rotate/translate; `Ctrl`-drag corners for distort/perspective. See [Transforms](transforms.md). |
 | Liquify | `Y` | Push pixels under the brush (bilinear warp). |
 | Puppet Warp | `Shift+Y` | Place pins; anchored pins hold, dragged pins bend (IDW displacement). |
