@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v2.18.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v2.18.1-orange)]()
 
 > **💚 Support Photoslop** — if this app saves you money or RAM, consider tossing a few bucks at the project:
 > **CashApp [`$cryptojones`](https://cash.app/$cryptojones)** · **Venmo [`@CryptoJones`](https://venmo.com/u/CryptoJones)**
@@ -53,6 +53,12 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
 - **Film** — develop a scanned negative into the positive photograph, colour or
   black-and-white, detected from the negative itself (the orange mask of a
   colour negative is removed rather than inverted along with everything else).
+
+  <p align="center">
+    <img src="docs/film-negative.png" alt="A scanned Kodak Portra 400 frame developed into a positive by Photoslop's Film Negative filter, with the Filter menu open on the command" width="900">
+    <br>
+    <em>A Portra 400 frame, developed — mask removed, not merely inverted.</em>
+  </p>
 - **Rulers & guides** — rulers in pixels, millimetres, picas, or freedom
   units (inches); drag guides out of the rulers, drag them back off to
   remove. While a guide is dragged, a marker tracks it on the matching ruler
