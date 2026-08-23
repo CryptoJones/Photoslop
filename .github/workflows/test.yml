@@ -63,7 +63,13 @@ jobs:
           - os: windows-latest
             python: "3.12"
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    # Sized from real run history, like the other caps (#322, #323) — but the
+    # suite grows and the cap did not. Measured 2026-08-22: macOS 13m, Ubuntu
+    # 17-18m, Windows 25m10s, against a 25m cap that Windows had quietly been
+    # running within four minutes of. It went over, and main went red on a
+    # green diff. 40m keeps the point of the cap (a hung runner fails in
+    # minutes, not the six-hour default) while leaving Windows real headroom.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux Qt runtime libraries

@@ -210,6 +210,11 @@ both `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `ipados/project.yml`
 once. Tagging the release and dating the CHANGELOG heading stay a separate
 commit; this rule only owns the number going up.
 
+The one exception is a branch named `release/…`, which is exempt. A release
+branch cuts the version that is *already* on main — it dates the CHANGELOG
+heading and tags it. Requiring it to bump as well would tag a version main
+never carried, so the rule would break the release rather than protect it.
+
 ## Documentation
 
 The full v1 feature library — every tool, menu, format, and CLI operation —
