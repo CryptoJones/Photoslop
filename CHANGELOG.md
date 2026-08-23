@@ -4,9 +4,13 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.18.2] — unreleased
+## [2.18.3] — unreleased
 
 ### Changed
+- **The portable build pins `pyinstaller` at 6.22.0**, up from 6.21.0, with
+  `uv.lock` regenerated to match. PyInstaller is what freezes the Windows and
+  macOS portable bundles, so it is the one dev dependency whose version is
+  visible in a shipped artifact rather than only in CI.
 - **CI pins `astral-sh/setup-uv` at v10.0.1**, up from v9.0.0, across every
   workflow that provisions the toolchain. The action is what installs `uv`
   itself, so it sits upstream of the locked sync every job depends on —
