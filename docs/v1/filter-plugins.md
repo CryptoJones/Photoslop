@@ -7,7 +7,7 @@ parameter dialog), works in the **CLI** as `--filter "name:key=val,..."`,
 respects **selections and feathering**, participates in **actions** and
 **smart-filter replay** — all from one class and one entry point.
 
-Six built-ins ship in the box and double as living documentation — all pure
+Seven built-ins ship in the box and double as living documentation — all pure
 numpy, so none of them needs the unsafe-plugin opt-in below:
 
 | Filter | CLI name | Params |
@@ -18,6 +18,35 @@ numpy, so none of them needs the unsafe-plugin opt-in below:
 | Retro Console (8-Bit) | `retro-console` | `size` 1–64, `levels` 2–8, `dither` 0/1 |
 | Pixel Sort (Glitch) | `pixel-sort` | `low`/`high` 0–255, `vertical` 0/1, `reverse` 0/1 |
 | Datamosh + Chromatic Aberration | `datamosh` | `block` 4–64, `amount` 0–100, `drift` 0–64, `aberration` 0–20, `seed` 0–9999 |
+| Film Negative → Positive | `film-negative` | `mode` auto/color/mono, `clip` 0.0–5.0 |
+
+**Film Negative** develops a scanned negative into the photograph that was on
+the film. It is not an inversion. Two things make `255 - v` wrong:
+
+- A **colour negative carries an orange mask** — a dye layer in the film base
+  that corrects the dyes' unwanted absorptions — so a plain invert leaves the
+  familiar muddy cyan-blue image with the mask still in it.
+- Film records **transmittance**, so the inversion is a reciprocal rather than
+  a subtraction: the positive is `base / v`, which is a subtraction in *density*
+  space, not in scan values.
+
+Both fall to one operation — normalise each channel independently in reciprocal
+space between its own clipped extremes. Per-channel normalisation removes the
+mask (a constant density offset per channel is a constant factor here, and
+divides straight out); the reciprocal gets film's tonality right.
+
+A **black-and-white** negative has no mask and must stay neutral: normalising
+its channels independently would stretch whatever tint the acetate base and the
+scanner contributed into a colour cast. Mono negatives are developed from a
+single luma channel and written back neutral.
+
+`mode=auto` tells the two apart by mean per-pixel chroma — the mask puts a
+colour negative far from neutral everywhere, a monochrome scan sits near zero,
+and the threshold has wide margin on both sides. Set `mode` explicitly for the
+unusual frame: a badly faded or cross-processed negative, or a colour negative
+that was scanned to greyscale. `clip` is the percentage discarded from each end
+before normalising, so a dust speck, a scanner flare or the clear film edge
+cannot define the whole scale on its own.
 
 **Pixel Sort** gathers pixels whose luma falls inside the `low`..`high` band
 into contiguous runs along each row (or column) and sorts each run by
@@ -134,6 +163,10 @@ class MyFilter(Filter):
     params = (
         ParamSpec("amount", "Amount", "int", 0, 100, 50),
         #         key       label     type  min  max  default
+        ParamSpec("mode", "Mode", "choice", 0, 0, "auto", ("auto", "fast")),
+        #  a "choice" ignores min/max and takes a tuple of permitted values;
+        #  the dialog renders a combo box, the CLI validates membership, so a
+        #  mode never has to be smuggled in as a magic integer in a spin box
     )
 
     def apply(self, image, params):   # QImage, dict -> edit in place
@@ -144,8 +177,9 @@ class MyFilter(Filter):
   copy — never the resident buffer — so selections, feather blending, and
   undo happen outside the plugin (you write zero Qt UI and zero undo code).
 - `params` arrives validated against your `ParamSpec`s: the GUI builds
-  spinboxes from them, the CLI parses `key=val` against them, and both
-  reject out-of-range values before your code runs.
+  spinboxes (or a combo box, for `choice`) from them, the CLI parses `key=val`
+  against them, and both reject out-of-range or unknown values before your code
+  runs. Types are `int`, `float`, `str` and `choice`.
 - Buffers are **premultiplied ARGB32**; use
   `photoslop.npimage.view_u32(image)` for a zero-copy numpy view.
 

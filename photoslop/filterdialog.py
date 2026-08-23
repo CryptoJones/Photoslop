@@ -5,6 +5,7 @@ per ParamSpec, so a plugin gets a UI without writing any Qt."""
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -21,10 +22,14 @@ class FilterParamsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(cls.label)
         self._cls = cls
-        self._boxes: dict[str, QSpinBox | QDoubleSpinBox | QLineEdit] = {}
+        self._boxes: dict[str, QSpinBox | QDoubleSpinBox | QLineEdit | QComboBox] = {}
         form = QFormLayout(self)
         for spec in cls.params:
-            if spec.type == "str":
+            if spec.type == "choice":
+                box = QComboBox()
+                box.addItems(list(spec.choices))
+                box.setCurrentText(str(spec.default))
+            elif spec.type == "str":
                 box = QLineEdit(str(spec.default))
             elif spec.type == "int":
                 box = QSpinBox()
@@ -45,6 +50,12 @@ class FilterParamsDialog(QDialog):
 
     def values(self) -> dict:
         return {
-            key: (box.text() if isinstance(box, QLineEdit) else box.value())
+            key: (
+                box.currentText()
+                if isinstance(box, QComboBox)
+                else box.text()
+                if isinstance(box, QLineEdit)
+                else box.value()
+            )
             for key, box in self._boxes.items()
         }

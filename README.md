@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v2.17.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v2.18.0-orange)]()
 
 > **💚 Support Photoslop** — if this app saves you money or RAM, consider tossing a few bucks at the project:
 > **CashApp [`$cryptojones`](https://cash.app/$cryptojones)** · **Venmo [`@CryptoJones`](https://venmo.com/u/CryptoJones)**
@@ -50,6 +50,9 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
   guides come along), rotate/flip individual layers about their centre, and
   Free Transform (`Ctrl+T`) for freehand scale/rotate/move with live preview
   (Ctrl+drag corners/edges for distort, skew, and perspective).
+- **Film** — develop a scanned negative into the positive photograph, colour or
+  black-and-white, detected from the negative itself (the orange mask of a
+  colour negative is removed rather than inverted along with everything else).
 - **Rulers & guides** — rulers in pixels, millimetres, picas, or freedom
   units (inches); drag guides out of the rulers, drag them back off to
   remove. While a guide is dragged, a marker tracks it on the matching ruler
@@ -200,6 +203,13 @@ apart once they are running — the title bar, the About box and
 `photoslop-cli --version` would all name a release that no longer describes
 the binary you are testing. CI enforces it: `scripts/check-version.py` fails a
 pull request whose version does not advance the base branch's.
+
+After bumping locally, re-run `uv pip install -e . --no-deps` (or
+`uv sync --extra dev`). The installed distribution records the version at
+install time, so `importlib.metadata.version("photoslop")` keeps reporting the
+old one until you do, and `test_version_gate` fails on a bump that is otherwise
+correct. CI never sees this — it installs fresh — which is exactly why it is
+easy to lose ten minutes to locally.
 
 The number lives in `photoslop/__about__.py` and is mirrored in six places
 that must agree with it — the `CHANGELOG.md` heading, the README badge above,
