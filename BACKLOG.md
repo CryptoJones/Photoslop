@@ -97,6 +97,14 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] Nothing turned a scanned film negative into the photograph, and inverting
+  the pixels is not that operation — a colour negative's orange mask survives
+  `255 - v`, and film records transmittance so the inversion is a reciprocal.
+  Shipped **Film Negative → Positive**: per-channel normalisation in reciprocal
+  space (which removes the mask), a neutral luma path for black-and-white
+  negatives, and auto-detection between the two by mean per-pixel chroma with
+  an explicit override
+  ([#336](https://github.com/CryptoJones/Photoslop/issues/336))
 - [x] Cropping always resized the whole document — the Crop tool and Crop to
   Selection both shrink the canvas and keep every layer's pixels, so there was
   no way to trim one layer back and leave the document alone. The crop tool

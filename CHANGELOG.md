@@ -4,6 +4,47 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.18.0] — unreleased
+
+### Added
+- **Film Negative → Positive filter** (closes #336). Develops a scanned
+  negative into the photograph that was on the film, choosing between colour
+  and black-and-white by looking at the negative rather than asking.
+  - It is deliberately *not* an inversion, because two things make `255 - v`
+    wrong. A colour negative carries an **orange mask** — a dye layer in the
+    film base that corrects the dyes' unwanted absorptions — so a plain invert
+    leaves the familiar muddy cyan-blue image with the mask still in it. And
+    film records **transmittance**, so the inversion is a reciprocal, not a
+    subtraction: the positive is `base / v`, a subtraction in *density* space.
+  - Both fall to one operation — normalise each channel independently in
+    reciprocal space between its own clipped extremes. The per-channel part
+    removes the mask, because a constant density offset per channel is a
+    constant factor here and divides straight out; the reciprocal part gets
+    film's tonality right.
+  - A **black-and-white negative has no mask and must stay neutral.**
+    Normalising its channels independently would stretch whatever tint the
+    acetate base and the scanner contributed into a colour cast, so mono
+    negatives develop from a single luma channel and are written back neutral.
+  - `mode=auto` tells the two apart by mean per-pixel chroma: the mask puts a
+    colour negative far from neutral everywhere while a monochrome scan sits
+    near zero, with wide margin on both sides. `mode` overrides it for the
+    unusual frame — faded, cross-processed, or a colour negative scanned to
+    greyscale. `clip` (default 0.5%) is what each end discards before
+    normalising, so a dust speck, a scanner flare or the clear film edge cannot
+    define the whole scale on its own.
+  - Statistics come from chunked 256-bin histograms and the development runs
+    through a 256-entry lookup, so a large scan never materialises a full-size
+    float array (DD-001). Alpha is preserved, and transparent pixels are
+    excluded from the statistics so a soft-edged layer develops the same as the
+    same pixels at full opacity.
+  - Headless mirror: `photoslop-cli neg.tif --filter "film-negative:mode=auto"`.
+- **The filter plugin API gained a `choice` parameter type.** The Negative
+  filter needed a mode, and the alternative was smuggling one in as a magic
+  integer in a spin box. `ParamSpec(..., "choice", 0, 0, "auto", ("auto",
+  "color", "mono"))` renders a combo box in the generated dialog and validates
+  membership in the CLI, and is available to third-party plugins on the same
+  terms as the existing types.
+
 ## [2.17.0] — 2026-08-22
 
 ### Fixed

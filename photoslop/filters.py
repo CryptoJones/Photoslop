@@ -31,10 +31,14 @@ from photoslop.npimage import view_u32
 class ParamSpec(NamedTuple):
     key: str
     label: str
-    type: str  # "int" | "float"
+    type: str  # "int" | "float" | "str" | "choice"
     minimum: float
     maximum: float
-    default: float
+    default: float | str
+    # "choice" only: the permitted values. The dialog renders a combo box and
+    # the CLI validates membership, so a filter with a mode never has to encode
+    # one as a magic integer in a spin box.
+    choices: tuple[str, ...] = ()
 
 
 class Filter:
@@ -171,6 +175,12 @@ def parse_params(cls: type[Filter], text: str) -> dict:
                 else f"{cls.name} takes no parameters"
             )
         spec = specs[key]
+        if spec.type == "choice":
+            value = num.strip()
+            if value not in spec.choices:
+                raise ValueError(f"{cls.name}: {key} must be one of " + ", ".join(spec.choices))
+            values[key] = value
+            continue
         try:
             v = int(num) if spec.type == "int" else float(num)
         except ValueError as exc:
@@ -512,3 +522,166 @@ _BUILT_INS = (
     PixelSortFilter,
     DatamoshFilter,
 )
+
+
+class FilmNegativeFilter(Filter):
+    """Develop a scanned film negative into the positive photograph.
+
+    Not the same operation as inverting the pixels. A colour negative carries
+    an **orange mask** — a deliberate dye layer in the film base that corrects
+    the dyes' unwanted absorptions — so ``255 - v`` yields the familiar muddy
+    cyan-blue image with the mask still in it. And film records *transmittance*,
+    so the inversion is a reciprocal, not a subtraction: the positive is
+    ``base / v``, which is a subtraction in density space, not in scan values.
+
+    Both problems fall to one operation: normalise **each channel
+    independently** in reciprocal space between its own clipped extremes. The
+    per-channel part removes the orange mask (the mask is a constant offset per
+    channel, so it cancels), and the reciprocal part gets film's tonality right.
+
+    A black-and-white negative has no mask and must stay neutral — normalising
+    its channels independently would amplify whatever tint the acetate base and
+    the scanner contributed into a colour cast. So mono negatives are developed
+    from a single luma channel and written back neutral.
+
+    ``mode=auto`` tells the two apart by mean per-pixel chroma: the orange mask
+    puts a colour negative far from neutral everywhere (typically 40-80 of 255),
+    while a monochrome scan sits near zero. The threshold has generous margin on
+    both sides, and ``mode`` overrides it when a negative is unusual — a heavily
+    faded or cross-processed frame, or a colour negative scanned to greyscale.
+    """
+
+    name = "film-negative"
+    label = "Film Negative → Positive"
+    params = (
+        ParamSpec("mode", "Negative type", "choice", 0, 0, "auto", ("auto", "color", "mono")),
+        ParamSpec("clip", "Clip (%)", "float", 0.0, 5.0, 0.5),
+    )
+
+    # Mean per-pixel chroma, 0-255, above which a scan is treated as a colour
+    # negative. Measured margin is wide: an orange mask lands far above it and a
+    # greyscale scan at essentially zero, so the exact value is not delicate.
+    MONO_CHROMA_MAX = 24.0
+
+    def apply(self, image: QImage, params: dict) -> None:
+        mode = str(params.get("mode", "auto"))
+        clip = float(params.get("clip", 0.5))
+        arr = view_u32(image)
+        height = arr.shape[0]
+        if height == 0 or arr.shape[1] == 0:
+            return
+
+        # Pass 1 — 256-bin histograms and the chroma statistic, chunked so a
+        # large layer never materialises a full-size float array (DD-001).
+        hist = np.zeros((4, 256), dtype=np.int64)  # R, G, B, luma
+        chroma_sum = 0.0
+        opaque_count = 0
+        for y0 in range(0, height, CHUNK_ROWS):
+            chunk = arr[y0 : y0 + CHUNK_ROWS]
+            a = (chunk >> np.uint32(24)) & np.uint32(0xFF)
+            keep = a > 0
+            if not keep.any():
+                continue
+            r, g, b = _unpremultiplied_rgb(chunk, a)
+            r, g, b = r[keep], g[keep], b[keep]
+            for index, channel in enumerate((r, g, b)):
+                hist[index] += np.bincount(channel, minlength=256)
+            luma = np.rint(0.299 * r + 0.587 * g + 0.114 * b).astype(np.int64)
+            hist[3] += np.bincount(np.clip(luma, 0, 255), minlength=256)
+            top = np.maximum(np.maximum(r, g), b).astype(np.int32)
+            bottom = np.minimum(np.minimum(r, g), b).astype(np.int32)
+            chroma_sum += float((top - bottom).sum())
+            opaque_count += int(keep.sum())
+
+        if opaque_count == 0:
+            return
+        if mode == "auto":
+            chroma = chroma_sum / opaque_count
+            mode = "mono" if chroma <= self.MONO_CHROMA_MAX else "color"
+
+        channels = (3, 3, 3) if mode == "mono" else (0, 1, 2)
+        bounds = [_clipped_bounds(hist[index], opaque_count, clip) for index in channels]
+
+        # Pass 2 — develop. Reciprocal space, per channel, between its own
+        # clipped extremes: dense negative (low scan value) -> bright positive.
+        tables = [_negative_lut(lo, hi) for lo, hi in bounds]
+        for y0 in range(0, height, CHUNK_ROWS):
+            chunk = arr[y0 : y0 + CHUNK_ROWS]
+            a = (chunk >> np.uint32(24)) & np.uint32(0xFF)
+            r, g, b = _unpremultiplied_rgb(chunk, a)
+            if mode == "mono":
+                luma = np.clip(np.rint(0.299 * r + 0.587 * g + 0.114 * b).astype(np.int32), 0, 255)
+                out_r = out_g = out_b = tables[0][luma]
+            else:
+                out_r, out_g, out_b = tables[0][r], tables[1][g], tables[2][b]
+            _store_premultiplied(chunk, a, out_r, out_g, out_b)
+
+
+def _unpremultiplied_rgb(chunk: np.ndarray, a: np.ndarray):
+    """Straight (un-premultiplied) 0-255 channels for a packed ARGB chunk.
+
+    Statistics taken over premultiplied values would be pulled toward zero by
+    any partial alpha, so a soft-edged layer would develop differently from the
+    same pixels at full opacity.
+    """
+    r = ((chunk >> np.uint32(16)) & np.uint32(0xFF)).astype(np.int32)
+    g = ((chunk >> np.uint32(8)) & np.uint32(0xFF)).astype(np.int32)
+    b = (chunk & np.uint32(0xFF)).astype(np.int32)
+    alpha = a.astype(np.int32)
+    partial = (alpha > 0) & (alpha < 255)
+    if partial.any():
+        scale = np.where(partial, 255.0 / np.maximum(alpha, 1), 1.0)
+        r = np.clip(np.rint(r * scale), 0, 255).astype(np.int32)
+        g = np.clip(np.rint(g * scale), 0, 255).astype(np.int32)
+        b = np.clip(np.rint(b * scale), 0, 255).astype(np.int32)
+    return r, g, b
+
+
+def _store_premultiplied(chunk, a, r, g, b) -> None:
+    """Write straight channels back into a premultiplied ARGB chunk in place."""
+    alpha = a.astype(np.int32)
+    scale = alpha / 255.0
+    pr = np.clip(np.rint(r * scale), 0, 255).astype(np.uint32)
+    pg = np.clip(np.rint(g * scale), 0, 255).astype(np.uint32)
+    pb = np.clip(np.rint(b * scale), 0, 255).astype(np.uint32)
+    chunk[...] = (a << np.uint32(24)) | (pr << np.uint32(16)) | (pg << np.uint32(8)) | pb
+
+
+def _clipped_bounds(counts: np.ndarray, total: int, clip: float) -> tuple[int, int]:
+    """Lowest and highest scan value left after discarding ``clip`` percent of
+    the pixels from each end — the film base and any dust speck or scanner
+    flare that would otherwise define the whole range on its own."""
+    if total <= 0:
+        return 0, 255
+    drop = int(total * clip / 100.0)
+    cumulative = np.cumsum(counts)
+    lo = int(np.searchsorted(cumulative, drop, side="right"))
+    hi = int(np.searchsorted(cumulative, total - drop, side="left"))
+    lo = min(max(lo, 0), 255)
+    hi = min(max(hi, 0), 255)
+    if hi <= lo:  # a flat frame: nothing to stretch, keep the full range
+        return 0, 255
+    return lo, hi
+
+
+def _negative_lut(lo: int, hi: int) -> np.ndarray:
+    """256-entry lookup mapping scan value -> developed positive.
+
+    ``1/v`` puts the work in transmittance space, where film's response lives;
+    normalising that between the clipped extremes both inverts the image and
+    removes the channel's constant base density — the orange mask, for a colour
+    negative — because a constant offset in density is a constant factor here
+    and divides straight out.
+    """
+    values = np.arange(256, dtype=np.float64)
+    recip = 1.0 / np.maximum(values, 1.0)
+    top = 1.0 / max(lo, 1)  # densest kept value -> brightest positive
+    bottom = 1.0 / max(hi, 1)  # film base -> black
+    span = top - bottom
+    if span <= 0:
+        return np.zeros(256, dtype=np.int32)
+    scaled = (recip - bottom) / span
+    return np.clip(np.rint(scaled * 255.0), 0, 255).astype(np.int32)
+
+
+_BUILT_INS = (*_BUILT_INS, FilmNegativeFilter)
