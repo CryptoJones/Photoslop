@@ -21,7 +21,14 @@ numpy, so none of them needs the unsafe-plugin opt-in below:
 | Film Negative → Positive | `film-negative` | `mode` auto/color/mono, `clip` 0.0–5.0 |
 
 **Film Negative** develops a scanned negative into the photograph that was on
-the film. It is not an inversion. Two things make `255 - v` wrong:
+the film.
+
+![A scanned Kodak Portra 400 frame developed into a positive](../film-negative.png)
+
+*A 35mm Portra 400 frame — sprocket holes, rebate markings and all — developed
+in one step.*
+
+It is not an inversion. Two things make `255 - v` wrong:
 
 - A **colour negative carries an orange mask** — a dye layer in the film base
   that corrects the dyes' unwanted absorptions — so a plain invert leaves the

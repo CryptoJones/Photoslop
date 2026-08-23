@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.18.1] — unreleased
+
+### Changed
+- **The README and the filter reference now show the Film Negative filter
+  working**, on a real 35mm Kodak Portra 400 frame — sprocket holes, rebate
+  markings and all — developed in one step. The claim that the orange mask is
+  removed rather than inverted along with the picture is the kind of thing a
+  screenshot settles faster than a paragraph. Scaled to 1920x1024 (875 KB),
+  matching the weight of the screenshot already in `docs/`: still 2x sharp at
+  any width a README renders at, half the bytes of the retina original.
+
 ## [2.18.0] — 2026-08-23
 
 ### Added
