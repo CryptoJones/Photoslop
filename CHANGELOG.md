@@ -4,9 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.18.1] — unreleased
+## [2.18.2] — unreleased
 
 ### Changed
+- **CI pins `astral-sh/setup-uv` at v10.0.1**, up from v9.0.0, across every
+  workflow that provisions the toolchain. The action is what installs `uv`
+  itself, so it sits upstream of the locked sync every job depends on —
+  leaving it a major version behind is how a build starts resolving
+  differently than the lockfile says it should.
 - **The README and the filter reference now show the Film Negative filter
   working**, on a real 35mm Kodak Portra 400 frame — sprocket holes, rebate
   markings and all — developed in one step. The claim that the orange mask is
