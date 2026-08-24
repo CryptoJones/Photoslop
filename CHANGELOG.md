@@ -4,7 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.18.3] — unreleased
+## [2.18.4] — unreleased
+
+### Added
+- **BACKLOG.md carries the 2026-08-24 memory audit** — sixteen findings across
+  the desktop and iPhone/iPad editions (issues #340–#355), from true leaks
+  (desktop dialogs never destroyed, the recovery timer pinning discard-closed
+  documents, an iOS hosting controller minted per size-class flip) through
+  unbounded growth and avoidable import/open/export peak memory.
 
 ### Changed
 - **The portable build pins `pyinstaller` at 6.22.0**, up from 6.21.0, with
