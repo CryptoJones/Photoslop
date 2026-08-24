@@ -69,9 +69,9 @@ def load_extra(path: str, *, allow_large: bool = False) -> QImage | None:
     with Image.open(path) as im:
         validate_dimensions(*im.size, operation="image decode", buffers=2, allow_large=allow_large)
         rgba = im.convert("RGBA")
-        img = QImage(
-            rgba.tobytes(), rgba.width, rgba.height, rgba.width * 4, QImage.Format.Format_RGBA8888
-        )
+        # keep the bytes alive: this QImage constructor wraps, not copies
+        data = rgba.tobytes()
+        img = QImage(data, rgba.width, rgba.height, rgba.width * 4, QImage.Format.Format_RGBA8888)
         return img.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
 
 

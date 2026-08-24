@@ -85,5 +85,7 @@ def correct_lens(image: QImage, source_path: str) -> QImage:
         ys = np.clip(np.rint(coords[..., 1]).astype(np.int32), 0, h - 1)
         arr = arr[ys, xs]
 
-    out = QImage(np.ascontiguousarray(arr).tobytes(), w, h, w * 4, QImage.Format.Format_ARGB32)
+    # keep the bytes alive: this QImage constructor wraps, not copies
+    data = np.ascontiguousarray(arr).tobytes()
+    out = QImage(data, w, h, w * 4, QImage.Format.Format_ARGB32)
     return out.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)

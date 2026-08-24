@@ -144,6 +144,22 @@ def test_recovery_snapshot_round_trips_identity_and_stays_unsaved(qapp, tmp_path
     assert service.available() == []
 
 
+def test_recovery_offer_reads_metadata_without_decoding_pixels(qapp, tmp_path):
+    # the startup "Recover N documents?" question is answered from the
+    # .recovery.json sidecars alone; the .ora snapshots decode only when the
+    # caller actually iterates the documents
+    service = RecoveryService(str(tmp_path / "meta"))
+    doc = Document.new(QSize(12, 8), 72.0, "Camera edit", QColor("blue"))
+    service.write(doc)
+    summaries = service.summaries()
+    assert len(summaries) == 1
+    assert summaries[0]["document_id"] == doc.document_id
+    assert summaries[0]["name"] == "Camera edit"
+    recovered = list(service.iter_available())
+    assert len(recovered) == 1
+    assert recovered[0].name == "Recovered Camera edit"
+
+
 def test_recovery_retention_prunes_old_and_excess_documents(qapp, tmp_path):
     service = RecoveryService(str(tmp_path / "bounded"), max_documents=2, max_age_days=30)
     documents = [

@@ -691,35 +691,35 @@ class ArbitraryRotateCommand(QUndoCommand):
             )
             for layer in doc.layers
         ]
-        self.new_state: tuple | None = None
 
     def redo(self) -> None:
         from PySide6.QtCore import QPointF, QRectF
         from PySide6.QtGui import QTransform
 
         doc = self.doc
-        if self.new_state is None:
-            t = QTransform().rotate(self.angle)
-            w, h = self.old_size.width(), self.old_size.height()
-            bounds = t.mapRect(QRectF(0, 0, w, h))
-            new_size = QSize(round(bounds.width()), round(bounds.height()))
-            old_c = QPointF(w / 2.0, h / 2.0)
-            new_c = QPointF(new_size.width() / 2.0, new_size.height() / 2.0)
-            entries = []
-            for layer, old_img, old_offset, old_mask in self.old_layers:
-                new_img = old_img.transformed(t, Qt.TransformationMode.SmoothTransformation)
-                new_mask = _transform_mask(old_mask, t) if old_mask is not None else None
-                centre = QPointF(
-                    old_offset.x() + old_img.width() / 2.0, old_offset.y() + old_img.height() / 2.0
-                )
-                rotated = t.map(centre - old_c) + new_c
-                new_offset = QPoint(
-                    round(rotated.x() - new_img.width() / 2.0),
-                    round(rotated.y() - new_img.height() / 2.0),
-                )
-                entries.append((layer, new_img, new_offset, new_mask))
-            self.new_state = (new_size, entries)
-        new_size, entries = self.new_state
+        # Recomputed on every redo rather than memoized: the rotation is a pure
+        # function of the stored pre-rotation refs, and holding the rotated set
+        # too would park a second full-resolution document in the undo stack
+        # (same trade as ResizeImageCommand — CPU is cheaper than resident RAM).
+        t = QTransform().rotate(self.angle)
+        w, h = self.old_size.width(), self.old_size.height()
+        bounds = t.mapRect(QRectF(0, 0, w, h))
+        new_size = QSize(round(bounds.width()), round(bounds.height()))
+        old_c = QPointF(w / 2.0, h / 2.0)
+        new_c = QPointF(new_size.width() / 2.0, new_size.height() / 2.0)
+        entries = []
+        for layer, old_img, old_offset, old_mask in self.old_layers:
+            new_img = old_img.transformed(t, Qt.TransformationMode.SmoothTransformation)
+            new_mask = _transform_mask(old_mask, t) if old_mask is not None else None
+            centre = QPointF(
+                old_offset.x() + old_img.width() / 2.0, old_offset.y() + old_img.height() / 2.0
+            )
+            rotated = t.map(centre - old_c) + new_c
+            new_offset = QPoint(
+                round(rotated.x() - new_img.width() / 2.0),
+                round(rotated.y() - new_img.height() / 2.0),
+            )
+            entries.append((layer, new_img, new_offset, new_mask))
         doc.size = QSize(new_size)
         for layer, img, offset, mask in entries:
             layer.image = QImage(img)

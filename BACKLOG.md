@@ -70,29 +70,6 @@ sync — check an item here when its issue closes.
 
 ### Desktop
 
-- [ ] Modal dialogs are never destroyed after `exec()` — ~25 parented sites in
-  `mainwindow.py`; Export and the adjustment dialogs pin 48–96 MB of
-  flattened/pristine pixels each, and every leaked dialog pins its whole
-  document ([#340](https://github.com/CryptoJones/Photoslop/issues/340))
-- [ ] The recovery autosave `QTimer` is never removed on tab close, so a
-  discard-closed document (layers + 64-deep undo stack) leaks until app exit
-  ([#341](https://github.com/CryptoJones/Photoslop/issues/341))
-- [ ] `_run_filter` deep-copies both undo snapshots at full-layer rect where
-  COW `QImage` refs are free — undo entries land at 2× the necessary size
-  ([#342](https://github.com/CryptoJones/Photoslop/issues/342))
-- [ ] `ArbitraryRotateCommand` memoizes the rotated layer set alongside the
-  pre-rotation copies — recompute on redo like `ResizeImageCommand`
-  ([#343](https://github.com/CryptoJones/Photoslop/issues/343))
-- [ ] The startup recovery offer fully decodes up to 20 autosaved documents
-  just to ask "Recover?" — describe from `.recovery.json` metadata and load
-  after Yes ([#344](https://github.com/CryptoJones/Photoslop/issues/344))
-- [ ] The cursor cache is keyed by unclamped brush diameter while rendering
-  clamps at 64 px — pixel-identical `QCursor`s accumulate per zoom/size combo
-  ([#345](https://github.com/CryptoJones/Photoslop/issues/345))
-- [ ] Memory hygiene: `Diagnostics._fingerprints` grows forever and
-  mis-dedupes after trim; `SmudgeTool._pickup` lingers between strokes;
-  `lens.py`/`gmicpack.py` build non-copying `QImage`s over temporary bytes
-  ([#346](https://github.com/CryptoJones/Photoslop/issues/346))
 - [ ] Band the float32 transients in `gaussian_blur`/`unsharp_mask`/
   `blend_by_weights` the way `apply_point_color` already does — full-image
   planes peak at ~576 MB on 12 MP
@@ -152,6 +129,30 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] The 2026-08-24 desktop memory audit's fix batch, shipped in 2.19.0:
+  every modal dialog now dies after `exec()` via one `run_modal` helper —
+  Export and the adjustment dialogs had pinned 48–96 MB of flattened/pristine
+  pixels each, plus their whole document, until app exit
+  ([#340](https://github.com/CryptoJones/Photoslop/issues/340));
+  the recovery autosave timer is stopped and dropped on tab close, so a
+  discard-closed document no longer leaks its layers and undo stack
+  ([#341](https://github.com/CryptoJones/Photoslop/issues/341));
+  filter undo entries use copy-on-write `QImage` refs instead of two immediate
+  full-layer deep copies
+  ([#342](https://github.com/CryptoJones/Photoslop/issues/342));
+  `ArbitraryRotateCommand` recomputes on redo instead of parking a second
+  full-resolution document in the stack
+  ([#343](https://github.com/CryptoJones/Photoslop/issues/343));
+  the startup recovery offer asks from `.recovery.json` metadata and decodes
+  snapshots one at a time only after Yes
+  ([#344](https://github.com/CryptoJones/Photoslop/issues/344));
+  the cursor cache keys on the 64 px diameter it actually renders
+  ([#345](https://github.com/CryptoJones/Photoslop/issues/345));
+  and the hygiene trio — diagnostics fingerprints rebuilt on trim, smudge
+  pickup released between strokes, `QImage`-over-temporary-bytes bound to
+  locals in `lens.py`/`gmicpack.py`/`io_formats.py`
+  ([#346](https://github.com/CryptoJones/Photoslop/issues/346))
 
 - [x] Nothing turned a scanned film negative into the photograph, and inverting
   the pixels is not that operation — a colour negative's orange mask survives

@@ -114,7 +114,11 @@ class CursorRenderer:
         kind = "forbidden" if not intent.valid else intent.kind
         if kind in builtin and not intent.badge:
             return QCursor(builtin[kind])
-        key = (CursorIntent(kind, intent.badge, intent.diameter, intent.valid), round(dpr, 2))
+        # Key on the diameter _render actually draws: it clamps brushes at
+        # 64 px, so every zoomed size above that is pixel-identical and must
+        # share one cache entry instead of minting a new QCursor per size.
+        diameter = min(intent.diameter, 64) if kind == "brush" else 0
+        key = (CursorIntent(kind, intent.badge, diameter, intent.valid), round(dpr, 2))
         if key not in self._cache:
             self._cache[key] = self._render(key[0], max(1.0, dpr))
         return self._cache[key]

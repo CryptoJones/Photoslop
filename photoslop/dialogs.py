@@ -23,6 +23,22 @@ from PySide6.QtWidgets import (
 from photoslop import units
 from photoslop.units import PAPER_SIZES  # noqa: F401 — re-export; canonical home is units
 
+
+def run_modal(dialog):
+    """exec() a modal dialog, then schedule its destruction.
+
+    A parented dialog survives exec() as a child of its parent, and several of
+    ours hold flattened or pristine full-image snapshots plus a reference to
+    their document. deleteLater() runs only when control returns to the event
+    loop, so callers may read results off the widget immediately after this
+    returns.
+    """
+    try:
+        return dialog.exec()
+    finally:
+        dialog.deleteLater()
+
+
 _BACKGROUNDS = (
     ("White", QColor(255, 255, 255)),
     ("Transparent", None),

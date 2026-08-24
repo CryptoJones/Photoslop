@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.18.4] — unreleased
+## [2.18.5] — unreleased
 
 ### Added
 - **BACKLOG.md carries the 2026-08-24 memory audit** — sixteen findings across
@@ -30,6 +30,36 @@ follows [SemVer](https://semver.org).
   screenshot settles faster than a paragraph. Scaled to 1920x1024 (875 KB),
   matching the weight of the screenshot already in `docs/`: still 2x sharp at
   any width a README renders at, half the bytes of the retina original.
+
+### Fixed
+- **Modal dialogs are destroyed after use** (#340). Every parented dialog
+  survived `exec()` as a child of the main window; Export retained a full
+  flatten (48–96 MB on a 12 MP document), the Levels/Curves/Hue-Sat/Color
+  Balance/Point Color dialogs retained pristine full-layer snapshots, and any
+  leaked dialog pinned its entire document — layers, masks and undo stack —
+  even after the tab closed. One `run_modal` helper now `deleteLater()`s each
+  dialog once its results are read.
+- **Discard-closing a document frees it** (#341). The recovery autosave
+  `QTimer`'s lambda holds the document; the timer is now stopped and dropped
+  on tab close instead of surviving to app exit.
+- **Filter undo entries cost copy-on-write references, not deep copies**
+  (#342), halving the resident size of every filter application's undo entry.
+- **Rotate Arbitrary recomputes on redo** (#343) instead of holding both the
+  pre- and post-rotation document in one undo entry — the same CPU-for-RAM
+  trade Image Resize has always made.
+- **The startup recovery offer reads metadata, not pixels** (#344). It used to
+  fully decode up to 20 autosaved documents to ask "Recover?", then discard
+  them all on No; it now asks from the `.recovery.json` sidecars and decodes
+  one document at a time after Yes.
+- **The brush cursor cache is bounded** (#345): keys clamp to the 64 px the
+  renderer actually draws, so scrubbing size across zoom levels no longer
+  mints an endless run of pixel-identical `QCursor`s.
+- **Memory hygiene** (#346): the diagnostics dedup set follows its trimmed
+  records instead of growing forever (and no longer suppresses re-recording of
+  trimmed entries); the smudge tool releases its pickup buffer between
+  strokes; and the `QImage`-over-temporary-`bytes` constructions in
+  `lens.py`, `gmicpack.py` and `io_formats.py` bind their buffers to locals
+  that outlive the conversion.
 
 ## [2.18.0] — 2026-08-23
 
