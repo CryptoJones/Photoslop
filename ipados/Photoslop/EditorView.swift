@@ -177,6 +177,9 @@ struct EditorView: View {
       defaultFilename: "\(exportName).\(exportFormat.fileExtension)"
     ) { result in
       if case .failure(let error) = result { errorMessage = error.localizedDescription }
+      // The encoded bytes were only ever for this presentation; a large TIFF
+      // held here would sit in RAM until the next export (#352).
+      exportDocument = ExportedImageDocument()
     }
     .sheet(isPresented: $showImportOptions) {
       importSourceSheet(title: "Import Image", source: $importSource) { chosen in
@@ -1840,7 +1843,9 @@ struct EditorView: View {
       _ = store.fitTextLayer(current.layerID, to: current.rect)
     } else if expandingCanvas {
       if !store.placeLayerExpandingCanvas(current.layerID, in: current.rect) {
-        errorMessage = "The canvas cannot grow that large."
+        if store.memoryPressureNotice == nil {
+          errorMessage = "The canvas cannot grow that large."
+        }
         store.previewSuppressedLayerID = current.layerID
         return
       }

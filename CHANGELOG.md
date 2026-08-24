@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.18.5] — unreleased
+## [2.19.0] — unreleased
 
 ### Added
 - **BACKLOG.md carries the 2026-08-24 memory audit** — sixteen findings across
@@ -32,6 +32,33 @@ follows [SemVer](https://semver.org).
   any width a README renders at, half the bytes of the retina original.
 
 ### Fixed
+- **iPhone/iPad: Import Image decodes straight to the fitted size** (#348).
+  The #309 streamed decode had only reached batch photo import; the
+  single-image `.fit` path still materialised the full-resolution bitmap —
+  ~110 MB transient for a 12 MP photo where ~25 MB suffices, the same bug
+  class that caused the #309 jetsam kill. `normalizedImage` also gained a
+  fast path so already-normalised images (decoded PNGs, ImageIO thumbnails)
+  are no longer redrawn into a second full-size bitmap.
+- **iPhone/iPad: project open and save drain per layer** (#349).
+  `ProjectArchive`'s decode and encode loops now run each layer inside an
+  `autoreleasepool`, so a 20-layer document no longer approaches 2× its own
+  size in transients on open; the Files preview renders straight at ≤1024 px
+  instead of compositing the full document first.
+- **iPhone/iPad: the last export's bytes are released** (#352) when the
+  export sheet dismisses, instead of sitting in the view until the next
+  export.
+- **iPhone/iPad: the editor's overlay controller is handed back** (#353).
+  `PencilCanvas` now dismantles its `UIHostingController` when SwiftUI
+  discards the representable; before, every size-class flip (Split View,
+  Stage Manager) leaked one controller and its overlay graph.
+- **iPhone/iPad: every allocation door asks the memory budget first** (#354).
+  The `os_proc_available_memory` check that guarded batch photo import now
+  also guards single import, layer-from-file, Add Layer, Canvas Size, Resize
+  Document and place-expanding-canvas — whole-document operations ask for
+  layers × canvas — and refuse with the same honest explanation instead of
+  letting jetsam answer. (Duplicate Layer shares its bitmap and text layers
+  are tight glyph boxes; those stay unguarded because they allocate almost
+  nothing.)
 - **Modal dialogs are destroyed after use** (#340). Every parented dialog
   survived `exec()` as a child of the main window; Export retained a full
   flatten (48–96 MB on a 12 MP document), the Levels/Curves/Hue-Sat/Color
