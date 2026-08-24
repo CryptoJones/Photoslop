@@ -117,6 +117,15 @@ jobs:
           xcrun simctl bootstatus '${{ steps.simulator.outputs.ipad }}' -b
           xcrun simctl privacy '${{ steps.simulator.outputs.ipad }}' \
             grant photos-add io.ronin48.photoslop.ipad
+      # Tag builds run the unit bundle only (#360). The UI suite already ran
+      # in full on the pull request that put this tree on main; the tag build
+      # re-running it re-proves nothing and re-rolls the runner-starvation
+      # flakes that failed the v2.19.0 tag twice ("the editor never came up").
+      # portable.yml's verify-checks idiom does not transplant here: this
+      # workflow has no push-to-main trigger and a squash merge changes the
+      # SHA, so a tagged commit never has a prior run of its own to verify.
+      # The unit tests stay because they are fast, have never flaked, and run
+      # against the exact tree being shipped to TestFlight.
       - name: Run iPad tests
         working-directory: ipados
         run: |
@@ -126,6 +135,7 @@ jobs:
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.ipad }}' \
             -retry-tests-on-failure -test-iterations 2 \
+            ${{ github.ref_type == 'tag' && '-only-testing:PhotoslopIPadTests' || '' }} \
             CODE_SIGNING_ALLOWED=NO \
             test
       # Granted per device, immediately before its own tests. Booting both
@@ -151,6 +161,7 @@ jobs:
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.iphone }}' \
             -retry-tests-on-failure -test-iterations 2 \
+            ${{ github.ref_type == 'tag' && '-only-testing:PhotoslopIPadTests' || '' }} \
             CODE_SIGNING_ALLOWED=NO \
             test
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

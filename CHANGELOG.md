@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.19.1] — unreleased
+
+### Changed
+- **Tag builds run the iOS unit-test bundle only** (#360). The UI suite runs
+  in full on every pull request; re-running it in the tag build re-proved a
+  tree the PR had already proved and re-rolled the runner-starvation flakes
+  that failed the v2.19.0 tag build twice. The 162 unit tests still run in
+  the tag build, against the exact tree shipped to TestFlight.
+
 ## [2.19.0] — 2026-08-24
 
 ### Added
