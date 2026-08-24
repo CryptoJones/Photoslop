@@ -8,6 +8,35 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
+- [ ] Import Image decodes at full resolution — the #309 streamed decode
+  (`decodeImage(_:fittingInto:)`) was wired into batch photo import only; the
+  single-image `.fit` path still pays ~110 MB transient for a 12 MP photo
+  where ~25 MB would do, and layer import normalizes the same image twice
+  ([#348](https://github.com/CryptoJones/Photoslop/issues/348))
+- [ ] `ProjectArchive` decode/encode loops run without an `autoreleasepool`,
+  materialize every layer twice on open (~2× document transient), and render
+  the Files preview at full size before downscaling
+  ([#349](https://github.com/CryptoJones/Photoslop/issues/349))
+- [ ] `RasterLayer.source` keeps the decoded full-resolution original of every
+  placed layer for the whole session (DD-011's "for now") — ten placed 12 MP
+  photos ≈ 488 MB of sources on iPhone
+  ([#350](https://github.com/CryptoJones/Photoslop/issues/350))
+- [ ] One canvas-geometry undo step (`resizeCanvas`/`crop`/`scaleDocument`)
+  pins a whole document of old bitmaps; register per-layer diffs instead of
+  the full layer array
+  ([#351](https://github.com/CryptoJones/Photoslop/issues/351))
+- [ ] The last export's encoded bytes sit in `@State exportDocument` until the
+  next export ([#352](https://github.com/CryptoJones/Photoslop/issues/352))
+- [ ] `PencilCanvas`'s overlay `UIHostingController` is `addChild`'d and never
+  removed — one leaks per size-class flip (Split View, Stage Manager)
+  ([#353](https://github.com/CryptoJones/Photoslop/issues/353))
+- [ ] `canAffordLayer` (the `os_proc_available_memory` budget) is consulted
+  only by batch photo import; single import, file/text/duplicate layer, and
+  the document-geometry ops allocate unguarded
+  ([#354](https://github.com/CryptoJones/Photoslop/issues/354))
+- [ ] Composite render rasterizes each stroke-bearing layer's `PKDrawing` at
+  full canvas size every pass, and change detection serializes drawings
+  repeatedly ([#355](https://github.com/CryptoJones/Photoslop/issues/355))
 - [ ] The ⋯ More Actions menu on iPhone holds 15 actions and scrolls, with
   nothing to say that it scrolls — the Finger toggle and everything below the
   fold are effectively invisible. It is a system `UIMenu`, so no scroll
@@ -41,6 +70,33 @@ sync — check an item here when its issue closes.
 
 ### Desktop
 
+- [ ] Modal dialogs are never destroyed after `exec()` — ~25 parented sites in
+  `mainwindow.py`; Export and the adjustment dialogs pin 48–96 MB of
+  flattened/pristine pixels each, and every leaked dialog pins its whole
+  document ([#340](https://github.com/CryptoJones/Photoslop/issues/340))
+- [ ] The recovery autosave `QTimer` is never removed on tab close, so a
+  discard-closed document (layers + 64-deep undo stack) leaks until app exit
+  ([#341](https://github.com/CryptoJones/Photoslop/issues/341))
+- [ ] `_run_filter` deep-copies both undo snapshots at full-layer rect where
+  COW `QImage` refs are free — undo entries land at 2× the necessary size
+  ([#342](https://github.com/CryptoJones/Photoslop/issues/342))
+- [ ] `ArbitraryRotateCommand` memoizes the rotated layer set alongside the
+  pre-rotation copies — recompute on redo like `ResizeImageCommand`
+  ([#343](https://github.com/CryptoJones/Photoslop/issues/343))
+- [ ] The startup recovery offer fully decodes up to 20 autosaved documents
+  just to ask "Recover?" — describe from `.recovery.json` metadata and load
+  after Yes ([#344](https://github.com/CryptoJones/Photoslop/issues/344))
+- [ ] The cursor cache is keyed by unclamped brush diameter while rendering
+  clamps at 64 px — pixel-identical `QCursor`s accumulate per zoom/size combo
+  ([#345](https://github.com/CryptoJones/Photoslop/issues/345))
+- [ ] Memory hygiene: `Diagnostics._fingerprints` grows forever and
+  mis-dedupes after trim; `SmudgeTool._pickup` lingers between strokes;
+  `lens.py`/`gmicpack.py` build non-copying `QImage`s over temporary bytes
+  ([#346](https://github.com/CryptoJones/Photoslop/issues/346))
+- [ ] Band the float32 transients in `gaussian_blur`/`unsharp_mask`/
+  `blend_by_weights` the way `apply_point_color` already does — full-image
+  planes peak at ~576 MB on 12 MP
+  ([#347](https://github.com/CryptoJones/Photoslop/issues/347))
 - [ ] A user reports the desktop version "doesn't work" — no symptom, platform
   or install method yet, and it does not reproduce. The old leading guess is
   dead: the shipped 2.9.0 macOS artifact is Notarized Developer ID, accepted
