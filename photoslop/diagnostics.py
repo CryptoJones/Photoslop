@@ -97,8 +97,10 @@ class DiagnosticStore(QObject):
                 item for item in reversed(self._records) if self._fingerprint(item) == fingerprint
             )
         self._records.append(record)
-        self._fingerprints.add(fingerprint)
         self._records = self._records[-self.retention :]
+        # rebuilt, not appended: a fingerprint whose record trimmed out would
+        # otherwise suppress re-recording forever while the set grows unbounded
+        self._fingerprints = {self._fingerprint(item) for item in self._records}
         self._persist()
         self.recordAdded.emit(record)
         return record

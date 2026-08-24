@@ -110,23 +110,41 @@ class RecoveryService:
         for _saved_at, document_id in sorted(snapshots, reverse=True)[self.max_documents :]:
             self.clear(document_id)
 
-    def available(self) -> list:
+    def summaries(self) -> list[dict]:
+        """Metadata for every pending snapshot, without decoding any pixels.
+
+        The startup offer only needs a count and names; fully loading up to
+        max_documents OpenRaster files just to ask "Recover?" costs a
+        document-sized transient per snapshot that is thrown away on No.
+        """
         if not os.path.isdir(self.root):
             return []
         self.prune()
-        recovered = []
+        found = []
         for name in sorted(os.listdir(self.root)):
             if not name.endswith(".ora"):
                 continue
-            path = os.path.join(self.root, name)
+            document_id = name[: -len(".ora")]
+            metadata = self._metadata(document_id)
+            metadata.setdefault("document_id", document_id)
+            found.append(metadata)
+        return found
+
+    def iter_available(self):
+        """Yield recovered documents one at a time, skipping unreadable files,
+        so at most one decoded snapshot is in flight beyond what the caller
+        keeps."""
+        for metadata in self.summaries():
+            path = self.path_for(metadata["document_id"])
             try:
                 document = load_ora(path)
             except (OSError, ValueError, KeyError, ParseError, BadZipFile):
                 continue
             document.path = None
             document.name = f"Recovered {document.embedded_name}"
-            metadata = self._metadata(document.document_id)
             document.recovery_original_path = metadata.get("source_path")
             document.recovery_saved_at = metadata.get("saved_at")
-            recovered.append(document)
-        return recovered
+            yield document
+
+    def available(self) -> list:
+        return list(self.iter_available())

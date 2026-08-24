@@ -36,7 +36,9 @@ def _to_rgba(image: QImage) -> np.ndarray:
 
 def _write_back(image: QImage, rgba: np.ndarray) -> None:
     h, w = image.height(), image.width()
-    out = QImage(rgba.tobytes(), w, h, w * 4, QImage.Format.Format_RGBA8888)
+    # keep the bytes alive: this QImage constructor wraps, not copies
+    data = rgba.tobytes()
+    out = QImage(data, w, h, w * 4, QImage.Format.Format_RGBA8888)
     out = out.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
     from photoslop.npimage import view_u32
 
@@ -61,8 +63,10 @@ def _restore_shape(res: np.ndarray, alpha: np.ndarray, w: int, h: int) -> np.nda
     )
     rgba = np.clip(rgba, 0, 255).astype(np.uint8)
     if rgba.shape[:2] != (h, w):  # a command that resized: scale back
+        # keep the bytes alive: this QImage constructor wraps, not copies
+        data = rgba.tobytes()
         img = QImage(
-            rgba.tobytes(),
+            data,
             rgba.shape[1],
             rgba.shape[0],
             rgba.shape[1] * 4,
@@ -107,7 +111,9 @@ def _run_gmic_cli(rgba: np.ndarray, command: str) -> np.ndarray:
         src = os.path.join(tmp, "in.png")
         dst = os.path.join(tmp, "out.png")
         rgb = np.ascontiguousarray(rgba[..., :3])
-        img = QImage(rgb.tobytes(), w, h, w * 3, QImage.Format.Format_RGB888)
+        # keep the bytes alive: this QImage constructor wraps, not copies
+        data = rgb.tobytes()
+        img = QImage(data, w, h, w * 3, QImage.Format.Format_RGB888)
         img.save(src)
         proc = subprocess.run(
             ["gmic", src, *command.split(), "output", dst],

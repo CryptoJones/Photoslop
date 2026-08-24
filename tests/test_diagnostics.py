@@ -42,6 +42,18 @@ def test_diagnostics_persist_redacted_bounded_records(qapp, tmp_path):
     assert reloaded.records == (record,)
 
 
+def test_fingerprints_follow_the_trimmed_records(qapp, tmp_path):
+    # the dedup set is rebuilt on trim: it must not grow past retention, and a
+    # record whose entry trimmed out must be recordable again rather than
+    # silently suppressed by a stale fingerprint
+    store = DiagnosticStore(str(tmp_path / "diag"), retention=10)
+    for index in range(store.retention + 5):
+        store.record(f"op-{index}", f"summary {index}")
+    assert len(store._fingerprints) == len(store.records) == store.retention
+    trimmed_out = store.record("op-0", "summary 0")
+    assert store.records[-1] is trimmed_out
+
+
 def test_background_failure_is_durable_and_points_status_to_record(qapp, tmp_path):
     win = MainWindow(recovery_enabled=False)
     win.diagnostics = DiagnosticStore(str(tmp_path), parent=win)

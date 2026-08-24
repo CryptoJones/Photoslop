@@ -1285,6 +1285,14 @@ class SmudgeTool(BrushTool):
         self._pickup = None
         super().press(doc, canvas, pos, ev)
 
+    def release(self, doc, canvas, pos, ev):
+        super().release(doc, canvas, pos, ev)
+        self._pickup = None  # a brush-sized region copy; don't hold it between strokes
+
+    def cancel(self, doc=None) -> None:
+        super().cancel(doc)
+        self._pickup = None
+
     def _stroke_name(self) -> str:
         return "Smudge"
 

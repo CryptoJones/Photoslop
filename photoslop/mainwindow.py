@@ -56,7 +56,7 @@ from photoslop.commands import (
     RotateLayerCommand,
 )
 from photoslop.diagnostics import DiagnosticsDialog, DiagnosticStore
-from photoslop.dialogs import CanvasSizeDialog, NewDocumentDialog, ResizeImageDialog
+from photoslop.dialogs import CanvasSizeDialog, NewDocumentDialog, ResizeImageDialog, run_modal
 from photoslop.document import Document
 from photoslop.exportdialog import ExportDialog
 from photoslop.io_raw import is_raw_path, load_raw
@@ -1045,7 +1045,7 @@ class MainWindow(QMainWindow):
         return act
 
     def action_command_palette(self) -> None:
-        self.action_registry.palette(self).exec()
+        run_modal(self.action_registry.palette(self))
 
     def action_cancel_tasks(self) -> None:
         self.task_service.cancel_all()
@@ -1190,19 +1190,21 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self._offer_recovery)
 
     def _offer_recovery(self) -> None:
-        recovered = self.recovery_service.available()
-        if not recovered:
+        # Ask from metadata alone; the .ora snapshots are decoded one at a
+        # time only after Yes, so a No costs no pixel allocations at all.
+        pending = self.recovery_service.summaries()
+        if not pending:
             return
         answer = QMessageBox.question(
             self,
             "Recover autosaved documents",
-            f"Recover {len(recovered)} autosaved document(s)?",
+            f"Recover {len(pending)} autosaved document(s)?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if answer != QMessageBox.StandardButton.Yes:
             self.recovery_service.clear_all()
             return
-        for doc in recovered:
+        for doc in self.recovery_service.iter_available():
             doc.undo_stack.push(QUndoCommand("Recovered autosave"))
             self.add_document(doc)
 
@@ -1266,6 +1268,12 @@ class MainWindow(QMainWindow):
         self.undo_group.removeStack(doc.undo_stack)
         self.task_service.cancel_scope(doc.document_id)
         self.recovery_service.clear(doc.document_id)
+        timer = self._recovery_timers.pop(doc.document_id, None)
+        if timer is not None:
+            # its timeout lambda holds the document; left in place it pins a
+            # discard-closed document (layers + undo stack) until app exit
+            timer.stop()
+            timer.deleteLater()
         doc.close()
         self.layer_panel.set_document(None)
         self.adjust_panel.set_document(None)
@@ -1316,7 +1324,7 @@ class MainWindow(QMainWindow):
 
     def action_new(self) -> None:
         dialog = NewDocumentDialog(self, initial_size=self._clip_size_hint())
-        if dialog.exec():
+        if run_modal(dialog):
             name, size, dpi, background = dialog.values()
             from photoslop.resources import validate_dimensions
 
@@ -1339,7 +1347,7 @@ class MainWindow(QMainWindow):
                 from photoslop.rawdialog import RawDevelopDialog
 
                 dialog = RawDevelopDialog(path, self)
-                values = dialog.values() if dialog.exec() else None
+                values = dialog.values() if run_modal(dialog) else None
 
                 def develop(context, source=path, params=values):
                     context.progress(5, "Decoding RAW")
@@ -1460,7 +1468,7 @@ class MainWindow(QMainWindow):
         centre = box.addButton("Centre on Canvas", QMessageBox.ButtonRole.ActionRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(expand)
-        box.exec()
+        run_modal(box)
         clicked = box.clickedButton()
         if clicked is expand:
             return "expand"
@@ -1534,7 +1542,7 @@ class MainWindow(QMainWindow):
         dialog.setNameFilters(["OpenRaster (*.ora)", "Scalable Vector Graphics (*.svg)"])
         dialog.setDirectory(self._last_directory())
         dialog.selectFile(suggested_name)
-        if not dialog.exec():
+        if not run_modal(dialog):
             return "", ""
         paths = dialog.selectedFiles()
         return (paths[0] if paths else "", dialog.selectedNameFilter())
@@ -1551,7 +1559,7 @@ class MainWindow(QMainWindow):
                 probe_raw(path)  # junk raises -> graceful failure below
                 dialog = RawDevelopDialog(path, self)
                 # cancelled = camera defaults
-                img = dialog.developed() if dialog.exec() else load_raw(path)
+                img = dialog.developed() if run_modal(dialog) else load_raw(path)
                 from photoslop.resources import validate_dimensions
 
                 validate_dimensions(
@@ -1655,7 +1663,7 @@ class MainWindow(QMainWindow):
         if doc is None:
             return
         dialog = ExportDialog(doc, self)
-        if not dialog.exec():
+        if not run_modal(dialog):
             return
         fmt = dialog.chosen_format()
         suffix = dialog.suggested_suffix()
@@ -1866,9 +1874,12 @@ class MainWindow(QMainWindow):
         from photoslop.filterdialog import FilterParamsDialog
 
         dialog = FilterParamsDialog(cls, self)
-        if cls.params and not dialog.exec():
+        if cls.params and not run_modal(dialog):
             return
-        self.apply_plugin_filter(cls.name, dialog.values())
+        values = dialog.values()
+        if not cls.params:
+            dialog.deleteLater()  # run_modal never saw it
+        self.apply_plugin_filter(cls.name, values)
 
     def apply_plugin_filter(self, name: str, params: dict) -> None:
         """Run a registered filter plugin through the shared plumbing."""
@@ -1967,7 +1978,7 @@ class MainWindow(QMainWindow):
                 layer.image = image
                 doc.undo_stack.push(
                     LayerRegionCommand(
-                        doc, layer, rect, before.copy(rect), image.copy(rect), title, applied=True
+                        doc, layer, rect, QImage(before), QImage(image), title, applied=True
                     )
                 )
                 doc.notify_pixels(layer.bounds())
@@ -1981,7 +1992,7 @@ class MainWindow(QMainWindow):
         rect = layer.image.rect()
         doc.undo_stack.push(
             LayerRegionCommand(
-                doc, layer, rect, before.copy(rect), layer.image.copy(rect), title, applied=True
+                doc, layer, rect, QImage(before), QImage(layer.image), title, applied=True
             )
         )
         doc.notify_pixels(layer.bounds())
@@ -2105,7 +2116,7 @@ class MainWindow(QMainWindow):
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
-        if not dialog.exec():
+        if not run_modal(dialog):
             return
         self.apply_tilt_shift(
             doc,
@@ -2274,7 +2285,7 @@ class MainWindow(QMainWindow):
             return
         from photoslop.refinedialog import RefineSelectionDialog
 
-        RefineSelectionDialog(doc, self).exec()
+        run_modal(RefineSelectionDialog(doc, self))
 
     def action_select_all(self) -> None:
         doc = self.current_doc()
@@ -2398,7 +2409,7 @@ class MainWindow(QMainWindow):
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
         refresh()
-        if not dialog.exec():
+        if not run_modal(dialog):
             doc.undo_stack.undo()  # remove the inserted adjustment layer
 
     def action_drop_shadow(self) -> None:
@@ -2430,7 +2441,7 @@ class MainWindow(QMainWindow):
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
-        if not dialog.exec():
+        if not run_modal(dialog):
             return
         from photoslop.appearance import new_effect
         from photoslop.commands import SetLayerStyleCommand
@@ -2619,7 +2630,7 @@ class MainWindow(QMainWindow):
     def action_preferences(self) -> None:
         from photoslop.preferences import PreferencesDialog
 
-        PreferencesDialog(self).exec()
+        run_modal(PreferencesDialog(self))
         self.accessibility.apply()
         editor = self.current_editor()
         if editor is not None:  # colour settings may change the viewport
@@ -2877,7 +2888,7 @@ class MainWindow(QMainWindow):
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
-        if not dialog.exec():
+        if not run_modal(dialog):
             return
         from photoslop.commands import SetGroupPropsCommand
 
@@ -3010,7 +3021,7 @@ class MainWindow(QMainWindow):
             return
         from photoslop.levelsdialog import LevelsDialog
 
-        LevelsDialog(doc, self).exec()
+        run_modal(LevelsDialog(doc, self))
 
     def action_hue_saturation(self) -> None:
         doc = self.current_doc()
@@ -3018,7 +3029,7 @@ class MainWindow(QMainWindow):
             return
         from photoslop.huesatdialog import HueSatDialog
 
-        HueSatDialog(doc, self).exec()
+        run_modal(HueSatDialog(doc, self))
 
     def action_point_color(self) -> None:
         doc = self.current_doc()
@@ -3026,7 +3037,7 @@ class MainWindow(QMainWindow):
             return
         from photoslop.pointcolordialog import PointColorDialog
 
-        PointColorDialog(doc, self).exec()
+        run_modal(PointColorDialog(doc, self))
 
     def _toggle_soft_proof(self) -> None:
         from photoslop import color
@@ -3052,7 +3063,7 @@ class MainWindow(QMainWindow):
         from photoslop.colordialog import ProfilePickerDialog
 
         dialog = ProfilePickerDialog("Assign Profile" if assign else "Convert to Profile", self)
-        if not dialog.exec():
+        if not run_modal(dialog):
             return
         space = dialog.space()
         if space is None:
@@ -3069,7 +3080,7 @@ class MainWindow(QMainWindow):
             return
         from photoslop.curvesdialog import CurvesDialog
 
-        CurvesDialog(doc, self).exec()
+        run_modal(CurvesDialog(doc, self))
 
     def action_color_balance(self) -> None:
         doc = self.current_doc()
@@ -3077,7 +3088,7 @@ class MainWindow(QMainWindow):
             return
         from photoslop.colorbalancedialog import ColorBalanceDialog
 
-        ColorBalanceDialog(doc, self).exec()
+        run_modal(ColorBalanceDialog(doc, self))
 
     def action_content_aware_scale(self) -> None:
         doc = self.current_doc()
@@ -3105,7 +3116,7 @@ class MainWindow(QMainWindow):
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
-        if not dialog.exec():
+        if not run_modal(dialog):
             return
         target_w, target_h = w_spin.value(), h_spin.value()
         if (target_w, target_h) == (layer.image.width(), layer.image.height()):
@@ -3132,7 +3143,7 @@ class MainWindow(QMainWindow):
         if doc is None:
             return
         dialog = ResizeImageDialog(doc.size, self)
-        if dialog.exec() and dialog.value() != doc.size:
+        if run_modal(dialog) and dialog.value() != doc.size:
             try:
                 doc.undo_stack.push(
                     ResizeImageCommand(
@@ -3147,7 +3158,7 @@ class MainWindow(QMainWindow):
         if doc is None:
             return
         dialog = CanvasSizeDialog(doc.size, self)
-        if dialog.exec():
+        if run_modal(dialog):
             new_size, delta = dialog.value()
             if new_size != doc.size:
                 try:
@@ -3303,13 +3314,13 @@ class MainWindow(QMainWindow):
                 guidance="Disable or update this optional plugin, then restart Photoslop.",
                 context={"entry_point_group": failure.group},
             )
-        DiagnosticsDialog(self.diagnostics, self).exec()
+        run_modal(DiagnosticsDialog(self.diagnostics, self))
 
     def action_task_monitor(self) -> None:
-        TaskMonitorDialog(self.task_service, self).exec()
+        run_modal(TaskMonitorDialog(self.task_service, self))
 
     def action_about(self) -> None:
-        self._build_about().exec()
+        run_modal(self._build_about())
 
     def action_credits(self) -> None:
         QMessageBox.information(self, "Credits", CREDITS_TEXT)

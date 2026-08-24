@@ -38,6 +38,19 @@ def test_custom_cursor_renders_at_hidpi_with_center_hotspot(qapp):
     assert cursor.hotSpot().x() == cursor.hotSpot().y() == 16
 
 
+def test_oversize_brush_diameters_share_one_cache_entry(qapp):
+    # _render clamps brushes at 64 px, so every zoomed diameter above that is
+    # pixel-identical; the cache key must clamp the same way or a session that
+    # scrubs size across zoom levels mints an unbounded run of QCursors.
+    renderer = CursorRenderer()
+    renderer.cursor(CursorIntent("brush", diameter=80))
+    renderer.cursor(CursorIntent("brush", diameter=300))
+    renderer.cursor(CursorIntent("brush", diameter=64))
+    assert len(renderer._cache) == 1
+    renderer.cursor(CursorIntent("brush", diameter=63))
+    assert len(renderer._cache) == 2
+
+
 def test_every_toolbar_tool_has_a_nonempty_cursor_intent(qapp):
     win = _window(qapp)
     canvas = win.current_editor().canvas
