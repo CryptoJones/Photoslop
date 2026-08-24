@@ -68,6 +68,11 @@ sync — check an item here when its issue closes.
 
 ### CI
 
+- [x] Tag builds re-ran the full simulator UI suite and re-rolled its flakes —
+  the v2.19.0 tag failed twice on "the editor never came up" for a tree that
+  had passed the identical workflow on its PR an hour earlier. Tag builds now
+  run the unit bundle only; UI tests remain on every PR
+  ([#360](https://github.com/CryptoJones/Photoslop/issues/360))
 - [ ] The Windows test job runs about twice as slow as macOS for identical work
   (25m10s vs 13m09s, measured 2026-08-22) and had been sitting within four
   minutes of its 25-minute cap, so twenty new tests pushed it over and turned
