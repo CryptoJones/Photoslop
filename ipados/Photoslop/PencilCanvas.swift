@@ -74,6 +74,17 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
     return view
   }
 
+  static func dismantleUIView(_ view: CanvasHostView, coordinator: Coordinator) {
+    // The overlay controller was adopted by an owning view controller that can
+    // outlive this representable (the editor rebuilds PencilCanvas on every
+    // size-class flip); without this hand-back each rebuild leaks one
+    // UIHostingController and its SwiftUI overlay graph (#353).
+    let host = coordinator.overlayHost
+    host.willMove(toParent: nil)
+    host.view.removeFromSuperview()
+    host.removeFromParent()
+  }
+
   func updateUIView(_ view: CanvasHostView, context: Context) {
     view.onZoomScaleChanged = onZoomScaleChanged
     context.coordinator.parent = self

@@ -231,12 +231,27 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   /// composite, save, and show the user why it stopped rather than dying while
   /// explaining itself.
   static func canAffordLayer(canvas: CGSize, reserve: Int = 192 * 1_024 * 1_024) -> Bool {
+    canAffordLayers(1, canvas: canvas, reserve: reserve)
+  }
+
+  /// `canAffordLayer` for operations that rebuild `count` layers at once —
+  /// Canvas Size, Resize Document, place-expanding-canvas — where the old and
+  /// new documents coexist until the mutation lands.
+  static func canAffordLayers(
+    _ count: Int, canvas: CGSize, reserve: Int = 192 * 1_024 * 1_024
+  ) -> Bool {
     let available = availableMemoryBytes()
     // 0 means the platform declined to answer; do not refuse work over that.
     guard available > 0 else { return true }
     let layerBytes = Int(canvas.width.rounded()) * Int(canvas.height.rounded()) * 4
-    return available > layerBytes * 2 + reserve
+    return available > layerBytes * (count + 1) + reserve
   }
+
+  /// The refusal shown when a memory budget check says no (#354): the same
+  /// honest stop the batch importer makes, for every other allocation door.
+  static let memoryRefusal =
+    "There is not enough free memory for that right now. "
+    + "Close other apps or documents and try again."
 
   /// Called once the choice has been offered, so it is not asked again when the
   /// view reappears after a sheet, a rotation, or a return from the background.
@@ -323,6 +338,10 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   /// difference, so a document resized either way lands identically.
   func resizeCanvas(to size: CGSize) {
     guard ProjectArchive.isValidCanvas(size), size != canvasSize else { return }
+    guard Self.canAffordLayers(layers.count, canvas: size) else {
+      memoryPressureNotice = Self.memoryRefusal
+      return
+    }
     let offset = CGPoint(
       x: ((size.width - canvasSize.width) / 2).rounded(),
       y: ((size.height - canvasSize.height) / 2).rounded()
@@ -359,6 +378,10 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   /// Mirrors `photoslop-cli --resize WxH`.
   func scaleDocument(to size: CGSize) {
     guard ProjectArchive.isValidCanvas(size), size != canvasSize else { return }
+    guard Self.canAffordLayers(layers.count, canvas: size) else {
+      memoryPressureNotice = Self.memoryRefusal
+      return
+    }
     let sx = size.width / canvasSize.width
     let sy = size.height / canvasSize.height
     let transform = CGAffineTransform(scaleX: sx, y: sy)
@@ -591,8 +614,28 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   func importImage(
     data: Data, suggestedName: String? = nil, sizing: ImportSizing = .fit
   ) throws {
-    let normalized = try ProjectArchive.decodeImage(data)
+    // Refuse before decoding: the decode IS the allocation that kills (#309).
+    // The canvas this import must afford is the source's own size when the
+    // canvas will grow to it, and the current canvas otherwise.
+    let decodedSize = ProjectArchive.imageSize(of: data)
+    let demand = sizing == .expandCanvas ? (decodedSize ?? canvasSize) : canvasSize
+    guard Self.canAffordLayer(canvas: demand) else {
+      throw ImportError.resourceLimit(Self.memoryRefusal)
+    }
     let name = suggestedName ?? "Imported image"
+    if sizing == .fit {
+      // Decode straight to the fitted extent (#309): the full-resolution
+      // bitmap is never materialised. The other sizings genuinely need every
+      // source pixel, so they keep the full decode below.
+      let fitted = try ProjectArchive.decodeImage(data, fittingInto: canvasSize)
+      mutate(actionName: "Import Image") {
+        let layer = RasterLayer(name: name, image: Self.fitted(fitted, into: canvasSize))
+        layers = [layer]
+        activeLayerID = layer.id
+      }
+      return
+    }
+    let normalized = try ProjectArchive.decodeImage(data)
     switch sizing {
     case .expandCanvas:
       guard ProjectArchive.isValidCanvas(normalized.size) else {
@@ -619,11 +662,8 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
         activeLayerID = layer.id
       }
     case .fit:
-      mutate(actionName: "Import Image") {
-        let layer = RasterLayer(name: name, image: Self.fitted(normalized, into: canvasSize))
-        layers = [layer]
-        activeLayerID = layer.id
-      }
+      // handled above with a size-bounded decode
+      break
     }
   }
 
@@ -693,6 +733,14 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
       throw ImportError.resourceLimit(
         "A project holds \(ProjectArchive.maximumLayers) layers and this document has "
           + "\(layers.count).")
+    }
+    // A placed layer costs its canvas-sized bitmap plus the retained source
+    // (DD-011), so the budget question is asked about the larger of the two.
+    let demand = CGSize(
+      width: max(canvasSize.width, image.size.width),
+      height: max(canvasSize.height, image.size.height))
+    guard Self.canAffordLayer(canvas: demand) else {
+      throw ImportError.resourceLimit(Self.memoryRefusal)
     }
     let normalized = Self.normalizedImage(image)
     let rect = Self.centredRect(for: normalized.size, in: canvasSize)
@@ -769,6 +817,10 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     guard rect.width >= 1, rect.height >= 1 else { return false }
     let union = rect.union(CGRect(origin: .zero, size: canvasSize)).integral
     guard ProjectArchive.isValidCanvas(union.size) else { return false }
+    guard Self.canAffordLayers(layers.count, canvas: union.size) else {
+      memoryPressureNotice = Self.memoryRefusal
+      return false
+    }
     let offset = CGPoint(x: -union.origin.x, y: -union.origin.y)
     let translation = CGAffineTransform(translationX: offset.x, y: offset.y)
     let source = layer.source ?? layer.image
@@ -894,6 +946,10 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   }
 
   func addLayer() {
+    guard Self.canAffordLayer(canvas: canvasSize) else {
+      memoryPressureNotice = Self.memoryRefusal
+      return
+    }
     mutate(actionName: "Add Layer") {
       let image = Self.solidImage(size: canvasSize, color: .clear)
       let layer = RasterLayer(name: uniqueName(base: "Paint Layer"), image: image)
@@ -1127,6 +1183,11 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   }
 
   static func normalizedImage(_ image: UIImage) -> UIImage {
+    // Already normalised — decoded PNGs and ImageIO thumbnails land here.
+    // Redrawing would allocate a second full-size bitmap for zero pixel change.
+    if image.imageOrientation == .up, image.scale == 1, image.cgImage != nil {
+      return image
+    }
     let format = UIGraphicsImageRendererFormat()
     format.scale = 1
     format.opaque = false

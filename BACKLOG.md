@@ -8,15 +8,6 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
-- [ ] Import Image decodes at full resolution — the #309 streamed decode
-  (`decodeImage(_:fittingInto:)`) was wired into batch photo import only; the
-  single-image `.fit` path still pays ~110 MB transient for a 12 MP photo
-  where ~25 MB would do, and layer import normalizes the same image twice
-  ([#348](https://github.com/CryptoJones/Photoslop/issues/348))
-- [ ] `ProjectArchive` decode/encode loops run without an `autoreleasepool`,
-  materialize every layer twice on open (~2× document transient), and render
-  the Files preview at full size before downscaling
-  ([#349](https://github.com/CryptoJones/Photoslop/issues/349))
 - [ ] `RasterLayer.source` keeps the decoded full-resolution original of every
   placed layer for the whole session (DD-011's "for now") — ten placed 12 MP
   photos ≈ 488 MB of sources on iPhone
@@ -25,15 +16,6 @@ sync — check an item here when its issue closes.
   pins a whole document of old bitmaps; register per-layer diffs instead of
   the full layer array
   ([#351](https://github.com/CryptoJones/Photoslop/issues/351))
-- [ ] The last export's encoded bytes sit in `@State exportDocument` until the
-  next export ([#352](https://github.com/CryptoJones/Photoslop/issues/352))
-- [ ] `PencilCanvas`'s overlay `UIHostingController` is `addChild`'d and never
-  removed — one leaks per size-class flip (Split View, Stage Manager)
-  ([#353](https://github.com/CryptoJones/Photoslop/issues/353))
-- [ ] `canAffordLayer` (the `os_proc_available_memory` budget) is consulted
-  only by batch photo import; single import, file/text/duplicate layer, and
-  the document-geometry ops allocate unguarded
-  ([#354](https://github.com/CryptoJones/Photoslop/issues/354))
 - [ ] Composite render rasterizes each stroke-bearing layer's `PKDrawing` at
   full canvas size every pass, and change detection serializes drawings
   repeatedly ([#355](https://github.com/CryptoJones/Photoslop/issues/355))
@@ -129,6 +111,22 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] The 2026-08-24 iPhone/iPad memory audit's fix batch, shipped in 2.19.0:
+  single-image Import decodes straight to the fitted size, finishing the #309
+  streamed decode, and `normalizedImage` stops redrawing already-normalised
+  images ([#348](https://github.com/CryptoJones/Photoslop/issues/348));
+  `ProjectArchive` decode/encode drain per layer and the Files preview
+  renders at preview size
+  ([#349](https://github.com/CryptoJones/Photoslop/issues/349));
+  the last export's encoded bytes release on dismissal
+  ([#352](https://github.com/CryptoJones/Photoslop/issues/352));
+  `PencilCanvas` dismantles its overlay hosting controller instead of leaking
+  one per size-class flip
+  ([#353](https://github.com/CryptoJones/Photoslop/issues/353));
+  and the `os_proc_available_memory` budget now guards every allocation door —
+  single import, layer-from-file, Add Layer, and the whole-document geometry
+  operations ([#354](https://github.com/CryptoJones/Photoslop/issues/354))
 
 - [x] The 2026-08-24 desktop memory audit's fix batch, shipped in 2.19.0:
   every modal dialog now dies after `exec()` via one `run_modal` helper —

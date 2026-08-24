@@ -178,20 +178,25 @@ enum ProjectArchive {
     var total = manifestData.count
     var layerFolders: [String: FileWrapper] = [:]
     for record in snapshot.manifest.layers {
-      guard let payload = snapshot.layers[record.id] else {
-        throw CocoaError(.fileWriteUnknown)
+      // Pooled per layer: pngData()'s CoreGraphics intermediates are
+      // autoreleased, and without a drain here every layer's encoding scratch
+      // stays alive until the whole document is encoded (#349).
+      try autoreleasepool {
+        guard let payload = snapshot.layers[record.id] else {
+          throw CocoaError(.fileWriteUnknown)
+        }
+        guard let imagePNG = payload.image.pngData(), imagePNG.count <= maximumLayerBytes else {
+          throw CocoaError(.fileWriteOutOfSpace)
+        }
+        let drawing = payload.drawing.dataRepresentation()
+        guard drawing.count <= maximumLayerBytes else { throw CocoaError(.fileWriteOutOfSpace) }
+        total += imagePNG.count + drawing.count
+        guard total <= maximumProjectBytes else { throw CocoaError(.fileWriteOutOfSpace) }
+        layerFolders[record.id.uuidString] = FileWrapper(directoryWithFileWrappers: [
+          "image.png": FileWrapper(regularFileWithContents: imagePNG),
+          "drawing.data": FileWrapper(regularFileWithContents: drawing),
+        ])
       }
-      guard let imagePNG = payload.image.pngData(), imagePNG.count <= maximumLayerBytes else {
-        throw CocoaError(.fileWriteOutOfSpace)
-      }
-      let drawing = payload.drawing.dataRepresentation()
-      guard drawing.count <= maximumLayerBytes else { throw CocoaError(.fileWriteOutOfSpace) }
-      total += imagePNG.count + drawing.count
-      guard total <= maximumProjectBytes else { throw CocoaError(.fileWriteOutOfSpace) }
-      layerFolders[record.id.uuidString] = FileWrapper(directoryWithFileWrappers: [
-        "image.png": FileWrapper(regularFileWithContents: imagePNG),
-        "drawing.data": FileWrapper(regularFileWithContents: drawing),
-      ])
     }
     var root: [String: FileWrapper] = [
       "manifest.json": FileWrapper(regularFileWithContents: manifestData),
@@ -232,9 +237,11 @@ enum ProjectArchive {
       width: CGFloat(snapshot.manifest.canvas.width),
       height: CGFloat(snapshot.manifest.canvas.height)
     )
-    let composite = EditorStore.render(layers: layers, size: size)
     let scale = min(1, previewMaximumDimension / max(size.width, size.height))
-    guard scale < 1 else { return composite.pngData() }
+    guard scale < 1 else { return EditorStore.render(layers: layers, size: size).pngData() }
+    // Rendered straight at preview size: compositing at full document size
+    // first would cost one extra canvas-sized buffer (plus one per
+    // stroke-bearing layer) purely to throw the pixels away in the downscale.
     let target = CGSize(
       width: max(1, (size.width * scale).rounded()),
       height: max(1, (size.height * scale).rounded())
@@ -242,9 +249,21 @@ enum ProjectArchive {
     let format = UIGraphicsImageRendererFormat()
     format.scale = 1
     format.opaque = false
+    let bounds = CGRect(origin: .zero, size: size)
     let preview = UIGraphicsImageRenderer(size: target, format: format).image { context in
       context.cgContext.interpolationQuality = .high
-      composite.draw(in: CGRect(origin: .zero, size: target))
+      context.cgContext.scaleBy(x: scale, y: scale)
+      for layer in layers where layer.isVisible && layer.opacity > 0 {
+        autoreleasepool {
+          layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
+          if !layer.drawing.strokes.isEmpty {
+            // Rasterised at the preview's own scale — a preview-sized bitmap,
+            // not a canvas-sized one.
+            layer.drawing.image(from: bounds, scale: scale).draw(
+              in: bounds, blendMode: .normal, alpha: layer.opacity)
+          }
+        }
+      }
     }
     return preview.pngData()
   }
@@ -270,42 +289,48 @@ enum ProjectArchive {
     var seen = Set<UUID>()
     var layers: [RasterLayer] = []
     for record in manifest.layers {
-      guard seen.insert(record.id).inserted,
-        record.name.count <= 4_096,
-        record.opacity.isFinite, (0...1).contains(record.opacity),
-        let files = layerFolders[record.id.uuidString]?.fileWrappers,
-        let imageData = files["image.png"]?.regularFileContents,
-        let drawingData = files["drawing.data"]?.regularFileContents,
-        imageData.count <= maximumLayerBytes, drawingData.count <= maximumLayerBytes
-      else { throw CocoaError(.fileReadCorruptFile) }
-      total += imageData.count + drawingData.count
-      guard total <= maximumProjectBytes else {
-        throw ProjectArchiveError.resourceLimit("The project exceeds the 1 GiB limit.")
+      // Pooled per layer: decoding runs a full-bitmap UIImage(data:) whose
+      // CoreGraphics scratch is autoreleased; without a drain the transients
+      // for every layer coexist until the loop ends (#349).
+      let decoded: RasterLayer = try autoreleasepool {
+        guard seen.insert(record.id).inserted,
+          record.name.count <= 4_096,
+          record.opacity.isFinite, (0...1).contains(record.opacity),
+          let files = layerFolders[record.id.uuidString]?.fileWrappers,
+          let imageData = files["image.png"]?.regularFileContents,
+          let drawingData = files["drawing.data"]?.regularFileContents,
+          imageData.count <= maximumLayerBytes, drawingData.count <= maximumLayerBytes
+        else { throw CocoaError(.fileReadCorruptFile) }
+        total += imageData.count + drawingData.count
+        guard total <= maximumProjectBytes else {
+          throw ProjectArchiveError.resourceLimit("The project exceeds the 1 GiB limit.")
+        }
+        let image = try decodeImage(imageData)
+        // Before version 3 a layer image WAS the canvas, and a file claiming
+        // otherwise is corrupt. From version 3 a layer carries an origin and only
+        // has to fit (#309).
+        let origin: CGPoint
+        if let recorded = record.origin, manifest.version >= 3 {
+          origin = CGPoint(x: CGFloat(recorded.x), y: CGFloat(recorded.y))
+        } else {
+          origin = .zero
+        }
+        guard manifest.version >= 3 ? true : image.size == size,
+          isLayerFrameValid(CGRect(origin: origin, size: image.size), canvas: size)
+        else { throw CocoaError(.fileReadCorruptFile) }
+        let drawing = try PKDrawing(data: drawingData)
+        return RasterLayer(
+          id: record.id,
+          name: record.name,
+          image: image,
+          drawing: drawing,
+          isVisible: record.isVisible,
+          opacity: record.opacity,
+          text: record.text,
+          origin: origin
+        )
       }
-      let image = try decodeImage(imageData)
-      // Before version 3 a layer image WAS the canvas, and a file claiming
-      // otherwise is corrupt. From version 3 a layer carries an origin and only
-      // has to fit (#309).
-      let origin: CGPoint
-      if let recorded = record.origin, manifest.version >= 3 {
-        origin = CGPoint(x: CGFloat(recorded.x), y: CGFloat(recorded.y))
-      } else {
-        origin = .zero
-      }
-      guard manifest.version >= 3 ? true : image.size == size,
-        isLayerFrameValid(CGRect(origin: origin, size: image.size), canvas: size)
-      else { throw CocoaError(.fileReadCorruptFile) }
-      let drawing = try PKDrawing(data: drawingData)
-      layers.append(RasterLayer(
-        id: record.id,
-        name: record.name,
-        image: image,
-        drawing: drawing,
-        isVisible: record.isVisible,
-        opacity: record.opacity,
-        text: record.text,
-        origin: origin
-      ))
+      layers.append(decoded)
     }
     if let activeLayerID = manifest.activeLayerID, !seen.contains(activeLayerID) {
       throw CocoaError(.fileReadCorruptFile)

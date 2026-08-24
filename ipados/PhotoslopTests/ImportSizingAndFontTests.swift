@@ -50,6 +50,30 @@ final class ImportSizingAndFontTests: XCTestCase {
     XCTAssertEqual(store.canvasSize, CGSize(width: 400, height: 300))
   }
 
+  func testFitImportProducesACanvasSizedLayer() throws {
+    // The .fit path decodes straight to the fitted extent (#348); the layer it
+    // lands must be indistinguishable from the old full-decode-then-scale one.
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 400, height: 300))
+    try store.importImage(data: pngData(size: CGSize(width: 1000, height: 800)))
+    guard let image = store.layers.first?.image else { return XCTFail("no imported layer") }
+    XCTAssertEqual(image.size, CGSize(width: 400, height: 300))
+  }
+
+  func testNormalizedImageIsIdentityWhenAlreadyNormalized() {
+    // An already-.up, scale-1, CGImage-backed image must come back as the same
+    // instance: re-rendering it would allocate a second full-size bitmap for
+    // zero pixel change (#348).
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    let image = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8), format: format)
+      .image { context in
+        UIColor.red.setFill()
+        context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+      }
+    XCTAssertTrue(EditorStore.normalizedImage(image) === image)
+  }
+
   func testExpandCanvasImportRefusesAnImpossibleCanvas() {
     let store = EditorStore()
     store.newDocument(size: CGSize(width: 400, height: 300))
