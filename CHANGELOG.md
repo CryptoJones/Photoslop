@@ -4,9 +4,27 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.19.1] — unreleased
+## [2.20.0] — 2026-09-02
+
+### Added
+- **Node Machine** filter: generative circuit-trace artwork grown from a
+  layer's silhouette. Nodes are scattered inside the alpha mask, wired to
+  their nearest neighbours, and each edge is routed as a PCB trace (one
+  axis-aligned run plus one 45° diagonal) then stroked as a bundle of
+  parallel copies, with pads at the nodes, the silhouette contour stroked in
+  the same ink, an optional additive glow, and a two-stop gradient projected
+  across the frame. Output is seeded, so a given seed always redraws the same
+  art.
+- Six Node Machine presets ship as sibling filters — `node-machine`,
+  `node-machine-circuit`, `node-machine-web`, `node-machine-nodes`,
+  `node-machine-lightning`, `node-machine-vertical` — each with the full
+  parameter set live in the Filter menu, the generated dialog, smart-filter
+  replay, and `--filter`.
 
 ### Changed
+- The generated filter parameter dialog puts its rows in a scroll area when a
+  filter declares more than eight of them, capped to 70% of the screen height,
+  with the buttons outside the scroll area. Shorter dialogs are unchanged.
 - **Tag builds run the iOS unit-test bundle only** (#360). The UI suite runs
   in full on every pull request; re-running it in the tag build re-proved a
   tree the PR had already proved and re-rolled the runner-starvation flakes

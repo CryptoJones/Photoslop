@@ -117,6 +117,10 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] Node Machine — generative circuit-trace filter driven by a layer's
+  silhouette, with six presets, CLI mirror and a scrolling filter dialog
+  ([#363](https://github.com/CryptoJones/Photoslop/issues/363)) — shipped v2.20.0
+
 - [x] The 2026-08-24 iPhone/iPad memory audit's fix batch, shipped in 2.19.0:
   single-image Import decodes straight to the fitted size, finishing the #309
   streamed decode, and `normalizedImage` stops redrawing already-normalised

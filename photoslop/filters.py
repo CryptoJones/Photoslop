@@ -118,7 +118,11 @@ def register_filter(cls: type[Filter]) -> None:
 
 def available_filters(*, allow_unsafe: bool = False) -> dict[str, type[Filter]]:
     """Return safe built-ins, plus explicitly enabled native/plugin filters."""
-    for cls in _BUILT_INS:
+    # Imported here, not at module scope: nodemachine imports Filter/ParamSpec
+    # from this module, so a top-level import either way is a cycle.
+    from photoslop.nodemachine import NODE_MACHINE_FILTERS
+
+    for cls in (*_BUILT_INS, *NODE_MACHINE_FILTERS):
         _REGISTRY.setdefault(cls.name, cls)
     if allow_unsafe:
         from photoslop import geglpack, gimpbridge, gmicpack
