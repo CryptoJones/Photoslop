@@ -201,3 +201,39 @@ def test_luma_source_traces_a_bright_subject_on_black(qapp):
     assert len(xs) > 0
     assert xs.min() >= BLOB_CENTRE - BLOB_RADIUS - 8
     assert xs.max() <= BLOB_CENTRE + BLOB_RADIUS + 8
+
+
+def _opaque(w, h):
+    img = blank_image(QSize(w, h))
+    for y in range(h):
+        for x in range(w):
+            img.setPixelColor(x, y, QColor(180, 180, 180))
+    return img
+
+
+def test_glow_on_a_narrow_layer_does_not_crash(qapp):
+    """gaussian_blur's cumsum trick breaks once its radius reaches the short
+    side of the buffer, so the halo radius has to be clamped to the layer.
+    These are the exact shapes that used to raise on preset defaults."""
+    for cls, (w, h) in (
+        (nodemachine.NodeMachineNodesFilter, (12, 200)),
+        (nodemachine.NodeMachineLightningFilter, (200, 4)),
+        (nodemachine.NodeMachineLightningFilter, (4, 200)),
+    ):
+        params = {s.key: s.default for s in cls.params}
+        cls().apply(_opaque(w, h), params)  # must not raise
+
+
+def test_glow_radius_is_clamped_to_the_buffer(qapp):
+    tall = blank_image(QSize(8, 400))
+    assert nodemachine._glow_radius(tall, 100) == 2 * 8 - 3
+    assert nodemachine._glow_radius(blank_image(QSize(400, 400)), 100) == 100 // 3 + 2
+    # too thin to blur at all
+    assert nodemachine._glow_radius(blank_image(QSize(1, 400)), 100) == 0
+
+
+def test_glow_at_every_extreme_shape(qapp):
+    """The whole degenerate-shape family, at maximum glow."""
+    for w, h in ((1, 200), (200, 1), (2, 2), (3, 40), (40, 3)):
+        img = _opaque(w, h)
+        nodemachine.NodeMachineFilter().apply(img, {"seed": 5, "glow": 100})

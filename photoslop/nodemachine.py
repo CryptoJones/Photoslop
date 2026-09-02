@@ -280,7 +280,21 @@ def _paint_pads(
         _draw_pad(painter, x, y, float(radius), int(rng.integers(0, 3)))
 
 
-def _apply_glow(overlay: QImage, glow: int) -> QImage:
+def _glow_radius(overlay: QImage, glow: int) -> int:
+    """Blur radius for the halo, clamped to what the buffer can carry.
+
+    npimage.gaussian_blur halves the radius into ``r = radius // 2 + 1``, and
+    _box_blur_plane's cumsum trick only balances its stacked operands while
+    ``r < dimension`` — past that numpy raises on the broadcast. A narrow layer
+    (a pasted strip, a slim text layer) therefore has to cap the radius however
+    high the glow slider goes. Returns 0 when the buffer is too thin to blur."""
+    limit = 2 * min(overlay.width(), overlay.height()) - 3
+    if limit < 1:
+        return 0
+    return min(glow // 3 + 2, limit)
+
+
+def _apply_glow(overlay: QImage, glow: int, radius: int) -> QImage:
     """Gain then blur a copy of the ink. The gain is uniform across all four
     premultiplied channels, so clipping cannot push R,G,B above A."""
     halo = overlay.copy()
@@ -290,7 +304,7 @@ def _apply_glow(overlay: QImage, glow: int) -> QImage:
     a, r, g, b = (np.clip(c, 0, 255).astype(np.uint32) for c in planes)
     arr[...] = (a << np.uint32(24)) | (r << np.uint32(16)) | (g << np.uint32(8)) | b
     del arr
-    npimage.gaussian_blur(halo, glow // 3 + 2)
+    npimage.gaussian_blur(halo, radius)
     return halo
 
 
@@ -322,7 +336,8 @@ def _render(image: QImage, params: dict) -> None:
     painter.end()
 
     glow = int(params.get("glow", 0))
-    halo = _apply_glow(overlay, glow) if glow > 0 else None
+    radius = _glow_radius(overlay, glow) if glow > 0 else 0
+    halo = _apply_glow(overlay, glow, radius) if radius > 0 else None
 
     keep = min(100, max(0, int(params.get("keep", 0))))
     if keep < 100:  # premultiplied: a uniform 4-channel scale is an opacity
