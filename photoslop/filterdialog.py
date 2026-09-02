@@ -1,9 +1,16 @@
 # SPDX-License-Identifier: Apache-2.0
 """Auto-generated parameter dialog for filter plugins — one spinbox row
-per ParamSpec, so a plugin gets a UI without writing any Qt."""
+per ParamSpec, so a plugin gets a UI without writing any Qt.
+
+Filters with a lot of knobs (Node Machine has seventeen) would otherwise
+generate a form taller than the screen, so past a threshold the rows go
+inside a scroll area capped to a fraction of the available screen height.
+Short dialogs are laid out exactly as before — Sepia's single row must not
+grow a scrollbar."""
 
 from __future__ import annotations
 
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -11,10 +18,18 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QLineEdit,
+    QScrollArea,
     QSpinBox,
+    QVBoxLayout,
+    QWidget,
 )
 
 from photoslop.filters import Filter
+
+# Row count past which the form is worth scrolling rather than stretching.
+_SCROLL_THRESHOLD = 8
+# Never let the dialog claim more than this share of the screen.
+_MAX_SCREEN_FRACTION = 0.7
 
 
 class FilterParamsDialog(QDialog):
@@ -23,7 +38,8 @@ class FilterParamsDialog(QDialog):
         self.setWindowTitle(cls.label)
         self._cls = cls
         self._boxes: dict[str, QSpinBox | QDoubleSpinBox | QLineEdit | QComboBox] = {}
-        form = QFormLayout(self)
+        rows = QWidget(self)
+        form = QFormLayout(rows)
         for spec in cls.params:
             if spec.type == "choice":
                 box = QComboBox()
@@ -46,7 +62,26 @@ class FilterParamsDialog(QDialog):
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        form.addRow(buttons)
+
+        outer = QVBoxLayout(self)
+        if len(cls.params) > _SCROLL_THRESHOLD:
+            scroll = QScrollArea(self)
+            scroll.setWidgetResizable(True)
+            scroll.setWidget(rows)
+            outer.addWidget(scroll)
+            self.setMaximumHeight(self._screen_cap())
+        else:
+            outer.addWidget(rows)
+        # Buttons live outside the scroll area so OK is always reachable.
+        outer.addWidget(buttons)
+
+    def _screen_cap(self) -> int:
+        """Height budget for a scrolling dialog; falls back to a sane
+        constant when there is no screen (offscreen test runs)."""
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            return 600
+        return int(screen.availableGeometry().height() * _MAX_SCREEN_FRACTION)
 
     def values(self) -> dict:
         return {

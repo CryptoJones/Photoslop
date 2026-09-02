@@ -7,7 +7,7 @@ parameter dialog), works in the **CLI** as `--filter "name:key=val,..."`,
 respects **selections and feathering**, participates in **actions** and
 **smart-filter replay** — all from one class and one entry point.
 
-Seven built-ins ship in the box and double as living documentation — all pure
+Thirteen built-ins ship in the box and double as living documentation — all pure
 numpy, so none of them needs the unsafe-plugin opt-in below:
 
 | Filter | CLI name | Params |
@@ -19,6 +19,12 @@ numpy, so none of them needs the unsafe-plugin opt-in below:
 | Pixel Sort (Glitch) | `pixel-sort` | `low`/`high` 0–255, `vertical` 0/1, `reverse` 0/1 |
 | Datamosh + Chromatic Aberration | `datamosh` | `block` 4–64, `amount` 0–100, `drift` 0–64, `aberration` 0–20, `seed` 0–9999 |
 | Film Negative → Positive | `film-negative` | `mode` auto/color/mono, `clip` 0.0–5.0 |
+| Node Machine | `node-machine` | see [Filters](filters.md) — seventeen shared params |
+| Node Machine (Circu1t) | `node-machine-circuit` | traces laid over the source art |
+| Node Machine (Web) | `node-machine-web` | sparse node web |
+| Node Machine (Nodes) | `node-machine-nodes` | dense triangulated graph, glowing |
+| Node Machine (Lightning) | `node-machine-lightning` | bundled traces with a bloom |
+| Node Machine (Vertical Flow) | `node-machine-vertical` | vertical drop lines |
 
 **Film Negative** develops a scanned negative into the photograph that was on
 the film.
