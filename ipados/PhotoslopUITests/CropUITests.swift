@@ -14,14 +14,7 @@ final class CropUITests: UITestCase {
     // Shared app: the editor is reused when the previous test provably left it
     // there, so crop pays a launch only when it has to (#254).
     let app = openEditor()
-
-    let more = app.navigationBars.buttons["More Actions"].firstMatch
-    XCTAssertTrue(more.waitForExistence(timeout: 15), "no More Actions menu on the bar")
-    more.tap()
-
-    let crop = app.buttons["Crop…"].firstMatch
-    XCTAssertTrue(crop.waitForExistence(timeout: 10), "Crop is missing from the menu")
-    crop.tap()
+    app.chooseAction("Crop…")
     return app
   }
 

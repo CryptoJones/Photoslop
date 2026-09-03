@@ -19,11 +19,6 @@ sync — check an item here when its issue closes.
 - [ ] Composite render rasterizes each stroke-bearing layer's `PKDrawing` at
   full canvas size every pass, and change detection serializes drawings
   repeatedly ([#355](https://github.com/CryptoJones/Photoslop/issues/355))
-- [ ] The ⋯ More Actions menu on iPhone holds 15 actions and scrolls, with
-  nothing to say that it scrolls — the Finger toggle and everything below the
-  fold are effectively invisible. It is a system `UIMenu`, so no scroll
-  affordance can be added; the menu has to get shorter
-  ([#313](https://github.com/CryptoJones/Photoslop/issues/313))
 - [ ] Coloured drop shadows and embossing on text layers
   ([#316](https://github.com/CryptoJones/Photoslop/issues/316))
 - [ ] A mutable pixel-buffer layer for iOS — the missing foundation under the
@@ -84,6 +79,11 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] iPhone More Actions menu nested into Image and Text submenus so its
+  seven-row top level fits without scrolling, and finger drawing on by
+  default where no Apple Pencil can exist
+  ([#313](https://github.com/CryptoJones/Photoslop/issues/313)) — shipped v2.20.3
 
 - [x] The Windows test job runs about twice as slow as macOS for identical work
   and had been sitting within four minutes of its cap, so twenty new tests

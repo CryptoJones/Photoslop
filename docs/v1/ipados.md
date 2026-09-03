@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.20.2 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.20.3 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -20,10 +20,20 @@ device name, so an iPad in a narrow Split View gets the phone layout too.
   drawing.
 - A phone's navigation bar holds three controls beside the document title, so
   the compact layout picks them rather than leaving the choice to UIKit:
-  **Layers**, a **More Actions** menu holding New, Canvas Size, Resize Document,
-  Crop, Resize Layer, the text actions, Import Image, and About, and
-  **Export**. Undo and redo move
-  to the leading edge of the tool strip, which never has to be scrolled to.
+  **Layers**, a **More Actions** menu, and **Export**. Undo and redo move to
+  the leading edge of the tool strip, which never has to be scrolled to.
+- The phone's More Actions menu is seven rows: **New**, an **Image** submenu
+  (Canvas Size, Resize Document, Crop, Resize Layer, Flatten Image), a
+  **Text** submenu (Add Text, and Edit, Move and Fit Text while a text layer
+  is active), **Import Image**, **Finger**, **Clear Layer** and **About**. It
+  used to be fifteen rows, flat, which is taller than a phone: the menu is a
+  system `UIMenu`, which scrolls when it overflows without showing that it
+  does, so Finger and everything under it were effectively invisible (#313).
+  Nothing can be added to say "more below", so the top level has to fit
+  without it — a new action belongs in a submenu, whose chevron is the
+  affordance the flat list could not have. The iPad's menu is flat: it holds
+  fewer actions, since New, Canvas Size and About sit on its bar, and an iPad
+  has the screen for them.
 - The tool strip narrows its brush picker and width slider at compact width and
   scrolls horizontally if it still does not fit.
 
@@ -90,8 +100,13 @@ what it was doing to #227.
 ## Editing workflow
 
 - Draw with Apple Pencil using the Pen, Pencil, Marker, or bitmap Eraser.
-  PencilKit supplies pressure and predicted-touch handling. Turn on **Finger**
-  to draw with touch; otherwise one finger pans and two fingers pinch to zoom.
+  PencilKit supplies pressure and predicted-touch handling. **Finger** in More
+  Actions decides whether touch draws too: on, one finger paints and two
+  fingers pan or pinch to zoom; off, one finger pans. It starts off on an
+  iPad, where a Pencil can exist and a resting palm should pan rather than
+  paint, and on on an iPhone, which takes no Pencil — off there meant a fresh
+  install could not draw at all, every stroke a pan, with the only remedy a
+  switch below the fold of the menu above (#313).
 - Brushes differ in which Apple Pencil inputs they read. Pen varies with force
   alone, so tilting the Pencil does not change its stroke. Pencil and Marker
   also read the Pencil's altitude and azimuth and broaden as it is laid over,

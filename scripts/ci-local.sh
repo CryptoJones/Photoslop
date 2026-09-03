@@ -41,6 +41,17 @@ BUNDLE_ID="io.ronin48.photoslop.ipad"
 WHAT="${1:-all}"
 FAILED_LEGS=""
 
+# No simulator outlives this script. run_leg shuts its own device down at the end
+# of a leg, and `set +e` keeps that reachable even when the tests FAIL -- but not
+# when the script is INTERRUPTED. Ctrl-C, a timeout, or an agent session ending
+# mid-leg skips it and leaves CI-iPhone-18.5 booted indefinitely.
+#
+# That is not hypothetical: on 2026-08-25 two stranded simulators held 5.88 GB and
+# 344 processes on makemake -- the same starvation this script's header warns about
+# (L-002), except makemake also hosts the Buzz agent harness, where memory pressure
+# has already knocked every agent off the relay once.
+trap 'xcrun simctl shutdown all >/dev/null 2>&1 || true' EXIT
+
 say() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 
 run_python() {
