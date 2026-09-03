@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.22.1] — 2026-09-03
+
+### Changed
+- **Dependencies**: PyInstaller 6.22.0 → 6.22.2 (dependabot #362), with
+  `uv.lock` regenerated to match — a pip-ecosystem dependabot bump edits
+  `pyproject.toml` only, and `uv sync --locked` refuses a lock that disagrees
+  with it.
+
 ## [2.22.0] — 2026-09-02
 
 ### Added
