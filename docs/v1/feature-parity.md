@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v2.20.4** against six
+An honest, category-by-category comparison of **Photoslop v2.21.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -20,6 +20,7 @@ client exposes it.
 |---|---:|---:|---:|---:|
 | Layered project persistence | ORA | `.photoslop` package | ORA read/write | ORA read/write under root policy |
 | Raster/Pencil drawing | ✅ | ✅ PencilKit | — | — |
+| Paint bucket (flood fill) | ✅ | ✅ ported from the desktop fill, fixture-proven identical | 🟡 `--fill` fills the whole layer | — |
 | Selections/filters/vectors/text | ✅ | — | ✅ shared safe engine operations | ✅ safe subset |
 | Native/third-party plugins | local opt-in | — | local opt-in | denied |
 | Network model operations | local configured endpoint | — | local configured endpoint | denied |
@@ -30,7 +31,7 @@ client exposes it.
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 2.20.4 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
+| **Photoslop** | 2.21.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
@@ -57,6 +58,7 @@ for the versioned platform screen-reader and visual smoke procedures.
 | Dodge / burn | ✅ | ✅ | ✅ | ❌ | — | — | — |
 | Smudge / mixer | ✅ | ✅ | ✅ | ❌ | — | — | — |
 | Gradient tool | ✅ (linear/radial) | ✅ | ✅ | ✅ | — | — | — |
+| Paint bucket / flood fill (tolerance) | ✅ desktop + iOS | ✅ | ✅ | ✅ | — | — | — |
 | Pattern fill | ✅ | ✅ | ✅ | ❌ | — | — | — |
 | Liquify / push warp | ✅ | ✅ | 🟡 (IWarp filter) | ❌ | — | 🟡 (liquify module) | ❌ |
 | Pressure sensitivity (tablet) | ❌ | ✅ | ✅ | ✅ | — | — | — |

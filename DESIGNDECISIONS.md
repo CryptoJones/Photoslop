@@ -330,6 +330,61 @@ diagnosed and fixed on its own before the pattern was recognised:
 
 ---
 
+## DD-013 — iOS pixel operations go through one borrowed buffer, in the desktop's byte order
+
+**Status: Accepted (2026-09-02).**
+
+The paint bucket ([#325](https://github.com/CryptoJones/Photoslop/issues/325)),
+the magic wand (#326) and the filter library (#327) all need to read and write
+a layer's pixels on iOS, and nothing in `ipados/` could: drawing is PencilKit,
+which is vector strokes, and a layer is a `UIImage`, which is immutable. The
+question was how to give them pixels without giving every operation its own
+bitmap plumbing, and without handing the app a second full-size buffer per layer.
+
+**The decision: one seam, `PixelBuffer` ([#324](https://github.com/CryptoJones/Photoslop/issues/324)).**
+An operation borrows the layer's pixels as a premultiplied ARGB32 buffer,
+rewrites them, and the store puts the result back as the layer image in one
+undo step (`EditorStore.applyPixelOperation`). Nothing is resident between
+operations; the buffer lives for the call.
+
+**Byte order is the desktop's, deliberately.** The buffer is a `CGContext`
+with `byteOrder32Little | premultipliedFirst`: B, G, R, A in memory, read as a
+little-endian `UInt32` it is `0xAARRGGBB` premultiplied — bit for bit the word
+`npimage.view_u32` reads from a `QImage.Format_ARGB32_Premultiplied`. That is
+what lets a desktop algorithm be *ported* rather than *re-derived*: the flood
+fill's tolerance test compares the same channels of the same word on both
+platforms, and a fixture the desktop writes is an assertion the iOS tests can
+make verbatim. The alternative, RGBA in memory with a translation at the edge,
+would have been one more place for the two editions to quietly disagree.
+
+**Memory, per DD-001.** A buffer is one canvas-sized bitmap and the result is
+another until undo takes the old image, so the store budgets a pixel operation
+with the same `canAffordLayer` check import uses (#354) and refuses with the
+same notice. Inside an operation, work is banded in 256 rows — the desktop's
+`CHUNK_ROWS` — under an autorelease pool per band, so a per-row transient is
+sized to a band, never to the picture. The seam does not pay for undo by the
+tile the way the desktop does; that is the existing store's whole-state undo,
+and shrinking it is #351's work, not this seam's.
+
+**Consequences.**
+- An operation sees the layer *as drawn*: bounded layers are padded to the
+  canvas and PencilKit strokes are baked into the pixels first, because a fill
+  inside a drawn outline has to stop at the outline. Strokes are pixels from
+  then on, as after Merge Down; the import source is dropped so a later resize
+  cannot re-render the operation away. Undo restores all of it.
+- Text layers are refused. Their pixels are re-rendered from the words on
+  every edit, so a pixel operation on one would not survive Edit Text. Fill a
+  paint layer instead.
+- The desktop's `flood_fill` is now `FloodFill.swift`, fixture-proven
+  identical (`scripts/gen-flood-fill-fixture.py`). The wand is the same flood
+  with the write swapped for a mask; the filters are `applyPixelOperation`
+  calls with a banded body. Each is a port, not a design.
+- Selections are not consulted, because iOS has none yet. When #326 adds a
+  selection model, it enters `FloodFill.mask` as the `sel_mask` intersection
+  the desktop already has, and nothing else in the seam moves.
+
+---
+
 *New decisions get the next DD number. Reversing one requires a new entry
 that names the entry it supersedes — history is append-only.*
 

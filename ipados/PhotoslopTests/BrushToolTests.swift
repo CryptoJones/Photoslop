@@ -45,6 +45,16 @@ final class BrushToolTests: XCTestCase {
     XCTAssertTrue(BrushTool.pencil.usesInk)
     XCTAssertTrue(BrushTool.marker.usesInk)
     XCTAssertFalse(BrushTool.eraser.usesInk)
+    // The bucket takes the ink but not the width: a fill has no stroke.
+    XCTAssertTrue(BrushTool.bucket.usesInk)
+    XCTAssertFalse(BrushTool.bucket.usesWidth)
+    XCTAssertTrue(BrushTool.pen.usesWidth)
+    XCTAssertFalse(BrushTool.eraser.usesWidth)
+  }
+
+  func testOnlyTheBucketFillsOnTap() {
+    XCTAssertEqual(BrushTool.allCases.filter(\.fillsOnTap), [.bucket])
+    XCTAssertFalse(BrushTool.bucket.respondsToTilt)
   }
 
   func testEveryBrushIsPresentableInTheToolStrip() {

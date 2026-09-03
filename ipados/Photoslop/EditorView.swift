@@ -106,6 +106,8 @@ struct EditorView: View {
   /// width the user chose.
   @State private var inkWidthEstablished = false
   @State private var tool = BrushTool.pen
+  /// The bucket's colour tolerance, 0...255 like the desktop's (#325).
+  @State private var bucketTolerance = Double(EditorStore.defaultBucketTolerance)
   @State private var drawsWithFinger = EditorView.defaultDrawsWithFinger(
     idiom: UIDevice.current.userInterfaceIdiom)
   @State private var showLayers = false
@@ -328,6 +330,9 @@ struct EditorView: View {
           ? (store.activeLayer?.opacity ?? 1)
           : 0,
         onCanvasDragged: isMovingText ? moveText : nil,
+        // A tap tool owns the tap only while nothing else owns the canvas.
+        onCanvasTapped: tool.fillsOnTap && !isMovingText && !isCropping && placement == nil
+          ? fillAtTap : nil,
         onZoomScaleChanged: { canvasZoom = $0 },
         // Drawing is suspended while a box owns the canvas, so a drag moves the
         // rectangle rather than painting under it. Pinch, zoom and two-finger
@@ -360,6 +365,7 @@ struct EditorView: View {
       // overlay reaching down here, and this stops anything else that does from
       // winning the touch.
       .zIndex(1)
+      if Self.pixelProbeEnabled { pixelProbe }
     }
     // No .navigationTitle here on purpose. DocumentGroup binds the title to
     // the document's file name and drives Rename through it; setting a
@@ -743,7 +749,8 @@ struct EditorView: View {
         // to spare.
         if tool.usesInk {
           inkButton
-
+        }
+        if tool.usesWidth {
           Slider(
             value: $inkWidth,
             in: BrushMetrics.minimumWidth...BrushMetrics.maximumWidth(for: store.canvasSize),
@@ -752,6 +759,18 @@ struct EditorView: View {
             .accessibilityLabel("Brush width")
             .accessibilityIdentifier("Brush width")
           Text("\(Int(inkWidth))")
+            .font(.caption.monospacedDigit())
+            .frame(width: 24, alignment: .leading)
+            .accessibilityHidden(true)
+        } else if tool.fillsOnTap {
+          // The bucket's one option, in the width slider's slot so the strip
+          // stays within its iPad-mini budget (#246): how far a pixel may
+          // differ from the tapped one, per channel, and still be filled.
+          Slider(value: $bucketTolerance, in: 0...255, step: 1)
+            .frame(width: isCompact ? 130 : 180)
+            .accessibilityLabel("Tolerance")
+            .accessibilityIdentifier("Tolerance")
+          Text("\(Int(bucketTolerance))")
             .font(.caption.monospacedDigit())
             .frame(width: 24, alignment: .leading)
             .accessibilityHidden(true)
@@ -1705,6 +1724,44 @@ struct EditorView: View {
   private func moveText(to point: CGPoint, isFinal: Bool) {
     guard let id = activeTextLayer?.id else { return }
     store.moveTextLayer(id, to: point, coalesce: !isFinal)
+  }
+
+  /// `-PhotoslopPixelProbe` exposes one pixel of the active layer to UI tests,
+  /// which have no other way to see what a fill did: XCUITest reads the
+  /// accessibility tree, not the screen. Off outside the test runner, so the
+  /// probe costs nothing in the app.
+  static let pixelProbeEnabled = ProcessInfo.processInfo.arguments.contains("-PhotoslopPixelProbe")
+
+  /// The active layer's centre pixel as a premultiplied ARGB32 word in hex,
+  /// read through a 1x1 context rather than a canvas-sized buffer.
+  private var pixelProbe: some View {
+    let word: UInt32? = store.activeLayer.flatMap { layer in
+      let centre = CGPoint(x: store.canvasSize.width / 2, y: store.canvasSize.height / 2)
+      guard layer.fillsCanvas(store.canvasSize) else { return nil }
+      return PixelBuffer.probe(image: layer.image, x: Int(centre.x), y: Int(centre.y))
+    }
+    let hex = word.map { String(format: "%08X", $0) } ?? "none"
+    return Text(hex)
+      .font(.system(size: 1))
+      .frame(height: 1)
+      .accessibilityLabel("Pixel probe")
+      .accessibilityValue(hex)
+      .accessibilityIdentifier("Pixel probe")
+  }
+
+  /// The bucket's tap (#325): fill the region under it on the active layer
+  /// with the ink as the swatch shows it. A text layer is refused out loud,
+  /// the way Fit Text and Edit Text keep its words editable; a memory refusal
+  /// already raised the low-memory notice.
+  private func fillAtTap(_ point: CGPoint) {
+    let outcome = store.paintBucket(
+      at: point, tolerance: Int(bucketTolerance.rounded()),
+      color: UIColor(inkColor), opacity: inkOpacity)
+    if outcome == .textLayer {
+      errorMessage =
+        "Text layers stay editable, so the bucket cannot paint on one. "
+        + "Select a paint layer, or add one, and fill that."
+    }
   }
 
   /// Load the active text layer's own words back into the sheet, so editing
