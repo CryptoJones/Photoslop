@@ -1237,6 +1237,58 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }
   }
 
+  /// Run a pixel operation over a layer through the `PixelBuffer` seam
+  /// (#324, DD-013): borrow the layer's pixels, let `operation` rewrite them,
+  /// and put the result back as the layer image in one undo step.
+  ///
+  /// The operation sees the layer as it is drawn — a bounded layer padded to
+  /// the canvas, and the PencilKit strokes baked into the pixels, because a
+  /// fill inside a drawn outline has to stop at the outline. That makes the
+  /// strokes pixels from then on, the way Merge Down already does, and drops
+  /// the import source, since a later resize re-rendered from it would throw
+  /// the operation away.
+  ///
+  /// Returns false, and registers no undo step, when the operation reports no
+  /// change, when the layer is a text layer (its pixels are re-rendered from
+  /// the words on every edit, so a fill would not survive Edit Text), or when
+  /// the buffer is not affordable — the same refusal import makes (#354).
+  @discardableResult
+  func applyPixelOperation(
+    to layerID: UUID, actionName: String, _ operation: (inout PixelBuffer) -> Bool
+  ) -> Bool {
+    guard let layer = layers.first(where: { $0.id == layerID }), !layer.isText else {
+      return false
+    }
+    guard Self.canAffordLayer(canvas: canvasSize) else {
+      memoryPressureNotice = Self.memoryRefusal
+      return false
+    }
+    let canvas = canvasSize
+    // The rendered transient lives only until the buffer has copied it.
+    func borrow() -> PixelBuffer? {
+      if layer.drawing.strokes.isEmpty, layer.fillsCanvas(canvas) {
+        return PixelBuffer(image: layer.image)
+      }
+      var flat = layer
+      flat.isVisible = true
+      flat.opacity = 1
+      return PixelBuffer(image: Self.render(layers: [flat], size: canvas))
+    }
+    guard var buffer = borrow(), operation(&buffer), let image = buffer.makeImage() else {
+      return false
+    }
+    mutate(actionName: actionName) {
+      update(layerID) {
+        $0.image = image
+        $0.origin = .zero
+        $0.drawing = PKDrawing()
+        $0.source = nil
+        $0.placement = nil
+      }
+    }
+    return true
+  }
+
   func mergeActiveDown() {
     guard let id = activeLayerID, let index = layers.firstIndex(where: { $0.id == id }),
       index > 0

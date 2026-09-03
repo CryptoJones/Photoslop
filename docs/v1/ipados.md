@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.20.4 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.21.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -89,9 +89,10 @@ what it was doing to #227.
 
 ## Editing workflow
 
-- Draw with Apple Pencil using the Pen, Pencil, Marker, or bitmap Eraser.
-  PencilKit supplies pressure and predicted-touch handling. Turn on **Finger**
-  to draw with touch; otherwise one finger pans and two fingers pinch to zoom.
+- Draw with Apple Pencil using the Pen, Pencil, Marker, or bitmap Eraser, or
+  fill with the **Bucket**. PencilKit supplies pressure and predicted-touch
+  handling. Turn on **Finger** to draw with touch; otherwise one finger pans
+  and two fingers pinch to zoom.
 - Brushes differ in which Apple Pencil inputs they read. Pen varies with force
   alone, so tilting the Pencil does not change its stroke. Pencil and Marker
   also read the Pencil's altitude and azimuth and broaden as it is laid over,
@@ -125,6 +126,11 @@ what it was doing to #227.
   mirrors `photoslop-cli --resize WxH`. The three size operations are distinct
   and none replaces another — see
   [Three ways to change a size](#three-ways-to-change-a-size).
+- The **Bucket** fills the region of similar colour under a tap with the ink
+  as the swatch shows it, colour and opacity both, on the active layer, as one
+  undo step. Its one option is **Tolerance** (0–255, 32 to start, the desktop's
+  default), which takes the width slider's slot on the strip. See
+  [Paint bucket](#paint-bucket).
 - **About Photoslop** introduces the app the way the desktop edition does: Le
   Basilisk, the name with no platform attached, and the same one-line
   description, over the licence and repository link. It also reports the
@@ -243,13 +249,10 @@ The same box is reached again through **Resize Layer…** for a layer that came 
 the wrong size, and through **Fit Text…** for a text layer, where dragging the
 box scales the type to span it and moves the anchor to its corner.
 
-A layer imported in this session keeps its original as a source — the
-compressed bytes of the photo or file, decoded again for each placement — so
+A layer imported in this session keeps its original pixels as a source, so
 resizing it repeatedly resamples from the original rather than compounding
-losses. Sources share a 64 MiB budget; past it the oldest is let go and that
-layer resizes from its own pixels from then on. A layer restored from a saved
-document has no separate source yet — see DD-011 — so its box opens on the
-whole canvas and its own pixels are the source.
+losses. A layer restored from a saved document has no separate source yet — see
+DD-011 — so its box opens on the whole canvas and its own pixels are the source.
 
 Several pictures chosen at once still arrive scaled to fit the canvas: placing
 each of twenty photos by hand is not a workflow anybody wants.
@@ -263,6 +266,58 @@ chosen origin rather than a centred one. That is deliberate: a layer is pixels
 *and* PencilKit strokes *and* possibly a text anchor, all of which have to travel
 together, and a second code path would be a second chance to forget one. The
 result agrees with `photoslop-cli --crop X,Y,W,H` for the same rectangle.
+### Paint bucket
+
+Pick **Bucket** from the tool palette and tap the canvas. The pixels connected
+to the tap whose colour is within **Tolerance** of the tapped pixel take the
+ink — the same colour and opacity the swatch shows, premultiplied the way the
+desktop bucket premultiplies its foreground. A finger tap fills whether or not
+**Finger** drawing is on: the bucket is a tap tool, so there is no stroke for a
+Pencil to own. One finger still pans and two fingers still pinch.
+
+The fill is the desktop's fill, not a look-alike. `FloodFill.swift` is a port
+of `photoslop.npimage.flood_fill` — the same iterative scanline algorithm, the
+same per-channel tolerance against the tapped pixel (alpha included, on
+premultiplied values), the same 4-connectivity, so a one-pixel outline holds
+and a diagonal gap does not leak. The proof is a fixture the desktop
+implementation generates (`scripts/gen-flood-fill-fixture.py`) and the iOS
+tests compare against word for word, at tolerance 0, a mid tolerance and an
+enclosed region. Contiguous fill only: the desktop bucket has no colour-range
+mode either (that is the wand's, #326).
+
+Two rules, both stated so they are not surprises:
+
+- **Text layers are refused.** A text layer's pixels are re-rendered from its
+  words every time Edit Text, Fit Text or Move Text runs, so a fill on one would
+  vanish at the next edit. The app says so and leaves the layer alone; fill a
+  paint layer beneath it instead.
+- **Strokes become pixels.** The fill has to see the outline you drew, so the
+  layer's PencilKit strokes are baked into its bitmap before the fill runs, as
+  Merge Down already does. A placed photo's pristine source is dropped for the
+  same reason: a later resize re-rendered from the source would throw the fill
+  away. Undo puts all of it back.
+
+A selection is not honoured yet because the iOS edition has no selection model;
+until the wand lands (#326) a fill runs to the edge of its region, exactly as
+the desktop bucket does with nothing selected.
+
+#### The pixel seam and memory
+
+The bucket is the first user of `PixelBuffer` (#324, DD-013), the seam every
+pixel operation on iOS goes through: it borrows a layer's pixels as a
+premultiplied ARGB32 buffer — the byte-for-byte equivalent of what the
+desktop's `view_u32` reads from a `QImage` — hands them to an operation, and
+puts the result back as the layer image in one undo step.
+
+A buffer costs one canvas-sized bitmap (12 MiB on the standard canvas), and the
+result is a second one until the old image is released to undo. The store
+budgets that through the same free-memory check import makes before it decodes
+(#354) and shows the same refusal rather than risking a jetsam kill. Inside an
+operation, work runs in bands of 256 rows — the desktop's `CHUNK_ROWS` — each
+in its own autorelease pool, so a per-row transient is sized to a band rather
+than the picture. The flood fill itself allocates only its two masks, two bytes
+per pixel, as the desktop version does.
+
 ### Importing from Photos or from Files
 
 **Import Image…** asks where the picture is coming from before it asks which
@@ -435,7 +490,7 @@ link, require Beta App Review on the first build of a version.
 ## Initial-edition boundary
 
 The iPad edition currently covers persistent layered raster/PencilKit painting,
-image import, document-wide undo, and flattened image export. The desktop edition
+the paint bucket, image import, document-wide undo, and flattened image export. The desktop edition
 remains the authoritative home for OpenRaster round trips, selections,
 adjustments, filters, appearance effects, editable vectors/text, automation,
 CLI, and MCP. An unsigned GitHub artifact is a reproducible developer build,

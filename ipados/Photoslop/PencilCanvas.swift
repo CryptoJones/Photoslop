@@ -34,6 +34,12 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
   /// can be moved. `isFinal` marks the end of the gesture, which is where the
   /// undo entry belongs — one per drag rather than one per touch sample.
   var onCanvasDragged: ((CGPoint, Bool) -> Void)?
+  /// When set, a single tap reports its position in canvas pixels — the paint
+  /// bucket's seed (#325). Drawing is suspended while it is set, so the tap
+  /// fills rather than dotting the layer; a finger tap counts whether or not
+  /// finger drawing is on, because a tap tool has no stroke for a Pencil to
+  /// own. Panning and pinching are untouched.
+  var onCanvasTapped: ((CGPoint) -> Void)?
   /// The zoom scale, so an overlay can keep its chrome a constant size on
   /// screen. Everything an overlay *draws about the document* — the rectangle,
   /// its position — is in document pixels and scales correctly on its own; the
@@ -123,10 +129,12 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
     // Placement has to win over PencilKit's own touch handling, so drawing is
     // suspended for as long as a tap is what the user means.
     host.onCanvasDragged = onCanvasDragged
+    host.onCanvasTapped = onCanvasTapped
     let isMoving = onCanvasDragged != nil
     // Moving needs the touch before PencilKit gets it, or the drag paints.
-    // An overlay needs the same, for the same reason.
-    host.canvasView.isUserInteractionEnabled = !isMoving && !overlayIsActive
+    // An overlay needs the same, for the same reason, and so does a tap tool.
+    host.canvasView.isUserInteractionEnabled =
+      !isMoving && !overlayIsActive && onCanvasTapped == nil
     host.onBoxDrag = onBoxDrag
     host.setOverlayActive(overlayIsActive)
     // With one-finger panning left on, the scroll view and the move gesture
@@ -229,6 +237,10 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     didSet { moveDragRecognizer?.isEnabled = onCanvasDragged != nil }
   }
   private var moveDragRecognizer: UIPanGestureRecognizer?
+  var onCanvasTapped: ((CGPoint) -> Void)? {
+    didSet { tapRecognizer?.isEnabled = onCanvasTapped != nil }
+  }
+  private var tapRecognizer: UITapGestureRecognizer?
   private var boxDragRecognizer: BoxPanRecognizer?
   var onBoxDrag: ((CGPoint, CGPoint, Bool) -> Void)?
   private var boxDragStart: CGPoint?
@@ -300,6 +312,15 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     contentView.addGestureRecognizer(drag)
     moveDragRecognizer = drag
 
+    // The bucket's tap, in document pixels. Off unless a tap tool is armed,
+    // for the same reason the move drag is: a recogniser on `contentView`
+    // cancels touches to its subviews when it fires.
+    let tap = UITapGestureRecognizer(target: self, action: #selector(handleCanvasTap))
+    tap.numberOfTouchesRequired = 1
+    tap.isEnabled = false
+    contentView.addGestureRecognizer(tap)
+    tapRecognizer = tap
+
     // The box's own drag. On `overlayContainer`, so it is live only while a box
     // is up, and reporting in `contentView` coordinates, which are the
     // document's pixels.
@@ -352,6 +373,14 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     default:
       break
     }
+  }
+
+  @objc private func handleCanvasTap(_ recognizer: UITapGestureRecognizer) {
+    guard let onCanvasTapped, recognizer.state == .ended else { return }
+    let point = recognizer.location(in: contentView)
+    // Unlike a move, a tap off the canvas means nothing; leave it to the store
+    // to ignore rather than clamping it onto an edge pixel.
+    onCanvasTapped(point)
   }
 
   @objc private func handleMoveDrag(_ recognizer: UIPanGestureRecognizer) {

@@ -4,6 +4,33 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.21.0] — 2026-09-02
+
+### Added
+- **iOS pixel seam** (#324): `PixelBuffer` borrows a layer's pixels as a
+  premultiplied ARGB32 buffer — the same word the desktop's `view_u32` reads
+  from a `QImage` — hands them to an operation, and puts the result back as
+  the layer image in one undo step (`EditorStore.applyPixelOperation`). Until
+  now nothing in `ipados/` could touch a pixel: drawing is PencilKit vector
+  strokes and a layer is an immutable `UIImage`, which is what blocked the
+  bucket, the magic wand and the filter library alike. Work inside an
+  operation runs in 256-row bands (the desktop's `CHUNK_ROWS`) under a pool
+  per band, and the store budgets the buffer with the same free-memory check
+  import uses (#354), so the seam fits the jetsam discipline of #309/#311.
+  Design in DD-013.
+- **iOS Paint Bucket** (#325): tap to fill the contiguous region of similar
+  colour on the active layer with the current ink, colour and opacity both,
+  with a **Tolerance** control (0–255, 32 to start) in the width slider's
+  slot. `FloodFill.swift` is a port of the desktop's iterative scanline
+  `flood_fill` — same per-channel tolerance on premultiplied values, same
+  4-connectivity — and a fixture the desktop generates
+  (`scripts/gen-flood-fill-fixture.py`) is asserted word for word by the iOS
+  tests, so the two editions fill identically rather than similarly. Strokes
+  are baked to pixels before the fill so a drawn outline holds; text layers
+  are refused because their pixels are re-rendered on every edit. Closes the
+  iOS parity gap — the desktop bucket and the CLI's `--fill` were already
+  there.
+
 ## [2.20.4] — 2026-09-02
 
 ### Fixed

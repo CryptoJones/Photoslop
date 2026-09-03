@@ -10,14 +10,6 @@ sync — check an item here when its issue closes.
 
 - [ ] Coloured drop shadows and embossing on text layers
   ([#316](https://github.com/CryptoJones/Photoslop/issues/316))
-- [ ] A mutable pixel-buffer layer for iOS — the missing foundation under the
-  paint bucket, the magic wand and the filter library. Drawing is PencilKit
-  (vector strokes) and layers are `UIImage`; the only pixel access in
-  `ipados/` is `.cgImage` for export, so no pixel operation is expressible
-  today ([#324](https://github.com/CryptoJones/Photoslop/issues/324))
-- [ ] iOS paint bucket — port the desktop's iterative scanline `flood_fill`;
-  first real user of the pixel seam
-  ([#325](https://github.com/CryptoJones/Photoslop/issues/325))
 - [ ] iOS magic wand, and the selection model it needs. The wand is the flood
   with the write swapped for a mask; the expensive half is that iOS has no
   image-selection concept at all, and a mask nothing honours is a toy
@@ -68,6 +60,16 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] iOS pixel seam — `PixelBuffer` borrows a layer's pixels as premultiplied
+  ARGB32 in the desktop's byte order, banded in 256 rows, and puts them back
+  as one undo step through `applyPixelOperation`; the foundation under the
+  bucket, the wand and the filter library (DD-013)
+  ([#324](https://github.com/CryptoJones/Photoslop/issues/324)) — shipped v2.21.0
+- [x] iOS paint bucket — tap-to-fill with a Tolerance control, `FloodFill.swift`
+  a port of the desktop's scanline `flood_fill` proven identical by a
+  desktop-generated fixture; first user of the pixel seam
+  ([#325](https://github.com/CryptoJones/Photoslop/issues/325)) — shipped v2.21.0
 
 - [x] The 2026-08-24 iPhone/iPad memory audit's steady-state batch, shipped in
   2.20.4: `RasterLayer.source` is the compressed import bytes under a 64 MiB
