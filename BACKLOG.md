@@ -16,10 +16,6 @@ sync — check an item here when its issue closes.
   PencilKit and are not clipped by the mask yet), selection feathering, and a
   marquee / lasso producer alongside the wand
   ([#370](https://github.com/CryptoJones/Photoslop/issues/370))
-- [ ] Port the six filters to Swift — Sepia, Pixelate, Denoise, Retro Console,
-  Pixel Sort, Datamosh. Datamosh must keep its seeded position-keyed field or
-  it loses parity with the desktop and the CLI
-  ([#327](https://github.com/CryptoJones/Photoslop/issues/327))
 
 ### Desktop
 
@@ -63,6 +59,14 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] iOS filters — the seven desktop built-ins (Sepia, Pixelate, Denoise,
+  Retro Console, Pixel Sort, Datamosh + Chromatic Aberration, Film Negative)
+  ported over `PixelBuffer` behind a Filters submenu with parameter sheets;
+  word-for-word parity with the desktop proven by `gen-filter-fixture.py`,
+  including Qt's nearest-neighbour grid and NumPy's `SeedSequence` + `PCG64`
+  so a Datamosh seed reproduces across platforms; selection-aware, one undo
+  step
+  ([#327](https://github.com/CryptoJones/Photoslop/issues/327)) — shipped v2.27.0
 - [x] iOS text effects — `LayerEffect` is the desktop's normalised effect
   object and `AppearanceRenderer` a port of `appearance.render`, fixture-proven
   bit-exact on the blur and word-exact on every renderable kind; an Effects…
@@ -85,7 +89,6 @@ sync — check an item here when its issue closes.
   All, Deselect, Invert, Delete Selection; the bucket stays inside the
   selection
   ([#326](https://github.com/CryptoJones/Photoslop/issues/326)) — shipped v2.22.0
-
 - [x] The 2026-08-24 iPhone/iPad memory audit's steady-state batch, shipped in
   2.20.4: `RasterLayer.source` is the compressed import bytes under a 64 MiB
   budget instead of the decoded original held for the session — DD-011
