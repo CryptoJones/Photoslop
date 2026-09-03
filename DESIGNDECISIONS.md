@@ -227,6 +227,61 @@ by fiat.
   (`--convert-smart` / `--restore-smart`), which keep pristine pixels resident
   because a desktop can afford it.
 
+**Addendum (2026-09-02): implemented as decided, with the backstop, plus two
+neighbours the same audit found.** The v2.9.0 implementation of #262 shipped the
+*first* row's cousin, not the third: `RasterLayer.source` was the decoded
+`UIImage`, held "for now". The 2026-08-24 memory audit measured what that
+"now" cost — ten placed 12 MP photos, 488 MB of sources beside 126 MB of layers
+([#350](https://github.com/CryptoJones/Photoslop/issues/350)) — and v2.20.4
+moves it to the decision above.
+
+- `LayerSource` is the compressed bytes and the header size. The import paths
+  already hold the file or photo `Data`; it is kept as-is (a 12 MP JPEG is ~3
+  MB against 48.8 MB decoded), and a layer placed for the first time from its
+  own pixels — one restored from a document — gets a PNG of them, which is
+  lossless and still smaller than the bitmap. `placeLayer` decodes inside an
+  `autoreleasepool` and lets the decode go once the canvas-sized bitmap is
+  drawn. Re-placement is lossless exactly as before: the same bytes decode to
+  the same pixels, which is what the test `testReplacingALayerLargerAgain-
+  GivesTheFirstPlacementsPixels` holds still.
+- The backstop is live: `sourceBudgetBytes` (64 MiB — fifteen to thirty phone
+  photos) drops the oldest source first and that layer resizes from its own
+  pixels. Measured on the Simulator with worst-case noise JPEGs (15.4 MB each;
+  a real photo is 3-4 MB), six placed 12 MP photos retain 61.5 MB of sources —
+  four of the six, the budget having let two go — where they retained 292.6 MB.
+- Sources are still not written into the `.photoslop` package. The
+  "Consequences" bullet above stands as the remaining work; the package format
+  is unchanged.
+
+Two more decisions from the same audit live here because they are the same
+shape — bound what is retained, do not ration what the user may do:
+
+- **Undo records only what a step changed
+  ([#351](https://github.com/CryptoJones/Photoslop/issues/351)).** An undo step
+  used to pin the whole prior `[RasterLayer]`. Most steps shared their bitmaps
+  with the document and cost nothing; the four whole-document geometry steps
+  (Canvas Size, Crop, Resize Document, place-expanding-canvas) replaced every
+  bitmap and pinned one old document per step — 32 of them on a 10-layer
+  document is multiple GB. `UndoRecord` now holds the changed layers by id
+  plus order, active layer and canvas size, and a step that replaced more than
+  one layer's pixels packs them with `lzfse` off the main thread. `lzfse` on
+  the raw premultiplied rows rather than PNG because PNG stores straight alpha
+  and a semi-transparent pixel comes back a shade off, and an undo that returns
+  *almost* the pixels is not an undo. Drawn, text and flat layers pack one to
+  two orders of magnitude smaller; a photograph barely packs, which is what
+  lossless means, and the lossless inverse for the grow-only steps (crop back)
+  is the next refinement if the photo case needs one.
+- **Strokes render over their own bounds and compare by revision
+  ([#355](https://github.com/CryptoJones/Photoslop/issues/355)).** Each
+  stroke-bearing layer's `PKDrawing` was rasterised at canvas size per
+  composite pass; it is now rasterised over `drawing.bounds ∩ canvas`, per-layer
+  pooled. Change detection compared `dataRepresentation()` on both sides in
+  `setDrawing` and again in `PencilCanvas.configure`; it now compares a
+  `DrawingKey` (layer id + a revision every assignment bumps) and, where the
+  canvas reports strokes back, `DrawingChange.differs`, which walks stroke
+  metadata (`path.count`, `creationDate`, `renderBounds`, `transform`,
+  `maskedPathRanges`, ink) and never serialises.
+
 ---
 
 ## DD-012 — A canvas overlay lives inside the canvas's coordinate space, not above it

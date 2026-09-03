@@ -6,11 +6,81 @@ import UIKit
 import UniformTypeIdentifiers
 import os
 
+/// The pristine pixels of an imported layer, kept as the compressed bytes they
+/// arrived as rather than as a decoded bitmap (DD-011, #350).
+///
+/// A 12 MP photo is 48.8 MB decoded and 2-4 MB as the JPEG or HEIC the picker
+/// handed over; ten placed photos kept decoded were 488 MB of sources sitting
+/// beside 126 MB of layers, the largest steady-state term on a phone. The bytes
+/// are decoded again each time the layer is placed, which costs a decode per
+/// resize instead of a second bitmap per layer for the whole session.
+struct LayerSource: @unchecked Sendable {
+  /// Tells one source from another without comparing bytes.
+  let id = UUID()
+  /// The encoded image: the file or photo bytes as imported, or a PNG of pixels
+  /// that never had a file (a layer placed for the first time from its own
+  /// canvas-sized bitmap).
+  let data: Data
+  /// The size the bytes decode to, orientation applied, so the placement box
+  /// knows the source's shape without decoding it.
+  let pixelSize: CGSize
+  /// Recency, for the retention budget: the oldest source is the first dropped.
+  let stamp: Int
+
+  var byteCount: Int { data.count }
+
+  init(data: Data, pixelSize: CGSize) {
+    self.data = data
+    self.pixelSize = pixelSize
+    self.stamp = Self.nextStamp()
+  }
+
+  /// PNG-encode pixels that have no file of their own. Lossless, so placing a
+  /// layer that came from a document rather than a photo still resamples from
+  /// exactly the pixels it had.
+  init?(encoding image: UIImage) {
+    guard let png = image.pngData() else { return nil }
+    self.init(data: png, pixelSize: image.size)
+  }
+
+  /// The pixels, decoded fresh and normalised the way the import path did it,
+  /// so re-placement lands on the same bitmap the first placement drew from.
+  func decode() -> UIImage? {
+    try? ProjectArchive.decodeImage(data)
+  }
+
+  private static var stampCounter = 0
+  private static func nextStamp() -> Int {
+    stampCounter += 1
+    return stampCounter
+  }
+}
+
+/// Names one revision of one layer's strokes (#355).
+///
+/// Two drawings are the same for every purpose in the editor when they are the
+/// same revision of the same layer, and that is O(1) to ask. The alternative,
+/// comparing `dataRepresentation()` on both sides, serialised every stroke of a
+/// drawing — several times per composite refresh once `setDrawing` and
+/// `PencilCanvas.configure` had each asked.
+struct DrawingKey: Hashable, Sendable {
+  let layer: UUID?
+  let revision: Int
+
+  /// The key of no drawing at all: what the canvas shows with no active layer.
+  static let empty = DrawingKey(layer: nil, revision: 0)
+}
+
 struct RasterLayer: Identifiable, @unchecked Sendable {
   let id: UUID
   var name: String
   var image: UIImage
-  var drawing: PKDrawing
+  /// Every assignment takes a fresh revision, so two copies of a layer can be
+  /// asked whether their strokes differ without serialising either (#355).
+  var drawing: PKDrawing {
+    didSet { drawingRevision = Self.nextDrawingRevision() }
+  }
+  private(set) var drawingRevision: Int
   var isVisible: Bool
   var opacity: Double
   /// Set on text layers. The image is rendered from this, so keeping it is what
@@ -20,11 +90,11 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
   /// resized repeatedly without resampling a resample.
   ///
   /// Without this, scaling a layer down and back up again would go through the
-  /// canvas-sized bitmap twice and lose detail it never needed to lose. Held in
-  /// memory only for now — persisting it is DD-011's compressed-source work,
-  /// and a reopened document falls back to treating the layer's own pixels as
-  /// the source, which is correct but not lossless across sessions.
-  var source: UIImage?
+  /// canvas-sized bitmap twice and lose detail it never needed to lose. Kept as
+  /// compressed bytes and decoded on placement (DD-011, #350); a reopened
+  /// document falls back to treating the layer's own pixels as the source,
+  /// which is correct but not lossless across sessions.
+  var source: LayerSource?
   /// Where `source` sits on the canvas, in canvas pixels. Nil means it fills
   /// the canvas, which is what every layer did before layers could be placed.
   var placement: CGRect?
@@ -45,6 +115,40 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
 
   /// The rectangle this layer occupies on the canvas.
   var frame: CGRect { CGRect(origin: origin, size: image.size) }
+
+  /// Which strokes this layer currently shows, for the canvas to compare
+  /// against what it last displayed (#355).
+  var drawingKey: DrawingKey { DrawingKey(layer: id, revision: drawingRevision) }
+
+  /// The bytes this layer's bitmap occupies decoded.
+  var imageBytes: Int {
+    Int(image.size.width.rounded()) * Int(image.size.height.rounded()) * 4
+  }
+
+  /// True when nothing about this layer differs from `other` — the test an
+  /// undo step uses to leave a layer out of its record (#351).
+  ///
+  /// Pixels compare by identity: a mutation that touches a layer's image
+  /// always draws a new one, and a copy that kept the old reference is by
+  /// definition unchanged. Strokes compare by revision for the same reason.
+  func hasSameContent(as other: RasterLayer) -> Bool {
+    id == other.id
+      && image === other.image
+      && drawingRevision == other.drawingRevision
+      && name == other.name
+      && isVisible == other.isVisible
+      && opacity == other.opacity
+      && text == other.text
+      && source?.id == other.source?.id
+      && placement == other.placement
+      && origin == other.origin
+  }
+
+  private static var drawingRevisionCounter = 0
+  private static func nextDrawingRevision() -> Int {
+    drawingRevisionCounter += 1
+    return drawingRevisionCounter
+  }
 
   /// True when the layer already fills the canvas from the top-left, which is
   /// the shape every raster operation in this file expects.
@@ -80,7 +184,7 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
     isVisible: Bool = true,
     opacity: Double = 1,
     text: TextContent? = nil,
-    source: UIImage? = nil,
+    source: LayerSource? = nil,
     placement: CGRect? = nil,
     origin: CGPoint = .zero
   ) {
@@ -88,6 +192,9 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
     self.name = name
     self.image = image
     self.drawing = drawing
+    // `didSet` does not fire from an initialiser, so the first revision is
+    // taken by hand.
+    self.drawingRevision = Self.nextDrawingRevision()
     self.isVisible = isVisible
     self.opacity = opacity
     self.text = text
@@ -132,6 +239,41 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   /// for the life of the document. 32 is deep enough that nobody reaches the
   /// end by hand and shallow enough to bound the worst case (#309).
   static let undoDepth = 32
+
+  /// How many bytes of compressed layer sources a document keeps (DD-011's
+  /// backstop, #350). Past this the oldest source is dropped and that layer
+  /// resizes from its own pixels — degraded, not refused. 64 MiB is fifteen to
+  /// thirty phone photos as JPEG or HEIC, against the 488 MB ten of them cost
+  /// decoded.
+  var sourceBudgetBytes = 64 * 1_024 * 1_024
+
+  /// The compressed bytes held as layer sources right now.
+  var retainedSourceBytes: Int {
+    layers.reduce(0) { $0 + ($1.source?.byteCount ?? 0) }
+  }
+
+  /// Every undo step still registered, weakly: `UndoManager` owns the records
+  /// through the closures it holds, and an entry here vanishes when the manager
+  /// drops one — at the depth cap, on redo, or in `shedMemory`. Kept only so
+  /// the store can say what its history pins (#351).
+  private let undoRecords = NSHashTable<UndoRecord>.weakObjects()
+
+  /// The most recently registered step, for tests to inspect what it holds.
+  private(set) weak var latestUndoRecord: UndoRecord?
+
+  /// Bytes the undo history pins that the document itself does not: packed
+  /// PNGs, and live bitmaps no current layer still shares.
+  var undoPinnedBytes: Int {
+    let resident = Set(layers.map { ObjectIdentifier($0.image) })
+    return undoRecords.allObjects.reduce(0) { $0 + $1.pinnedBytes(excluding: resident) }
+  }
+
+  /// Block until every undo record has finished packing its bitmaps. Tests
+  /// measure `undoPinnedBytes` and packing runs off the main thread, so they
+  /// need somewhere to wait.
+  func settleUndoPacking() {
+    UndoRecord.packingQueue.sync {}
+  }
 
   /// A generation counter the off-main render can read.
   ///
@@ -205,6 +347,7 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   /// smaller one than losing the document to a kill.
   func shedMemory() {
     renderTask?.cancel()
+    placementPreviewCache = nil
     let hadHistory = undoManager?.canUndo ?? false
     undoManager?.removeAllActions()
     memoryPressureNotice =
@@ -727,15 +870,24 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   ///
   /// Returns the new layer's id and the rectangle it landed in, which is where
   /// the placement box opens.
+  ///
+  /// `sourceData` is the file or photo the image was decoded from. It becomes
+  /// the layer's source as-is (DD-011, #350); without it the decoded pixels are
+  /// PNG-encoded to serve, which is lossless but slower and larger than the
+  /// bytes the import already had in hand.
   @discardableResult
-  func addPlaceableLayer(name: String, image: UIImage) throws -> (id: UUID, rect: CGRect) {
+  func addPlaceableLayer(
+    name: String, image: UIImage, sourceData: Data? = nil
+  ) throws -> (id: UUID, rect: CGRect) {
     guard layers.count < ProjectArchive.maximumLayers else {
       throw ImportError.resourceLimit(
         "A project holds \(ProjectArchive.maximumLayers) layers and this document has "
           + "\(layers.count).")
     }
-    // A placed layer costs its canvas-sized bitmap plus the retained source
-    // (DD-011), so the budget question is asked about the larger of the two.
+    // The decoded original and the canvas-sized bitmap drawn from it coexist
+    // while the layer is built, so the budget question is asked about the
+    // larger of the two. The original is released once it has been drawn; only
+    // its compressed bytes stay (DD-011).
     let demand = CGSize(
       width: max(canvasSize.width, image.size.width),
       height: max(canvasSize.height, image.size.height))
@@ -744,16 +896,58 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }
     let normalized = Self.normalizedImage(image)
     let rect = Self.centredRect(for: normalized.size, in: canvasSize)
+    let source =
+      sourceData.map { LayerSource(data: $0, pixelSize: normalized.size) }
+      ?? LayerSource(encoding: normalized)
     let layer = RasterLayer(
       name: uniqueName(base: name),
       image: Self.drawn(normalized, in: rect, canvas: canvasSize),
-      source: normalized,
+      source: source,
       placement: rect)
     mutate(actionName: "New Layer from Image") {
       layers.append(layer)
       activeLayerID = layer.id
+      trimSources()
     }
     return (layer.id, rect)
+  }
+
+  /// Drop the oldest sources until what is kept fits `sourceBudgetBytes`.
+  ///
+  /// A layer whose source is dropped keeps working: its next placement
+  /// resamples from its own canvas-sized pixels, exactly as a layer restored
+  /// from a file does. Called inside a mutation so the change is part of the
+  /// step that caused it.
+  private func trimSources() {
+    var total = retainedSourceBytes
+    while total > sourceBudgetBytes {
+      guard
+        let oldest = layers.indices
+          .filter({ layers[$0].source != nil })
+          .min(by: { layers[$0].source!.stamp < layers[$1].source!.stamp })
+      else { return }
+      total -= layers[oldest].source!.byteCount
+      layers[oldest].source = nil
+    }
+  }
+
+  /// A fitted decode of a layer's source for the placement box to scale while
+  /// it is dragged, cached so a drag does not decode a photo per sample.
+  private var placementPreviewCache: (source: UUID, image: UIImage)?
+
+  /// The pixels the placement box shows live for a raster layer: the source,
+  /// decoded no larger than the canvas (which is as large as the screen can
+  /// show it), or the layer's own pixels when it has no source.
+  func placementPreview(for id: UUID) -> UIImage? {
+    guard let layer = layers.first(where: { $0.id == id }) else { return nil }
+    guard let source = layer.source else { return layer.image }
+    if let cached = placementPreviewCache, cached.source == source.id {
+      return cached.image
+    }
+    let preview =
+      (try? ProjectArchive.decodeImage(source.data, fittingInto: canvasSize)) ?? layer.image
+    placementPreviewCache = (source.id, preview)
+    return preview
   }
 
   /// The rectangle an image occupies when it arrives at its own size, centred.
@@ -789,19 +983,38 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   func placeLayer(_ id: UUID, in rect: CGRect, actionName: String = "Resize Layer") {
     guard let layer = layers.first(where: { $0.id == id }) else { return }
     guard rect.width >= 1, rect.height >= 1 else { return }
-    // A layer restored from a file has no separate source, so its own pixels
-    // are it, and they cover the canvas.
-    let source = layer.source ?? layer.image
-    let drawn = Self.drawn(source, in: rect, canvas: canvasSize)
+    let placed = Self.placed(layer, in: rect, canvas: canvasSize)
     mutate(actionName: actionName) {
       update(id) {
-        $0.image = drawn
-        // `drawn` is canvas-sized, so a layer that had been bounded (#309) is
-        // back to filling the canvas and must stop claiming an offset.
+        $0.image = placed.image
+        // The image is canvas-sized, so a layer that had been bounded (#309)
+        // is back to filling the canvas and must stop claiming an offset.
         $0.origin = .zero
-        $0.source = source
+        $0.source = placed.source
         $0.placement = rect
       }
+      trimSources()
+    }
+  }
+
+  /// A layer's source drawn into `rect`, and the source to keep with it.
+  ///
+  /// The source is decoded for the duration of the draw and released with the
+  /// pool (DD-011, #350). A layer restored from a file has no separate source,
+  /// so its own pixels are it: they are PNG-encoded on this first placement so
+  /// the next one resamples from the same pixels rather than from this one's
+  /// result.
+  private static func placed(
+    _ layer: RasterLayer, in rect: CGRect, canvas: CGSize
+  ) -> (image: UIImage, source: LayerSource?) {
+    autoreleasepool {
+      if let source = layer.source, let pixels = source.decode() {
+        return (drawn(pixels, in: rect, canvas: canvas), source)
+      }
+      return (
+        drawn(layer.image, in: rect, canvas: canvas),
+        layer.source ?? LayerSource(encoding: layer.image)
+      )
     }
   }
 
@@ -823,8 +1036,8 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }
     let offset = CGPoint(x: -union.origin.x, y: -union.origin.y)
     let translation = CGAffineTransform(translationX: offset.x, y: offset.y)
-    let source = layer.source ?? layer.image
     let target = rect.offsetBy(dx: offset.x, dy: offset.y)
+    let placed = Self.placed(layer, in: target, canvas: union.size)
     let previousCanvas = canvasSize
     mutate(actionName: "Expand Canvas") {
       canvasSize = union.size
@@ -832,8 +1045,8 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
         let existing = original.expandedToCanvas(previousCanvas)
         var moved = existing
         if existing.id == id {
-          moved.image = Self.drawn(source, in: target, canvas: union.size)
-          moved.source = source
+          moved.image = placed.image
+          moved.source = placed.source
           moved.placement = target
           return moved
         }
@@ -844,11 +1057,12 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
           text.y += Double(offset.y)
           moved.text = text
         }
-        if let placed = moved.placement {
-          moved.placement = placed.applying(translation)
+        if let shifted = moved.placement {
+          moved.placement = shifted.applying(translation)
         }
         return moved
       }
+      trimSources()
     }
     return true
   }
@@ -940,9 +1154,22 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     refreshCanvas()
   }
 
-  func setDrawing(_ drawing: PKDrawing) {
-    guard drawing.dataRepresentation() != activeLayer?.drawing.dataRepresentation() else { return }
+  /// The strokes the canvas should be showing right now.
+  var activeDrawingKey: DrawingKey { activeLayer?.drawingKey ?? .empty }
+
+  /// Take the strokes the canvas reports, as one undo step, and return the key
+  /// the canvas should now consider itself to be showing (#355).
+  ///
+  /// PencilKit reports a change for every completed stroke, and occasionally
+  /// for none — a cancelled touch, a tool change — so an unchanged drawing has
+  /// to be recognised or it becomes an empty undo step. `DrawingChange.differs`
+  /// answers that from stroke metadata without serialising anything.
+  @discardableResult
+  func setDrawing(_ drawing: PKDrawing) -> DrawingKey {
+    guard let active = activeLayer else { return .empty }
+    guard DrawingChange.differs(drawing, active.drawing) else { return active.drawingKey }
     mutate(actionName: "Draw") { updateActive { $0.drawing = drawing } }
+    return activeDrawingKey
   }
 
   func addLayer() {
@@ -1155,15 +1382,24 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     let bounds = CGRect(origin: .zero, size: size)
     return UIGraphicsImageRenderer(size: size, format: format).image { context in
       context.cgContext.interpolationQuality = .high
+      // One pool per layer: the stroke bitmap below is a transient that
+      // otherwise lives until the whole composite returns, so five stroke
+      // layers cost five of them at once, on every refresh of a drag (#355).
       for layer in layers where layer.isVisible && layer.opacity > 0 {
-        // A layer occupies its own frame, which is the whole canvas for every
-        // layer that predates bounded extents (#309) and a tight box around the
-        // glyphs for a text layer. Drawing into `bounds` unconditionally would
-        // stretch a bounded layer across the canvas.
-        layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
-        if layer.id != excludedID, !layer.drawing.strokes.isEmpty {
-          layer.drawing.image(from: bounds, scale: 1).draw(
-            in: bounds,
+        autoreleasepool {
+          // A layer occupies its own frame, which is the whole canvas for
+          // every layer that predates bounded extents (#309) and a tight box
+          // around the glyphs for a text layer. Drawing into `bounds`
+          // unconditionally would stretch a bounded layer across the canvas.
+          layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
+          guard layer.id != excludedID, !layer.drawing.strokes.isEmpty else { return }
+          // Strokes are rasterised over the box they occupy, not the canvas:
+          // a signature in one corner of a 4000x3000 document is a few
+          // hundred kilobytes rather than 48 MB.
+          let strokeBox = layer.drawing.bounds.intersection(bounds).integral
+          guard !strokeBox.isEmpty else { return }
+          layer.drawing.image(from: strokeBox, scale: 1).draw(
+            in: strokeBox,
             blendMode: .normal,
             alpha: layer.opacity
           )
@@ -1209,11 +1445,13 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     EditorState(layers: layers, activeLayerID: activeLayerID, canvasSize: canvasSize)
   }
 
-  private func restore(_ state: EditorState, actionName: String) {
+  /// Put a step's record back, merging it over the layers that step left alone.
+  private func restore(_ record: UndoRecord, actionName: String) {
     let redo = currentState()
-    layers = state.layers
-    activeLayerID = state.activeLayerID
-    canvasSize = state.canvasSize
+    let current = Dictionary(layers.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    layers = record.order.compactMap { id in record.changed[id]?.layer() ?? current[id] }
+    activeLayerID = record.activeLayerID
+    canvasSize = record.canvasSize
     mutationRevision += 1
     registerUndo(previous: redo, actionName: actionName)
     refreshCanvas()
@@ -1232,12 +1470,25 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     if refresh { refreshCanvas() }
   }
 
+  /// Register the step that turned `previous` into the current state.
+  ///
+  /// The record holds only what the step changed (#351): the layers whose
+  /// content differs, by id, plus the order, the active layer and the canvas
+  /// size. A stroke on one layer of a ten-layer document used to pin all ten
+  /// (cheaply, since nine shared their bitmaps with the document — but a
+  /// Canvas Size step replaced all ten and pinned a whole old document per
+  /// step). Now the one-layer step records one layer, and the geometry step
+  /// records ten that are `lzfse`-packed off the main thread moments later.
   private func registerUndo(previous: EditorState, actionName: String) {
     guard let undoManager else { return }
+    let record = UndoRecord(from: previous, to: currentState())
+    undoRecords.add(record)
+    latestUndoRecord = record
     undoManager.registerUndo(withTarget: self) { target in
-      target.restore(previous, actionName: actionName)
+      target.restore(record, actionName: actionName)
     }
     undoManager.setActionName(actionName)
+    record.packIfWorthwhile()
   }
 
   private func updateActive(_ operation: (inout RasterLayer) -> Void) {
@@ -1270,5 +1521,199 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
         return message
       }
     }
+  }
+}
+
+/// One undo step's record: the layers it changed and nothing else (#351).
+///
+/// A record names the layer order, the active layer and the canvas size from
+/// before the step, and holds the prior content of only the layers whose
+/// content the step changed. Restoring merges those over the layers the step
+/// left alone, which the document still has. A layer the step *added* is not
+/// in the order and simply goes; one it removed is held here and comes back.
+final class UndoRecord: @unchecked Sendable {
+  let canvasSize: CGSize
+  let activeLayerID: UUID?
+  /// Every layer id from before the step, in order, changed or not.
+  let order: [UUID]
+  /// The layers whose content the step changed, as they were before it.
+  let changed: [UUID: HeldLayer]
+
+  /// Where records pack their bitmaps: serial, so a burst of geometry steps
+  /// encodes one document at a time; utility, so it yields to the touch.
+  static let packingQueue = DispatchQueue(label: "photoslop.undo-packing", qos: .utility)
+
+  init(from previous: EditorState, to current: EditorState) {
+    canvasSize = previous.canvasSize
+    activeLayerID = previous.activeLayerID
+    order = previous.layers.map(\.id)
+    let now = Dictionary(current.layers.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    var changed: [UUID: HeldLayer] = [:]
+    for layer in previous.layers {
+      if let same = now[layer.id], same.hasSameContent(as: layer) { continue }
+      changed[layer.id] = HeldLayer(
+        layer, pixelsReplaced: now[layer.id].map { $0.image !== layer.image } ?? true)
+    }
+    self.changed = changed
+  }
+
+  /// Pack the held bitmaps when the step replaced more than one layer's
+  /// pixels — the signature of Canvas Size, Crop, Resize Document and
+  /// place-expanding-canvas, each of which redraws every layer. A one-layer
+  /// step stays live: packing it would cost a copy to save a bitmap the
+  /// document has, in most cases, only just stopped sharing.
+  func packIfWorthwhile() {
+    let replaced = changed.values.filter(\.holdsReplacedPixels)
+    guard replaced.count >= 2 else { return }
+    Self.packingQueue.async {
+      for held in replaced { held.pack() }
+    }
+  }
+
+  /// Bytes this record pins that nothing in `resident` (the document's own
+  /// bitmaps, by identity) already accounts for.
+  func pinnedBytes(excluding resident: Set<ObjectIdentifier>) -> Int {
+    changed.values.reduce(0) { $0 + $1.pinnedBytes(excluding: resident) }
+  }
+}
+
+/// One layer as an undo step held it: live at first, packed bytes once the
+/// packing queue reaches it (#351).
+///
+/// Packing is lossless compression of the raw premultiplied bitmap, not PNG:
+/// PNG stores straight alpha, so a semi-transparent pixel comes back a shade
+/// off after the round trip, and an undo that returns *almost* the pixels it
+/// took away is not an undo. `lzfse` on the raw rows is bit-exact, runs at
+/// hundreds of MB/s, and shrinks drawn, text and flat layers by one to two
+/// orders of magnitude. A photograph compresses barely at all, which is honest:
+/// nothing lossless does better on noise.
+final class HeldLayer: @unchecked Sendable {
+  private let lock = NSLock()
+  /// The layer as held. `image` is the live bitmap until packing replaces it.
+  private var template: RasterLayer
+  private var packed: PackedPixels?
+  /// True when the step drew a new bitmap for this layer, so the held one is
+  /// the step's alone to pin.
+  let holdsReplacedPixels: Bool
+
+  init(_ layer: RasterLayer, pixelsReplaced: Bool) {
+    template = layer
+    holdsReplacedPixels = pixelsReplaced
+  }
+
+  /// Trade the live bitmap for its packed bytes. Runs off the main thread.
+  func pack() {
+    lock.lock()
+    let live = packed == nil ? template.image : nil
+    lock.unlock()
+    guard let live, let bytes = autoreleasepool(invoking: { PackedPixels(live) }) else { return }
+    lock.lock()
+    packed = bytes
+    template.image = UIImage()
+    lock.unlock()
+  }
+
+  /// The layer as it was, its bitmap unpacked if it had been packed.
+  func layer() -> RasterLayer {
+    lock.lock()
+    defer { lock.unlock() }
+    var restored = template
+    if let packed, let image = packed.unpack() {
+      restored.image = image
+    }
+    return restored
+  }
+
+  /// Whether the held bitmap has been traded for packed bytes yet.
+  var isPacked: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return packed != nil
+  }
+
+  func pinnedBytes(excluding resident: Set<ObjectIdentifier>) -> Int {
+    lock.lock()
+    defer { lock.unlock() }
+    if let packed { return packed.data.count }
+    return resident.contains(ObjectIdentifier(template.image)) ? 0 : template.imageBytes
+  }
+}
+
+/// A bitmap's rows, drawn into one known 32-bit premultiplied layout and
+/// compressed losslessly, with what it takes to rebuild the `CGImage`.
+struct PackedPixels {
+  let width: Int
+  let height: Int
+  let data: Data
+
+  private static let bitmapInfo =
+    CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue
+  private static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+
+  init?(_ image: UIImage) {
+    guard let cgImage = image.cgImage else { return nil }
+    let width = cgImage.width
+    let height = cgImage.height
+    guard width > 0, height > 0 else { return nil }
+    // Drawn into a context rather than read from the image's data provider:
+    // a provider backed by a file hands back the *encoded* file, and one
+    // backed by a different pixel layout hands back rows this cannot rebuild.
+    guard
+      let context = CGContext(
+        data: nil, width: width, height: height, bitsPerComponent: 8,
+        bytesPerRow: width * 4, space: Self.colorSpace, bitmapInfo: Self.bitmapInfo),
+      let base = context.data
+    else { return nil }
+    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+    let raw = Data(bytes: base, count: width * 4 * height)
+    guard let compressed = try? (raw as NSData).compressed(using: .lzfse) else { return nil }
+    self.width = width
+    self.height = height
+    self.data = compressed as Data
+  }
+
+  func unpack() -> UIImage? {
+    guard
+      let raw = try? (data as NSData).decompressed(using: .lzfse),
+      let provider = CGDataProvider(data: raw),
+      let cgImage = CGImage(
+        width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+        bytesPerRow: width * 4, space: Self.colorSpace,
+        bitmapInfo: CGBitmapInfo(rawValue: Self.bitmapInfo), provider: provider,
+        decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+    else { return nil }
+    return UIImage(cgImage: cgImage)
+  }
+}
+
+/// Whether two drawings differ, answered from stroke metadata (#355).
+///
+/// `PKDrawing.dataRepresentation()` is the only equality PencilKit offers and
+/// it serialises every point of every stroke. Everything the editor can do to
+/// a drawing shows up cheaper than that: a new stroke changes the count, the
+/// vector eraser removes one, the bitmap eraser leaves the count alone but
+/// changes a stroke's `maskedPathRanges`, and a transform moves its
+/// `renderBounds`. So the strokes are walked pairwise over those fields, which
+/// is O(strokes) with no allocation beyond the stroke wrappers themselves.
+enum DrawingChange {
+  static func differs(_ lhs: PKDrawing, _ rhs: PKDrawing) -> Bool {
+    if lhs.bounds != rhs.bounds { return true }
+    let left = lhs.strokes
+    let right = rhs.strokes
+    if left.count != right.count { return true }
+    for (a, b) in zip(left, right) where differs(a, b) {
+      return true
+    }
+    return false
+  }
+
+  private static func differs(_ a: PKStroke, _ b: PKStroke) -> Bool {
+    a.path.count != b.path.count
+      || a.path.creationDate != b.path.creationDate
+      || a.renderBounds != b.renderBounds
+      || a.transform != b.transform
+      || a.maskedPathRanges != b.maskedPathRanges
+      || a.ink.inkType != b.ink.inkType
+      || a.ink.color != b.ink.color
   }
 }

@@ -4,6 +4,45 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.20.4] — 2026-09-02
+
+### Fixed
+- **iPhone/iPad: a placed layer's source is its compressed bytes, not the
+  decoded original** (#350). `RasterLayer.source` held the full-resolution
+  decoded bitmap of every placed photo for the whole session — DD-011's "for
+  now" — and ten placed 12 MP photos were 488 MB of sources beside 126 MB of
+  layers, the largest steady-state term on a phone. The source is now the
+  JPEG/HEIC bytes the import already had in hand (a PNG of the pixels for a
+  layer that never had a file), decoded inside an `autoreleasepool` only for
+  the duration of a placement, under a 64 MiB budget that drops the oldest
+  source first; a layer past the budget resizes from its own pixels, the way a
+  layer restored from a document always has. Re-placement is lossless exactly
+  as before. On the Simulator, six placed 12 MP photos retain 61.5 MB of
+  sources (worst-case 15 MB noise JPEGs, the budget having let two go) where
+  they retained 292.6 MB decoded. DD-011 gains an addendum.
+- **iPhone/iPad: an undo step records only the layers it changed** (#351).
+  Every step pinned the whole prior layer array; most shared their bitmaps
+  with the document and cost nothing, but Canvas Size, Crop, Resize Document
+  and place-expanding-canvas replace every layer's bitmap, so each pinned an
+  entire old document — 32 of them on a 10-layer document is multiple GB.
+  `UndoRecord` now holds the changed layers by id plus order, active layer
+  and canvas size, and a step that replaced more than one layer's pixels
+  packs them with `lzfse` off the main thread (lossless on the raw
+  premultiplied rows — PNG stores straight alpha and would hand back
+  semi-transparent pixels a shade off). Drawn, text and flat layers pack one
+  to two orders of magnitude smaller; a photograph barely packs, which is
+  what lossless means.
+- **iPhone/iPad: strokes composite over their own bounds and change detection
+  no longer serialises drawings** (#355). Each stroke-bearing layer's
+  `PKDrawing` was rasterised at full canvas size on every composite pass —
+  up to 5 × 48 MB of transients per refresh of a text drag on a 4000×3000
+  document with five stroke layers — and `setDrawing` and
+  `PencilCanvas.configure` each compared `dataRepresentation()` on both sides.
+  Strokes now rasterise over `drawing.bounds ∩ canvas` inside a per-layer
+  `autoreleasepool`, and change detection compares a `DrawingKey` (layer id +
+  a revision every assignment bumps) or, where the canvas reports strokes
+  back, walks stroke metadata without serialising.
+
 ## [2.20.3] — 2026-09-02
 
 ### Fixed

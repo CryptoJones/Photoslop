@@ -8,17 +8,6 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
-- [ ] `RasterLayer.source` keeps the decoded full-resolution original of every
-  placed layer for the whole session (DD-011's "for now") — ten placed 12 MP
-  photos ≈ 488 MB of sources on iPhone
-  ([#350](https://github.com/CryptoJones/Photoslop/issues/350))
-- [ ] One canvas-geometry undo step (`resizeCanvas`/`crop`/`scaleDocument`)
-  pins a whole document of old bitmaps; register per-layer diffs instead of
-  the full layer array
-  ([#351](https://github.com/CryptoJones/Photoslop/issues/351))
-- [ ] Composite render rasterizes each stroke-bearing layer's `PKDrawing` at
-  full canvas size every pass, and change detection serializes drawings
-  repeatedly ([#355](https://github.com/CryptoJones/Photoslop/issues/355))
 - [ ] Coloured drop shadows and embossing on text layers
   ([#316](https://github.com/CryptoJones/Photoslop/issues/316))
 - [ ] A mutable pixel-buffer layer for iOS — the missing foundation under the
@@ -79,6 +68,20 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] The 2026-08-24 iPhone/iPad memory audit's steady-state batch, shipped in
+  2.20.4: `RasterLayer.source` is the compressed import bytes under a 64 MiB
+  budget instead of the decoded original held for the session — DD-011
+  implemented as decided
+  ([#350](https://github.com/CryptoJones/Photoslop/issues/350));
+  undo records only the layers a step changed, and a whole-document geometry
+  step packs its old bitmaps with `lzfse` off the main thread instead of
+  pinning a document per step
+  ([#351](https://github.com/CryptoJones/Photoslop/issues/351));
+  and the composite rasterises each layer's strokes over their own bounds in
+  a per-layer pool while change detection compares a `DrawingKey` revision
+  instead of serialising the drawing twice per refresh
+  ([#355](https://github.com/CryptoJones/Photoslop/issues/355)) — shipped v2.20.4
 
 - [x] iPhone More Actions menu nested into Image and Text submenus so its
   seven-row top level fits without scrolling, and finger drawing on by
