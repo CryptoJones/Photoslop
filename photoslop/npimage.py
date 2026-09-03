@@ -4,6 +4,11 @@
 The fill is an iterative scanline algorithm: span expansion and neighbour-run
 discovery are vectorised, so no per-pixel Python runs even on large regions,
 and the only allocations are the boolean masks.
+
+The full-layer float paths (gaussian blur, unsharp mask, weighted blend,
+puppet warp) walk the image in row bands of BAND_ROWS, so their transient
+is a band's worth of planes rather than four float copies of the layer
+(DD-001, #347) — the same discipline as adjust.CHUNK_ROWS.
 """
 
 from __future__ import annotations
@@ -13,6 +18,8 @@ from collections import deque
 import numpy as np
 from PySide6.QtCore import QPoint, QRect
 from PySide6.QtGui import QImage, QPainter, QPainterPath, Qt
+
+BAND_ROWS = 256  # rows per float transient; twin of adjust.CHUNK_ROWS (adjust imports us)
 
 
 def view_u32(img: QImage) -> np.ndarray:
@@ -297,43 +304,48 @@ def puppet_warp(img: QImage, pins: list) -> QImage:
     anchors have source == target, moved pins pull their neighbourhood.
     The displacement field is inverse-distance-squared weighted over the
     pins' target positions; pixels resample backward bilinearly. Returns a
-    new image the same size."""
+    new image the same size. The field and the resample are per-pixel over
+    the whole source, so the work runs in row bands: the only full-size
+    buffer is the result itself (#347)."""
     h, w = img.height(), img.width()
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-    num_x = np.zeros((h, w), dtype=np.float32)
-    num_y = np.zeros((h, w), dtype=np.float32)
-    den = np.zeros((h, w), dtype=np.float32)
-    for (sx, sy), (tx, ty) in pins:
-        dx, dy = tx - sx, ty - sy
-        dist2 = (xx - tx) ** 2 + (yy - ty) ** 2 + 4.0
-        weight = 1.0 / dist2
-        num_x += weight * dx
-        num_y += weight * dy
-        den += weight
-    disp_x = num_x / den
-    disp_y = num_y / den
-
     src = view_u32(img)
-    sx = np.clip(xx - disp_x, 0, w - 1)
-    sy = np.clip(yy - disp_y, 0, h - 1)
-    fx0 = np.floor(sx).astype(np.int64)
-    fy0 = np.floor(sy).astype(np.int64)
-    fx1 = np.minimum(fx0 + 1, w - 1)
-    fy1 = np.minimum(fy0 + 1, h - 1)
-    tx = (sx - fx0)[..., None]
-    ty = (sy - fy0)[..., None]
-
-    def planes(a):
-        return np.stack(
-            [((a >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (24, 16, 8, 0)], axis=-1
-        )
-
-    top = planes(src[fy0, fx0]) * (1 - tx) + planes(src[fy0, fx1]) * tx
-    bot = planes(src[fy1, fx0]) * (1 - tx) + planes(src[fy1, fx1]) * tx
-    out_p = top * (1 - ty) + bot * ty
-    a, r, g, b = [np.clip(out_p[..., i] + 0.5, 0, 255).astype(np.uint32) for i in range(4)]
     out = QImage(w, h, img.format())
-    view_u32(out)[:] = (a << np.uint32(24)) | (r << np.uint32(16)) | (g << np.uint32(8)) | b
+    dst = view_u32(out)
+
+    for y0 in range(0, h, BAND_ROWS):
+        y1 = min(y0 + BAND_ROWS, h)
+        yy, xx = np.mgrid[y0:y1, 0:w].astype(np.float32)
+        num_x = np.zeros((y1 - y0, w), dtype=np.float32)
+        num_y = np.zeros((y1 - y0, w), dtype=np.float32)
+        den = np.zeros((y1 - y0, w), dtype=np.float32)
+        for (sx, sy), (tx, ty) in pins:
+            dx, dy = tx - sx, ty - sy
+            dist2 = (xx - tx) ** 2 + (yy - ty) ** 2 + 4.0
+            weight = 1.0 / dist2
+            num_x += weight * dx
+            num_y += weight * dy
+            den += weight
+        disp_x = num_x / den
+        disp_y = num_y / den
+
+        sx = np.clip(xx - disp_x, 0, w - 1)
+        sy = np.clip(yy - disp_y, 0, h - 1)
+        fx0 = np.floor(sx).astype(np.int64)
+        fy0 = np.floor(sy).astype(np.int64)
+        fx1 = np.minimum(fx0 + 1, w - 1)
+        fy1 = np.minimum(fy0 + 1, h - 1)
+        tx = sx - fx0
+        ty = sy - fy0
+
+        # gather the four bilinear taps once, then resample a channel at a time
+        taps = (src[fy0, fx0], src[fy0, fx1], src[fy1, fx0], src[fy1, fx1])
+        packed = np.zeros((y1 - y0, w), dtype=np.uint32)
+        for shift in (24, 16, 8, 0):
+            p00, p01, p10, p11 = (((t >> np.uint32(shift)) & 0xFF).astype(np.float32) for t in taps)
+            top = p00 * (1 - tx) + p01 * tx
+            bot = p10 * (1 - tx) + p11 * tx
+            packed |= _round_u8(top * (1 - ty) + bot * ty) << np.uint32(shift)
+        dst[y0:y1] = packed
     return out
 
 
@@ -352,43 +364,108 @@ def _box_blur_plane(c: np.ndarray, r: int) -> np.ndarray:
     return c
 
 
+def _box_sum(c: np.ndarray, r: int, axis: int) -> np.ndarray:
+    """Sum of each (2r+1)-wide window along `axis`, the window truncated at
+    the array's edges (zero outside). Cumsum-based, so O(1) per element for
+    any radius — including radii wider than the array, which the float32
+    vstack trick in `_box_blur_plane` cannot balance. Exact on int64."""
+    n = c.shape[axis]
+    csum = np.cumsum(c, axis=axis)
+    out = np.empty_like(csum)
+    v_out = out.swapaxes(0, axis)  # views: one set of row slices serves both axes
+    v_sum = csum.swapaxes(0, axis)
+    keep = max(0, n - r)
+    v_out[:keep] = v_sum[r : r + keep]
+    v_out[keep:] = v_sum[-1]
+    if n > r + 1:
+        v_out[r + 1 :] -= v_sum[: n - r - 1]
+    return out
+
+
+def _blurred_plane(src: np.ndarray, shift: int, r: int, top: int, rows: int) -> np.ndarray:
+    """Triple box blur of one 8-bit channel of `src` — a row band plus its
+    halo, see `_halo_bands` — returning rows [top, top + rows) as float64.
+
+    The three vertical passes run in exact int64 (window sums of bytes never
+    leave the integers, so the result cannot depend on where the band
+    boundaries fall); the horizontal passes are per-row and cannot see the
+    boundaries at all. The single division by k**6 happens once, at the end.
+    Net: banded output is bit-identical to the same maths over the whole
+    image, and within 1 LSB of the float32 full-image version this replaced
+    (#347)."""
+    c = ((src >> np.uint32(shift)) & 0xFF).astype(np.int64)
+    for _ in range(3):
+        c = _box_sum(c, r, 0)
+    c = c[top : top + rows].astype(np.float64)
+    for _ in range(3):
+        c = _box_sum(c, r, 1)
+    return c / float((2 * r + 1) ** 6)
+
+
+def _halo_bands(arr: np.ndarray, r: int):
+    """Yield (y0, y1, src, top) per BAND_ROWS band of `arr`, for an in-place
+    triple box blur of radius r: `src` is the band plus up to 3r rows of halo
+    either side (as far as the image extends) and `top` is where the band
+    starts inside it. The halo above comes from a carry of the *original*
+    rows — the caller overwrites each band before the next is computed, so
+    reading them back from `arr` would blur the blur. The carry is at most
+    3r rows: bounded by the radius, not the image."""
+    height = arr.shape[0]
+    halo = 3 * r
+    carry = arr[:0]
+    for y0 in range(0, height, BAND_ROWS):
+        y1 = min(y0 + BAND_ROWS, height)
+        src = np.concatenate((carry, arr[y0 : min(height, y1 + halo)]))
+        top = carry.shape[0]
+        carry = src[max(0, top + y1 - y0 - halo) : top + y1 - y0].copy()  # rows [y1 - 3r, y1)
+        yield y0, y1, src, top
+
+
+def _round_u8(plane: np.ndarray) -> np.ndarray:
+    return np.clip(plane + 0.5, 0, 255).astype(np.uint32)
+
+
 def gaussian_blur(img: QImage, radius: int, mask: np.ndarray | None = None) -> None:
     """Approximate gaussian blur (triple box blur) on all four premultiplied
-    channels, in place; when `mask` is given only masked pixels change."""
+    channels, in place; when `mask` is given only masked pixels change.
+    Processed in row bands so the float transient is bounded by the band
+    (plus the blur halo), not the layer (DD-001, #347)."""
     r = max(1, int(radius) // 2 + 1)
     arr = view_u32(img)
-    planes = [((arr >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (24, 16, 8, 0)]
-    blurred = planes
-    for _ in range(3):
-        blurred = [_box_blur_plane(c, r) for c in blurred]
-    a, rr, g, b = [np.clip(c + 0.5, 0, 255).astype(np.uint32) for c in blurred]
-    out = (a << np.uint32(24)) | (rr << np.uint32(16)) | (g << np.uint32(8)) | b
-    if mask is None:
-        arr[:] = out
-    else:
-        arr[mask] = out[mask]
+    for y0, y1, src, top in _halo_bands(arr, r):
+        out = np.zeros((y1 - y0, arr.shape[1]), dtype=np.uint32)
+        for shift in (24, 16, 8, 0):
+            plane = _blurred_plane(src, shift, r, top, y1 - y0)
+            out |= _round_u8(plane) << np.uint32(shift)
+        band = arr[y0:y1]
+        if mask is None:
+            band[:] = out
+        else:
+            m = mask[y0:y1]
+            band[m] = out[m]
 
 
 def unsharp_mask(img: QImage, radius: int, amount: float, mask: np.ndarray | None = None) -> None:
-    """Sharpen: original + amount * (original - blur), premultiplied-safe."""
+    """Sharpen: original + amount * (original - blur), premultiplied-safe
+    (colour never exceeds alpha, alpha itself is untouched). Row-banded like
+    `gaussian_blur`."""
     r = max(1, int(radius) // 2 + 1)
     arr = view_u32(img)
-    planes = [((arr >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (24, 16, 8, 0)]
-    sharpened = []
-    for i, c in enumerate(planes):
-        blur = c
-        for _ in range(3):
-            blur = _box_blur_plane(blur, r)
-        if i == 0:
-            sharpened.append(c)  # alpha untouched
+    for y0, y1, src, top in _halo_bands(arr, r):
+        band = arr[y0:y1]
+        alpha = band >> np.uint32(24)
+        out = alpha << np.uint32(24)
+        alpha = alpha.astype(np.float64)
+        for shift in (16, 8, 0):
+            c = ((band >> np.uint32(shift)) & 0xFF).astype(np.float64)
+            blur = _blurred_plane(src, shift, r, top, y1 - y0)
+            sharp = np.minimum(np.clip(c + amount * (c - blur), 0, 255), alpha)
+            out |= _round_u8(sharp) << np.uint32(shift)
+        if mask is None:
+            band[:] = out
         else:
-            sharpened.append(np.minimum(np.clip(c + amount * (c - blur), 0, 255), planes[0]))
-    a, rr, g, b = [np.clip(c + 0.5, 0, 255).astype(np.uint32) for c in sharpened]
-    out = (a << np.uint32(24)) | (rr << np.uint32(16)) | (g << np.uint32(8)) | b
-    if mask is None:
-        arr[:] = out
-    else:
-        arr[mask] = out[mask]
+            m = mask[y0:y1]
+            band[m] = out[m]
 
 
 def livewire_path(img: QImage, a, b, margin: int = 16, max_area: int = 60000) -> list:
@@ -697,19 +774,22 @@ def inpaint_diffuse(img: QImage, mask: np.ndarray, blend_passes: int = 3) -> QRe
 
 
 def blend_by_weights(filtered: QImage, original: QImage, weights: np.ndarray) -> None:
-    """filtered = original*(1-w) + filtered*w, per premultiplied channel."""
+    """filtered = original*(1-w) + filtered*w, per premultiplied channel.
+    Per-pixel, so it bands trivially: one (BAND_ROWS, w) float plane per
+    channel instead of two (h, w, 4) stacks plus their product (#347)."""
     f = view_u32(filtered)
     o = view_u32(original)
-    w = weights[..., None]
-    fp = np.stack(
-        [((f >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (24, 16, 8, 0)], axis=-1
-    )
-    op = np.stack(
-        [((o >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (24, 16, 8, 0)], axis=-1
-    )
-    out = op * (1.0 - w) + fp * w
-    a, r, g, b = [np.clip(out[..., i] + 0.5, 0, 255).astype(np.uint32) for i in range(4)]
-    f[:] = (a << np.uint32(24)) | (r << np.uint32(16)) | (g << np.uint32(8)) | b
+    height = f.shape[0]
+    for y0 in range(0, height, BAND_ROWS):
+        y1 = min(y0 + BAND_ROWS, height)
+        fb, ob = f[y0:y1], o[y0:y1]
+        w = weights[y0:y1]
+        out = np.zeros_like(fb)
+        for shift in (24, 16, 8, 0):
+            fp = ((fb >> np.uint32(shift)) & 0xFF).astype(np.float32)
+            op = ((ob >> np.uint32(shift)) & 0xFF).astype(np.float32)
+            out |= _round_u8(op * (1.0 - w) + fp * w) << np.uint32(shift)
+        fb[:] = out
 
 
 def feathered_weights(path, size, offset, feather: float) -> np.ndarray:

@@ -26,13 +26,6 @@ sync — check an item here when its issue closes.
   ([#313](https://github.com/CryptoJones/Photoslop/issues/313))
 - [ ] Coloured drop shadows and embossing on text layers
   ([#316](https://github.com/CryptoJones/Photoslop/issues/316))
-- [ ] Tell the user when the device runs out of memory, and explain the app
-  disappearing. A jetsam kill is `SIGKILL` — nothing can be caught, no dialog
-  shown, and no crash report is written under the app's name, so the app
-  simply vanishes mid-tap. Nothing can be said at the moment of the kill, but
-  the low-memory warning and the next launch are both usable
-  ([#311](https://github.com/CryptoJones/Photoslop/issues/311))
-
 - [ ] A mutable pixel-buffer layer for iOS — the missing foundation under the
   paint bucket, the magic wand and the filter library. Drawing is PencilKit
   (vector strokes) and layers are `UIImage`; the only pixel access in
@@ -52,10 +45,6 @@ sync — check an item here when its issue closes.
 
 ### Desktop
 
-- [ ] Band the float32 transients in `gaussian_blur`/`unsharp_mask`/
-  `blend_by_weights` the way `apply_point_color` already does — full-image
-  planes peak at ~576 MB on 12 MP
-  ([#347](https://github.com/CryptoJones/Photoslop/issues/347))
 - [ ] A user reports the desktop version "doesn't work" — no symptom, platform
   or install method yet, and it does not reproduce. The old leading guess is
   dead: the shipped 2.9.0 macOS artifact is Notarized Developer ID, accepted
@@ -68,27 +57,12 @@ sync — check an item here when its issue closes.
 
 ### CI
 
-- [x] Tag builds re-ran the full simulator UI suite and re-rolled its flakes —
-  the v2.19.0 tag failed twice on "the editor never came up" for a tree that
-  had passed the identical workflow on its PR an hour earlier. Tag builds now
-  run the unit bundle only; UI tests remain on every PR
-  ([#360](https://github.com/CryptoJones/Photoslop/issues/360))
 - [ ] The Windows test job runs about twice as slow as macOS for identical work
   (25m10s vs 13m09s, measured 2026-08-22) and had been sitting within four
   minutes of its 25-minute cap, so twenty new tests pushed it over and turned
   `main` red on a green diff. Cap raised to 40 minutes as the unblock; the
   slowness itself, and a cap that does not go stale every time the suite grows,
   are unexamined ([#335](https://github.com/CryptoJones/Photoslop/issues/335))
-
-### Filters
-
-- [ ] Pixel Sort (Glitch) filter — luma-band runs sorted along rows or
-  columns, the glitch-art staple behind the Cyberpunk 2077 cyberspace dive
-  ([#318](https://github.com/CryptoJones/Photoslop/issues/318))
-- [ ] Datamosh + Chromatic Aberration filter — macroblock motion vectors that
-  accumulate down the frame like a P-frame chain with no keyframe, plus a
-  radial colour fringe; seeded so smart-filter replay reproduces the glitch
-  ([#319](https://github.com/CryptoJones/Photoslop/issues/319))
 
 ### Windows
 
@@ -116,6 +90,36 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] Banded the full-layer float transients in `npimage` — `gaussian_blur`,
+  `unsharp_mask`, `blend_by_weights` and `puppet_warp` now walk the layer in
+  256-row bands (the blur with a 3r halo, in exact integer sums), so the
+  peak is a band's worth of planes instead of the layer's: on 12 MP a blur
+  drops from 687 MiB to 43 MiB, the weighted blend from 824 MiB to 23 MiB
+  and the puppet warp from 2.5 GiB to 164 MiB
+  ([#347](https://github.com/CryptoJones/Photoslop/issues/347)) — shipped v2.20.1
+
+- [x] Tag builds re-ran the full simulator UI suite and re-rolled its flakes —
+  the v2.19.0 tag failed twice on "the editor never came up" for a tree that
+  had passed the identical workflow on its PR an hour earlier. Tag builds now
+  run the unit bundle only; UI tests remain on every PR
+  ([#360](https://github.com/CryptoJones/Photoslop/issues/360)) — shipped v2.20.0
+
+- [x] Pixel Sort (Glitch) filter — luma-band runs sorted along rows or
+  columns, the glitch-art staple behind the Cyberpunk 2077 cyberspace dive
+  ([#318](https://github.com/CryptoJones/Photoslop/issues/318)) — shipped v2.16.0
+- [x] Datamosh + Chromatic Aberration filter — macroblock motion vectors that
+  accumulate down the frame like a P-frame chain with no keyframe, plus a
+  radial colour fringe; seeded so smart-filter replay reproduces the glitch
+  ([#319](https://github.com/CryptoJones/Photoslop/issues/319)) — shipped v2.16.0
+
+- [x] Tell the user when the device runs out of memory, and explain the app
+  disappearing. A jetsam kill is `SIGKILL` — nothing can be caught, no dialog
+  shown, and no crash report is written under the app's name, so the app
+  simply vanishes mid-tap. The low-memory warning now announces what it
+  releases, and a marker that survives the kill lets the next launch name low
+  memory as the likely cause
+  ([#311](https://github.com/CryptoJones/Photoslop/issues/311)) — shipped v2.15.0
 
 - [x] Node Machine — generative circuit-trace filter driven by a layer's
   silhouette, with six presets, CLI mirror and a scrolling filter dialog

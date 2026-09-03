@@ -45,6 +45,35 @@ These numbers are one machine's baseline, not a cross-platform performance
 claim. Scheduled reports remain the release evidence and must be compared using
 the complete environment record below.
 
+## Filter transients
+
+Full-layer pixel work in `photoslop.npimage` and `photoslop.adjust` runs in
+row bands (`BAND_ROWS` / `CHUNK_ROWS`, 256 rows), so the float planes a
+filter needs exist for one band at a time and the peak does not grow with the
+layer's height. The blur family adds a halo of three box radii either side of
+each band and keeps its vertical sums in integers, which makes the banded
+result bit-identical to the whole-image computation
+(`tests/test_npimage_banding.py` checks this, and that the peak is the same at
+3 MP and 6 MP).
+
+Measured on 2026-09-02 with `tracemalloc` (which sees numpy's allocations; the
+layer buffer itself is Qt's and is excluded) on a 4000×3000 premultiplied
+layer, one operation per process, Linux 7.0.0 x86-64, Python 3.12.13,
+numpy 2.5.0:
+
+| Operation | Peak before (v2.20.0) | Peak after (v2.20.1) | Wall before → after |
+|---|---:|---:|---:|
+| `gaussian_blur`, radius 8 | 687 MiB | 43 MiB | 3.27 s → 1.84 s |
+| `gaussian_blur`, radius 50 | 687 MiB | 57 MiB | 3.27 s → 2.37 s |
+| `unsharp_mask`, radius 4 | 641 MiB | 65 MiB | 3.52 s → 1.50 s |
+| `blend_by_weights` (tilt-shift, feathered filters) | 824 MiB | 23 MiB | 1.06 s → 0.29 s |
+| `puppet_warp`, two pins | 2518 MiB | 164 MiB | 3.76 s → 1.21 s |
+
+The remaining peaks scale with the layer *width* times the band (plus the
+blur halo); a 12 MP layer's four float32 planes alone would be 192 MiB.
+`feathered_weights` and `drop_shadow_image` still blur whole planes, but a
+single float32 plane, not four.
+
 ## Interaction budgets
 
 - Scaled smoke work targets **33 ms P95**. Full-scale targets are stored with

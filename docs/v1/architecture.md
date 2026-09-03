@@ -76,7 +76,10 @@ behavior or changing existing document/command APIs.
 ## Transients
 Filters, transforms, and selections allocate region-bounded buffers and drop
 them immediately; transform sessions preview via painter transforms and
-resample exactly once at commit.
+resample exactly once at commit. Whole-layer float work (adjustments, the
+blur family, weighted blends, puppet warp) runs in 256-row bands so the
+transient is a band's worth of planes, not the layer's — see
+[performance.md](performance.md#filter-transients) for the measured peaks.
 
 ## Headless parity
 The engine never touches widgets — documents, layers, filters, transforms,

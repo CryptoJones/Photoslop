@@ -4,6 +4,37 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.20.1] — 2026-09-02
+
+### Changed
+- **The full-layer float transients in `npimage` are banded** (#347).
+  `gaussian_blur`, `unsharp_mask`, `blend_by_weights` and `puppet_warp` used
+  to unpack the whole layer into float32 planes — four of them, then a blurred
+  set, or two `(h, w, 4)` stacks plus their product — so a 12 MP layer spiked
+  by hundreds of megabytes for the duration of a filter. They now walk the
+  layer in 256-row bands, the way `apply_point_color` always has: the blur
+  runs its three vertical box passes over the band plus a 3r-row halo in
+  exact integer sums (the horizontal passes are per-row and cannot see the
+  band edges at all), so the banded result is bit-identical to the same maths
+  over the whole image and within 1 LSB of the old float32 output; the
+  weighted blend and the puppet warp are per-pixel and produce identical
+  bytes. Measured with `tracemalloc` on a 4000×3000 layer: gaussian blur
+  peak 687 MiB → 43 MiB (57 MiB at radius 50), unsharp mask 641 MiB →
+  65 MiB, weighted blend 824 MiB → 23 MiB, puppet warp 2518 MiB → 164 MiB.
+  The peak no longer moves with the layer height; wall-clock also improved
+  (blur 3.3 s → 1.8 s) because the band fits in cache. Public signatures and
+  premultiplied-alpha semantics (DD-001) are unchanged.
+
+### Fixed
+- `gaussian_blur`/`unsharp_mask` raised a numpy broadcast error once the
+  box radius reached the layer's short side (a slim strip, a thin text
+  layer); the banded sums truncate the window at the edge like every other
+  edge instead. Node Machine's glow clamp, which worked around this, stays as
+  a visual cap.
+- `BACKLOG.md` caught up with the tracker: #311 (v2.15.0), #318 and #319
+  (v2.16.0) and #360 (v2.20.0) were closed on GitHub but still listed as
+  open; they are in Done with the version that shipped them.
+
 ## [2.20.0] — 2026-09-02
 
 ### Added
