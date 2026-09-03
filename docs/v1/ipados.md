@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.26.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.28.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -385,6 +385,28 @@ pixels, or a lasso of fewer than three points, is the desktop's click: it
 deselects under New Selection and does nothing under Add or Subtract. A tap
 that never moves does nothing at all — Deselect is in the Select menu. Both
 tools take no ink and, like the wand, work on a text layer.
+
+### Cut, Copy and Paste
+
+While a selection is up, **Cut**, **Copy**, **Paste** and **Delete Selection**
+appear together at the left of the tool strip, next to Undo and Redo, and go
+away when the selection does (#374). That is the one-tap route, and it is
+where these belong: making a selection is a modal act, and on a phone the
+Select menu is inside **More**, which is a system menu that cannot show what
+is under it — Delete Selection shipped there in 2.22.0 and went unfound. The
+same four commands stay in the Select menu, with ⌘X / ⌘C / ⌘V for a keyboard.
+
+- **Copy** puts the selected pixels of the active layer on the system
+  pasteboard, cropped to the selection's bounds. With nothing selected it
+  copies the whole layer. A feathered selection copies with its soft edge, so
+  what you paste back is what you cut, ramp and all.
+- **Cut** is Copy and Delete Selection as a single undo step. It needs a
+  selection; text layers stay editable and refuse it, as they refuse the
+  bucket.
+- **Paste** puts the pasteboard's image on a new layer above the active one,
+  one undo step. A copy made in this app goes back where it came from; a
+  screenshot, or an image copied in another app, lands at the top-left. All
+  three work the same whichever tool made the selection.
 
 The **Select** menu (under **More** on a phone, on the toolbar on an iPad)
 holds the rest of the desktop's selection commands:

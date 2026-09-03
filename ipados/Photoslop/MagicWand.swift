@@ -96,14 +96,17 @@ extension EditorStore {
   /// selection (#370) a pixel is cleared by its weight, so the edge fades
   /// rather than cuts.
   @discardableResult
-  func deleteSelection() -> DeleteSelectionOutcome {
+  /// `actionName` is the undo step's label: Delete Selection names itself,
+  /// and Cut passes its own so the copy-then-clear reads as one "Cut" (#374),
+  /// the desktop's `beginMacro("Cut")`.
+  func deleteSelection(actionName: String = "Delete Selection") -> DeleteSelectionOutcome {
     guard let layer = activeLayer, let selection else { return .unchanged }
     if layer.isText { return .textLayer }
     guard Self.canAffordLayer(canvas: canvasSize) else {
       memoryPressureNotice = Self.memoryRefusal
       return .refused
     }
-    let cleared = applyPixelOperation(to: layer.id, actionName: "Delete Selection") { buffer in
+    let cleared = applyPixelOperation(to: layer.id, actionName: actionName) { buffer in
       var changed = false
       buffer.withMutableWords { words in
         for i in 0..<words.count where words[i] != 0 {

@@ -796,6 +796,16 @@ struct EditorView: View {
         redoButton.labelStyle(.iconOnly).accessibilityIdentifier("Redo")
         Divider().frame(height: 24)
 
+        // While a selection is up, what to *do* with it belongs here and not
+        // three levels down a menu (#374). Making a selection is a modal act:
+        // it is the only thing on screen the user is thinking about, so its
+        // actions earn the strip's leading zone — the part that never has to
+        // be scrolled to — for exactly as long as one exists.
+        if store.selection != nil {
+          selectionActionBar
+          Divider().frame(height: 24)
+        }
+
         // A palette, not a segmented control. The segmented picker was a fixed
         // 240pt for four tools, which is most of a phone's strip and the reason
         // the ink well and width slider were scrolled off the end of it. It also
@@ -856,6 +866,46 @@ struct EditorView: View {
       .padding(.vertical, 10)
     }
     .background(.bar)
+  }
+
+  /// Cut, Copy, Paste and Delete for the selection that is up (#374).
+  ///
+  /// These exist in the Select menu too, which is where their keyboard
+  /// shortcuts live and where an iPad user with a keyboard will look. They are
+  /// repeated here because on iPhone the Select menu is inside More Actions,
+  /// which is a system `UIMenu` with no way to advertise what is under it: the
+  /// operator who asked for this feature had been using the wand for a while
+  /// and never found Delete Selection, which has shipped since 2.22.0. An
+  /// action nobody can find is not a shipped action.
+  ///
+  /// Icon-only, because four labelled buttons is more than the phone strip's
+  /// leading zone holds, and each carries its label for VoiceOver and for the
+  /// UI tests.
+  @ViewBuilder private var selectionActionBar: some View {
+    Button(action: cutSelection) {
+      Label("Cut", systemImage: "scissors")
+    }
+    .labelStyle(.iconOnly)
+    .disabled(store.activeLayer == nil)
+    .accessibilityIdentifier("Cut")
+    Button(action: copySelection) {
+      Label("Copy", systemImage: "doc.on.doc")
+    }
+    .labelStyle(.iconOnly)
+    .disabled(store.activeLayer == nil)
+    .accessibilityIdentifier("Copy")
+    Button(action: paste) {
+      Label("Paste", systemImage: "doc.on.clipboard")
+    }
+    .labelStyle(.iconOnly)
+    .disabled(!store.canPaste)
+    .accessibilityIdentifier("Paste")
+    Button(role: .destructive, action: deleteSelection) {
+      Label("Delete Selection", systemImage: "trash")
+    }
+    .labelStyle(.iconOnly)
+    .disabled(store.activeLayer == nil)
+    .accessibilityIdentifier("Delete Selection")
   }
 
   /// Two layouts, because a phone's navigation bar cannot hold the iPad's.
@@ -1094,8 +1144,26 @@ struct EditorView: View {
       .disabled(store.selection == nil)
       .keyboardShortcut("d", modifiers: [.command, .option])
       Divider()
+      // The clipboard trio keeps its shortcuts here, where a keyboard user
+      // looks for them; the one-tap route is `selectionActionBar` (#374).
+      Button(action: cutSelection) {
+        Label("Cut", systemImage: "scissors")
+      }
+      .disabled(store.selection == nil || store.activeLayer == nil)
+      .keyboardShortcut("x", modifiers: .command)
+      Button(action: copySelection) {
+        Label("Copy", systemImage: "doc.on.doc")
+      }
+      .disabled(store.activeLayer == nil)
+      .keyboardShortcut("c", modifiers: .command)
+      Button(action: paste) {
+        Label("Paste", systemImage: "doc.on.clipboard")
+      }
+      .disabled(!store.canPaste)
+      .keyboardShortcut("v", modifiers: .command)
+      Divider()
       Button(role: .destructive, action: deleteSelection) {
-        Label("Delete Selection", systemImage: "scissors")
+        Label("Delete Selection", systemImage: "trash")
       }
       .disabled(store.selection == nil || store.activeLayer == nil)
       .keyboardShortcut(.delete, modifiers: [])
@@ -1999,6 +2067,28 @@ struct EditorView: View {
         "Text layers stay editable, so a selection cannot be cut out of one. "
         + "Select a paint layer and delete from that."
     }
+  }
+
+  /// Cut (#374): the selected pixels to the pasteboard, then out of the layer,
+  /// as one undo step. A text layer is refused out loud, as Delete Selection
+  /// and the bucket already are.
+  private func cutSelection() {
+    if store.cutSelection() == .textLayer {
+      errorMessage =
+        "Text layers stay editable, so a selection cannot be cut out of one. "
+        + "Select a paint layer and cut from that."
+    }
+  }
+
+  /// Copy (#374). Works on a text layer too — what lands on the pasteboard is
+  /// the picture the words render to, which is what the desktop copies.
+  private func copySelection() {
+    _ = store.copySelection()
+  }
+
+  /// Paste (#374): the pasteboard's image as a new layer above the active one.
+  private func paste() {
+    _ = store.paste()
   }
 
   /// The bucket's tap (#325): fill the region under it on the active layer

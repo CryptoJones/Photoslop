@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v2.26.0** against six
+An honest, category-by-category comparison of **Photoslop v2.28.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -21,7 +21,7 @@ client exposes it.
 | Layered project persistence | ORA | `.photoslop` package | ORA read/write | ORA read/write under root policy |
 | Raster/Pencil drawing | ✅ | ✅ PencilKit | — | — |
 | Paint bucket (flood fill) | ✅ | ✅ ported from the desktop fill, fixture-proven identical | 🟡 `--fill` fills the whole layer | — |
-| Selections/filters/vectors/text | ✅ | 🟡 wand, marquee and lasso selections with feathering; brushes, bucket and Delete Selection honour them; editable text layers; no filters or vectors yet | ✅ shared safe engine operations | ✅ safe subset |
+| Selections/filters/vectors/text | ✅ | 🟡 wand, marquee and lasso selections with feathering; brushes, bucket, Delete Selection and Cut/Copy/Paste honour them; editable text layers; no filters or vectors yet | ✅ shared safe engine operations | ✅ safe subset |
 | Live appearance effects (shadow, glow, outline, overlay, bevel) | ✅ 10 kinds on any layer | 🟡 8 kinds on text layers, ported from the desktop renderer, fixture-proven identical; Gaussian blur and feather kept but not drawn | ✅ `--drop-shadow`, `--glow`, `--stroke`, `--effect`, `--set-effects` | ✅ safe subset |
 | Native/third-party plugins | local opt-in | — | local opt-in | denied |
 | Network model operations | local configured endpoint | — | local configured endpoint | denied |
@@ -32,7 +32,7 @@ client exposes it.
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 2.26.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
+| **Photoslop** | 2.28.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
