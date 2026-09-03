@@ -4,6 +4,47 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.25.0] — 2026-09-03
+
+### Added
+- **iOS text effects** (#316): coloured drop shadows, embossing and the rest
+  of the desktop's appearance stack on text layers. `LayerEffect` is the
+  desktop's normalised effect object — the same kinds, parameter names,
+  defaults and clamps as `photoslop.appearance`, with unknown keys kept as
+  extensions — stored per layer as `effects: [LayerEffect]` on every layer,
+  and `AppearanceRenderer` is a port of `appearance.render`: the same
+  three-pass float32 box blur, morphology, truncating colourise and gradient
+  lighting. A desktop-generated fixture (`scripts/gen-appearance-fixture.py`)
+  covers the raw blur as float32 bit patterns and every renderable kind as
+  premultiplied ARGB32 planes, and `AppearanceParityTests` compares them
+  word for word with no tolerance. Drop shadow, inner shadow, outer glow,
+  inner glow, outline, colour overlay, gradient overlay and bevel/emboss draw
+  live; Gaussian blur and feather are kept with the document but not drawn
+  yet.
+- **Effects… sheet** in the text tool: an ordered stack with Add, drag to
+  reorder, swipe to remove and an enable toggle per row; one page of controls
+  per effect (colour pickers, sliders, blend mode, opacity); and the desktop's
+  built-in presets — Lifted, Sticker, Neon, Letterpress, Chrome, Soft Focus —
+  which replace the stack as on the desktop. The canvas previews the draft
+  live through a non-undoable `previewEffects`, and Apply commits the stack
+  as one **Change Effects** undo step. On iPhone the button sits inside the
+  text submenu so the top-level menu does not grow (#313).
+- Effects are composited in `EditorStore.render`, so the canvas, Flatten,
+  every export and the package preview all include them, and a layer's own
+  pixels never change; Edit Text, Fit Text and Move Text keep the stack. No
+  per-layer effect bitmap is cached (#309): planes are rendered from the
+  layer's opaque bounding box plus the stack's reach and released after each
+  composite (DD-014).
+- `.photoslop` format version 4: a layer record carries `effects`, the
+  desktop's JSON verbatim — what an `.ora` holds in `photoslop-effects` — and
+  omits the key when empty. Version 3 packages open with empty stacks, and an
+  entry the app cannot read is dropped rather than failing the document, the
+  desktop's `normalize_effects` rule.
+
+### Fixed
+- The `.photoslop` package preview drew bounded (#309) layers at the canvas
+  top-left instead of at their origin.
+
 ## [2.22.0] — 2026-09-02
 
 ### Added

@@ -45,7 +45,8 @@ final class BoundedLayerExtentTests: XCTestCase {
       state: EditorState(
         layers: store.layers, activeLayerID: store.activeLayerID,
         canvasSize: store.canvasSize))
-    XCTAssertEqual(snapshot.manifest.version, 3)
+    // Version 3 introduced the origin; later versions carry it unchanged.
+    XCTAssertGreaterThanOrEqual(snapshot.manifest.version, 3)
 
     let decoded = try ProjectArchive.decode(try ProjectArchive.encode(snapshot))
     let restored = try XCTUnwrap(decoded.layers.last)

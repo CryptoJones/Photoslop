@@ -329,6 +329,7 @@ extension XCUIApplication {
     "Edit Text": "Text",
     "Move Text": "Text",
     "Fit Text…": "Text",
+    "Effects…": "Text",
   ]
 
   /// Open More Actions and wait until its rows are actually on screen.

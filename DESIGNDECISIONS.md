@@ -385,6 +385,72 @@ and shrinking it is #351's work, not this seam's.
 
 ---
 
+## DD-014 — iOS effects are rendered from the layer every composite, never cached
+
+**Status: Accepted (2026-09-03).**
+
+Coloured shadows and embossing on text
+([#316](https://github.com/CryptoJones/Photoslop/issues/316)) put the
+desktop's appearance stack on iOS. The desktop keeps a per-layer `fx_cache`
+keyed by the image's `cacheKey` and the stack, so a Move drag never re-blurs;
+the question was whether iOS should keep one too. It costs one premultiplied
+bitmap per effect plane per layer, resident for as long as the layer is —
+which is the shape of allocation the memory work of #309/#311 spent three
+releases removing.
+
+**The decision: no effect cache.** `EditorStore.render` asks
+`AppearanceRenderer.planes(for:)` for a layer's planes, draws them under and
+over the fill, and lets them go inside the composite's autorelease pool. The
+model is data on every layer (`RasterLayer.effects`), the renderer is
+layer-agnostic, and the UI is text-first, because text is where the trade-off
+is cheap.
+
+**Why it is cheap for text.** A bounded text layer (#309) is its glyph box,
+not the canvas. The alpha plane is cropped to the opaque bounding box plus
+twice the stack's reach, so a 40-point word with a 10-pixel shadow blurs a
+few hundred pixels a side, in float32, three cumulative-sum passes — well
+under a millisecond, and freed before the next layer draws. Re-rendering per
+composite is therefore invisible next to the composite itself, and there is no
+cache to invalidate when the words, the anchor or the stack change: they are
+inputs, and the output follows.
+
+**Why it is not yet cheap for photos, and what that defers.** The same crop
+on a photo layer is the whole canvas. A 4K layer with a shadow is a
+4096×2160 float32 plane and its blur scratch, per effect, per composite —
+tens of megabytes on a device where a drag already runs at the jetsam line.
+The renderer is banded-ready in principle (`PixelBuffer.bandRows`, a
+`radius`-row halo), but nothing forces that design before the sheet is
+exposed on raster layers, so the Effects… button lives in the text tool and
+the raster entry point, with the banding it needs, is
+[#372](https://github.com/CryptoJones/Photoslop/issues/372).
+
+**Parity is by port, proven by fixture.** `AppearanceRenderer` is
+`appearance.render` line for line — the desktop's `_box_blur_plane` as
+sequential float32 cumulative sums, the same truncating colourise, the same
+`np.gradient` lighting — and `scripts/gen-appearance-fixture.py` writes what
+the desktop produced for a text-shaped mask as float32 bit patterns and ARGB32
+words that `AppearanceParityTests` compares with no tolerance. Where the port
+found the two disagree, the iOS side is wrong by definition.
+
+**Consequences:**
+
+- Effects are never baked. Flatten, export and the package preview draw them
+  through the same composite; a layer's `image` is untouched by the stack, and
+  Edit Text, Fit Text and Move Text keep it.
+- The `.photoslop` manifest (version 4) stores the desktop's normalised effect
+  objects verbatim, the JSON an `.ora`'s `photoslop-effects` attribute holds,
+  so a future ORA round trip on iOS copies the field rather than translating
+  it. Unknown effect kinds are dropped on read and unknown keys are kept under
+  `extensions`, the desktop's `normalize_effects` rule.
+- Gaussian blur and feather, which on the desktop replace the fill rather than
+  add a plane, are carried but not drawn; the sheet says so. Fill opacity is
+  not modelled. Both are in #372.
+- Preview while the sheet is open is `EditorStore.previewEffects`, the
+  non-undoable substitution `previewSuppressedLayerID` already established;
+  Apply is one `Change Effects` undo step.
+
+---
+
 *New decisions get the next DD number. Reversing one requires a new entry
 that names the entry it supersedes — history is append-only.*
 
