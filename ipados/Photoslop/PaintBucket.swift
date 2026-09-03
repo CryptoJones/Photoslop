@@ -25,7 +25,11 @@ extension EditorStore {
   ///
   /// Inside a selection (#326) the fill stops at the selection's edge, and a
   /// tap outside it fills nothing — the desktop's `sel_mask`. With nothing
-  /// selected a fill runs to the region's edge.
+  /// selected a fill runs to the region's edge. Through a feathered
+  /// selection (#370) the region is found across the whole layer, as a
+  /// desktop filter's is, and the ink lands by weight — full inside, fading
+  /// over the ramp either side of the hard edge, none beyond it — the way
+  /// Delete Selection and the brushes fade.
   @discardableResult
   func paintBucket(at point: CGPoint, tolerance: Int, color: UIColor, opacity: CGFloat)
     -> PaintBucketOutcome
@@ -44,8 +48,31 @@ extension EditorStore {
     let ink = PixelBuffer.premultipliedWord(color: color, opacity: opacity)
     let within = selection?.bits
     let filled = applyPixelOperation(to: layer.id, actionName: "Paint Bucket") { buffer in
-      FloodFill.fill(&buffer, x: x, y: y, color: ink, tolerance: tolerance, selection: within)
-        != nil
+      guard let selection, let weights = selection.weights else {
+        return FloodFill.fill(
+          &buffer, x: x, y: y, color: ink, tolerance: tolerance, selection: within) != nil
+      }
+      // The desktop bucket writes its word outright; a feathered one is the
+      // unclipped region blended in by weight (`npimage.blend_by_weights`,
+      // as `_apply_filter` does with `mask=None` and the weights).
+      let width = buffer.width, height = buffer.height
+      guard
+        let (region, _) = buffer.withWords({ words in
+          FloodFill.mask(
+            words: words, width: width, height: height, x: x, y: y, tolerance: tolerance)
+        })
+      else { return false }
+      var changed = false
+      buffer.withMutableWords { words in
+        for i in 0..<words.count where region[i] {
+          let out = PixelBuffer.blend(words[i], toward: ink, weight: weights[i])
+          if out != words[i] {
+            words[i] = out
+            changed = true
+          }
+        }
+      }
+      return changed
     }
     return filled ? .filled : .unchanged
   }

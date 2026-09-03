@@ -4,6 +4,49 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.26.0] — 2026-09-03
+
+### Added
+- **iOS strokes honour the selection** (#370): with a selection up, the pen,
+  pencil, marker and eraser stop at its edge. The live stroke is clipped on
+  the canvas by the selection's path, and when the finger lifts the stroke is
+  rasterised over its own box and composited onto the layer's pixels by the
+  selection's weight as one undo step ("Draw" / "Erase") — ink outside the
+  selection never reaches the layer, the composite or the document, and a
+  stroke that lands nothing registers no step. No document-sized bitmap is
+  added per refresh (#309); the design is DD-015.
+- **Feathering on iOS** (#370): Select ▸ **Feather…** (⌘⌥D) softens the
+  selection's edge by 0–100 px with the desktop's `npimage.feathered_weights`
+  ported exactly (three truncated box-blur passes, normalised at the canvas
+  edge, matched to the desktop fixture within one level in 255). Delete
+  Selection, the paint bucket and the brushes all fade over the ramp; the
+  marching ants stay on the hard edge. A new selection is hard again, as on
+  the desktop.
+- **Rectangle Select and Lasso Select on iOS** (#370), alongside the wand in
+  the tool strip, sharing its New / Add / Subtract option. The shape is drawn
+  as a hairline while dragging and becomes the selection on release. The
+  lasso fills under the desktop's odd-even rule with an exact emulation of
+  Qt's aliased scanline rasteriser; `scripts/gen-selection-fixture.py` writes
+  the desktop's masks and feather weights as a Swift fixture, and the iOS
+  masks match them pixel for pixel. A click, or a lasso of fewer than three
+  points, deselects under New Selection and does nothing under Add or
+  Subtract.
+
+### Changed
+- **The iOS eraser is a pixel eraser under a selection** (#370): PencilKit's
+  stroke eraser has nothing to erase once strokes are pixels, so with a
+  selection up the eraser draws a frosted preview and takes its coverage out
+  of the layer's alpha on release — it erases a photograph inside the
+  selection as readily as a stroke. Without a selection it is the stroke
+  eraser it always was.
+- Under a selection the active layer's earlier strokes are baked into its
+  pixels with the first clipped stroke, as they are by a bucket fill or Merge
+  Down.
+
+### Fixed
+- The 2.22.0 known limit — strokes not clipped, no feather, no marquee — is
+  closed (#370). The wand and the bucket behave as they did in 2.22.0.
+
 ## [2.25.0] — 2026-09-03
 
 ### Added

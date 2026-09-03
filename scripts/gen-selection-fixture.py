@@ -1,0 +1,242 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Regenerate the iOS selection parity fixture from the desktop rasteriser.
+
+The Swift port in ``ipados/Photoslop/Selection.swift`` (#370) claims that a
+rectangle or lasso selection covers exactly the pixels the desktop's
+``photoslop.npimage.selection_mask`` covers — Qt's aliased ``fillPath`` under
+its default odd-even rule — and that ``SelectionMask.featheredWeights`` matches
+``photoslop.npimage.feathered_weights``. This script is the proof: it runs the
+*desktop* code over each scenario and writes the masks and weights as a Swift
+source file that ``SelectionParityTests`` compares against.
+
+Masks are one string per row, ``#`` selected and ``.`` not. Feather weights
+are the desktop's float32 ratios quantised to ``0...255`` with round-half-up,
+which is how the iOS mask stores them; the Swift test allows one level of
+slack for the float rounding a different summation order can introduce.
+
+Run from the repository root::
+
+    QT_QPA_PLATFORM=offscreen uv run python scripts/gen-selection-fixture.py
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+from PySide6.QtCore import QPoint, QPointF, QRectF, QSize
+from PySide6.QtGui import QPainterPath
+
+from photoslop import npimage
+
+OUT = (
+    Path(__file__).resolve().parent.parent / "ipados/PhotoslopTests/Fixtures/SelectionFixture.swift"
+)
+
+W, H = 24, 20
+SIZE = QSize(W, H)
+ORIGIN = QPoint(0, 0)
+
+# (name, x0, y0, x1, y1, doc) — the two corners of the drag, in document pixels,
+# in the order the pointer visited them (the desktop normalises).
+RECT_SCENARIOS = [
+    ("rectInteger", 3, 2, 10, 9, "whole-pixel corners: columns 3..9, rows 2..8"),
+    (
+        "rectFraction",
+        2.3,
+        1.7,
+        9.6,
+        8.2,
+        "fractional corners: an edge takes a pixel whose centre it has passed",
+    ),
+    ("rectReversed", 15, 14, 6, 3, "dragged up and left: normalised like the desktop"),
+    ("rectOverflow", -3.5, 12.25, 30, 25, "corners off the canvas: clipped to it"),
+    (
+        "rectHalf",
+        4.5,
+        4.5,
+        9.5,
+        9.5,
+        "corners on pixel centres: the tie goes below/right",
+    ),
+    (
+        "rectThin",
+        5.25,
+        3,
+        5.75,
+        12,
+        "narrower than a pixel: the one column whose centre it straddles",
+    ),
+]
+
+# (name, points, doc)
+LASSO_SCENARIOS = [
+    ("triangle", [(2, 2), (20, 4), (6, 17)], "a plain triangle"),
+    (
+        "concave",
+        [(2, 2), (14, 2), (14, 8), (8, 8), (8, 16), (2, 16)],
+        "an L shape: the notch stays clear",
+    ),
+    (
+        "bowTie",
+        [(2, 2), (21, 17), (21, 2), (2, 17)],
+        "a self-intersecting bow tie: both lobes fill, the pinch is one crossing",
+    ),
+    (
+        "star",
+        [(12, 1), (16.5, 18), (2, 7), (22, 7), (7.5, 18)],
+        "a five-point star drawn in one stroke: odd-even leaves the centre pentagon empty",
+    ),
+    (
+        "offCanvas",
+        [(-6, 5), (30, -3), (28, 24), (10, 26)],
+        "a quad hanging off every side: clipped to the canvas",
+    ),
+    (
+        "fractional",
+        [(1.4, 1.6), (17.25, 3.1), (19.9, 12.55), (9.7, 18.3), (3.05, 11.7)],
+        "sub-pixel vertices",
+    ),
+    ("collinear", [(2, 2), (10, 10), (18, 18)], "three points on one line enclose nothing"),
+]
+
+# (name, kind, shape, feather, doc)
+FEATHER_SCENARIOS = [
+    ("featherOne", "rect", (6, 5, 18, 15), 1, "feather 1 = radius 1: one soft pixel each side"),
+    ("featherThree", "rect", (6, 5, 18, 15), 3, "feather 3 = radius 2"),
+    ("featherEight", "rect", (6, 5, 18, 15), 8, "feather 8 (the desktop default) = radius 5"),
+    ("featherTwenty", "rect", (6, 5, 18, 15), 20, "feather 20 = radius 11: wider than the box"),
+    (
+        "featherCorner",
+        "rect",
+        (0, 0, 10, 8),
+        8,
+        "a selection in the corner: the truncated window normalises against the edge",
+    ),
+    (
+        "featherStar",
+        "lasso",
+        [(12, 1), (16.5, 18), (2, 7), (22, 7), (7.5, 18)],
+        4,
+        "an odd-even star, feathered: the hollow centre softens too",
+    ),
+]
+
+
+def rect_path(x0, y0, x1, y1) -> QPainterPath:
+    path = QPainterPath()
+    path.addRect(QRectF(QPointF(x0, y0), QPointF(x1, y1)).normalized())
+    return path
+
+
+def lasso_path(points) -> QPainterPath:
+    path = QPainterPath(QPointF(*points[0]))
+    for point in points[1:]:
+        path.lineTo(QPointF(*point))
+    path.closeSubpath()
+    return path
+
+
+def mask_rows(mask) -> list[str]:
+    return ['      "' + "".join("#" if v else "." for v in mask[y]) + '",' for y in range(H)]
+
+
+def weight_rows(weights) -> list[str]:
+    levels = np.floor(weights.astype(np.float64) * 255 + 0.5).astype(int)
+    return ["      " + ", ".join(f"{int(v):3d}" for v in levels[y]) + "," for y in range(H)]
+
+
+def swift_points(points) -> str:
+    return ", ".join(f"CGPoint(x: {x}, y: {y})" for x, y in points)
+
+
+def main() -> int:
+    out = [
+        "// SPDX-License-Identifier: Apache-2.0",
+        "// GENERATED by scripts/gen-selection-fixture.py from the desktop",
+        "// photoslop.npimage.selection_mask and feathered_weights — do not edit by",
+        "// hand. Regenerate with:",
+        "//   QT_QPA_PLATFORM=offscreen uv run python scripts/gen-selection-fixture.py",
+        "",
+        "import CoreGraphics",
+        "",
+        "/// Desktop-produced expected masks for the rectangle and lasso selections",
+        "/// and expected feather weights (#370). Masks are one string per row, `#`",
+        "/// for a selected pixel and `.` for one that is not; weights are the",
+        "/// desktop's float ratios quantised to 0...255.",
+        "enum SelectionFixture {",
+        f"  static let width = {W}",
+        f"  static let height = {H}",
+        "",
+        "  struct RectScenario {",
+        "    let name: String",
+        "    let from: CGPoint",
+        "    let to: CGPoint",
+        "    let expected: [String]",
+        "  }",
+        "",
+        "  static let rectScenarios: [RectScenario] = [",
+    ]
+    for name, x0, y0, x1, y1, doc in RECT_SCENARIOS:
+        mask = npimage.selection_mask(rect_path(x0, y0, x1, y1), SIZE, ORIGIN)
+        out += [
+            f"    // {doc}",
+            f'    RectScenario(name: "{name}", from: CGPoint(x: {x0}, y: {y0}),',
+            f"      to: CGPoint(x: {x1}, y: {y1}), expected: [",
+            *mask_rows(mask),
+            "    ]),",
+        ]
+    out += [
+        "  ]",
+        "",
+        "  struct LassoScenario {",
+        "    let name: String",
+        "    let points: [CGPoint]",
+        "    let expected: [String]",
+        "  }",
+        "",
+        "  static let lassoScenarios: [LassoScenario] = [",
+    ]
+    for name, points, doc in LASSO_SCENARIOS:
+        mask = npimage.selection_mask(lasso_path(points), SIZE, ORIGIN)
+        out += [
+            f"    // {doc}",
+            f'    LassoScenario(name: "{name}", points: [{swift_points(points)}],',
+            "      expected: [",
+            *mask_rows(mask),
+            "    ]),",
+        ]
+    out += [
+        "  ]",
+        "",
+        "  struct FeatherScenario {",
+        "    let name: String",
+        "    let feather: Int",
+        "    /// The hard mask the weights were computed from.",
+        "    let mask: [String]",
+        "    let expected: [UInt8]",
+        "  }",
+        "",
+        "  static let featherScenarios: [FeatherScenario] = [",
+    ]
+    for name, kind, shape, feather, doc in FEATHER_SCENARIOS:
+        path = rect_path(*shape) if kind == "rect" else lasso_path(shape)
+        mask = npimage.selection_mask(path, SIZE, ORIGIN)
+        weights = npimage.feathered_weights(path, SIZE, ORIGIN, feather)
+        out += [
+            f"    // {doc}",
+            f'    FeatherScenario(name: "{name}", feather: {feather}, mask: [',
+            *mask_rows(mask),
+            "    ], expected: [",
+            *weight_rows(weights),
+            "    ]),",
+        ]
+    out += ["  ]", "}", ""]
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text("\n".join(out))
+    print(f"wrote {OUT}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
