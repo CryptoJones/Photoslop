@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.21.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.22.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -131,6 +131,14 @@ what it was doing to #227.
   undo step. Its one option is **Tolerance** (0–255, 32 to start, the desktop's
   default), which takes the width slider's slot on the strip. See
   [Paint bucket](#paint-bucket).
+- The **Magic Wand** selects the region of similar colour under a tap — the
+  flood with the write swapped for a mask — and the marching ants show what is
+  selected. Its options are the same **Tolerance** slider, a **Contiguous**
+  toggle (off is the desktop's colour-range mode) and a combine mode that
+  stands in for the desktop's Shift and Alt clicks. The **Select** menu holds
+  Select All, Deselect, Invert Selection and **Delete Selection**, which is
+  how a background comes off a photo: wand it, delete it. The bucket stays
+  inside the selection. See [Magic wand and selections](#magic-wand-and-selections).
 - **About Photoslop** introduces the app the way the desktop edition does: Le
   Basilisk, the name with no platform attached, and the same one-line
   description, over the licence and repository link. It also reports the
@@ -283,7 +291,8 @@ and a diagonal gap does not leak. The proof is a fixture the desktop
 implementation generates (`scripts/gen-flood-fill-fixture.py`) and the iOS
 tests compare against word for word, at tolerance 0, a mid tolerance and an
 enclosed region. Contiguous fill only: the desktop bucket has no colour-range
-mode either (that is the wand's, #326).
+mode either (that is the wand's — see
+[Magic wand and selections](#magic-wand-and-selections)).
 
 Two rules, both stated so they are not surprises:
 
@@ -297,9 +306,9 @@ Two rules, both stated so they are not surprises:
   same reason: a later resize re-rendered from the source would throw the fill
   away. Undo puts all of it back.
 
-A selection is not honoured yet because the iOS edition has no selection model;
-until the wand lands (#326) a fill runs to the edge of its region, exactly as
-the desktop bucket does with nothing selected.
+With a selection up, the fill stops at its edge, and a tap outside the
+selection fills nothing — the desktop bucket's `sel_mask` behaviour. With
+nothing selected a fill runs to the edge of its region.
 
 #### The pixel seam and memory
 
@@ -317,6 +326,51 @@ operation, work runs in bands of 256 rows — the desktop's `CHUNK_ROWS` — eac
 in its own autorelease pool, so a per-row transient is sized to a band rather
 than the picture. The flood fill itself allocates only its two masks, two bytes
 per pixel, as the desktop version does.
+
+### Magic wand and selections
+
+Pick **Magic Wand** from the tool palette and tap the canvas. The pixels whose
+colour is within **Tolerance** of the tapped pixel become the selection, and
+marching ants — a white hairline under a walking black dash, one screen point
+wide at every zoom — trace its edge. The wand is the bucket's flood with the
+write swapped for a mask: the same `FloodFill.swift`, the same fixture-proven
+parity with `photoslop.npimage.flood_mask` and `global_mask`, so a wand on
+iOS selects exactly the pixels the desktop wand would. Selecting is not an
+undo step, as it is not on the desktop; the selection simply changes.
+
+The wand reads the active layer as the canvas shows it, strokes included, and
+writes nothing, so it works on a text layer too. Its options sit in a menu
+beside the Tolerance slider:
+
+- **Contiguous** (on to start) limits the selection to the pixels connected
+  to the tap. Off, every pixel in the layer within tolerance is selected
+  wherever it is — the desktop's colour-range toggle.
+- **New Selection**, **Add to Selection** and **Subtract from Selection** say
+  how the tapped region meets the selection already there. They are the
+  desktop's plain, Shift and Alt clicks, made into a choice a finger can
+  make, and the menu's icon shows which is current.
+
+The **Select** menu (under **More** on a phone, on the toolbar on an iPad)
+holds the rest of the desktop's selection commands:
+
+- **Select All** (⌘A) and **Deselect** (⌘D).
+- **Invert Selection** (⌘⇧I) swaps selected and unselected. With nothing
+  selected it is Select All, so the ants never simply vanish.
+- **Delete Selection** (Delete) clears the selected pixels of the active layer
+  to transparent, one undo step. This is the workflow the wand exists for:
+  tap the background, delete it, and the subject is left on transparency
+  ready to export as PNG or to sit over another layer. Text layers are
+  refused for the reason the bucket refuses them: their pixels are re-rendered
+  from the words at the next edit, so a hole cut in them would not survive.
+
+A selection is a mask in canvas pixels, one flag per pixel, rather than the
+path the desktop keeps — every producer and consumer on iOS speaks pixels,
+so keeping the mask skips the desktop's two conversions and loses nothing
+while every selection is pixel-aligned. It belongs to the document, not to a
+layer: switching layers keeps it, and the bucket honours it on whichever layer
+is active. Resizing or cropping the canvas drops it, since a mask for the old
+canvas describes no pixel of the new one. Brush and eraser strokes do not yet
+stop at the selection edge (#370); the bucket and Delete Selection do.
 
 ### Importing from Photos or from Files
 
@@ -490,8 +544,9 @@ link, require Beta App Review on the first build of a version.
 ## Initial-edition boundary
 
 The iPad edition currently covers persistent layered raster/PencilKit painting,
-the paint bucket, image import, document-wide undo, and flattened image export. The desktop edition
-remains the authoritative home for OpenRaster round trips, selections,
+the paint bucket, the magic wand and pixel selections, image import,
+document-wide undo, and flattened image export. The desktop edition remains the
+authoritative home for OpenRaster round trips, marquee and lasso selections,
 adjustments, filters, appearance effects, editable vectors/text, automation,
 CLI, and MCP. An unsigned GitHub artifact is a reproducible developer build,
 not an App Store-signed IPA.

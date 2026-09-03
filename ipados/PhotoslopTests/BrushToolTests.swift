@@ -57,6 +57,16 @@ final class BrushToolTests: XCTestCase {
     XCTAssertFalse(BrushTool.bucket.respondsToTilt)
   }
 
+  func testOnlyTheWandSelectsOnTapAndTakesNoInk() {
+    XCTAssertEqual(BrushTool.allCases.filter(\.selectsOnTap), [.wand])
+    XCTAssertEqual(BrushTool.allCases.filter(\.actsOnTap), [.bucket, .wand])
+    // Both tap tools take a tolerance; the wand paints nothing, so no ink.
+    XCTAssertEqual(BrushTool.allCases.filter(\.usesTolerance), [.bucket, .wand])
+    XCTAssertFalse(BrushTool.wand.usesInk)
+    XCTAssertFalse(BrushTool.wand.usesWidth)
+    XCTAssertFalse(BrushTool.wand.respondsToTilt)
+  }
+
   func testEveryBrushIsPresentableInTheToolStrip() {
     XCTAssertEqual(BrushTool.allCases.first, .pen, "Pen stays the default brush")
     for brush in BrushTool.allCases {

@@ -10,16 +10,17 @@ import UIKit
 /// altitude and azimuth of a tilted Pencil, which is what gives them a
 /// broader stroke as the Pencil lies down.
 ///
-/// The bucket is the one tool that is not a PencilKit ink: it fills the
-/// tapped region of the layer's pixels through the `PixelBuffer` seam (#325),
-/// so it takes the ink colour and opacity but no width, and a tolerance
-/// instead.
+/// The bucket and the wand are the tools that are not a PencilKit ink: a tap
+/// finds the region of similar colour under it through the `PixelBuffer`
+/// seam, and the bucket fills it (#325) while the wand selects it (#326). Both
+/// take a tolerance instead of a width; only the bucket uses the ink.
 enum BrushTool: String, CaseIterable, Identifiable {
   case pen
   case pencil
   case marker
   case eraser
   case bucket
+  case wand
 
   var id: String { rawValue }
 
@@ -30,6 +31,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .marker: "Marker"
     case .eraser: "Eraser"
     case .bucket: "Bucket"
+    case .wand: "Magic Wand"
     }
   }
 
@@ -40,6 +42,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .marker: "highlighter"
     case .eraser: "eraser"
     case .bucket: "drop.fill"
+    case .wand: "wand.and.rays"
     }
   }
 
@@ -52,11 +55,21 @@ enum BrushTool: String, CaseIterable, Identifiable {
   /// Whether a tap on the canvas fills instead of a stroke painting.
   var fillsOnTap: Bool { self == .bucket }
 
+  /// Whether a tap on the canvas selects instead of a stroke painting.
+  var selectsOnTap: Bool { self == .wand }
+
+  /// Whether the tool acts on a tap rather than a stroke, so the canvas is
+  /// told to hand taps over and hold strokes back.
+  var actsOnTap: Bool { fillsOnTap || selectsOnTap }
+
+  /// Whether the colour tolerance control applies to this tool.
+  var usesTolerance: Bool { actsOnTap }
+
   /// Whether the stroke shape changes with how far the Pencil is tilted.
   var respondsToTilt: Bool {
     switch self {
     case .pencil, .marker: true
-    case .pen, .eraser, .bucket: false
+    case .pen, .eraser, .bucket, .wand: false
     }
   }
 
@@ -65,16 +78,16 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .pen: .pen
     case .pencil: .pencil
     case .marker: .marker
-    case .eraser, .bucket: nil
+    case .eraser, .bucket, .wand: nil
     }
   }
 
   /// The PencilKit tool this brush installs on the canvas.
   ///
-  /// The bucket installs a pen it never uses: the canvas view is disabled for
-  /// as long as a tap tool is armed, so no stroke can reach it.
+  /// A tap tool installs a pen it never uses: the canvas view is disabled for
+  /// as long as one is armed, so no stroke can reach it.
   func pkTool(color: UIColor, width: CGFloat) -> PKTool {
-    if fillsOnTap { return PKInkingTool(.pen, color: color, width: width) }
+    if actsOnTap { return PKInkingTool(.pen, color: color, width: width) }
     guard let inkType else { return PKEraserTool(.bitmap) }
     return PKInkingTool(inkType, color: color, width: width)
   }

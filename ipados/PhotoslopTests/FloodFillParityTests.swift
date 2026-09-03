@@ -18,19 +18,69 @@ final class FloodFillParityTests: XCTestCase {
       words: FloodFillFixture.input)
   }
 
+  /// A fixture mask (`#` selected, `.` not) as the flags the Swift side takes.
+  private func bits(_ rows: [String]) -> [Bool] {
+    rows.flatMap { $0.map { $0 == "#" } }
+  }
+
   /// Every fixture scenario: tolerance 0 outside the box, a mid tolerance
-  /// inside it that crosses one band and not the next, and a wide tolerance
-  /// that takes the whole interior without leaking through the 1-px outline.
+  /// inside it that crosses one band and not the next, a wide tolerance that
+  /// takes the whole interior without leaking through the 1-px outline, and a
+  /// fill held inside a selection (#326).
   func testFillMatchesDesktopFixtureWordForWord() {
-    XCTAssertEqual(FloodFillFixture.scenarios.count, 3)
+    XCTAssertEqual(FloodFillFixture.scenarios.count, 4)
     for scenario in FloodFillFixture.scenarios {
       var buffer = fixtureBuffer()
       let dirty = FloodFill.fill(
         &buffer, x: scenario.seedX, y: scenario.seedY, color: FloodFillFixture.ink,
-        tolerance: scenario.tolerance)
+        tolerance: scenario.tolerance, selection: scenario.selection.map(bits))
       XCTAssertNotNil(dirty, scenario.name)
       XCTAssertEqual(buffer.words, scenario.expected, scenario.name)
     }
+  }
+
+  /// The wand's masks (#326) against the desktop's `flood_mask` and
+  /// `global_mask`: the connected region, every pixel in range, and
+  /// tolerance 0 across a disconnected column.
+  func testWandMasksMatchDesktopFixture() {
+    XCTAssertEqual(FloodFillFixture.wandScenarios.count, 3)
+    let buffer = fixtureBuffer()
+    for scenario in FloodFillFixture.wandScenarios {
+      let found = buffer.withWords { words in
+        scenario.contiguous
+          ? FloodFill.mask(
+            words: words, width: buffer.width, height: buffer.height,
+            x: scenario.seedX, y: scenario.seedY, tolerance: scenario.tolerance)
+          : FloodFill.globalMask(
+            words: words, width: buffer.width, height: buffer.height,
+            x: scenario.seedX, y: scenario.seedY, tolerance: scenario.tolerance)
+      }
+      XCTAssertEqual(found?.mask, bits(scenario.expected), scenario.name)
+    }
+  }
+
+  func testSeedOutsideTheSelectionFindsNothing() {
+    // The desktop's `if not fillable[y, x]: return None`: a fill or wand
+    // whose seed is outside the selection does nothing at all.
+    let buffer = fixtureBuffer()
+    var leftHalf = [Bool](repeating: false, count: buffer.width * buffer.height)
+    for y in 0..<buffer.height { for x in 0..<6 { leftHalf[y * buffer.width + x] = true } }
+    let contiguous = buffer.withWords { words in
+      FloodFill.mask(
+        words: words, width: buffer.width, height: buffer.height, x: 10, y: 0, tolerance: 0,
+        selection: leftHalf)
+    }
+    XCTAssertNil(contiguous)
+    let global = buffer.withWords { words in
+      FloodFill.globalMask(
+        words: words, width: buffer.width, height: buffer.height, x: 10, y: 0, tolerance: 0,
+        selection: leftHalf)
+    }
+    XCTAssertNil(global)
+    var copy = buffer
+    XCTAssertNil(
+      FloodFill.fill(&copy, x: 10, y: 0, color: FloodFillFixture.ink, tolerance: 0, selection: leftHalf))
+    XCTAssertEqual(copy.words, buffer.words)
   }
 
   func testEnclosedRegionNeverLeaksPastAOnePixelOutline() throws {

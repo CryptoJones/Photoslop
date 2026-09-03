@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v2.21.0** against six
+An honest, category-by-category comparison of **Photoslop v2.22.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -21,7 +21,7 @@ client exposes it.
 | Layered project persistence | ORA | `.photoslop` package | ORA read/write | ORA read/write under root policy |
 | Raster/Pencil drawing | ✅ | ✅ PencilKit | — | — |
 | Paint bucket (flood fill) | ✅ | ✅ ported from the desktop fill, fixture-proven identical | 🟡 `--fill` fills the whole layer | — |
-| Selections/filters/vectors/text | ✅ | — | ✅ shared safe engine operations | ✅ safe subset |
+| Selections/filters/vectors/text | ✅ | 🟡 magic wand + pixel selections (Select All / Invert / Delete Selection) | ✅ shared safe engine operations | ✅ safe subset |
 | Native/third-party plugins | local opt-in | — | local opt-in | denied |
 | Network model operations | local configured endpoint | — | local configured endpoint | denied |
 | Accessibility automation | automated semantics + manual matrix required | native labels + manual matrix required | structured errors | structured tool errors |
@@ -31,7 +31,7 @@ client exposes it.
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 2.21.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
+| **Photoslop** | 2.22.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
