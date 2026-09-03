@@ -231,4 +231,69 @@ final class ImportMemoryDiagnosticsTests: XCTestCase {
     // Twenty full decodes would be ~975 MB. Allow generous slack for noise.
     XCTAssertLessThan(after > base ? after - base : 0, 100_000_000)
   }
+
+  /// #350: a placed photo keeps its JPEG bytes as its source, not the decoded
+  /// bitmap. Ten placed 12 MP photos used to hold 488 MB of sources beside
+  /// their 126 MB of layers; the sources are now the ~3 MB each the picker
+  /// handed over, and the budget caps even that.
+  func testPlacedPhotoSourcesStayAsCompressedBytes() throws {
+    let data = photoJPEGData()
+    let store = EditorStore()
+    store.newDocument(size: EditorStore.defaultCanvasSize)
+    let base = footprint()
+    print("### baseline: \(mb(base)); JPEG bytes per photo: \(mb(UInt64(data.count)))")
+
+    for index in 1...6 {
+      try autoreleasepool {
+        let image = try ProjectArchive.decodeImage(data)
+        _ = try store.addPlaceableLayer(name: "Photo \(index)", image: image, sourceData: data)
+      }
+      let now = footprint()
+      print(
+        "### placed \(index): \(mb(now))  \(delta(base, now))  "
+          + "sources=\(mb(UInt64(store.retainedSourceBytes)))")
+    }
+    let decodedWouldBe = UInt64(6 * 4032 * 3024 * 4)
+    print("### sources retained: \(mb(UInt64(store.retainedSourceBytes))); decoded they were \(mb(decodedWouldBe))")
+
+    // The noise JPEG is a worst case at ~15 MB (a real photo is 3-4 MB), so
+    // the 64 MiB budget lets the oldest go once four are held: what is kept
+    // is whole sources, as many as fit, and never more than the budget.
+    let fits = min(6, store.sourceBudgetBytes / data.count)
+    XCTAssertEqual(store.retainedSourceBytes, fits * data.count)
+    XCTAssertLessThanOrEqual(store.retainedSourceBytes, store.sourceBudgetBytes)
+    XCTAssertLessThan(UInt64(data.count), UInt64(4032 * 3024 * 4), "one source is smaller than its decode")
+    XCTAssertLessThan(UInt64(store.retainedSourceBytes) * 4, decodedWouldBe)
+  }
+
+  /// #351: five whole-document geometry steps on a photo-bearing document,
+  /// and what the undo history pins once the records have packed.
+  func testGeometryUndoHistoryPacksItsBitmaps() throws {
+    let data = photoJPEGData()
+    let store = EditorStore()
+    store.newDocument(size: EditorStore.defaultCanvasSize)
+    let undo = UndoManager()
+    store.undoManager = undo
+    _ = try store.addImageLayers([(name: "Photo", image: try ProjectArchive.decodeImage(data))])
+    store.addLayer()
+    XCTAssertTrue(store.addTextLayer("Caption", fontSize: 96, color: .white, at: CGPoint(x: 40, y: 40)))
+    let document = store.layers.reduce(0) { $0 + $1.imageBytes }
+    let base = footprint()
+    print("### document \(mb(UInt64(document))) across \(store.layers.count) layers; baseline \(mb(base))")
+
+    store.resizeCanvas(to: CGSize(width: 2200, height: 1700))
+    store.crop(to: CGRect(x: 76, y: 82, width: 2048, height: 1536))
+    store.scaleDocument(to: CGSize(width: 1800, height: 1350))
+    store.resizeCanvas(to: CGSize(width: 2048, height: 1536))
+    store.scaleDocument(to: CGSize(width: 1600, height: 1200))
+    let live = store.undoPinnedBytes
+    let beforePacking = footprint()
+    store.settleUndoPacking()
+    let packed = store.undoPinnedBytes
+    let afterPacking = footprint()
+    print("### pinned live: \(mb(UInt64(live)))  packed: \(mb(UInt64(packed)))  (5 x document = \(mb(UInt64(document * 5))))")
+    print("### footprint before packing \(mb(beforePacking)), after \(mb(afterPacking))  \(delta(beforePacking, afterPacking))")
+
+    XCTAssertLessThan(packed, document * 5)
+  }
 }

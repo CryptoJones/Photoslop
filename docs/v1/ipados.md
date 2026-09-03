@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.20.3 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.20.4 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -20,20 +20,10 @@ device name, so an iPad in a narrow Split View gets the phone layout too.
   drawing.
 - A phone's navigation bar holds three controls beside the document title, so
   the compact layout picks them rather than leaving the choice to UIKit:
-  **Layers**, a **More Actions** menu, and **Export**. Undo and redo move to
-  the leading edge of the tool strip, which never has to be scrolled to.
-- The phone's More Actions menu is seven rows: **New**, an **Image** submenu
-  (Canvas Size, Resize Document, Crop, Resize Layer, Flatten Image), a
-  **Text** submenu (Add Text, and Edit, Move and Fit Text while a text layer
-  is active), **Import Image**, **Finger**, **Clear Layer** and **About**. It
-  used to be fifteen rows, flat, which is taller than a phone: the menu is a
-  system `UIMenu`, which scrolls when it overflows without showing that it
-  does, so Finger and everything under it were effectively invisible (#313).
-  Nothing can be added to say "more below", so the top level has to fit
-  without it — a new action belongs in a submenu, whose chevron is the
-  affordance the flat list could not have. The iPad's menu is flat: it holds
-  fewer actions, since New, Canvas Size and About sit on its bar, and an iPad
-  has the screen for them.
+  **Layers**, a **More Actions** menu holding New, Canvas Size, Resize Document,
+  Crop, Resize Layer, the text actions, Import Image, and About, and
+  **Export**. Undo and redo move
+  to the leading edge of the tool strip, which never has to be scrolled to.
 - The tool strip narrows its brush picker and width slider at compact width and
   scrolls horizontally if it still does not fit.
 
@@ -100,13 +90,8 @@ what it was doing to #227.
 ## Editing workflow
 
 - Draw with Apple Pencil using the Pen, Pencil, Marker, or bitmap Eraser.
-  PencilKit supplies pressure and predicted-touch handling. **Finger** in More
-  Actions decides whether touch draws too: on, one finger paints and two
-  fingers pan or pinch to zoom; off, one finger pans. It starts off on an
-  iPad, where a Pencil can exist and a resting palm should pan rather than
-  paint, and on on an iPhone, which takes no Pencil — off there meant a fresh
-  install could not draw at all, every stroke a pan, with the only remedy a
-  switch below the fold of the menu above (#313).
+  PencilKit supplies pressure and predicted-touch handling. Turn on **Finger**
+  to draw with touch; otherwise one finger pans and two fingers pinch to zoom.
 - Brushes differ in which Apple Pencil inputs they read. Pen varies with force
   alone, so tilting the Pencil does not change its stroke. Pencil and Marker
   also read the Pencil's altitude and azimuth and broaden as it is laid over,
@@ -258,10 +243,13 @@ The same box is reached again through **Resize Layer…** for a layer that came 
 the wrong size, and through **Fit Text…** for a text layer, where dragging the
 box scales the type to span it and moves the anchor to its corner.
 
-A layer imported in this session keeps its original pixels as a source, so
+A layer imported in this session keeps its original as a source — the
+compressed bytes of the photo or file, decoded again for each placement — so
 resizing it repeatedly resamples from the original rather than compounding
-losses. A layer restored from a saved document has no separate source yet — see
-DD-011 — so its box opens on the whole canvas and its own pixels are the source.
+losses. Sources share a 64 MiB budget; past it the oldest is let go and that
+layer resizes from its own pixels from then on. A layer restored from a saved
+document has no separate source yet — see DD-011 — so its box opens on the
+whole canvas and its own pixels are the source.
 
 Several pictures chosen at once still arrive scaled to fit the canvas: placing
 each of twenty photos by hand is not a workflow anybody wants.

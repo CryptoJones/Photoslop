@@ -319,6 +319,7 @@ struct EditorView: View {
         backgroundImage: store.canvasBackground,
         canvasSize: store.canvasSize,
         drawing: store.activeLayer?.drawing ?? PKDrawing(),
+        drawingKey: store.activeDrawingKey,
         inkColor: UIColor(inkColor.opacity(inkOpacity)),
         inkWidth: inkWidth,
         tool: tool,
@@ -605,9 +606,7 @@ struct EditorView: View {
   /// instead of sitting behind it at their old size and place.
   private func placementPreviewImage(_ current: Placement) -> UIImage? {
     if current.isText { return textPlacementPreview }
-    guard let layer = store.layers.first(where: { $0.id == current.layerID })
-    else { return nil }
-    return layer.source ?? layer.image
+    return store.placementPreview(for: current.layerID)
   }
 
   /// The placement mode's own bar.
@@ -1125,6 +1124,8 @@ struct EditorView: View {
         selectedLayerPhotos = []
       }
       var loaded: [(name: String, image: UIImage)] = []
+      // The single photo's bytes, kept as the placed layer's source (DD-011).
+      var singleData: Data?
       var unreadable = 0
       var unaffordable = 0
       let canvas = store.canvasSize
@@ -1153,7 +1154,10 @@ struct EditorView: View {
         // intermediates for every photo in the batch pile up until the whole
         // loop ends, which is the behaviour that got the app killed.
         let prepared: UIImage? = autoreleasepool {
-          if single { return try? ProjectArchive.decodeImage(data) }
+          if single {
+            singleData = data
+            return try? ProjectArchive.decodeImage(data)
+          }
           guard let decoded = try? ProjectArchive.decodeImage(data, fittingInto: canvas)
           else { return nil }
           return EditorStore.fitted(decoded, into: canvas)
@@ -1183,7 +1187,8 @@ struct EditorView: View {
       // twenty photos in turn, so those still arrive fitted to the canvas.
       if loaded.count == 1, unreadable == 0, let only = loaded.first {
         do {
-          let placed = try store.addPlaceableLayer(name: only.name, image: only.image)
+          let placed = try store.addPlaceableLayer(
+            name: only.name, image: only.image, sourceData: singleData)
           beginPlacement(layerID: placed.id, isNew: true)
         } catch {
           errorMessage = error.localizedDescription
@@ -1217,9 +1222,10 @@ struct EditorView: View {
       guard let url = try result.get().first else { return }
       let access = url.startAccessingSecurityScopedResource()
       defer { if access { url.stopAccessingSecurityScopedResource() } }
-      let image = try ProjectArchive.decodeImage(Data(contentsOf: url))
+      let data = try Data(contentsOf: url)
+      let image = try ProjectArchive.decodeImage(data)
       let placed = try store.addPlaceableLayer(
-        name: url.deletingPathExtension().lastPathComponent, image: image)
+        name: url.deletingPathExtension().lastPathComponent, image: image, sourceData: data)
       beginPlacement(layerID: placed.id, isNew: true)
     } catch {
       errorMessage = error.localizedDescription

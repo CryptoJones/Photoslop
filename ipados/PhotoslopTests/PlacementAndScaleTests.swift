@@ -137,7 +137,7 @@ final class PlacementAndScaleTests: XCTestCase {
     XCTAssertEqual(
       placed.rect, CGRect(x: 400, y: 450, width: 200, height: 100),
       "the image arrives at its own size, centred — not stretched to the canvas")
-    XCTAssertEqual(store.layers.last?.source?.size, CGSize(width: 200, height: 100))
+    XCTAssertEqual(store.layers.last?.source?.pixelSize, CGSize(width: 200, height: 100))
   }
 
   /// The bug in the user's words: "importing an image into a layer is still
@@ -179,7 +179,7 @@ final class PlacementAndScaleTests: XCTestCase {
     store.placeLayer(placed.id, in: CGRect(x: 0, y: 0, width: 200, height: 200))
 
     XCTAssertEqual(
-      store.layers.last?.source?.size, CGSize(width: 200, height: 200),
+      store.layers.last?.source?.pixelSize, CGSize(width: 200, height: 200),
       "the source stays the original, so the round trip does not compound losses")
   }
 

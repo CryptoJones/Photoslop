@@ -22,6 +22,9 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
   let backgroundImage: UIImage
   let canvasSize: CGSize
   let drawing: PKDrawing
+  /// Which revision of which layer `drawing` is, so an update can tell whether
+  /// the canvas already shows it without serialising both sides (#355).
+  var drawingKey: DrawingKey = .empty
   let inkColor: UIColor
   let inkWidth: CGFloat
   let tool: BrushTool
@@ -60,7 +63,10 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
   /// A box opened on text that had been zoomed past put its handles somewhere
   /// no finger could reach — a control that simply did not respond.
   var reveal: (id: Int, rect: CGRect, zooms: Bool)? = nil
-  let onDrawingChanged: (PKDrawing) -> Void
+  /// Called with the strokes PencilKit reports; returns the key the canvas
+  /// should now consider itself to be showing, so the next update does not
+  /// re-apply a drawing that came from this very canvas.
+  let onDrawingChanged: (PKDrawing) -> DrawingKey
   /// Drawn inside the scrolling content, in document pixels.
   @ViewBuilder var overlay: () -> Overlay
 
@@ -69,7 +75,7 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
   func makeUIView(context: Context) -> CanvasHostView {
     let view = CanvasHostView()
     view.mount(context.coordinator.overlayHost)
-    configure(view)
+    configure(view, context.coordinator)
     view.canvasView.delegate = context.coordinator
     return view
   }
@@ -89,14 +95,14 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
     view.onZoomScaleChanged = onZoomScaleChanged
     context.coordinator.parent = self
     context.coordinator.overlayHost.rootView = overlay()
-    configure(view)
+    configure(view, context.coordinator)
     if let reveal, reveal.id != context.coordinator.lastRevealID {
       context.coordinator.lastRevealID = reveal.id
       view.reveal(reveal.rect, zooming: reveal.zooms)
     }
   }
 
-  private func configure(_ host: CanvasHostView) {
+  private func configure(_ host: CanvasHostView, _ coordinator: Coordinator) {
     host.updateCanvasSize(canvasSize)
     host.imageView.image = backgroundImage
     host.canvasView.tool = tool.pkTool(color: inkColor, width: inkWidth)
@@ -134,11 +140,14 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
     // work during a crop (#270).
     host.scrollView.panGestureRecognizer.minimumNumberOfTouches =
       (drawsWithFinger || overlayIsActive) ? 2 : 1
-    if host.canvasView.drawing.dataRepresentation() != drawing.dataRepresentation() {
+    // Keyed rather than compared: `dataRepresentation()` on both sides
+    // serialised every stroke of the drawing on every SwiftUI update (#355).
+    if coordinator.appliedDrawingKey != drawingKey {
       let delegate = host.canvasView.delegate
       host.canvasView.delegate = nil
       host.canvasView.drawing = drawing
       host.canvasView.delegate = delegate
+      coordinator.appliedDrawingKey = drawingKey
     }
     host.makeDrawingSurfaceTransparent()
   }
@@ -148,6 +157,9 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
     /// The last reveal request applied, so a request runs once, not on every
     /// SwiftUI update for as long as it stays set.
     var lastRevealID = 0
+    /// The drawing the canvas currently shows, by key. Nil until the first
+    /// configure has put one there.
+    var appliedDrawingKey: DrawingKey?
     /// Retains the overlay's hosting controller. Its view lives in the scroll
     /// view's content, so the overlay is laid out in document pixels.
     ///
@@ -169,7 +181,9 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
     }
 
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-      parent.onDrawingChanged(canvasView.drawing)
+      // Recorded before SwiftUI's next update arrives, so that update sees
+      // the canvas already showing what the store just took from it.
+      appliedDrawingKey = parent.onDrawingChanged(canvasView.drawing)
     }
   }
 }
