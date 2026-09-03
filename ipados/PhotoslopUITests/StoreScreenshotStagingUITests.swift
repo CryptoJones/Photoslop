@@ -18,20 +18,11 @@ final class StoreScreenshotStagingUITests: UITestCase {
     let app = openEditor()
     app.selectTool("Pen")
 
-    // Synthesized touches are finger touches, and finger drawing is off by
-    // default — without this every drag below pans the canvas instead of
-    // painting on it.
-    let more = app.navigationBars.buttons["More Actions"].firstMatch
-    XCTAssertTrue(more.waitForExistence(timeout: 15))
-    more.tap()
-    let finger = app.switches["Finger"].firstMatch
-    if finger.waitForExistence(timeout: 5) {
-      finger.tap()
-    } else {
-      let fingerButton = app.buttons["Finger"].firstMatch
-      XCTAssertTrue(fingerButton.waitForExistence(timeout: 10), "no Finger toggle in the menu")
-      fingerButton.tap()
-    }
+    // Synthesized touches are finger touches, and finger drawing starts off
+    // on an iPad — without this every drag below pans the canvas instead of
+    // painting on it. A phone starts with it on (#313), which is why this
+    // reads the toggle rather than flipping it.
+    app.setFingerDrawing(true)
 
     // A little skyline of strokes, by coordinate *within the drawable canvas*
     // — window fractions were tried first and mostly landed on the grey

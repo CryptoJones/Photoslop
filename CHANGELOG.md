@@ -4,6 +4,45 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.20.3] — 2026-09-02
+
+### Fixed
+- **iPhone: the More Actions menu no longer scrolls** (#313). It held fifteen
+  actions and four dividers, which is taller than a phone. A SwiftUI `Menu`
+  is a system `UIMenu`: when it overflows it scrolls, with no indicator, no
+  "more below" affordance and no hook to add one, so everything below the
+  fold might as well not have existed. It did not, as far as the app's own
+  author could tell: the Finger toggle was concluded not to be on iPhone at
+  all, and once it was pointed out — *"I didn't know scrolling down was a
+  thing."* The menu is now seven rows: New, an **Image** submenu (Canvas
+  Size, Resize Document, Crop, Resize Layer, Flatten Image), a **Text**
+  submenu (Add, Edit, Move, Fit), Import Image, Finger, Clear Layer and
+  About. Canvas Size went into Image with its siblings rather than staying
+  on the top level: it pads, Resize Document resamples and Crop takes a
+  region, three answers to one question, and #269 made the sheet say which
+  is which precisely so they would not be confused for one another. The iPad
+  menu is unchanged — it is flat, shorter, and has the screen. A UI test now
+  measures the phone's last row against the window, so the next action added
+  to the top level instead of a submenu turns it red.
+- **iPhone: touch draws out of the box** (#313, the other half). Finger
+  drawing started off on every device, and an iPhone has no Apple Pencil, so
+  on a fresh install Pen, Pencil and Marker did nothing: every stroke panned
+  the canvas, and the only switch that made the app draw was the one under
+  the fold above. The default is now a function of the idiom —
+  `EditorView.defaultDrawsWithFinger(idiom:)`, on for `.phone` and off for
+  everything else — with unit tests pinning both. An iPad keeps the
+  Pencil-first default, where a resting palm should pan rather than paint.
+  The UI-test helper that turns finger drawing on for synthesized touches
+  now reads the toggle before deciding whether to tap it, since a blind tap
+  would have switched drawing *off* on the phone.
+- **`scripts/ci-local.sh` shuts every simulator down on exit**, not only at
+  the end of a leg that ran to completion. Ctrl-C, a timeout or an agent
+  session ending mid-leg used to skip the per-leg shutdown and leave
+  `CI-iPhone-18.5` booted indefinitely — on 2026-08-25 two stranded
+  simulators held 5.88 GB and 344 processes on the build machine, the
+  starvation the script's own header warns about (L-002). An `EXIT` trap
+  covers every way out.
+
 ## [2.20.2] — 2026-09-02
 
 ### Changed

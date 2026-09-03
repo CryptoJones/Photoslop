@@ -76,13 +76,7 @@ final class PlacementUITests: UITestCase {
   func testAnExistingLayerCanBeResized() {
     let app = openEditor()
 
-    let more = app.navigationBars.buttons["More Actions"].firstMatch
-    XCTAssertTrue(more.waitForExistence(timeout: 15), "no More Actions menu")
-    more.tap()
-
-    let resize = app.buttons["Resize Layer…"].firstMatch
-    XCTAssertTrue(resize.waitForExistence(timeout: 10), "there is no way to resize a placed layer")
-    resize.tap()
+    app.chooseAction("Resize Layer…")
 
     XCTAssertTrue(
       app.buttons["Apply Placement"].waitForExistence(timeout: 20),
@@ -103,15 +97,7 @@ final class PlacementUITests: UITestCase {
   func testResizeDocumentIsOfferedAlongsideCanvasSize() {
     let app = openEditor()
 
-    let more = app.navigationBars.buttons["More Actions"].firstMatch
-    XCTAssertTrue(more.waitForExistence(timeout: 15), "no More Actions menu")
-    more.tap()
-
-    let resize = app.buttons["Resize Document…"].firstMatch
-    XCTAssertTrue(
-      resize.waitForExistence(timeout: 10),
-      "there is no way to scale a document — only to pad it or crop it")
-    resize.tap()
+    app.chooseAction("Resize Document…")
 
     XCTAssertTrue(
       app.navigationBars["Resize Document"].waitForExistence(timeout: 20),

@@ -16,13 +16,7 @@ final class FitTextUITests: UITestCase {
     let app = openEditor()
     app.addText("Fit me across the picture")
 
-    let more = app.navigationBars.buttons["More Actions"].firstMatch
-    XCTAssertTrue(more.waitForExistence(timeout: 15), "no More Actions menu")
-    more.tap()
-
-    let fit = app.buttons["Fit Text…"].firstMatch
-    XCTAssertTrue(fit.waitForExistence(timeout: 10), "Fit Text… is missing from the menu")
-    fit.tap()
+    app.chooseAction("Fit Text…")
 
     XCTAssertTrue(
       app.buttons["Apply Placement"].waitForExistence(timeout: 20),
@@ -123,17 +117,7 @@ final class FitTextUITests: UITestCase {
     let app = openEditor()
     // Add Text lives on the bar where there is room and in More Actions where
     // there is not — the same route `addText` takes.
-    let barButton = app.navigationBars.buttons["Add Text"].firstMatch
-    if barButton.waitForExistence(timeout: 10), barButton.isHittable {
-      barButton.tap()
-    } else {
-      let more = app.navigationBars.buttons["More Actions"].firstMatch
-      XCTAssertTrue(more.waitForExistence(timeout: 15), "no More Actions menu")
-      more.tap()
-      let addText = app.buttons["Add Text"].firstMatch
-      XCTAssertTrue(addText.waitForExistence(timeout: 10), "Add Text is missing from the menu")
-      addText.tap()
-    }
+    app.chooseAction("Add Text")
 
     XCTAssertTrue(
       app.textFields["Type something"].waitForExistence(timeout: 20),
@@ -189,12 +173,7 @@ final class FitTextUITests: UITestCase {
     let doneMoving = app.buttons["Done"].firstMatch
     if doneMoving.exists, doneMoving.isHittable { doneMoving.tap() }
 
-    let more = app.navigationBars.buttons["More Actions"].firstMatch
-    XCTAssertTrue(more.waitForExistence(timeout: 15), "no More Actions menu")
-    more.tap()
-    let edit = app.buttons["Edit Text"].firstMatch
-    XCTAssertTrue(edit.waitForExistence(timeout: 10), "Edit Text is missing from the menu")
-    edit.tap()
+    app.chooseAction("Edit Text")
 
     XCTAssertTrue(
       app.navigationBars["Edit Text"].waitForExistence(timeout: 20),

@@ -317,6 +317,144 @@ extension XCUIApplication {
     return marker.waitForExistence(timeout: 10)
   }
 
+  /// Which submenu of the compact More Actions menu holds an action (#313).
+  /// Anything not listed is on the top level at every width.
+  private static let submenuHolding: [String: String] = [
+    "Canvas Size": "Image",
+    "Resize Document…": "Image",
+    "Crop…": "Image",
+    "Resize Layer…": "Image",
+    "Flatten Image": "Image",
+    "Add Text": "Text",
+    "Edit Text": "Text",
+    "Move Text": "Text",
+    "Fit Text…": "Text",
+  ]
+
+  /// Open More Actions and wait until its rows are actually on screen.
+  ///
+  /// Import Image is on the top level of both the phone's menu and the iPad's,
+  /// so its arrival is the menu's: a query for a nested row before this point
+  /// finds nothing, and reads as the row being missing.
+  func openMoreActions(file: StaticString = #filePath, line: UInt = #line) {
+    let more = navigationBars.buttons["More Actions"].firstMatch
+    XCTAssertTrue(
+      more.waitForExistence(timeout: 15), "no More Actions menu on the bar", file: file, line: line)
+    more.tap()
+    XCTAssertTrue(
+      buttons["Import Image…"].firstMatch.waitForExistence(timeout: 10),
+      "More Actions did not open", file: file, line: line)
+  }
+
+  /// Close an open menu without choosing anything from it.
+  ///
+  /// An open `Menu` puts a scrim over everything, so a tap that reaches
+  /// nothing else closes it — the same exit `restoreEditorBaseline` takes.
+  /// Low and central, though: the menu hangs from the leading side of the
+  /// bar, and a tap down its left edge lands on a row of a seven-row menu.
+  func dismissMenu() {
+    coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8)).tap()
+    _ = buttons["Import Image…"].firstMatch.waitForNonExistence(timeout: 10)
+  }
+
+  /// Bring a More Actions row on screen and hand it back, untapped.
+  ///
+  /// The compact menu nests Image and Text submenus so its top level fits a
+  /// phone without scrolling (#313); the iPad menu is flat and holds the same
+  /// actions one level up. A nested SwiftUI `Menu` is a row that has to be
+  /// tapped before its contents exist in the accessibility tree at all, so an
+  /// action is looked for on the top level first and behind its submenu only
+  /// when it is not there. Tests name the action; which menu this device
+  /// shows is not their business.
+  @discardableResult
+  func revealAction(
+    _ label: String, file: StaticString = #filePath, line: UInt = #line
+  ) -> XCUIElement {
+    openMoreActions(file: file, line: line)
+    let action = buttons[label].firstMatch
+    if !action.exists, let submenu = Self.submenuHolding[label] {
+      let row = buttons[submenu].firstMatch
+      XCTAssertTrue(
+        row.waitForExistence(timeout: 10),
+        "neither \(label) nor the \(submenu) submenu is in More Actions", file: file, line: line)
+      row.tap()
+    }
+    XCTAssertTrue(
+      action.waitForExistence(timeout: 10), "\(label) is missing from More Actions",
+      file: file, line: line)
+    return action
+  }
+
+  /// Choose a document action, wherever this width keeps it.
+  ///
+  /// On the bar when the bar is provably wide enough for it; otherwise in the
+  /// app's own More Actions menu, and on a phone possibly one submenu down.
+  /// A test that cares about the *result* of an action should not have to
+  /// know which.
+  func chooseAction(_ label: String, file: StaticString = #filePath, line: UInt = #line) {
+    let onBar = navigationBars.buttons[label].firstMatch
+    if onBar.waitForExistence(timeout: 2), onBar.isHittable {
+      onBar.tap()
+    } else {
+      revealAction(label, file: file, line: line).tap()
+    }
+  }
+
+  /// A menu row by label, whichever element type this runtime reports it as.
+  ///
+  /// An action is a button. A `Toggle` in a `Menu` becomes a `UIMenu` row with
+  /// a checkmark, and whether XCTest calls that a button or a switch has
+  /// varied between runtimes, so a query that accepts either is the one that
+  /// keeps working.
+  func menuRow(_ label: String) -> XCUIElement {
+    descendants(matching: .any).matching(
+      NSPredicate(
+        format: "label == %@ AND (elementType == %d OR elementType == %d)", label,
+        XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.switch.rawValue)
+    ).firstMatch
+  }
+
+  /// The Finger toggle as More Actions shows it, with the menu left open.
+  private func revealFingerToggle(file: StaticString = #filePath, line: UInt = #line)
+    -> XCUIElement
+  {
+    openMoreActions(file: file, line: line)
+    let toggle = menuRow("Finger")
+    XCTAssertTrue(
+      toggle.waitForExistence(timeout: 10), "no Finger toggle in the menu", file: file, line: line)
+    return toggle
+  }
+
+  /// Whether a menu row with a checkmark is checked.
+  private static func isOn(_ toggle: XCUIElement) -> Bool {
+    toggle.isSelected || (toggle.value as? String) == "1"
+  }
+
+  /// Whether touch draws right now, read off the Finger toggle. Opens and
+  /// closes More Actions to look.
+  func fingerDrawingIsOn(file: StaticString = #filePath, line: UInt = #line) -> Bool {
+    let toggle = revealFingerToggle(file: file, line: line)
+    let on = Self.isOn(toggle)
+    dismissMenu()
+    return on
+  }
+
+  /// Make touch draw, or not, whatever it does right now.
+  ///
+  /// Synthesized touches are finger touches, so a test that draws needs this
+  /// on. It used to be a blind tap on the assumption that Finger starts off,
+  /// which is true of an iPad and no longer of a phone (#313): the same tap
+  /// would have switched drawing *off* there. Reading the toggle first makes
+  /// the helper say what it means on both.
+  func setFingerDrawing(_ on: Bool, file: StaticString = #filePath, line: UInt = #line) {
+    let toggle = revealFingerToggle(file: file, line: line)
+    if Self.isOn(toggle) == on {
+      dismissMenu()
+    } else {
+      toggle.tap()
+    }
+  }
+
   /// Add a text layer, wherever this width keeps **Add Text**.
   ///
   /// It is on the bar only when the bar is provably wide enough; otherwise it
@@ -324,21 +462,7 @@ extension XCUIApplication {
   /// A test that cares about the *result* of adding text should not have to
   /// know which.
   func addText(_ body: String, file: StaticString = #filePath, line: UInt = #line) {
-    let addText = navigationBars.buttons["Add Text"].firstMatch
-    if addText.waitForExistence(timeout: 10), addText.isHittable {
-      addText.tap()
-    } else {
-      let more = navigationBars.buttons["More Actions"].firstMatch
-      XCTAssertTrue(
-        more.waitForExistence(timeout: 10), "neither Add Text nor a menu holding it is on the bar",
-        file: file, line: line)
-      more.tap()
-      let menuItem = buttons["Add Text"].firstMatch
-      XCTAssertTrue(
-        menuItem.waitForExistence(timeout: 10), "Add Text is missing from More Actions",
-        file: file, line: line)
-      menuItem.tap()
-    }
+    chooseAction("Add Text", file: file, line: line)
 
     let field = textFields["Type something"].firstMatch
     XCTAssertTrue(
@@ -379,18 +503,8 @@ extension XCUIApplication {
   /// Reach About, which sits on the bar at regular width and in the actions menu
   /// at compact width.
   @discardableResult
-  func openAbout() -> Bool {
-    let about = navigationBars.buttons["About Photoslop"].firstMatch
-    if about.waitForExistence(timeout: 10), about.isHittable {
-      about.tap()
-    } else {
-      let more = navigationBars.buttons["More Actions"].firstMatch
-      guard more.waitForExistence(timeout: 10) else { return false }
-      more.tap()
-      let menuAbout = buttons["About Photoslop"].firstMatch
-      guard menuAbout.waitForExistence(timeout: 10) else { return false }
-      menuAbout.tap()
-    }
+  func openAbout(file: StaticString = #filePath, line: UInt = #line) -> Bool {
+    chooseAction("About Photoslop", file: file, line: line)
     // Tapping is not arriving: the sheet has to be up before anything is read
     // off it.
     return navigationBars["About"].waitForExistence(timeout: 15)

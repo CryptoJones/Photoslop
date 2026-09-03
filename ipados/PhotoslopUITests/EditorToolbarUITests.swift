@@ -51,17 +51,79 @@ final class EditorToolbarUITests: UITestCase {
       app.navigationBars.buttons["Layers"].waitForExistence(timeout: 10),
       "Layers is not on the navigation bar; it is the only route to the layer list on a phone")
 
-    let more = app.navigationBars.buttons["More Actions"]
-    XCTAssertTrue(more.waitForExistence(timeout: 10), "the overflow menu is not on the bar")
-    more.tap()
-
+    // The top level, then each submenu. Reopened between them: a nested
+    // `UIMenu` may replace the list it came from rather than expand inside it,
+    // and this test is about where the actions are, not about how the runtime
+    // animates submenus.
+    app.openMoreActions()
     for label in [
-      "New", "Canvas Size", "Resize Document…", "Crop…", "Flatten Image", "Add Text",
-      "Import Image…", "About Photoslop",
+      "New", "Image", "Text", "Import Image…", "Finger", "Clear Layer", "About Photoslop",
     ] {
       XCTAssertTrue(
-        app.buttons[label].waitForExistence(timeout: 10), "\(label) is missing from the menu")
+        app.menuRow(label).waitForExistence(timeout: 10), "\(label) is missing from the menu")
     }
+    app.dismissMenu()
+
+    for label in ["Canvas Size", "Resize Document…", "Crop…", "Resize Layer…", "Flatten Image"] {
+      app.revealAction(label)
+      app.dismissMenu()
+    }
+    app.revealAction("Add Text")
+    app.dismissMenu()
+  }
+
+  /// The phone's menu may not scroll (#313).
+  ///
+  /// A `Menu` is a system `UIMenu`: when it is taller than the screen it
+  /// scrolls, with no indicator and no hook to add one, so everything below
+  /// the fold might as well not exist. Measured before the menu was nested:
+  /// fifteen rows and four dividers, with Finger — the only switch that made
+  /// a fresh iPhone draw at all — under the fold, where the app's own author
+  /// concluded it did not exist. The submenus are what keep the top level
+  /// short; this is what stops the next action from being added to the top
+  /// level instead.
+  func testEveryTopLevelMenuRowIsOnScreenWithoutScrolling() throws {
+    try XCTSkipUnless(
+      UIDevice.current.userInterfaceIdiom == .phone,
+      "the iPad has the screen for a flat menu; this pins the phone's")
+    let app = openEditor()
+    let window = app.windows.firstMatch.frame
+
+    app.openMoreActions()
+    // About is the last row, so if it is on screen everything above it is.
+    for label in ["Finger", "Clear Layer", "About Photoslop"] {
+      let row = app.menuRow(label)
+      XCTAssertTrue(row.waitForExistence(timeout: 10), "\(label) is missing from the menu")
+      XCTAssertTrue(
+        row.isHittable, "\(label) exists but cannot be tapped — the menu is scrolling again")
+      XCTAssertTrue(
+        window.contains(row.frame),
+        """
+        \(label) is below the fold at y=\(row.frame.maxY), window height \
+        \(window.height). The More Actions menu is over its budget for this \
+        device — nest the new action under Image or Text rather than adding \
+        a top-level row.
+        """)
+    }
+    app.dismissMenu()
+  }
+
+  /// Touch draws out of the box where no Apple Pencil can (#313).
+  ///
+  /// With Finger off, a fresh iPhone could not draw: no Pencil, every stroke a
+  /// pan, and the switch below the fold of a menu that did not say it
+  /// scrolled. An iPad keeps the Pencil-first default, so a resting palm pans.
+  /// The shared document is a launch's own — nothing in this target flips the
+  /// toggle except the staging test, which CI skips — so the state read here
+  /// is the default.
+  func testFingerDrawingDefaultsToOnOnlyWhereNoPencilCanExist() {
+    let app = openEditor()
+    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+    XCTAssertEqual(
+      app.fingerDrawingIsOn(), isPhone,
+      isPhone
+        ? "an iPhone has no Apple Pencil; with Finger off it cannot draw at all"
+        : "an iPad can have a Pencil, and a resting palm should pan rather than paint")
   }
 
   /// Nothing may be handed to UIKit's own overflow, on any device.

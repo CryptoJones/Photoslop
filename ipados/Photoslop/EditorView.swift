@@ -106,12 +106,29 @@ struct EditorView: View {
   /// width the user chose.
   @State private var inkWidthEstablished = false
   @State private var tool = BrushTool.pen
-  @State private var drawsWithFinger = false
+  @State private var drawsWithFinger = EditorView.defaultDrawsWithFinger(
+    idiom: UIDevice.current.userInterfaceIdiom)
   @State private var showLayers = false
   @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
   /// A phone has no room for a permanent sidebar beside the canvas.
   private var isCompact: Bool { horizontalSizeClass == .compact }
+
+  /// Whether touch draws before the user has said either way.
+  ///
+  /// Off wherever an Apple Pencil can exist, so a resting palm pans instead of
+  /// painting and the Pencil stays the drawing instrument. On where one cannot:
+  /// an iPhone takes no Pencil, so off there meant Pen, Pencil and Marker did
+  /// nothing on a fresh install — every stroke panned the canvas — and the one
+  /// switch that made the app draw at all sat below the fold of the More
+  /// Actions menu, where its own author could not find it (#313). A phone has
+  /// exactly one input, and that input should draw.
+  ///
+  /// A function of the idiom rather than a read of the device, so the policy
+  /// can be tested without one.
+  static func defaultDrawsWithFinger(idiom: UIUserInterfaceIdiom) -> Bool {
+    idiom == .phone
+  }
 
   /// A layer being positioned and sized on the canvas.
   ///
@@ -767,15 +784,19 @@ struct EditorView: View {
         // On iPad the sidebar is always beside the canvas, so this would be
         // redundant; on a phone it is the only way to reach layers.
         layersButton
+        // Seven rows, nested where the iPad menu below stays flat. Flat, this
+        // one was fifteen rows and four dividers, which is taller than a
+        // phone: it scrolled, and a `Menu` is a system `UIMenu`, which shows
+        // no indicator and offers no hook to add one. Finger and everything
+        // under it were simply not there — the app's own author concluded the
+        // toggle did not exist on iPhone (#313). Nothing can be added to say
+        // "more below", so the top level has to fit without it, and keep
+        // fitting as actions are added: a new one goes into a submenu, whose
+        // chevron is the affordance the flat list could not have.
         Menu {
           newDocumentButton
-          canvasSizeButton
-          resizeDocumentButton
-          cropButton
-          Divider()
-          resizeLayerButton
-          flattenImageButton
-          textButtons
+          imageMenu
+          textMenu
           Divider()
           importImageButton
           Divider()
@@ -836,6 +857,36 @@ struct EditorView: View {
         exportButton
         aboutButton
       }
+    }
+  }
+
+  /// Everything that changes the picture's geometry, in one submenu.
+  ///
+  /// Canvas Size pads, Resize Document resamples and Crop takes a region —
+  /// three answers to "make it a different size", which is why they sit
+  /// together here rather than Canvas Size staying on the top level alone.
+  /// #269 made the sheet say which is which; the menu should not split them
+  /// up again. Resize Layer and Flatten act on layers rather than the
+  /// document, hence the divider.
+  private var imageMenu: some View {
+    Menu {
+      canvasSizeButton
+      resizeDocumentButton
+      cropButton
+      Divider()
+      resizeLayerButton
+      flattenImageButton
+    } label: {
+      Label("Image", systemImage: "photo")
+    }
+  }
+
+  /// The text actions, one row on the top level instead of up to four.
+  private var textMenu: some View {
+    Menu {
+      textButtons
+    } label: {
+      Label("Text", systemImage: "textformat")
     }
   }
 
