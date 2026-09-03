@@ -91,7 +91,9 @@ effects rendered at composite time — shadow/glow beneath the fill, stroke
 above. The layer's own pixels never change; effects follow every edit and Move
 tool drag. Appearance caches use layer-local coordinates, so movement is cheap
 and effects re-derive only when pixels change. **Layer Style → Clear** removes
-all. Effects persist in ORA.
+all. Effects persist in ORA. The iOS edition draws the same effects on text
+layers from the same parameters, without a cache, through its text tool's
+**Effects…** sheet ([iPadOS](ipados.md#editing-workflow)).
 
 ## Fill opacity
 Layer Style → **Fill Opacity…** scales only the layer's own pixels — effects

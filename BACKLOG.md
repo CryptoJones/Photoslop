@@ -8,8 +8,10 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
-- [ ] Coloured drop shadows and embossing on text layers
-  ([#316](https://github.com/CryptoJones/Photoslop/issues/316))
+- [ ] iOS appearance-effect follow-ups: the Effects sheet on raster and photo
+  layers (needs banded or budgeted effect planes for canvas-sized alpha),
+  Gaussian blur and feather rendering (the fill-override kinds), and fill
+  opacity ([#372](https://github.com/CryptoJones/Photoslop/issues/372))
 - [ ] iOS strokes honour the selection (brush, pencil, marker, eraser are
   PencilKit and are not clipped by the mask yet), selection feathering, and a
   marquee / lasso producer alongside the wand
@@ -61,6 +63,12 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] iOS text effects — `LayerEffect` is the desktop's normalised effect
+  object and `AppearanceRenderer` a port of `appearance.render`, fixture-proven
+  bit-exact on the blur and word-exact on every renderable kind; an Effects…
+  sheet with the desktop's presets on text layers, live preview, one undo
+  step; `.photoslop` v4 carries the stack as the desktop's JSON (DD-014)
+  ([#316](https://github.com/CryptoJones/Photoslop/issues/316)) — shipped v2.25.0
 - [x] iOS pixel seam — `PixelBuffer` borrows a layer's pixels as premultiplied
   ARGB32 in the desktop's byte order, banded in 256 rows, and puts them back
   as one undo step through `applyPixelOperation`; the foundation under the

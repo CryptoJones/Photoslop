@@ -27,6 +27,7 @@ struct EditorView: View {
   @State private var canvasSheetMode = CanvasSheetMode.newDocument
   @State private var showAbout = false
   @State private var showTextOptions = false
+  @State private var showTextEffects = false
   @State private var textBody = ""
   @State private var textSize = 48.0
   @State private var textColor = Color.black
@@ -226,6 +227,11 @@ struct EditorView: View {
     .sheet(isPresented: $showNewDocumentOptions) { newDocumentSheet }
     .sheet(isPresented: $showAbout) { aboutSheet }
     .sheet(isPresented: $showTextOptions) { textOptionsSheet }
+    .sheet(isPresented: $showTextEffects) {
+      if let id = activeTextLayer?.id {
+        EffectsSheet(store: store, layerID: id, isPresented: $showTextEffects)
+      }
+    }
     .onChange(of: selectedPhoto) { _, item in
       guard let item else { return }
       Task {
@@ -1113,6 +1119,15 @@ struct EditorView: View {
         if let id = store.activeLayerID { beginPlacement(layerID: id, isNew: false) }
       } label: {
         Label("Fit Text…", systemImage: "textformat.size")
+      }
+
+      // The stack lives with the layer, not the pixels, so a shadow set here
+      // follows the words through Edit Text and Move Text (#316). Inside the
+      // text submenu on iPhone, so the top level does not grow (#313).
+      Button {
+        showTextEffects = true
+      } label: {
+        Label("Effects…", systemImage: "sparkles")
       }
     }
   }

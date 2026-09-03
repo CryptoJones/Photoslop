@@ -65,7 +65,13 @@ struct ProjectManifest: Codable {
   /// image is exactly canvas-sized (#309). A version 1 or 2 layer has no origin
   /// and must still fill the canvas, which is precisely what those files
   /// contain, so they decode unchanged.
-  static let currentVersion = 3
+  ///
+  /// Version 4 added `LayerRecord.effects`, the live appearance stack (#316).
+  /// The records are the desktop's normalised effect objects verbatim — the
+  /// same JSON `photoslop-effects` carries in an `.ora` — so a future ORA
+  /// round trip is a copy, not a translation. A version 3 document has none
+  /// and decodes with an empty stack, which is what it showed.
+  static let currentVersion = 4
   static let oldestReadableVersion = 1
 
   var version: Int
@@ -94,6 +100,25 @@ struct ProjectManifest: Codable {
     /// where every layer image was required to be exactly canvas-sized and so
     /// always sat at the top-left.
     var origin: PixelPoint?
+    /// The layer's live effects, absent when it has none and before version 4.
+    var effects: EffectStack?
+  }
+
+  /// A layer's effect list as the manifest carries it, read leniently: an
+  /// entry the app cannot make sense of is dropped rather than failing the
+  /// document, which is `appearance.normalize_effects`' rule too.
+  struct EffectStack: Codable, Equatable {
+    var effects: [LayerEffect]
+
+    init(_ effects: [LayerEffect]) { self.effects = effects }
+
+    init(from decoder: Decoder) throws {
+      effects = LayerEffect.normalized(try [JSONValue](from: decoder))
+    }
+
+    func encode(to encoder: Encoder) throws {
+      try effects.encode(to: encoder)
+    }
   }
 }
 
@@ -157,7 +182,8 @@ enum ProjectArchive {
           text: $0.text,
           origin: $0.origin == .zero
             ? nil
-            : .init(x: Int($0.origin.x.rounded()), y: Int($0.origin.y.rounded()))
+            : .init(x: Int($0.origin.x.rounded()), y: Int($0.origin.y.rounded())),
+          effects: $0.effects.isEmpty ? nil : .init($0.effects)
         )
       }
     )
@@ -230,7 +256,11 @@ enum ProjectArchive {
         drawing: payload.drawing,
         isVisible: record.isVisible,
         opacity: record.opacity,
-        text: record.text
+        text: record.text,
+        // The origin was left out when #309 introduced it, so a bounded text
+        // layer's preview drew it at the top-left wherever it sat (#316).
+        origin: record.origin.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) } ?? .zero,
+        effects: record.effects?.effects ?? []
       )
     }
     let size = CGSize(
@@ -255,7 +285,17 @@ enum ProjectArchive {
       context.cgContext.scaleBy(x: scale, y: scale)
       for layer in layers where layer.isVisible && layer.opacity > 0 {
         autoreleasepool {
+          // Effects at 1x through the scaled context: the planes are the
+          // layer's size, not the preview's, and the transform shrinks them.
+          let rendered = layer.hasRenderableEffects
+            ? AppearanceRenderer.planes(for: layer) : ([], .zero)
+          AppearanceRenderer.draw(
+            planes: rendered.planes, under: true, origin: rendered.origin,
+            layerOpacity: layer.opacity)
           layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
+          AppearanceRenderer.draw(
+            planes: rendered.planes, under: false, origin: rendered.origin,
+            layerOpacity: layer.opacity)
           if !layer.drawing.strokes.isEmpty {
             // Rasterised at the preview's own scale — a preview-sized bitmap,
             // not a canvas-sized one.
@@ -327,7 +367,11 @@ enum ProjectArchive {
           isVisible: record.isVisible,
           opacity: record.opacity,
           text: record.text,
-          origin: origin
+          origin: origin,
+          // Effects arrived with version 4; an older manifest carrying the
+          // key is not one this app wrote, so the key is ignored as `origin`
+          // is above.
+          effects: manifest.version >= 4 ? record.effects?.effects ?? [] : []
         )
       }
       layers.append(decoded)

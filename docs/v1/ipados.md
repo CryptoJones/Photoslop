@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.22.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.25.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -115,6 +115,27 @@ what it was doing to #227.
 - The words, size, colour, and anchor are stored in the document, which is what
   makes that possible. Documents saved before this shipped still open; they
   simply contain no text layers.
+- **Effects…** opens a text layer's appearance stack (#316): drop shadow, inner
+  shadow, outer and inner glow, outline, colour and gradient overlay, and bevel
+  and emboss, each with the desktop's parameters under the desktop's names
+  (colour, offset, blur, spread, angle, depth, and so on), plus opacity and a
+  blend mode per effect. Add stacks a new effect; drag to reorder, swipe to
+  remove, and the toggle on each row disables it without losing its settings.
+  The **Presets** section is the desktop's built-in set — Lifted, Sticker,
+  Neon, Letterpress, Chrome, Soft Focus — and picking one replaces the stack,
+  as it does there. The canvas previews every change live; **Apply** commits
+  the whole edit as one undo step and **Cancel** puts the layer back.
+- Effects are never baked into the layer. They are re-drawn from the type each
+  time it is composited, so Edit Text, Fit Text and Move Text keep them; they
+  are included in Flatten, in every export, and in the document preview; and
+  they round-trip through the `.photoslop` package as the same JSON the
+  desktop writes into an OpenRaster `photoslop-effects` attribute, so the
+  stack is one vocabulary across the CLI (`--drop-shadow`, `--glow`,
+  `--stroke`, `--effect`, `--set-effects`), the desktop, and the app. Two
+  desktop kinds, Gaussian blur and feather, are kept with the document but not
+  drawn on iOS yet; the app says so on their page.
+- On iPhone the button lives inside the text submenu, so the top-level tool
+  menu does not gain an item (#313).
 - **New** offers a starting canvas size: Standard, Square, HD, 4K UHD, A4 and
   US Letter at 300 DPI, Photo 6x4, or a custom size. **Canvas Size** applies the
   same choice to the open document, padding or cropping around centred content
@@ -474,7 +495,10 @@ Example.photoslop/
       drawing.data
 ```
 
-The versioned manifest is the source of layer order and metadata. Opening a
+The versioned manifest is the source of layer order and metadata. Version 4
+adds an `effects` array to a layer record — the desktop's normalised effect
+objects, verbatim — which a layer without effects omits; a version 3 package
+opens with empty stacks. Opening a
 package validates its schema, UUID uniqueness, dimensions, counts, payload
 sizes, layer image geometry, opacity, and PencilKit drawing data before the
 document is installed.
@@ -547,7 +571,8 @@ The iPad edition currently covers persistent layered raster/PencilKit painting,
 the paint bucket, the magic wand and pixel selections, image import,
 document-wide undo, and flattened image export. The desktop edition remains the
 authoritative home for OpenRaster round trips, marquee and lasso selections,
-adjustments, filters, appearance effects, editable vectors/text, automation,
+adjustments, filters, appearance effects on non-text layers, editable
+vectors, automation,
 CLI, and MCP. An unsigned GitHub artifact is a reproducible developer build,
 not an App Store-signed IPA.
 

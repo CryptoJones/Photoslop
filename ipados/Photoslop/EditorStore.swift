@@ -110,8 +110,19 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
   /// that have not been taught about origins call `expandedToCanvas` first, so
   /// a bounded layer is always safe to hand to them.
   var origin: CGPoint = .zero
+  /// Live appearance effects — the desktop's `Layer.effects` (#316). Data,
+  /// not pixels: the compositor renders them from the layer's alpha on every
+  /// composite, so they follow an edit to the words and are baked in only by
+  /// Flatten Image and export. Carried by every layer type, as on the desktop;
+  /// the editor exposes them for text layers first.
+  var effects: [LayerEffect] = []
 
   var isText: Bool { text != nil }
+
+  /// Whether the composite has effects to draw for this layer.
+  var hasRenderableEffects: Bool {
+    effects.contains { $0.enabled && LayerEffect.renderableKinds.contains($0.kind) }
+  }
 
   /// The rectangle this layer occupies on the canvas.
   var frame: CGRect { CGRect(origin: origin, size: image.size) }
@@ -142,6 +153,7 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
       && source?.id == other.source?.id
       && placement == other.placement
       && origin == other.origin
+      && effects == other.effects
   }
 
   private static var drawingRevisionCounter = 0
@@ -186,7 +198,8 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
     text: TextContent? = nil,
     source: LayerSource? = nil,
     placement: CGRect? = nil,
-    origin: CGPoint = .zero
+    origin: CGPoint = .zero,
+    effects: [LayerEffect] = []
   ) {
     self.id = id
     self.name = name
@@ -201,6 +214,7 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
     self.source = source
     self.placement = placement
     self.origin = origin
+    self.effects = effects
   }
 }
 
@@ -1418,10 +1432,40 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     didSet { if oldValue != previewSuppressedLayerID { refreshCanvas() } }
   }
 
+  /// An effect stack the composite shows in place of a layer's own while the
+  /// Effects sheet is open (#316).
+  ///
+  /// Like `previewSuppressedLayerID`, not part of `EditorState` and not
+  /// undoable: a slider being dragged is not an edit yet. Apply commits the
+  /// draft through `setEffects` as one undo step; Cancel clears it and the
+  /// layer's own stack comes back.
+  @Published var previewEffects: (layerID: UUID, effects: [LayerEffect])? {
+    didSet { refreshCanvas() }
+  }
+
+  /// Replace a layer's effect stack, as one undo step. Returns false when the
+  /// layer is unknown or the stack is unchanged, so nothing is registered.
+  @discardableResult
+  func setEffects(_ effects: [LayerEffect], for id: UUID) -> Bool {
+    let normalized = effects.map { $0.normalized() }
+    guard let existing = layers.first(where: { $0.id == id }), existing.effects != normalized
+    else { return false }
+    mutate(actionName: "Change Effects") {
+      update(id) { $0.effects = normalized }
+    }
+    return true
+  }
+
   func refreshCanvas() {
     renderRevision += 1
     let expectedRevision = renderRevision
-    let capturedLayers = layers.filter { $0.id != previewSuppressedLayerID }
+    let preview = previewEffects
+    let capturedLayers = layers.filter { $0.id != previewSuppressedLayerID }.map { layer in
+      guard let preview, preview.layerID == layer.id else { return layer }
+      var previewed = layer
+      previewed.effects = preview.effects
+      return previewed
+    }
     let capturedSize = canvasSize
     let excludedID = activeLayerID
 
@@ -1473,7 +1517,21 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
           // every layer that predates bounded extents (#309) and a tight box
           // around the glyphs for a text layer. Drawing into `bounds`
           // unconditionally would stretch a bounded layer across the canvas.
-          layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
+          if layer.hasRenderableEffects {
+            // The desktop's draw_layer order: effects under the fill, the
+            // fill, effects over it. Planes are rendered here and released
+            // with the pool — nothing is kept per layer between composites.
+            let rendered = AppearanceRenderer.planes(for: layer)
+            AppearanceRenderer.draw(
+              planes: rendered.planes, under: true, origin: rendered.origin,
+              layerOpacity: layer.opacity)
+            layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
+            AppearanceRenderer.draw(
+              planes: rendered.planes, under: false, origin: rendered.origin,
+              layerOpacity: layer.opacity)
+          } else {
+            layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
+          }
           guard layer.id != excludedID, !layer.drawing.strokes.isEmpty else { return }
           // Strokes are rasterised over the box they occupy, not the canvas:
           // a signature in one corner of a 4000x3000 document is a few
