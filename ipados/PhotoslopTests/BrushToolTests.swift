@@ -67,6 +67,37 @@ final class BrushToolTests: XCTestCase {
     XCTAssertFalse(BrushTool.wand.respondsToTilt)
   }
 
+  func testTheMarqueeAndLassoSelectByDragAndTakeNoInk() {
+    XCTAssertEqual(BrushTool.allCases.filter(\.selectsByDrag), [.rectSelect, .lasso])
+    XCTAssertEqual(BrushTool.allCases.filter(\.selects), [.wand, .rectSelect, .lasso])
+    for tool in [BrushTool.rectSelect, .lasso] {
+      XCTAssertFalse(tool.actsOnTap, "\(tool) is a drag, not a tap")
+      XCTAssertFalse(tool.usesTolerance)
+      XCTAssertFalse(tool.usesInk)
+      XCTAssertFalse(tool.usesWidth)
+      XCTAssertFalse(tool.respondsToTilt)
+      // Armed, the canvas is disabled; the pen it installs never draws.
+      XCTAssertTrue(tool.pkTool(color: .black, width: 4) is PKInkingTool)
+    }
+  }
+
+  func testTheEraserIsAPixelEraserUnderASelection() throws {
+    // Under a selection (#370) the strokes are pixels by the time they land,
+    // so the eraser is a pen of the bitmap eraser's width in the frosted
+    // preview ink, whose coverage is taken out of the layer.
+    let tool = try XCTUnwrap(
+      BrushTool.eraser.pkTool(color: .black, width: 4, clippedToSelection: true) as? PKInkingTool)
+    XCTAssertEqual(tool.inkType, .pen)
+    XCTAssertEqual(tool.color.cgColor.alpha, BrushTool.selectionEraserInk.cgColor.alpha, accuracy: 0.01)
+    XCTAssertEqual(tool.width, PKEraserTool.EraserType.fixedWidthBitmap.defaultWidth)
+    XCTAssertTrue(BrushTool.eraser.pkTool(color: .black, width: 4) is PKEraserTool)
+    // The brushes are the same pen either way: the clip is on the canvas.
+    let pen = try XCTUnwrap(
+      BrushTool.pen.pkTool(color: .red, width: 9, clippedToSelection: true) as? PKInkingTool)
+    XCTAssertEqual(pen.inkType, .pen)
+    XCTAssertEqual(pen.width, 9)
+  }
+
   func testEveryBrushIsPresentableInTheToolStrip() {
     XCTAssertEqual(BrushTool.allCases.first, .pen, "Pen stays the default brush")
     for brush in BrushTool.allCases {

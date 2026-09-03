@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.25.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.26.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -348,9 +348,9 @@ in its own autorelease pool, so a per-row transient is sized to a band rather
 than the picture. The flood fill itself allocates only its two masks, two bytes
 per pixel, as the desktop version does.
 
-### Magic wand and selections
+### Magic wand, marquee, lasso and selections
 
-Pick **Magic Wand** from the tool palette and tap the canvas. The pixels whose
+Three tools make a selection. Pick **Magic Wand** from the tool palette and tap the canvas. The pixels whose
 colour is within **Tolerance** of the tapped pixel become the selection, and
 marching ants — a white hairline under a walking black dash, one screen point
 wide at every zoom — trace its edge. The wand is the bucket's flood with the
@@ -371,6 +371,21 @@ beside the Tolerance slider:
   desktop's plain, Shift and Alt clicks, made into a choice a finger can
   make, and the menu's icon shows which is current.
 
+**Rectangle Select** and **Lasso Select** (#370) sit beside the wand and share
+its New / Add / Subtract option. Drag a marquee, or draw a loop; the shape is
+drawn as a hairline in the ants' colours while the finger moves and becomes
+the selection when it lifts — the desktop rebuilds the selection on every
+mouse move, which would be a mask of the canvas per sample here. A lasso is
+closed back to its first point and filled under the desktop's odd-even rule,
+so a loop that crosses itself leaves the crossed part unselected, exactly as
+`QPainterPath` fills it: the rasteriser is an emulation of Qt's, and
+`scripts/gen-selection-fixture.py` writes the desktop's masks as a Swift
+fixture the iOS masks are asserted against pixel for pixel. A drag under two
+pixels, or a lasso of fewer than three points, is the desktop's click: it
+deselects under New Selection and does nothing under Add or Subtract. A tap
+that never moves does nothing at all — Deselect is in the Select menu. Both
+tools take no ink and, like the wand, work on a text layer.
+
 The **Select** menu (under **More** on a phone, on the toolbar on an iPad)
 holds the rest of the desktop's selection commands:
 
@@ -383,6 +398,36 @@ holds the rest of the desktop's selection commands:
   ready to export as PNG or to sit over another layer. Text layers are
   refused for the reason the bucket refuses them: their pixels are re-rendered
   from the words at the next edit, so a hole cut in them would not survive.
+- **Feather…** (⌘⌥D) softens the selection's edge by 0–100 px, the desktop's
+  Select ▸ Feather with `npimage.feathered_weights` ported exactly: three
+  passes of a truncated box blur over the hard mask, normalised against the
+  same blur of a solid plane so a selection at the canvas edge stays solid
+  there. The menu shows the current radius; a new selection is hard again,
+  as on the desktop. The marching ants stay on the hard edge — the feather is
+  a weight per pixel, not a different selection — and Delete Selection, the
+  paint bucket and the brushes all fade over it. That is one step further
+  than the desktop, which applies the feather to its filters only; iOS reads
+  it everywhere a selection is consulted, which is what the word means to a
+  user. The weights cost one byte per canvas pixel and one float plane while
+  they are computed, so setting a feather is refused under the same memory
+  notice as adding a layer.
+
+**Strokes honour the selection** (#370). With a selection up, the pen, pencil,
+marker and eraser stop at its edge. While the finger is down the stroke is
+clipped on screen by the selection's outline; when it lifts, the stroke is
+rasterised over its own bounding box and composited onto the layer's pixels
+by the selection's weight, one undo step — ink outside the selection never
+reaches the layer, the composite or the saved document, and a stroke that
+lands nothing registers no step. Strokes under a selection are pixels from
+then on, as they are after Merge Down or a bucket fill, and the layer's earlier
+strokes are baked in with the first of them. The eraser changes character
+here: PencilKit's stroke eraser has nothing to erase once strokes are pixels,
+so under a selection it draws a frosted preview and takes its coverage out of
+the layer on release, erasing a photograph inside the selection as readily as
+a stroke — the desktop's eraser is a pixel eraser too. Without a selection it
+is the stroke eraser it always was. Text layers refuse strokes under a
+selection as they refuse every pixel operation. The design, and why no
+document-sized bitmap was added to draw a stroke, is DD-015.
 
 A selection is a mask in canvas pixels, one flag per pixel, rather than the
 path the desktop keeps — every producer and consumer on iOS speaks pixels,
@@ -390,8 +435,8 @@ so keeping the mask skips the desktop's two conversions and loses nothing
 while every selection is pixel-aligned. It belongs to the document, not to a
 layer: switching layers keeps it, and the bucket honours it on whichever layer
 is active. Resizing or cropping the canvas drops it, since a mask for the old
-canvas describes no pixel of the new one. Brush and eraser strokes do not yet
-stop at the selection edge (#370); the bucket and Delete Selection do.
+canvas describes no pixel of the new one. The bucket, Delete Selection and
+the brushes all honour it; the feather rides with it as a weight per pixel.
 
 ### Importing from Photos or from Files
 

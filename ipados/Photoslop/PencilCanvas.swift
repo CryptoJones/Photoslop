@@ -30,6 +30,11 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
   let tool: BrushTool
   let drawsWithFinger: Bool
   let drawingOpacity: Double
+  /// The selection clipping the live stroke (#370): its fill path in document
+  /// pixels, keyed by the selection's id so the mask is built once per
+  /// selection. Nil while nothing is selected. The eraser becomes a pixel
+  /// eraser for as long as this is set.
+  var strokeClip: (id: UUID, path: CGPath)? = nil
   /// When set, dragging reports the position in canvas pixels so a text layer
   /// can be moved. `isFinal` marks the end of the gesture, which is where the
   /// undo entry belongs — one per drag rather than one per touch sample.
@@ -111,7 +116,9 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
   private func configure(_ host: CanvasHostView, _ coordinator: Coordinator) {
     host.updateCanvasSize(canvasSize)
     host.imageView.image = backgroundImage
-    host.canvasView.tool = tool.pkTool(color: inkColor, width: inkWidth)
+    host.canvasView.tool = tool.pkTool(
+      color: inkColor, width: inkWidth, clippedToSelection: strokeClip != nil)
+    host.setStrokeClip(strokeClip)
     host.canvasView.drawingPolicy = drawsWithFinger ? .anyInput : .pencilOnly
     host.canvasView.alpha = drawingOpacity
     host.canvasView.isAccessibilityElement = true
@@ -244,6 +251,30 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
   private var boxDragRecognizer: BoxPanRecognizer?
   var onBoxDrag: ((CGPoint, CGPoint, Bool) -> Void)?
   private var boxDragStart: CGPoint?
+  /// Which selection the canvas's mask layer was built from, so the shape is
+  /// rebuilt once per selection rather than on every update.
+  private var strokeClipID: UUID?
+
+  /// Clip the live drawing surface to a selection (#370, DD-015): a
+  /// `CAShapeLayer` in document pixels — the canvas view's own coordinates,
+  /// which the scroll view zooms and pans as one — filled from the
+  /// selection's run rectangles. A shape, not a bitmap: the mask is
+  /// rasterised by Core Animation at display time and costs the app no
+  /// canvas of memory (#309). Nil takes the clip away.
+  func setStrokeClip(_ clip: (id: UUID, path: CGPath)?) {
+    guard clip?.id != strokeClipID else { return }
+    strokeClipID = clip?.id
+    guard let clip else {
+      canvasView.layer.mask = nil
+      return
+    }
+    let mask = CAShapeLayer()
+    mask.frame = CGRect(origin: .zero, size: canvasSize)
+    mask.path = clip.path
+    mask.fillColor = UIColor.black.cgColor
+    mask.fillRule = .nonZero
+    canvasView.layer.mask = mask
+  }
 
   /// A pan that remembers where the finger first landed.
   ///

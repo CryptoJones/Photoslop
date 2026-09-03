@@ -250,7 +250,36 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   /// Not an undo step, as on the desktop (`Document.set_selection` pushes
   /// nothing): a selection is where the next operation will act, not a change
   /// to the picture. The operations that use it register their own steps.
-  @Published private(set) var selection: SelectionMask?
+  ///
+  /// While one is up the canvas is in its clipped regime (#370, DD-015): the
+  /// active layer's strokes move from the live canvas into the composite, so
+  /// the composite is refreshed as the selection comes and goes.
+  @Published private(set) var selection: SelectionMask? {
+    didSet {
+      if (oldValue == nil) != (selection == nil) { refreshCanvas() }
+      if selection == nil { strokeClipCache = nil }
+    }
+  }
+  /// Bumped when the live canvas should drop the strokes it is showing under
+  /// a selection — once the composite has caught up with their baked pixels —
+  /// so the `activeDrawingKey` changes and `PencilCanvas` re-applies the
+  /// empty drawing then, not a frame before (#370).
+  private var suspendedStrokeGeneration = 0
+  /// Set by a bake, cleared by the composite refresh that shows its result.
+  private var strokesAwaitingComposite = false
+  /// `selection.fillPath()` built once per selection, for the live clip.
+  private var strokeClipCache: (id: UUID, path: CGPath)?
+
+  /// The selection as the path that clips the live canvas (#370), built once
+  /// per selection and handed back on every update after that. Nil when no
+  /// selection is up.
+  func strokeClip() -> (id: UUID, path: CGPath)? {
+    guard let selection else { return nil }
+    if let strokeClipCache, strokeClipCache.id == selection.id { return strokeClipCache }
+    let clip = (id: selection.id, path: selection.fillPath())
+    strokeClipCache = clip
+    return clip
+  }
 
   weak var undoManager: UndoManager? {
     didSet { undoManager?.levelsOfUndo = Self.undoDepth }
@@ -1186,7 +1215,25 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   }
 
   /// The strokes the canvas should be showing right now.
-  var activeDrawingKey: DrawingKey { activeLayer?.drawingKey ?? .empty }
+  ///
+  /// With a selection up (#370, DD-015) the canvas shows *no* stored strokes
+  /// — the active layer's are drawn in the composite instead, so the clip
+  /// over the canvas cannot hide them — and the key is a suspended one: a
+  /// negative revision no layer ever takes, stepped by
+  /// `suspendedStrokeGeneration` whenever the canvas should let go of the
+  /// stroke it just drew.
+  var activeDrawingKey: DrawingKey {
+    guard let active = activeLayer else { return .empty }
+    guard selection != nil else { return active.drawingKey }
+    return DrawingKey(layer: active.id, revision: -1 - suspendedStrokeGeneration)
+  }
+
+  /// What the canvas should show for `activeDrawingKey`: the active layer's
+  /// strokes, or nothing while a selection holds them in the composite.
+  var activeCanvasDrawing: PKDrawing {
+    guard selection == nil, let active = activeLayer else { return PKDrawing() }
+    return active.drawing
+  }
 
   /// Take the strokes the canvas reports, as one undo step, and return the key
   /// the canvas should now consider itself to be showing (#355).
@@ -1195,12 +1242,102 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   /// for none — a cancelled touch, a tool change — so an unchanged drawing has
   /// to be recognised or it becomes an empty undo step. `DrawingChange.differs`
   /// answers that from stroke metadata without serialising anything.
+  ///
+  /// With a selection up the strokes do not stay strokes: they are baked into
+  /// the layer's pixels through the selection (#370), `erasing` them out of
+  /// the pixels when the eraser drew them, and the canvas is told to show
+  /// nothing once the composite has them.
   @discardableResult
-  func setDrawing(_ drawing: PKDrawing) -> DrawingKey {
+  func setDrawing(_ drawing: PKDrawing, erasing: Bool = false) -> DrawingKey {
     guard let active = activeLayer else { return .empty }
+    if let selection {
+      return clipStrokes(drawing, of: active, through: selection, erasing: erasing)
+    }
     guard DrawingChange.differs(drawing, active.drawing) else { return active.drawingKey }
     mutate(actionName: "Draw") { updateActive { $0.drawing = drawing } }
     return activeDrawingKey
+  }
+
+  /// The stroke pipeline under a selection (DD-015). The canvas started the
+  /// stroke empty, so everything it reports is new. The strokes are
+  /// rasterised over their own box — never the canvas — into premultiplied
+  /// words, scaled per pixel by the selection's weight (0 outside, the
+  /// feather's ramp at the edge), and composited source-over onto the layer
+  /// through `applyPixelOperation`: one undo step, the layer's old strokes
+  /// baked with them, nothing document-sized kept afterwards. Ink outside
+  /// the selection therefore never reaches the layer or the composite.
+  ///
+  /// Returns the key the canvas should hold. After a bake it is the current
+  /// suspended key, so the canvas keeps showing the stroke until the
+  /// composite refresh that carries its pixels bumps the generation; when
+  /// nothing changed — the stroke fell wholly outside, or was refused — it is
+  /// `.empty`, which no layer ever matches, so the next update clears the
+  /// canvas straight away.
+  private func clipStrokes(
+    _ drawing: PKDrawing, of layer: RasterLayer, through selection: SelectionMask,
+    erasing: Bool
+  ) -> DrawingKey {
+    guard !drawing.strokes.isEmpty else { return activeDrawingKey }
+    let discard = { () -> DrawingKey in
+      self.objectWillChange.send()
+      return .empty
+    }
+    guard !layer.isText else { return discard() }
+    let bounds = CGRect(origin: .zero, size: canvasSize)
+    let box = drawing.bounds.intersection(bounds).integral.intersection(bounds)
+    guard !box.isEmpty, let strokes = Self.rasterise(drawing, over: box, asCoverage: erasing)
+    else { return discard() }
+    let width = Int(canvasSize.width)
+    let x0 = Int(box.minX), y0 = Int(box.minY)
+    let changed = applyPixelOperation(to: layer.id, actionName: erasing ? "Erase" : "Draw") {
+      buffer in
+      var changed = false
+      buffer.withMutableWords { words in
+        strokes.withWords { source in
+          for row in 0..<strokes.height {
+            let dstRow = (y0 + row) * width + x0
+            let srcRow = row * strokes.width
+            for col in 0..<strokes.width {
+              let ink = source[srcRow + col]
+              guard ink != 0 else { continue }
+              let weight = selection.weight(at: dstRow + col)
+              guard weight != 0 else { continue }
+              let dst = words[dstRow + col]
+              let out =
+                erasing
+                ? PixelBuffer.erased(dst, by: ink, weight: weight)
+                : PixelBuffer.over(dst, source: ink, weight: weight)
+              if out != dst {
+                words[dstRow + col] = out
+                changed = true
+              }
+            }
+          }
+        }
+      }
+      return changed
+    }
+    guard changed else { return discard() }
+    strokesAwaitingComposite = true
+    return activeDrawingKey
+  }
+
+  /// The strokes of `drawing` as premultiplied words over `box` (canvas
+  /// pixels, integral), rasterised the way `render` rasterises a layer's
+  /// strokes. With `asCoverage` the strokes are re-inked opaque black first,
+  /// so the alpha channel is how much of each pixel the stroke covers — what
+  /// the eraser needs, whatever colour it showed while drawing.
+  static func rasterise(_ drawing: PKDrawing, over box: CGRect, asCoverage: Bool)
+    -> PixelBuffer?
+  {
+    var source = drawing
+    if asCoverage {
+      source = PKDrawing(
+        strokes: drawing.strokes.map {
+          PKStroke(ink: PKInk(.pen, color: .black), path: $0.path, transform: $0.transform, mask: $0.mask)
+        })
+    }
+    return autoreleasepool { PixelBuffer(image: source.image(from: box, scale: 1)) }
   }
 
   func addLayer() {
@@ -1467,7 +1604,10 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
       return previewed
     }
     let capturedSize = canvasSize
-    let excludedID = activeLayerID
+    // The live canvas shows the active layer's strokes, so the composite
+    // leaves them out — except under a selection, when the canvas is clipped
+    // and shows none of the stored strokes (#370, DD-015).
+    let excludedID = selection == nil ? activeLayerID : nil
 
     // Publish the generation *before* the work is queued, so a render that has
     // already been superseded can decline to start.
@@ -1493,6 +1633,12 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
         )
       }.value
       guard let self, let image, renderRevision == expectedRevision else { return }
+      // Bumped in the same update that publishes the composite, so the canvas
+      // drops its copy of a baked stroke exactly as the composite shows it.
+      if strokesAwaitingComposite {
+        strokesAwaitingComposite = false
+        suspendedStrokeGeneration += 1
+      }
       canvasBackground = image
     }
   }

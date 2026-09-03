@@ -113,8 +113,17 @@ struct EditorView: View {
   /// Whether the wand takes the connected region or every pixel in range —
   /// the desktop's "Contiguous" toggle (#326).
   @State private var wandContiguous = true
-  /// How a wand tap meets the selection already there (#326).
+  /// How a wand tap, a marquee or a lasso meets the selection already there
+  /// (#326, #370).
   @State private var wandCombine = SelectionCombine.replace
+  /// The marquee being dragged (#370): both corners in canvas pixels.
+  @State private var marquee: (from: CGPoint, to: CGPoint)?
+  /// The lasso being dragged (#370): its points so far, in canvas pixels.
+  @State private var lassoPoints: [CGPoint] = []
+  /// The Select ▸ Feather… sheet (#370).
+  @State private var showFeatherOptions = false
+  /// The radius the feather sheet proposes, in pixels.
+  @State private var featherRadius = Double(EditorStore.defaultFeather)
   @State private var drawsWithFinger = EditorView.defaultDrawsWithFinger(
     idiom: UIDevice.current.userInterfaceIdiom)
   @State private var showLayers = false
@@ -232,6 +241,7 @@ struct EditorView: View {
         EffectsSheet(store: store, layerID: id, isPresented: $showTextEffects)
       }
     }
+    .sheet(isPresented: $showFeatherOptions) { featherSheet }
     .onChange(of: selectedPhoto) { _, item in
       guard let item else { return }
       Task {
@@ -332,7 +342,7 @@ struct EditorView: View {
       PencilCanvas(
         backgroundImage: store.canvasBackground,
         canvasSize: store.canvasSize,
-        drawing: store.activeLayer?.drawing ?? PKDrawing(),
+        drawing: store.activeCanvasDrawing,
         drawingKey: store.activeDrawingKey,
         inkColor: UIColor(inkColor.opacity(inkOpacity)),
         inkWidth: inkWidth,
@@ -341,6 +351,9 @@ struct EditorView: View {
         drawingOpacity: store.activeLayer?.isVisible == true
           ? (store.activeLayer?.opacity ?? 1)
           : 0,
+        // While a selection is up the live stroke is clipped to it, and what
+        // lifts off is baked through it (#370, DD-015).
+        strokeClip: store.strokeClip(),
         onCanvasDragged: isMovingText ? moveText : nil,
         // A tap tool owns the tap only while nothing else owns the canvas.
         onCanvasTapped: tool.actsOnTap && !isMovingText && !isCropping && placement == nil
@@ -350,10 +363,11 @@ struct EditorView: View {
         // rectangle rather than painting under it. Pinch, zoom and two-finger
         // pan keep working throughout — switching off hit-testing for the whole
         // scroll view is what took them away before (#270).
-        overlayIsActive: isCropping || placement != nil,
+        // A marquee or lasso drag is an overlay for this purpose (#370).
+        overlayIsActive: isCropping || placement != nil || tool.selectsByDrag,
         onBoxDrag: handleBoxDrag,
         reveal: boxReveal,
-        onDrawingChanged: store.setDrawing
+        onDrawingChanged: { store.setDrawing($0, erasing: tool == .eraser) }
       ) {
         canvasOverlay
       }
@@ -538,7 +552,40 @@ struct EditorView: View {
       if let selection = store.selection {
         SelectionOutline(selection: selection, scale: canvasZoom)
       }
+      selectionDragOverlay
       modeOverlay
+    }
+  }
+
+  /// The marquee or lasso in progress (#370), drawn where the selection will
+  /// be: a hairline in the ants' colours, one screen point wide at any zoom
+  /// like the ants themselves, so what the finger is enclosing reads on any
+  /// picture. Takes no touches — the drag belongs to the canvas.
+  @ViewBuilder
+  private var selectionDragOverlay: some View {
+    let zoom = max(canvasZoom, 0.0001)
+    let size = store.canvasSize
+    if let marquee {
+      let rect = CGRect(
+        x: min(marquee.from.x, marquee.to.x), y: min(marquee.from.y, marquee.to.y),
+        width: abs(marquee.to.x - marquee.from.x), height: abs(marquee.to.y - marquee.from.y))
+      let path = Path(rect)
+      ZStack(alignment: .topLeading) {
+        path.stroke(.white, lineWidth: 1 / zoom)
+        path.stroke(.black, style: StrokeStyle(lineWidth: 1 / zoom, dash: [4 / zoom, 4 / zoom]))
+      }
+      .frame(width: size.width, height: size.height, alignment: .topLeading)
+      .allowsHitTesting(false)
+      .accessibilityHidden(true)
+    } else if lassoPoints.count > 1 {
+      let path = Path { $0.addLines(lassoPoints) }
+      ZStack(alignment: .topLeading) {
+        path.stroke(.white, lineWidth: 1 / zoom)
+        path.stroke(.black, style: StrokeStyle(lineWidth: 1 / zoom, dash: [4 / zoom, 4 / zoom]))
+      }
+      .frame(width: size.width, height: size.height, alignment: .topLeading)
+      .allowsHitTesting(false)
+      .accessibilityHidden(true)
     }
   }
 
@@ -801,7 +848,7 @@ struct EditorView: View {
             .frame(width: 24, alignment: .leading)
             .accessibilityHidden(true)
         }
-        if tool.selectsOnTap {
+        if tool.selects {
           wandOptionsMenu
         }
       }
@@ -1036,6 +1083,16 @@ struct EditorView: View {
       }
       .disabled(store.selection == nil)
       .keyboardShortcut("i", modifiers: [.command, .shift])
+      Button {
+        featherRadius = Double(
+          store.selection.map { $0.feather > 0 ? $0.feather : EditorStore.defaultFeather }
+            ?? EditorStore.defaultFeather)
+        showFeatherOptions = true
+      } label: {
+        Label(featherMenuTitle, systemImage: "circle.dotted.circle")
+      }
+      .disabled(store.selection == nil)
+      .keyboardShortcut("d", modifiers: [.command, .option])
       Divider()
       Button(role: .destructive, action: deleteSelection) {
         Label("Delete Selection", systemImage: "scissors")
@@ -1047,9 +1104,71 @@ struct EditorView: View {
     }
   }
 
-  /// The wand's two options (#326), behind one button so the strip keeps its
-  /// budget (#246): whether the region is the connected one or every pixel in
-  /// range, and whether it replaces, joins or is cut from the selection.
+  /// "Feather…", carrying the current radius when there is one, so the menu
+  /// says what the selection's edge is without opening the sheet.
+  private var featherMenuTitle: String {
+    if let feather = store.selection?.feather, feather > 0 {
+      return "Feather… (\(feather) px)"
+    }
+    return "Feather…"
+  }
+
+  /// Select ▸ Feather… (#370): the desktop's `QInputDialog.getInt`, 0...100
+  /// px, as a slider with a stepper's precision. Apply sets the radius on
+  /// the current selection; 0 makes the edge hard again.
+  private var featherSheet: some View {
+    NavigationStack {
+      Form {
+        Section {
+          HStack {
+            Slider(
+              value: $featherRadius,
+              in: Double(EditorStore.featherRange.lowerBound)...Double(
+                EditorStore.featherRange.upperBound),
+              step: 1)
+              .accessibilityLabel("Feather radius")
+              .accessibilityIdentifier("Feather radius")
+            Stepper(
+              value: $featherRadius,
+              in: Double(EditorStore.featherRange.lowerBound)...Double(
+                EditorStore.featherRange.upperBound),
+              step: 1
+            ) {
+              Text("\(Int(featherRadius)) px")
+                .font(.body.monospacedDigit())
+                .frame(minWidth: 52, alignment: .trailing)
+            }
+            .accessibilityLabel("Feather radius")
+          }
+        } footer: {
+          Text(
+            "Softens the selection's edge. The bucket, the brushes and Delete Selection fade "
+              + "out over this many pixels; the marching ants stay on the hard edge.")
+        }
+      }
+      .navigationTitle("Feather Selection")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") { showFeatherOptions = false }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Apply") {
+            store.setFeather(Int(featherRadius))
+            showFeatherOptions = false
+          }
+          .accessibilityIdentifier("Apply feather")
+        }
+      }
+    }
+    .presentationDetents([.fraction(0.3), .medium])
+  }
+
+  /// The selection tools' options (#326, #370), behind one button so the
+  /// strip keeps its budget (#246): whether a new region replaces, joins or
+  /// is cut from the selection — shared by the wand, the marquee and the
+  /// lasso — and, for the wand alone, whether the region is the connected
+  /// one or every pixel in range.
   private var wandOptionsMenu: some View {
     Menu {
       Picker("Combine", selection: $wandCombine) {
@@ -1058,16 +1177,20 @@ struct EditorView: View {
         }
       }
       .pickerStyle(.inline)
-      Divider()
-      Toggle(isOn: $wandContiguous) {
-        Label("Contiguous", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+      if tool.selectsOnTap {
+        Divider()
+        Toggle(isOn: $wandContiguous) {
+          Label("Contiguous", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+        }
       }
     } label: {
       Label(wandCombine.displayName, systemImage: wandCombine.symbolName)
         .labelStyle(.iconOnly)
     }
-    .accessibilityLabel("Wand options, \(wandCombine.displayName)")
-    .accessibilityIdentifier("Wand options")
+    .accessibilityLabel(
+      "\(tool.selectsOnTap ? "Wand" : "Selection") options, \(wandCombine.displayName)"
+    )
+    .accessibilityIdentifier(tool.selectsOnTap ? "Wand options" : "Selection options")
   }
 
   private var flattenImageButton: some View {
@@ -1953,6 +2076,10 @@ struct EditorView: View {
   /// again on every sample would let the grip jump between handles as the
   /// rectangle moves under the finger.
   private func handleBoxDrag(from start: CGPoint, to current: CGPoint, isFinal: Bool) {
+    // A crop or a placement owns the canvas ahead of a selection tool.
+    if !isCropping, placement == nil, tool.selectsByDrag {
+      return handleSelectionDrag(from: start, to: current, isFinal: isFinal)
+    }
     let translation = CGSize(width: current.x - start.x, height: current.y - start.y)
 
     if isCropping {
@@ -1989,6 +2116,39 @@ struct EditorView: View {
       if let current = placement {
         boxReveal = (id: (boxReveal?.id ?? 0) + 1, rect: current.rect, zooms: false)
       }
+    }
+  }
+
+  /// A marquee or lasso drag (#370). The shape is drawn as it goes and
+  /// becomes the selection when the finger lifts — the desktop rebuilds the
+  /// selection on every mouse move, which is a mask of the canvas per sample
+  /// here, so the commit waits for the release. The lasso keeps a point per
+  /// sample that has moved at least a pixel (Manhattan), as the desktop's
+  /// `LassoTool` does, and the store applies the desktop's thresholds: a
+  /// click, or a loop of fewer than three points, is New Selection's way of
+  /// deselecting.
+  private func handleSelectionDrag(from start: CGPoint, to current: CGPoint, isFinal: Bool) {
+    switch tool {
+    case .rectSelect:
+      marquee = (from: start, to: current)
+      if isFinal {
+        marquee = nil
+        store.selectRectangle(from: start, to: current, combine: wandCombine)
+      }
+    case .lasso:
+      if lassoPoints.isEmpty { lassoPoints.append(start) }
+      if let last = lassoPoints.last,
+        abs(current.x - last.x) + abs(current.y - last.y) >= 1
+      {
+        lassoPoints.append(current)
+      }
+      if isFinal {
+        let points = lassoPoints
+        lassoPoints = []
+        store.selectLasso(points, combine: wandCombine)
+      }
+    default:
+      break
     }
   }
 
