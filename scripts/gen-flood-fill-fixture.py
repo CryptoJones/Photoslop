@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Regenerate the iOS paint-bucket parity fixture from the desktop flood fill.
+"""Regenerate the iOS paint-bucket and magic-wand parity fixture from the
+desktop flood fill.
 
-The Swift port in ``ipados/Photoslop/FloodFill.swift`` (#325) claims identity
-with ``photoslop.npimage.flood_fill``, not mere similarity. This script is the
-proof: it builds a small synthetic ``QImage``, runs the *desktop* fill over it
-for each scenario, and writes the before/after pixels as a Swift source file
-that ``FloodFillParityTests`` compares against word for word.
+The Swift port in ``ipados/Photoslop/FloodFill.swift`` (#325, #326) claims
+identity with ``photoslop.npimage.flood_fill``, ``flood_mask`` and
+``global_mask``, not mere similarity. This script is the proof: it builds a
+small synthetic ``QImage``, runs the *desktop* fill and masks over it for each
+scenario, and writes the before/after pixels (and the wand's masks) as a Swift
+source file that ``FloodFillParityTests`` compares against word for word.
 
 Pixels are written as the ``view_u32`` values — little-endian ``ARGB32``
 premultiplied — which is exactly the word a ``PixelBuffer`` exposes on iOS.
@@ -20,6 +22,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import numpy as np
 from PySide6.QtGui import QImage
 
 from photoslop import npimage
@@ -59,17 +62,59 @@ def build_canvas() -> QImage:
     return img
 
 
-# (name, seed x, seed y, tolerance, what the scenario proves)
+# A selection for the constrained scenarios: the left half of the canvas,
+# columns 0..5, as the desktop's ``sel_mask`` (#326).
+LEFT_HALF = np.zeros((H, W), dtype=bool)
+LEFT_HALF[:, :6] = True
+
+# (name, seed x, seed y, tolerance, selection or None, what the scenario proves)
 SCENARIOS = [
-    ("exactOutside", 0, 0, 0, "tolerance 0 fills only the exact-white region outside the box"),
-    ("midInside", 3, 3, 20, "tolerance 20 crosses the 10-step band but stops at the 50-step one"),
+    (
+        "exactOutside",
+        0,
+        0,
+        0,
+        None,
+        "tolerance 0 fills only the exact-white region outside the box",
+    ),
+    (
+        "midInside",
+        3,
+        3,
+        20,
+        None,
+        "tolerance 20 crosses the 10-step band but stops at the 50-step one",
+    ),
     (
         "enclosed",
         3,
         3,
         60,
+        None,
         "tolerance 60 takes the whole interior and never leaks past the 1-px box",
     ),
+    (
+        "withinSelection",
+        0,
+        0,
+        0,
+        LEFT_HALF,
+        "inside a selection the fill stops at the selection's edge, not the region's",
+    ),
+]
+
+# (name, seed x, seed y, tolerance, contiguous, what the scenario proves)
+WAND_SCENARIOS = [
+    ("contiguousMid", 3, 3, 20, True, "the connected region: rows 3 and 4 of the interior"),
+    (
+        "globalMid",
+        3,
+        3,
+        20,
+        False,
+        "every pixel in range: rows 3, 4 and 6 of the interior plus all the white outside",
+    ),
+    ("globalExact", 11, 0, 0, False, "tolerance 0, non-contiguous: the whole half-red column"),
 ]
 
 
@@ -77,6 +122,14 @@ def words(arr) -> str:
     rows = []
     for y in range(H):
         rows.append("      " + ", ".join(f"0x{int(v):08X}" for v in arr[y]) + ",")
+    return "\n".join(rows)
+
+
+def mask_rows(mask) -> str:
+    """A boolean mask as one string per row, ``#`` selected and ``.`` not."""
+    rows = []
+    for y in range(H):
+        rows.append('      "' + "".join("#" if v else "." for v in mask[y]) + '",')
     return "\n".join(rows)
 
 
@@ -88,8 +141,10 @@ def main() -> int:
         "// photoslop.npimage.flood_fill — do not edit by hand. Regenerate with:",
         "//   QT_QPA_PLATFORM=offscreen uv run python scripts/gen-flood-fill-fixture.py",
         "",
-        "/// Desktop-produced expected pixels for the iOS paint bucket (#325).",
-        "/// Words are little-endian ARGB32 premultiplied, i.e. `PixelBuffer.words`.",
+        "/// Desktop-produced expected pixels for the iOS paint bucket (#325) and",
+        "/// expected masks for the magic wand (#326). Words are little-endian ARGB32",
+        "/// premultiplied, i.e. `PixelBuffer.words`; masks are one string per row,",
+        "/// `#` for a selected pixel and `.` for one that is not.",
         "enum FloodFillFixture {",
         f"  static let width = {W}",
         f"  static let height = {H}",
@@ -104,21 +159,59 @@ def main() -> int:
         "    let seedX: Int",
         "    let seedY: Int",
         "    let tolerance: Int",
+        "    /// The selection the fill ran inside, or nil for none.",
+        "    let selection: [String]?",
         "    let expected: [UInt32]",
         "  }",
         "",
         "  static let scenarios: [Scenario] = [",
     ]
-    for name, x, y, tol, doc in SCENARIOS:
+    for name, x, y, tol, sel, doc in SCENARIOS:
         img = base.copy()
-        dirty = npimage.flood_fill(img, x, y, INK, tol)
+        dirty = npimage.flood_fill(img, x, y, INK, tol, sel)
         if dirty is None:
             print(f"scenario {name} changed nothing", file=sys.stderr)
             return 1
+        out += [f"    // {doc}"]
+        if sel is None:
+            out += [
+                f'    Scenario(name: "{name}", seedX: {x}, seedY: {y}, tolerance: {tol},',
+                "      selection: nil, expected: [",
+            ]
+        else:
+            out += [
+                f'    Scenario(name: "{name}", seedX: {x}, seedY: {y}, tolerance: {tol},',
+                "      selection: [",
+                mask_rows(sel),
+                "    ], expected: [",
+            ]
+        out += [words(npimage.view_u32(img)), "    ]),"]
+    out += [
+        "  ]",
+        "",
+        "  struct WandScenario {",
+        "    let name: String",
+        "    let seedX: Int",
+        "    let seedY: Int",
+        "    let tolerance: Int",
+        "    let contiguous: Bool",
+        "    let expected: [String]",
+        "  }",
+        "",
+        "  static let wandScenarios: [WandScenario] = [",
+    ]
+    for name, x, y, tol, contiguous, doc in WAND_SCENARIOS:
+        finder = npimage.flood_mask if contiguous else npimage.global_mask
+        result = finder(base, x, y, tol)
+        if result is None:
+            print(f"wand scenario {name} selected nothing", file=sys.stderr)
+            return 1
+        mask, _bbox = result
         out += [
             f"    // {doc}",
-            f'    Scenario(name: "{name}", seedX: {x}, seedY: {y}, tolerance: {tol}, expected: [',
-            words(npimage.view_u32(img)),
+            f'    WandScenario(name: "{name}", seedX: {x}, seedY: {y}, tolerance: {tol},',
+            f"      contiguous: {'true' if contiguous else 'false'}, expected: [",
+            mask_rows(mask),
             "    ]),",
         ]
     out += ["  ]", "}", ""]

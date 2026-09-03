@@ -23,9 +23,9 @@ extension EditorStore {
   /// way the desktop bucket premultiplies its foreground colour, so the same
   /// tap with the same ink writes the same word on both platforms.
   ///
-  /// An active selection is not consulted yet — the iOS edition has no
-  /// selection model until #326 — so a fill runs to the region's edge as the
-  /// desktop does with no selection.
+  /// Inside a selection (#326) the fill stops at the selection's edge, and a
+  /// tap outside it fills nothing — the desktop's `sel_mask`. With nothing
+  /// selected a fill runs to the region's edge.
   @discardableResult
   func paintBucket(at point: CGPoint, tolerance: Int, color: UIColor, opacity: CGFloat)
     -> PaintBucketOutcome
@@ -42,8 +42,10 @@ extension EditorStore {
       return .refused
     }
     let ink = PixelBuffer.premultipliedWord(color: color, opacity: opacity)
+    let within = selection?.bits
     let filled = applyPixelOperation(to: layer.id, actionName: "Paint Bucket") { buffer in
-      FloodFill.fill(&buffer, x: x, y: y, color: ink, tolerance: tolerance) != nil
+      FloodFill.fill(&buffer, x: x, y: y, color: ink, tolerance: tolerance, selection: within)
+        != nil
     }
     return filled ? .filled : .unchanged
   }

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 
-/// The paint bucket's flood fill (#325), ported line for line from the desktop's
-/// `photoslop.npimage.flood_fill`.
+/// The paint bucket's flood fill (#325) and the magic wand's masks (#326),
+/// ported line for line from the desktop's `photoslop.npimage.flood_fill`,
+/// `flood_mask` and `global_mask`.
 ///
 /// The desktop fill is an iterative scanline algorithm: a seed span is grown
 /// left and right until it meets a pixel that is out of tolerance or already
@@ -28,16 +29,54 @@ enum FloodFill {
     return max(max(db, dg), max(dr, da)) <= tolerance
   }
 
+  /// Mirror of `global_mask`: every pixel within tolerance of the seed,
+  /// connected to it or not — the wand's non-contiguous, colour-range mode
+  /// (#326). Returns one flag per pixel and the bounding rectangle, or nil
+  /// when the seed is outside the buffer or outside the selection.
+  ///
+  /// `selection`, when given, is the desktop's `sel_mask`: the result is
+  /// intersected with it, so the wand and the bucket stay inside what is
+  /// already selected.
+  static func globalMask(
+    words: UnsafeBufferPointer<UInt32>, width: Int, height: Int,
+    x: Int, y: Int, tolerance: Int, selection: [Bool]? = nil
+  ) -> (mask: [Bool], bounds: PixelRect)? {
+    guard x >= 0, x < width, y >= 0, y < height else { return nil }
+    let seed = words[y * width + x]
+    var mask = [Bool](repeating: false, count: width * height)
+    var minX = Int.max, maxX = -1, minY = Int.max, maxY = -1
+    for py in 0..<height {
+      let row = py * width
+      for px in 0..<width {
+        let i = row + px
+        guard withinTolerance(words[i], of: seed, tolerance: tolerance),
+          selection?[i] ?? true
+        else { continue }
+        mask[i] = true
+        if px < minX { minX = px }
+        if px > maxX { maxX = px }
+        if py < minY { minY = py }
+        if py > maxY { maxY = py }
+      }
+    }
+    // The seed always matches itself; what this catches is a seed outside
+    // the selection, exactly the desktop's check.
+    guard mask[y * width + x] else { return nil }
+    return (mask, PixelRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1))
+  }
+
   /// Mirror of `flood_mask`: the region connected to (x, y) whose pixels are
   /// within tolerance of the seed. Returns one flag per pixel (row-major) and
   /// the bounding rectangle of the region, or nil when the seed is outside the
-  /// buffer.
+  /// buffer — or, with a `selection` (the desktop's `sel_mask`), outside it:
+  /// only selected pixels are fillable, so the region stops at the
+  /// selection's edge as it does on the desktop.
   ///
   /// Nothing here allocates per pixel: the two masks are the only allocations,
   /// as on the desktop, and the queue holds one entry per discovered run.
   static func mask(
     words: UnsafeBufferPointer<UInt32>, width: Int, height: Int,
-    x: Int, y: Int, tolerance: Int
+    x: Int, y: Int, tolerance: Int, selection: [Bool]? = nil
   ) -> (mask: [Bool], bounds: PixelRect)? {
     guard x >= 0, x < width, y >= 0, y < height else { return nil }
     let seed = words[y * width + x]
@@ -45,8 +84,11 @@ enum FloodFill {
     for i in 0..<(width * height) {
       fillable[i] = withinTolerance(words[i], of: seed, tolerance: tolerance)
     }
-    // The seed always matches itself; the desktop check exists for the
-    // selection intersection, which lands with #326.
+    if let selection {
+      for i in 0..<(width * height) where !selection[i] { fillable[i] = false }
+    }
+    // The seed always matches itself; what this catches is a seed outside
+    // the selection, exactly the desktop's check.
     guard fillable[y * width + x] else { return nil }
 
     var filled = [Bool](repeating: false, count: width * height)
@@ -94,17 +136,21 @@ enum FloodFill {
 
   /// Mirror of `flood_fill`: fill the region connected to (x, y) whose pixels
   /// are within tolerance of the seed with `color` (a premultiplied ARGB32
-  /// word). Returns the dirty rectangle, or nil when nothing changed — the seed
-  /// is outside the buffer, or already holds the fill colour.
+  /// word), inside `selection` when there is one. Returns the dirty
+  /// rectangle, or nil when nothing changed — the seed is outside the buffer
+  /// or the selection, or already holds the fill colour.
   @discardableResult
-  static func fill(_ buffer: inout PixelBuffer, x: Int, y: Int, color: UInt32, tolerance: Int)
-    -> PixelRect?
-  {
+  static func fill(
+    _ buffer: inout PixelBuffer, x: Int, y: Int, color: UInt32, tolerance: Int,
+    selection: [Bool]? = nil
+  ) -> PixelRect? {
     let width = buffer.width, height = buffer.height
     guard x >= 0, x < width, y >= 0, y < height else { return nil }
     if buffer.word(x: x, y: y) == color { return nil }
     guard let (mask, bounds) = buffer.withWords({ words in
-      FloodFill.mask(words: words, width: width, height: height, x: x, y: y, tolerance: tolerance)
+      FloodFill.mask(
+        words: words, width: width, height: height, x: x, y: y, tolerance: tolerance,
+        selection: selection)
     }) else { return nil }
     buffer.withMutableWords { words in
       for i in 0..<(width * height) where mask[i] { words[i] = color }

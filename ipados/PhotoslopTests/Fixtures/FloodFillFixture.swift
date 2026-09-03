@@ -3,8 +3,10 @@
 // photoslop.npimage.flood_fill — do not edit by hand. Regenerate with:
 //   QT_QPA_PLATFORM=offscreen uv run python scripts/gen-flood-fill-fixture.py
 
-/// Desktop-produced expected pixels for the iOS paint bucket (#325).
-/// Words are little-endian ARGB32 premultiplied, i.e. `PixelBuffer.words`.
+/// Desktop-produced expected pixels for the iOS paint bucket (#325) and
+/// expected masks for the magic wand (#326). Words are little-endian ARGB32
+/// premultiplied, i.e. `PixelBuffer.words`; masks are one string per row,
+/// `#` for a selected pixel and `.` for one that is not.
 enum FloodFillFixture {
   static let width = 12
   static let height = 10
@@ -28,12 +30,15 @@ enum FloodFillFixture {
     let seedX: Int
     let seedY: Int
     let tolerance: Int
+    /// The selection the fill ran inside, or nil for none.
+    let selection: [String]?
     let expected: [UInt32]
   }
 
   static let scenarios: [Scenario] = [
     // tolerance 0 fills only the exact-white region outside the box
-    Scenario(name: "exactOutside", seedX: 0, seedY: 0, tolerance: 0, expected: [
+    Scenario(name: "exactOutside", seedX: 0, seedY: 0, tolerance: 0,
+      selection: nil, expected: [
       0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x80800000,
       0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x80800000,
       0x7F0E477F, 0x7F0E477F, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0x7F0E477F, 0x80800000,
@@ -46,7 +51,8 @@ enum FloodFillFixture {
       0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x80800000,
     ]),
     // tolerance 20 crosses the 10-step band but stops at the 50-step one
-    Scenario(name: "midInside", seedX: 3, seedY: 3, tolerance: 20, expected: [
+    Scenario(name: "midInside", seedX: 3, seedY: 3, tolerance: 20,
+      selection: nil, expected: [
       0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x80800000,
       0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x80800000,
       0xFFFFFFFF, 0xFFFFFFFF, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFFFFFFFF, 0x80800000,
@@ -59,7 +65,8 @@ enum FloodFillFixture {
       0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x80800000,
     ]),
     // tolerance 60 takes the whole interior and never leaks past the 1-px box
-    Scenario(name: "enclosed", seedX: 3, seedY: 3, tolerance: 60, expected: [
+    Scenario(name: "enclosed", seedX: 3, seedY: 3, tolerance: 60,
+      selection: nil, expected: [
       0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x80800000,
       0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x80800000,
       0xFFFFFFFF, 0xFFFFFFFF, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFFFFFFFF, 0x80800000,
@@ -70,6 +77,85 @@ enum FloodFillFixture {
       0xFFFFFFFF, 0xFFFFFFFF, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFFFFFFFF, 0x80800000,
       0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x80800000,
       0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x80800000,
+    ]),
+    // inside a selection the fill stops at the selection's edge, not the region's
+    Scenario(name: "withinSelection", seedX: 0, seedY: 0, tolerance: 0,
+      selection: [
+      "######......",
+      "######......",
+      "######......",
+      "######......",
+      "######......",
+      "######......",
+      "######......",
+      "######......",
+      "######......",
+      "######......",
+    ], expected: [
+      0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x80800000,
+      0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x80800000,
+      0x7F0E477F, 0x7F0E477F, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFFFFFFFF, 0x80800000,
+      0x7F0E477F, 0x7F0E477F, 0xFF000000, 0xFFFAFAFA, 0xFFFAFAFA, 0xFFFAFAFA, 0xFFFAFAFA, 0xFFFAFAFA, 0xFFFAFAFA, 0xFF000000, 0xFFFFFFFF, 0x80800000,
+      0x7F0E477F, 0x7F0E477F, 0xFF000000, 0xFFF0F0F0, 0xFFF0F0F0, 0xFFF0F0F0, 0xFFF0F0F0, 0xFFF0F0F0, 0xFFF0F0F0, 0xFF000000, 0xFFFFFFFF, 0x80800000,
+      0x7F0E477F, 0x7F0E477F, 0xFF000000, 0xFFC8C8C8, 0xFFC8C8C8, 0xFFC8C8C8, 0xFFC8C8C8, 0xFFC8C8C8, 0xFFC8C8C8, 0xFF000000, 0xFFFFFFFF, 0x80800000,
+      0x7F0E477F, 0x7F0E477F, 0xFF000000, 0xFFFAFAFA, 0xFFFAFAFA, 0xFFFAFAFA, 0xFFFAFAFA, 0xFFFAFAFA, 0xFFFAFAFA, 0xFF000000, 0xFFFFFFFF, 0x80800000,
+      0x7F0E477F, 0x7F0E477F, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFF000000, 0xFFFFFFFF, 0x80800000,
+      0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x80800000,
+      0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0x7F0E477F, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x80800000,
+    ]),
+  ]
+
+  struct WandScenario {
+    let name: String
+    let seedX: Int
+    let seedY: Int
+    let tolerance: Int
+    let contiguous: Bool
+    let expected: [String]
+  }
+
+  static let wandScenarios: [WandScenario] = [
+    // the connected region: rows 3 and 4 of the interior
+    WandScenario(name: "contiguousMid", seedX: 3, seedY: 3, tolerance: 20,
+      contiguous: true, expected: [
+      "............",
+      "............",
+      "............",
+      "...######...",
+      "...######...",
+      "............",
+      "............",
+      "............",
+      "............",
+      "............",
+    ]),
+    // every pixel in range: rows 3, 4 and 6 of the interior plus all the white outside
+    WandScenario(name: "globalMid", seedX: 3, seedY: 3, tolerance: 20,
+      contiguous: false, expected: [
+      "###########.",
+      "###########.",
+      "##........#.",
+      "##.######.#.",
+      "##.######.#.",
+      "##........#.",
+      "##.######.#.",
+      "##........#.",
+      "###########.",
+      "###########.",
+    ]),
+    // tolerance 0, non-contiguous: the whole half-red column
+    WandScenario(name: "globalExact", seedX: 11, seedY: 0, tolerance: 0,
+      contiguous: false, expected: [
+      "...........#",
+      "...........#",
+      "...........#",
+      "...........#",
+      "...........#",
+      "...........#",
+      "...........#",
+      "...........#",
+      "...........#",
+      "...........#",
     ]),
   ]
 }

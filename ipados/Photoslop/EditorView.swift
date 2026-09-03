@@ -106,8 +106,14 @@ struct EditorView: View {
   /// width the user chose.
   @State private var inkWidthEstablished = false
   @State private var tool = BrushTool.pen
-  /// The bucket's colour tolerance, 0...255 like the desktop's (#325).
-  @State private var bucketTolerance = Double(EditorStore.defaultBucketTolerance)
+  /// The bucket's and the wand's colour tolerance, 0...255 like the desktop's
+  /// one shared `ToolOptions.tolerance` (#325, #326).
+  @State private var regionTolerance = Double(EditorStore.defaultBucketTolerance)
+  /// Whether the wand takes the connected region or every pixel in range —
+  /// the desktop's "Contiguous" toggle (#326).
+  @State private var wandContiguous = true
+  /// How a wand tap meets the selection already there (#326).
+  @State private var wandCombine = SelectionCombine.replace
   @State private var drawsWithFinger = EditorView.defaultDrawsWithFinger(
     idiom: UIDevice.current.userInterfaceIdiom)
   @State private var showLayers = false
@@ -331,8 +337,8 @@ struct EditorView: View {
           : 0,
         onCanvasDragged: isMovingText ? moveText : nil,
         // A tap tool owns the tap only while nothing else owns the canvas.
-        onCanvasTapped: tool.fillsOnTap && !isMovingText && !isCropping && placement == nil
-          ? fillAtTap : nil,
+        onCanvasTapped: tool.actsOnTap && !isMovingText && !isCropping && placement == nil
+          ? tapCanvas : nil,
         onZoomScaleChanged: { canvasZoom = $0 },
         // Drawing is suspended while a box owns the canvas, so a drag moves the
         // rectangle rather than painting under it. Pinch, zoom and two-finger
@@ -517,9 +523,22 @@ struct EditorView: View {
     }
   }
 
-  /// What is drawn on the canvas, in the canvas's own pixels.
-  @ViewBuilder
+  /// What is drawn on the canvas, in the canvas's own pixels: the mode's box,
+  /// if one is up, and the selection's ants beneath it (#326). The ants stay
+  /// through a crop or a placement so what a Delete Selection will cut is
+  /// never a surprise, but the box owns the touches — the outline takes none.
   private var canvasOverlay: some View {
+    ZStack(alignment: .topLeading) {
+      if let selection = store.selection {
+        SelectionOutline(selection: selection, scale: canvasZoom)
+      }
+      modeOverlay
+    }
+  }
+
+  /// The box of whichever mode owns the canvas, if one does.
+  @ViewBuilder
+  private var modeOverlay: some View {
     if isCropping {
       CanvasBox(
         rect: cropRect,
@@ -762,18 +781,22 @@ struct EditorView: View {
             .font(.caption.monospacedDigit())
             .frame(width: 24, alignment: .leading)
             .accessibilityHidden(true)
-        } else if tool.fillsOnTap {
-          // The bucket's one option, in the width slider's slot so the strip
-          // stays within its iPad-mini budget (#246): how far a pixel may
-          // differ from the tapped one, per channel, and still be filled.
-          Slider(value: $bucketTolerance, in: 0...255, step: 1)
+        } else if tool.usesTolerance {
+          // The tap tools' one slider, in the width slider's slot so the
+          // strip stays within its iPad-mini budget (#246): how far a pixel
+          // may differ from the tapped one, per channel, and still be filled
+          // or selected.
+          Slider(value: $regionTolerance, in: 0...255, step: 1)
             .frame(width: isCompact ? 130 : 180)
             .accessibilityLabel("Tolerance")
             .accessibilityIdentifier("Tolerance")
-          Text("\(Int(bucketTolerance))")
+          Text("\(Int(regionTolerance))")
             .font(.caption.monospacedDigit())
             .frame(width: 24, alignment: .leading)
             .accessibilityHidden(true)
+        }
+        if tool.selectsOnTap {
+          wandOptionsMenu
         }
       }
       .padding(.horizontal, 16)
@@ -814,6 +837,7 @@ struct EditorView: View {
         Menu {
           newDocumentButton
           imageMenu
+          selectMenu
           textMenu
           Divider()
           importImageButton
@@ -861,6 +885,7 @@ struct EditorView: View {
           Divider()
           resizeLayerButton
           flattenImageButton
+          selectMenu
           textButtons
           Divider()
           importImageButton
@@ -977,6 +1002,66 @@ struct EditorView: View {
       Label("Resize Layer…", systemImage: "arrow.up.backward.and.arrow.down.forward")
     }
     .disabled(store.activeLayerID == nil || activeTextLayer != nil)
+  }
+
+  /// The desktop's Select menu (#326): everything that acts on the selection
+  /// rather than on pixels, plus the one thing that acts on pixels *through*
+  /// it. Deselect, Invert and Delete are inert with nothing selected, and say
+  /// so by being disabled rather than by doing nothing.
+  private var selectMenu: some View {
+    Menu {
+      Button {
+        store.selectAll()
+      } label: {
+        Label("Select All", systemImage: "square.dashed")
+      }
+      .keyboardShortcut("a", modifiers: .command)
+      Button {
+        store.deselect()
+      } label: {
+        Label("Deselect", systemImage: "square.dashed.inset.filled")
+      }
+      .disabled(store.selection == nil)
+      .keyboardShortcut("d", modifiers: .command)
+      Button {
+        store.invertSelection()
+      } label: {
+        Label("Invert Selection", systemImage: "circle.lefthalf.filled.inverse")
+      }
+      .disabled(store.selection == nil)
+      .keyboardShortcut("i", modifiers: [.command, .shift])
+      Divider()
+      Button(role: .destructive, action: deleteSelection) {
+        Label("Delete Selection", systemImage: "scissors")
+      }
+      .disabled(store.selection == nil || store.activeLayer == nil)
+      .keyboardShortcut(.delete, modifiers: [])
+    } label: {
+      Label("Select", systemImage: "wand.and.rays")
+    }
+  }
+
+  /// The wand's two options (#326), behind one button so the strip keeps its
+  /// budget (#246): whether the region is the connected one or every pixel in
+  /// range, and whether it replaces, joins or is cut from the selection.
+  private var wandOptionsMenu: some View {
+    Menu {
+      Picker("Combine", selection: $wandCombine) {
+        ForEach(SelectionCombine.allCases) { mode in
+          Label(mode.displayName, systemImage: mode.symbolName).tag(mode)
+        }
+      }
+      .pickerStyle(.inline)
+      Divider()
+      Toggle(isOn: $wandContiguous) {
+        Label("Contiguous", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+      }
+    } label: {
+      Label(wandCombine.displayName, systemImage: wandCombine.symbolName)
+        .labelStyle(.iconOnly)
+    }
+    .accessibilityLabel("Wand options, \(wandCombine.displayName)")
+    .accessibilityIdentifier("Wand options")
   }
 
   private var flattenImageButton: some View {
@@ -1749,13 +1834,42 @@ struct EditorView: View {
       .accessibilityIdentifier("Pixel probe")
   }
 
+  /// A tap on the canvas while a tap tool is armed, in canvas pixels.
+  private func tapCanvas(_ point: CGPoint) {
+    if tool.selectsOnTap {
+      selectAtTap(point)
+    } else {
+      fillAtTap(point)
+    }
+  }
+
+  /// The wand's tap (#326): the region of similar colour under it on the
+  /// active layer becomes the selection, joins it or is cut from it. A memory
+  /// refusal already raised the low-memory notice; nothing else can go wrong
+  /// out loud, since a wand tap writes no pixels.
+  private func selectAtTap(_ point: CGPoint) {
+    store.magicWand(
+      at: point, tolerance: Int(regionTolerance.rounded()),
+      contiguous: wandContiguous, combine: wandCombine)
+  }
+
+  /// Delete Selection: the selected pixels of the active layer go
+  /// transparent. A text layer is refused out loud, as the bucket refuses it.
+  private func deleteSelection() {
+    if store.deleteSelection() == .textLayer {
+      errorMessage =
+        "Text layers stay editable, so a selection cannot be cut out of one. "
+        + "Select a paint layer and delete from that."
+    }
+  }
+
   /// The bucket's tap (#325): fill the region under it on the active layer
   /// with the ink as the swatch shows it. A text layer is refused out loud,
   /// the way Fit Text and Edit Text keep its words editable; a memory refusal
   /// already raised the low-memory notice.
   private func fillAtTap(_ point: CGPoint) {
     let outcome = store.paintBucket(
-      at: point, tolerance: Int(bucketTolerance.rounded()),
+      at: point, tolerance: Int(regionTolerance.rounded()),
       color: UIColor(inkColor), opacity: inkOpacity)
     if outcome == .textLayer {
       errorMessage =

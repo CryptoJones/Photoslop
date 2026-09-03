@@ -218,8 +218,25 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
 
   @Published private(set) var layers: [RasterLayer] = []
   @Published var activeLayerID: UUID?
-  @Published private(set) var canvasSize = EditorStore.defaultCanvasSize
+  @Published private(set) var canvasSize = EditorStore.defaultCanvasSize {
+    didSet {
+      // A selection is a canvas-sized mask; a canvas of another size has no
+      // pixel for it to describe. Crop, Resize Document, Canvas Size and an
+      // undo across any of them all pass through here.
+      if let selection, selection.width != Int(canvasSize.width)
+        || selection.height != Int(canvasSize.height)
+      {
+        self.selection = nil
+      }
+    }
+  }
   @Published private(set) var canvasBackground = UIImage()
+  /// The document's selection (#326), in canvas pixels, or nil for none.
+  ///
+  /// Not an undo step, as on the desktop (`Document.set_selection` pushes
+  /// nothing): a selection is where the next operation will act, not a change
+  /// to the picture. The operations that use it register their own steps.
+  @Published private(set) var selection: SelectionMask?
 
   weak var undoManager: UndoManager? {
     didSet { undoManager?.levelsOfUndo = Self.undoDepth }
@@ -1263,18 +1280,9 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
       memoryPressureNotice = Self.memoryRefusal
       return false
     }
-    let canvas = canvasSize
-    // The rendered transient lives only until the buffer has copied it.
-    func borrow() -> PixelBuffer? {
-      if layer.drawing.strokes.isEmpty, layer.fillsCanvas(canvas) {
-        return PixelBuffer(image: layer.image)
-      }
-      var flat = layer
-      flat.isVisible = true
-      flat.opacity = 1
-      return PixelBuffer(image: Self.render(layers: [flat], size: canvas))
-    }
-    guard var buffer = borrow(), operation(&buffer), let image = buffer.makeImage() else {
+    guard var buffer = borrowPixels(of: layer), operation(&buffer),
+      let image = buffer.makeImage()
+    else {
       return false
     }
     mutate(actionName: actionName) {
@@ -1287,6 +1295,28 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
       }
     }
     return true
+  }
+
+  /// A layer's pixels as the canvas sees them — padded to the canvas and with
+  /// its strokes baked in — for an operation to read or rewrite. The rendered
+  /// transient lives only until the buffer has copied it.
+  func borrowPixels(of layer: RasterLayer) -> PixelBuffer? {
+    if layer.drawing.strokes.isEmpty, layer.fillsCanvas(canvasSize) {
+      return PixelBuffer(image: layer.image)
+    }
+    var flat = layer
+    flat.isVisible = true
+    flat.opacity = 1
+    return PixelBuffer(image: Self.render(layers: [flat], size: canvasSize))
+  }
+
+  /// Mirror of `Document.set_selection`: an empty mask is no selection.
+  func setSelection(_ mask: SelectionMask?) {
+    if let mask, mask.isEmpty {
+      selection = nil
+    } else {
+      selection = mask
+    }
   }
 
   func mergeActiveDown() {

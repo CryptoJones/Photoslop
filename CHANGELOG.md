@@ -4,6 +4,42 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.22.0] — 2026-09-02
+
+### Added
+- **iOS magic wand and selections** (#326): the iOS edition gains a selection
+  model — `SelectionMask`, one flag per canvas pixel, owned by the document —
+  and the **Magic Wand** to fill it. The wand is the bucket's flood with the
+  write swapped for a mask: `FloodFill.mask` and `FloodFill.globalMask` are
+  ports of the desktop's `flood_mask` and `global_mask`, and the desktop-
+  generated fixture now covers wand masks too, so a wand on iOS selects the
+  pixels the desktop wand would. Options are the Tolerance slider, a
+  **Contiguous** toggle (off is the desktop's colour-range mode) and a
+  New / Add / Subtract combine mode standing in for the desktop's plain,
+  Shift and Alt clicks. Selecting is not an undo step, as on the desktop.
+- **Marching ants**: the selection edge is stroked white under a walking
+  black dash in document space, so it pans and zooms with the artwork and
+  stays one screen point wide at every zoom. The path is built once per
+  selection and only the dash phase animates; a border past 40,000 segments
+  is drawn still.
+- **Select menu** on iOS: Select All (⌘A), Deselect (⌘D), Invert Selection
+  (⌘⇧I) and **Delete Selection** (Delete), which clears the selected pixels of
+  the active layer to transparent as one undo step — wand the background,
+  delete it. Text layers are refused for the reason the bucket refuses them.
+
+### Changed
+- **The iOS paint bucket honours the selection**: with a selection up the fill
+  stops at its edge and a tap outside it fills nothing, the desktop's
+  `sel_mask` behaviour. `FloodFill.fill` takes an optional selection and the
+  desktop fixture gains a within-selection scenario to prove it.
+- Resizing or cropping the canvas on iOS drops the selection, since a mask for
+  the old canvas describes no pixel of the new one. Same-size operations keep
+  it.
+
+### Known limits
+- Brush, pencil, marker and eraser strokes on iOS are not clipped by the
+  selection yet, and there is no feathering or marquee (#370).
+
 ## [2.21.0] — 2026-09-02
 
 ### Added

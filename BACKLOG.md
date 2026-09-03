@@ -10,10 +10,10 @@ sync — check an item here when its issue closes.
 
 - [ ] Coloured drop shadows and embossing on text layers
   ([#316](https://github.com/CryptoJones/Photoslop/issues/316))
-- [ ] iOS magic wand, and the selection model it needs. The wand is the flood
-  with the write swapped for a mask; the expensive half is that iOS has no
-  image-selection concept at all, and a mask nothing honours is a toy
-  ([#326](https://github.com/CryptoJones/Photoslop/issues/326))
+- [ ] iOS strokes honour the selection (brush, pencil, marker, eraser are
+  PencilKit and are not clipped by the mask yet), selection feathering, and a
+  marquee / lasso producer alongside the wand
+  ([#370](https://github.com/CryptoJones/Photoslop/issues/370))
 - [ ] Port the six filters to Swift — Sepia, Pixelate, Denoise, Retro Console,
   Pixel Sort, Datamosh. Datamosh must keep its seeded position-keyed field or
   it loses parity with the desktop and the CLI
@@ -70,6 +70,13 @@ sync — check an item here when its issue closes.
   a port of the desktop's scanline `flood_fill` proven identical by a
   desktop-generated fixture; first user of the pixel seam
   ([#325](https://github.com/CryptoJones/Photoslop/issues/325)) — shipped v2.21.0
+- [x] iOS magic wand and the selection model it needs — `SelectionMask`, one
+  flag per canvas pixel; the wand is the flood with the write swapped for a
+  mask (`FloodFill.mask` / `globalMask`, fixture-proven against the desktop),
+  with Contiguous and New / Add / Subtract options; marching ants; Select
+  All, Deselect, Invert, Delete Selection; the bucket stays inside the
+  selection
+  ([#326](https://github.com/CryptoJones/Photoslop/issues/326)) — shipped v2.22.0
 
 - [x] The 2026-08-24 iPhone/iPad memory audit's steady-state batch, shipped in
   2.20.4: `RasterLayer.source` is the compressed import bytes under a 64 MiB
