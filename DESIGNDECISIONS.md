@@ -389,8 +389,6 @@ and shrinking it is #351's work, not this seam's.
   selection model, it enters `FloodFill.mask` as the `sel_mask` intersection
   the desktop already has, and nothing else in the seam moves.
 
----
-
 ## DD-014 — iOS effects are rendered from the layer every composite, never cached
 
 **Status: Accepted (2026-09-03).**
@@ -454,6 +452,83 @@ found the two disagree, the iOS side is wrong by definition.
 - Preview while the sheet is open is `EditorStore.previewEffects`, the
   non-undoable substitution `previewSuppressedLayerID` already established;
   Apply is one `Change Effects` undo step.
+
+---
+
+## DD-015 — iOS strokes through a selection are clipped on the canvas and baked by weight
+
+**Status: Accepted (2026-09-03).**
+
+The selection model (#326, DD-013's last consequence) gave the bucket and
+Delete Selection an edge to stop at. The brushes had none
+([#370](https://github.com/CryptoJones/Photoslop/issues/370)): a PencilKit
+stroke is a vector the canvas owns, drawn wherever the finger goes and kept
+as a stroke on the layer until something bakes it. The desktop is simpler —
+every brush is a `QPainter` with the selection set as its clip. The question
+was how to get the same effect on a canvas that is not ours to paint, without
+breaking #309's memory discipline: no extra document-sized bitmaps per
+refresh, and strokes rasterised per layer, once (2.20.4).
+
+**The decision: clip the live stroke on the canvas layer, then bake the
+committed stroke into pixels through the selection's weights.**
+
+- *While drawing*, the `PKCanvasView` is masked by a `CAShapeLayer` built
+  from the selection (`SelectionMask.fillPath`, one rectangle per run of
+  selected pixels, merged into bands). The mask is a path, not a bitmap; it
+  is cached per selection id and rebuilt only when the selection changes.
+  The finger sees ink stop at the edge as it draws.
+- *On commit*, the stroke PencilKit reports is rasterised over its own
+  bounding box — never the canvas — into premultiplied words, scaled per
+  pixel by the selection's weight, and composited source-over onto the
+  layer's pixels through `applyPixelOperation` (DD-013): one undo step
+  ("Draw"), the layer's earlier strokes baked with it. Ink outside the
+  selection is weighted to zero and never reaches the layer, the composite
+  or the document; a stroke that lands nothing registers no step.
+- *Between the two*, the canvas view holds no strokes. Under a selection the
+  active layer's stored strokes are drawn into the composite instead of the
+  live canvas (so the clip cannot hide them), and the canvas shows an empty
+  drawing under a *suspended* key — a negative revision no layer ever takes,
+  stepped when the composite carrying a stroke's pixels lands. That is what
+  keeps a stroke on screen from the finger lifting to the refresh arriving;
+  without it every stroke blinked once.
+
+**The eraser becomes a pixel eraser under a selection.** PencilKit's bitmap
+eraser erases strokes, and there are none by then — they are pixels. So with
+a selection up the eraser is a pen of the eraser's width in a frosted ink
+(`BrushTool.selectionEraserInk`), and at commit the stroke is re-inked opaque
+black and its coverage taken out of the layer's alpha, by weight. It erases
+a photograph inside a selection as readily as it erases a stroke, which the
+stroke eraser never could; the desktop's eraser is a pixel eraser too.
+
+**Feathering is the same weight plane.** `SelectionMask.feathered(by:)` is
+`npimage.feathered_weights` ported (three truncated box-blur passes on the
+hard mask, normalised against the same blur of a ones plane), quantised to a
+`UInt8` per pixel, computed in one float plane of the canvas and kept as one
+byte per pixel. Delete Selection, the bucket and the stroke bake all read
+`weight(at:)`; the ants stay on the hard edge, as they do on the desktop.
+The desktop consumes the feather only in its filters; iOS consumes it in
+everything that goes through a selection, which is what a user would
+expect the word to mean, and the difference is written down in
+`docs/v1/ipados.md`.
+
+**Memory, per DD-001 and #309.** The clip is a path. The per-stroke raster
+is the stroke's box, under an autorelease pool, gone when the operation
+returns. The bake goes through the one borrowed buffer. The feather's float
+plane lives for the call, and its `UInt8` result is the only thing kept. No
+refresh allocates anything it did not before.
+
+**Consequences.**
+- Under a selection, strokes are pixels immediately, not strokes — as they
+  would be after Merge Down or a bucket fill. Undo restores them as pixels.
+- Text layers refuse strokes under a selection, as they refuse every pixel
+  operation (DD-013); the canvas simply discards the stroke.
+- The marquee and lasso (#370) are `SelectionMask.rectangle` and
+  `SelectionMask.polygon`, the latter an exact emulation of Qt's aliased
+  odd-even scanline rasteriser so `scripts/gen-selection-fixture.py` can
+  assert the iOS mask pixel for pixel against the desktop's. The shape is
+  previewed as a hairline and committed on release; the desktop rebuilds the
+  selection per mouse move, which would be a mask per sample here.
+- The wand and the bucket are unchanged from #326 (2.22.0 as shipped).
 
 ---
 

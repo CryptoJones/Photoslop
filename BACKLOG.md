@@ -12,10 +12,6 @@ sync — check an item here when its issue closes.
   layers (needs banded or budgeted effect planes for canvas-sized alpha),
   Gaussian blur and feather rendering (the fill-override kinds), and fill
   opacity ([#372](https://github.com/CryptoJones/Photoslop/issues/372))
-- [ ] iOS strokes honour the selection (brush, pencil, marker, eraser are
-  PencilKit and are not clipped by the mask yet), selection feathering, and a
-  marquee / lasso producer alongside the wand
-  ([#370](https://github.com/CryptoJones/Photoslop/issues/370))
 
 ### Desktop
 
@@ -67,6 +63,14 @@ sync — check an item here when its issue closes.
   so a Datamosh seed reproduces across platforms; selection-aware, one undo
   step
   ([#327](https://github.com/CryptoJones/Photoslop/issues/327)) — shipped v2.27.0
+- [x] iOS strokes honour the selection — the live stroke is clipped on the
+  canvas by the selection's path and baked into the layer's pixels by weight
+  on commit, the eraser turning pixel eraser under a selection (DD-015);
+  Select ▸ Feather… with `npimage.feathered_weights` ported and read by
+  Delete Selection, the bucket and the brushes; Rectangle Select and Lasso
+  Select with New / Add / Subtract, the lasso an exact emulation of Qt's
+  odd-even rasteriser proven pixel for pixel by a desktop-generated fixture
+  ([#370](https://github.com/CryptoJones/Photoslop/issues/370)) — shipped v2.26.0
 - [x] iOS text effects — `LayerEffect` is the desktop's normalised effect
   object and `AppearanceRenderer` a port of `appearance.render`, fixture-proven
   bit-exact on the blur and word-exact on every renderable kind; an Effects…

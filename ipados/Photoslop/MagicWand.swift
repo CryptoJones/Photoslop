@@ -92,7 +92,9 @@ extension EditorStore {
 
   /// The desktop's Delete Selection: clear the selected pixels of the active
   /// layer to transparent, one undo step. With the wand this is how a
-  /// background comes off a photo — tap it, delete it.
+  /// background comes off a photo — tap it, delete it. Through a feathered
+  /// selection (#370) a pixel is cleared by its weight, so the edge fades
+  /// rather than cuts.
   @discardableResult
   func deleteSelection() -> DeleteSelectionOutcome {
     guard let layer = activeLayer, let selection else { return .unchanged }
@@ -104,9 +106,14 @@ extension EditorStore {
     let cleared = applyPixelOperation(to: layer.id, actionName: "Delete Selection") { buffer in
       var changed = false
       buffer.withMutableWords { words in
-        for i in 0..<words.count where selection.bits[i] && words[i] != 0 {
-          words[i] = 0
-          changed = true
+        for i in 0..<words.count where words[i] != 0 {
+          let weight = selection.weight(at: i)
+          guard weight != 0 else { continue }
+          let out = PixelBuffer.blend(words[i], toward: 0, weight: weight)
+          if out != words[i] {
+            words[i] = out
+            changed = true
+          }
         }
       }
       return changed

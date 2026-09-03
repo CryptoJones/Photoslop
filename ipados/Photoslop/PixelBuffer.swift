@@ -204,4 +204,77 @@ struct PixelBuffer {
       r: channel(r), g: channel(g), b: channel(b),
       a: channel(a * min(1, max(0, opacity))))
   }
+
+  // MARK: - Weighted writes (#370)
+
+  /// `npimage.blend_by_weights` for one pixel: `original * (1 - w) + result
+  /// * w` per premultiplied channel, rounded half up, with `w = weight / 255`
+  /// — how every write through a feathered selection lands.
+  static func blend(_ original: UInt32, toward result: UInt32, weight: UInt8) -> UInt32 {
+    switch weight {
+    case 0: return original
+    case 255: return result
+    default:
+      let w = Float(weight) / 255
+      var out: UInt32 = 0
+      for shift in stride(from: 24, through: 0, by: -8) {
+        let o = Float((original >> UInt32(shift)) & 0xFF)
+        let r = Float((result >> UInt32(shift)) & 0xFF)
+        let value = UInt32(min(max((o * (1 - w) + r * w + 0.5).rounded(.down), 0), 255))
+        out |= value << UInt32(shift)
+      }
+      return out
+    }
+  }
+
+  /// A stroke pixel composited over a layer pixel, source-over in
+  /// premultiplied space, with the stroke first scaled by `weight / 255` —
+  /// what ink through a selection leaves behind: nothing at weight 0, the
+  /// stroke as PencilKit would have drawn it at 255.
+  static func over(_ dst: UInt32, source: UInt32, weight: UInt8) -> UInt32 {
+    let src = scaled(source, by: weight)
+    let alpha = src >> 24
+    guard alpha != 0 else { return dst }
+    guard alpha != 255 else { return src }
+    let keep = 255 - alpha
+    var out: UInt32 = 0
+    for shift in stride(from: 24, through: 0, by: -8) {
+      let s = (src >> UInt32(shift)) & 0xFF
+      let d = (dst >> UInt32(shift)) & 0xFF
+      out |= min(255, s + (d * keep + 127) / 255) << UInt32(shift)
+    }
+    return out
+  }
+
+  /// A layer pixel with a stroke's coverage taken out of it, every channel
+  /// alike — the eraser through a selection. `coverage` is the stroke pixel's
+  /// alpha, scaled by `weight / 255` first.
+  static func erased(_ dst: UInt32, by coverage: UInt32, weight: UInt8) -> UInt32 {
+    let alpha = scaled(coverage, by: weight) >> 24
+    guard alpha != 0 else { return dst }
+    guard alpha != 255 else { return 0 }
+    let keep = 255 - alpha
+    var out: UInt32 = 0
+    for shift in stride(from: 24, through: 0, by: -8) {
+      let d = (dst >> UInt32(shift)) & 0xFF
+      out |= ((d * keep + 127) / 255) << UInt32(shift)
+    }
+    return out
+  }
+
+  /// Every channel of a premultiplied word multiplied by `weight / 255`.
+  private static func scaled(_ word: UInt32, by weight: UInt8) -> UInt32 {
+    switch weight {
+    case 0: return 0
+    case 255: return word
+    default:
+      let w = UInt32(weight)
+      var out: UInt32 = 0
+      for shift in stride(from: 24, through: 0, by: -8) {
+        let c = (word >> UInt32(shift)) & 0xFF
+        out |= ((c * w + 127) / 255) << UInt32(shift)
+      }
+      return out
+    }
+  }
 }
