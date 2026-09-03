@@ -57,12 +57,6 @@ sync — check an item here when its issue closes.
 
 ### CI
 
-- [ ] The Windows test job runs about twice as slow as macOS for identical work
-  (25m10s vs 13m09s, measured 2026-08-22) and had been sitting within four
-  minutes of its 25-minute cap, so twenty new tests pushed it over and turned
-  `main` red on a green diff. Cap raised to 40 minutes as the unblock; the
-  slowness itself, and a cap that does not go stale every time the suite grows,
-  are unexamined ([#335](https://github.com/CryptoJones/Photoslop/issues/335))
 
 ### Windows
 
@@ -90,6 +84,13 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] The Windows test job runs about twice as slow as macOS for identical work
+  and had been sitting within four minutes of its cap, so twenty new tests
+  turned `main` red on a green diff. Every test leg now reports its slowest
+  tests into the job summary, the caps are per-leg matrix data, and a cap
+  watch warns when a run crosses 70% of its timeout
+  ([#335](https://github.com/CryptoJones/Photoslop/issues/335)) — shipped v2.20.2
 
 - [x] Banded the full-layer float transients in `npimage` — `gaussian_blur`,
   `unsharp_mask`, `blend_by_weights` and `puppet_warp` now walk the layer in

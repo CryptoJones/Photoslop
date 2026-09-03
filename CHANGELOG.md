@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.20.2] — 2026-09-02
+
+### Changed
+- **The test matrix measures itself** (#335). Every `test` leg now runs
+  pytest with `--durations=25` and lifts the slowest-tests table into the
+  job's summary page, so where a slow leg's time goes is read off the run
+  rather than guessed from another platform; the transcript ships in the
+  test-report artifact next to the JUnit XML. A closing "cap watch" step
+  prints each leg's elapsed time against its timeout and raises a workflow
+  warning when a run crosses 70% of it — the situation that turned `main`
+  red on a green diff when Windows outgrew its 25-minute cap in silence.
+  The caps themselves moved into the matrix as per-leg data (Ubuntu 3.14
+  and macOS 30m, Ubuntu 3.10 35m, Windows 40m, each sized so the leg's
+  worst run of the last eleven sits under the warning line) and the job
+  timeout and the warning threshold read the same field, so the two cannot
+  drift apart; `tests/test_version_gate.py` pins that.
+
 ## [2.20.1] — 2026-09-02
 
 ### Changed

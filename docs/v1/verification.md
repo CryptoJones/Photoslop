@@ -25,4 +25,23 @@ set through `scripts/install-ci-qt-linux.sh`. The core OS/Python matrix does not
 force the optional G'MIC native package to compile on unsupported runners; a
 dedicated Linux job installs that extra and exercises its backend tests.
 
+## Job durations and caps
+
+Each `test` leg runs pytest with `--durations=25 --durations-min=1.0` and
+copies the resulting slowest-tests table into its job summary on the run's
+Summary page, so a slow leg is diagnosed from its own numbers rather than from
+another platform's; the full transcript (`pytest.log`) sits in the test-report
+artifact next to the JUnit XML. The per-leg timeout is the `cap-minutes` field
+of the matrix in `.github/workflows/test.yml`, sized so the leg's worst recent
+run stays under 70% of it, and a closing "cap watch" step prints the elapsed
+time against that cap in the summary and raises a workflow warning once a run
+crosses the 70% line. A warning means the cap is about to go stale the way it
+did in #335: read the slowest-tests table first, and only raise the cap if
+the growth is the suite's rather than a regression's. The first measured run
+(PR #365) put the same tests in the same order on all four legs with a
+near-constant ratio — Windows about 2x Ubuntu 3.14 and 1.4–2x macOS for
+every entry — so the Windows gap is the runner's per-test cost, and the
+reason its cap is the largest; the three slowest tests are the same
+everywhere and are where suite-side savings would come from.
+
 *Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*

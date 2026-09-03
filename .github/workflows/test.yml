@@ -53,24 +53,42 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # cap-minutes is each leg's job timeout AND the number the cap-watch
+        # step below measures against, so the two cannot drift apart. Sized
+        # from real run history like the other caps (#322, #323): eleven green
+        # runs, 2026-08-22 to 2026-09-02, Ubuntu 3.14 11-18m, macOS 10-19m,
+        # Ubuntu 3.10 13-21m, Windows 20-26m. Each cap leaves the leg's worst
+        # run under 70% of it; the watch warns when a run crosses that line,
+        # which is the four-minutes-of-headroom situation #335 describes,
+        # caught before it turns main red on a green diff.
         include:
           - os: ubuntu-latest
             python: "3.10"
+            cap-minutes: 35
           - os: ubuntu-latest
             python: "3.14"
+            cap-minutes: 30
           - os: macos-15
             python: "3.12"
+            cap-minutes: 30
           - os: windows-latest
             python: "3.12"
+            cap-minutes: 40
+    # Without this, cap-minutes would join the display name and the legs
+    # would stop being the "test (windows-latest, 3.12)" that #335, the docs
+    # and eleven weeks of run history call them.
+    name: test (${{ matrix.os }}, ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
-    # Sized from real run history, like the other caps (#322, #323) — but the
-    # suite grows and the cap did not. Measured 2026-08-22: macOS 13m, Ubuntu
-    # 17-18m, Windows 25m10s, against a 25m cap that Windows had quietly been
-    # running within four minutes of. It went over, and main went red on a
-    # green diff. 40m keeps the point of the cap (a hung runner fails in
-    # minutes, not the six-hour default) while leaving Windows real headroom.
-    timeout-minutes: 40
+    # A hung runner fails in minutes, not the six-hour default. The value
+    # lives in the matrix; see the comment there.
+    timeout-minutes: ${{ matrix.cap-minutes }}
     steps:
+      # The job's own clock, for the cap watch at the end. Runner setup before
+      # this step is a second or two and is the only time not counted.
+      - name: Start the job clock
+        id: clock
+        shell: bash
+        run: echo "started=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux Qt runtime libraries
         if: runner.os == 'Linux'
@@ -80,16 +98,63 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Sync locked development environment
         run: uv sync --extra dev --locked --python ${{ matrix.python }}
+      # --durations answers #335's first question — where a slow leg's time
+      # goes — on every leg, every run, so the answer is never a guess from
+      # one platform. The transcript is kept so the next step can lift the
+      # slowest-tests table into the job summary. Naming bash as the shell
+      # gives pipefail on all three runners, so the tee cannot hide pytest's
+      # exit status.
       - name: Tests
+        shell: bash
         env:
           QT_QPA_PLATFORM: offscreen
-        run: uv run pytest -q --junitxml=reports/tests.xml
+        run: |
+          mkdir -p reports
+          uv run pytest -q --junitxml=reports/tests.xml \
+            --durations=25 --durations-min=1.0 2>&1 | tee reports/pytest.log
+      - name: Slowest tests in the job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Slowest tests, test (${{ matrix.os }}, ${{ matrix.python }})"
+            echo
+            echo '```'
+            # From pytest's "slowest N durations" rule to the end of the
+            # transcript, which is the totals line.
+            sed -n '/slowest [0-9]* durations/,$p' reports/pytest.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Publish test report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tests-${{ runner.os }}-py${{ matrix.python }}-${{ github.sha }}
           path: reports/
+      # The cap watch. A ceiling sized from history goes stale silently as the
+      # suite grows, until one day it fails (#335). This step turns the silence
+      # into an annotation: the elapsed time and the cap it is measured against
+      # go into every job summary, and a run past 70% of its cap raises a
+      # workflow warning naming the leg and the numbers. Last step on purpose,
+      # so the artifact upload counts too.
+      - name: Cap watch
+        if: always()
+        shell: bash
+        env:
+          CAP_MINUTES: ${{ matrix.cap-minutes }}
+          JOB: test (${{ matrix.os }}, ${{ matrix.python }})
+          STARTED: ${{ steps.clock.outputs.started }}
+        run: |
+          elapsed=$(( $(date +%s) - STARTED ))
+          cap=$(( CAP_MINUTES * 60 ))
+          percent=$(( elapsed * 100 / cap ))
+          took=$(printf '%dm%02ds' $((elapsed / 60)) $((elapsed % 60)))
+          report="$JOB took $took of its ${CAP_MINUTES}m cap (${percent}%)"
+          echo "$report"
+          printf '\n%s\n' "$report" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$percent" -ge 70 ]; then
+            echo "::warning title=Job near its timeout cap::$report. Look at the slowest-tests table in this job's summary before raising the cap (#335)."
+          fi
 
   # Everything above runs QT_QPA_PLATFORM=offscreen, which is exactly the gap
   # #274 names: window creation, exposure, HiDPI scale factors and the menu

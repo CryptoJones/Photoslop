@@ -254,6 +254,36 @@ def test_every_linux_qt_workflow_installs_runtime_libraries():
     assert performance.count("scripts/install-ci-qt-linux.sh") == 1
 
 
+def test_test_matrix_caps_are_the_numbers_the_cap_watch_measures_against():
+    """The job timeout and the 70% warning read one matrix field (#335).
+
+    A cap hand-sized from history went stale as the suite grew and turned
+    main red on a green diff. The watch only catches that if it measures
+    against the cap actually in force, so the test job may not carry a
+    literal timeout that the warning threshold could drift away from, and
+    every leg has to declare its cap so no leg silently gets the six-hour
+    default while the watch reports against nothing.
+    """
+    test = _workflow_jobs((ROOT / ".github/workflows/test.yml").read_text())["test"]
+    assert "timeout-minutes: ${{ matrix.cap-minutes }}" in test
+    assert not re.search(r"timeout-minutes:\s*\d", test), "the cap is matrix data, not a literal"
+    # A matrix field joins the display name unless the job names itself; the
+    # legs stay the "test (windows-latest, 3.12)" the run history knows.
+    assert "name: test (${{ matrix.os }}, ${{ matrix.python }})" in test
+    legs = re.findall(r"- os: (\S+)\n\s+python: \"[\d.]+\"\n\s+cap-minutes: (\d+)", test)
+    assert len(legs) == test.count("- os:") == 4, legs
+    assert all(int(cap) >= 30 for _os, cap in legs), legs
+    assert "CAP_MINUTES: ${{ matrix.cap-minutes }}" in test
+    assert 'if [ "$percent" -ge 70 ]' in test
+    assert "::warning title=Job near its timeout cap::" in test
+    # The durations report is the evidence the warning points at; it has to
+    # be collected on every leg, and the transcript it is lifted from has to
+    # survive tee without hiding pytest's exit status.
+    assert "--durations=25 --durations-min=1.0" in test
+    assert "tee reports/pytest.log" in test
+    assert test.count("shell: bash") == 4
+
+
 def test_mcp_requirement_matches_the_api_the_code_uses():
     """The pin has to track the API `photoslop/server.py` actually imports.
 
