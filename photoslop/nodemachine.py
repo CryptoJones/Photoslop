@@ -283,11 +283,13 @@ def _paint_pads(
 def _glow_radius(overlay: QImage, glow: int) -> int:
     """Blur radius for the halo, clamped to what the buffer can carry.
 
-    npimage.gaussian_blur halves the radius into ``r = radius // 2 + 1``, and
-    _box_blur_plane's cumsum trick only balances its stacked operands while
-    ``r < dimension`` — past that numpy raises on the broadcast. A narrow layer
-    (a pasted strip, a slim text layer) therefore has to cap the radius however
-    high the glow slider goes. Returns 0 when the buffer is too thin to blur."""
+    npimage.gaussian_blur halves the radius into ``r = radius // 2 + 1``; its
+    original float32 cumsum trick only balanced its stacked operands while
+    ``r < dimension`` and raised past that. The banded blur (#347) truncates
+    the window instead, but a narrow layer (a pasted strip, a slim text
+    layer) still caps the radius however high the glow slider goes — past
+    the short side the halo is a uniform wash and only costs time. Returns 0
+    when the buffer is too thin to blur."""
     limit = 2 * min(overlay.width(), overlay.height()) - 3
     if limit < 1:
         return 0
