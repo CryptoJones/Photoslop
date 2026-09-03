@@ -377,8 +377,14 @@ and shrinking it is #351's work, not this seam's.
   paint layer instead.
 - The desktop's `flood_fill` is now `FloodFill.swift`, fixture-proven
   identical (`scripts/gen-flood-fill-fixture.py`). The wand is the same flood
-  with the write swapped for a mask; the filters are `applyPixelOperation`
-  calls with a banded body. Each is a port, not a design.
+  with the write swapped for a mask; the filters (#327) are
+  `applyPixelOperation` calls with a banded body. Each is a port, not a
+  design — and the filters showed what a port has to carry to stay one:
+  the desktop's `float32` arithmetic in the same order, Qt's fixed-point
+  nearest-neighbour sampling grid, and NumPy's `SeedSequence` + `PCG64`
+  (`NumpyRandom.swift`), each fixture-proven word for word
+  (`scripts/gen-filter-fixture.py`). A filter that needs full-size working
+  planes (Denoise, Datamosh) declares them so `canAffordLayers` counts them.
 - Selections are not consulted, because iOS has none yet. When #326 adds a
   selection model, it enters `FloodFill.mask` as the `sel_mask` intersection
   the desktop already has, and nothing else in the seam moves.

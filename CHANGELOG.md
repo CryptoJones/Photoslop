@@ -33,6 +33,35 @@ follows [SemVer](https://semver.org).
   #313's lesson one level deeper — an action nobody can find is not a shipped
   action.
 
+## [2.27.0] — 2026-09-03
+
+### Added
+- **iOS filters** (#327): the seven built-in filters of the desktop **Filters**
+  menu — Sepia, Pixelate, Denoise (Chroma), Retro Console (8-Bit), Pixel Sort
+  (Glitch), Datamosh + Chromatic Aberration, and Film Negative → Positive,
+  which is a first-party built-in on desktop and CLI and so comes along —
+  ported to Swift over `PixelBuffer` as a **Filters** submenu of More Actions.
+  Each row opens a parameter sheet built from the desktop `ParamSpec`s (same
+  names, ranges and defaults as the dialog and `photoslop-cli --filter`), and
+  Apply runs the filter over the active layer as one undo step named for the
+  filter. Text layers are refused for the reason the bucket refuses them.
+- **Pixel-identical to the desktop**, proven rather than claimed: the new
+  `scripts/gen-filter-fixture.py` runs the desktop filters over synthetic
+  images and `FilterParityTests` compares all 23 cases word for word, with no
+  tolerance. The ports keep the desktop's `float32` arithmetic in the same
+  order, reproduce Qt's nearest-neighbour `scaled` sampling grid for Pixelate
+  and Retro Console, and reproduce NumPy's `SeedSequence` + `PCG64` generator
+  (`NumpyRandom.swift`) so a Datamosh seed lays the same glitch on every
+  platform. Pixel Sort is tested to permute whole pixels, line by line.
+- With a selection, a filter runs over the layer and the pixels outside the
+  selection are put back — the desktop's hard-mask path. The working memory a
+  filter needs (Denoise's two chroma planes, Datamosh's snapshot) is counted
+  against the memory budget before it starts.
+
+### Known limits
+- No live preview on the parameter sheet; the desktop dialog has none either.
+  Filter plugins and smart-filter replay remain desktop-only.
+
 ## [2.26.0] — 2026-09-03
 
 ### Added

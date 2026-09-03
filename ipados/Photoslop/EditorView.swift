@@ -93,6 +93,8 @@ struct EditorView: View {
   @State private var exportQuality = 0.9
   @State private var isRenderingExport = false
   @State private var errorMessage: String?
+  /// The filter whose parameter sheet is up (#327); nil when none is.
+  @State private var filterToConfigure: FilterKind?
   @State private var explainUnexpectedExit = false
   @State private var inkColor = Color.black
   /// Stroke opacity, separate from the colour so the swatch can show both and
@@ -240,6 +242,15 @@ struct EditorView: View {
       if let id = activeTextLayer?.id {
         EffectsSheet(store: store, layerID: id, isPresented: $showTextEffects)
       }
+    }
+    .sheet(item: $filterToConfigure) { kind in
+      FilterSheet(
+        kind: kind,
+        onApply: { params in
+          filterToConfigure = nil
+          runFilter(kind, params: params)
+        },
+        onCancel: { filterToConfigure = nil })
     }
     .sheet(isPresented: $showFeatherOptions) { featherSheet }
     .onChange(of: selectedPhoto) { _, item in
@@ -941,6 +952,7 @@ struct EditorView: View {
           newDocumentButton
           imageMenu
           selectMenu
+          filtersMenu
           textMenu
           Divider()
           importImageButton
@@ -989,6 +1001,7 @@ struct EditorView: View {
           resizeLayerButton
           flattenImageButton
           selectMenu
+          filtersMenu
           textButtons
           Divider()
           importImageButton
@@ -1111,6 +1124,25 @@ struct EditorView: View {
   /// rather than on pixels, plus the one thing that acts on pixels *through*
   /// it. Deselect, Invert and Delete are inert with nothing selected, and say
   /// so by being disabled rather than by doing nothing.
+  /// The seven built-in filters (#327), one row each, in the desktop Filters
+  /// menu's order. A submenu rather than seven top-level rows, so the iPhone
+  /// More Actions menu keeps fitting without a scroll indicator (#313). Each
+  /// row opens a parameter sheet; nothing changes until Apply.
+  private var filtersMenu: some View {
+    Menu {
+      ForEach(FilterKind.allCases) { kind in
+        Button {
+          filterToConfigure = kind
+        } label: {
+          Text(kind.label)
+        }
+      }
+    } label: {
+      Label("Filters", systemImage: "camera.filters")
+    }
+    .disabled(store.activeLayer == nil)
+  }
+
   private var selectMenu: some View {
     Menu {
       Button {
@@ -2103,6 +2135,17 @@ struct EditorView: View {
       errorMessage =
         "Text layers stay editable, so the bucket cannot paint on one. "
         + "Select a paint layer, or add one, and fill that."
+    }
+  }
+
+  /// Apply a filter from its sheet (#327) to the active layer, as one undo
+  /// step. A text layer is refused out loud, the way the bucket and Delete
+  /// Selection refuse it; a memory refusal already raised the notice.
+  private func runFilter(_ kind: FilterKind, params: FilterParams) {
+    if store.applyFilter(kind, params: params) == .textLayer {
+      errorMessage =
+        "Text layers stay editable, so a filter cannot be baked into one. "
+        + "Select a paint layer, or flatten first, and filter that."
     }
   }
 
