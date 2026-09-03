@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.26.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.27.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -438,6 +438,40 @@ is active. Resizing or cropping the canvas drops it, since a mask for the old
 canvas describes no pixel of the new one. The bucket, Delete Selection and
 the brushes all honour it; the feather rides with it as a weight per pixel.
 
+### Filters
+
+The **Filters** submenu of **More Actions** holds the seven built-in filters
+of the desktop **Filters** menu — **Sepia**, **Pixelate**, **Denoise
+(Chroma)**, **Retro Console (8-Bit)**, **Pixel Sort (Glitch)**, **Datamosh +
+Chromatic Aberration** and **Film Negative → Positive** — in the desktop's
+order. Each row opens a sheet built from the same parameters the desktop
+dialog and `photoslop-cli --filter` take, with the same ranges and defaults:
+an integer is a slider (a 0/1 flag such as Dither is a switch), a float a
+finer slider, a choice a picker. **Apply** runs the filter over the active
+layer as one undo step, named for the filter; **Cancel** changes nothing.
+There is no live preview, as the desktop dialog has none.
+
+The filters are ports of `photoslop.filters` over the iOS `PixelBuffer`, and
+they produce the *same pixels*, not a similar look: `scripts/gen-filter-fixture.py`
+runs the desktop code over synthetic images and `FilterParityTests` compares
+every word of every case. That took three things a port could easily lose —
+the desktop's `float32` arithmetic in the same order, Qt's nearest-neighbour
+sampling grid for the shrink-and-enlarge filters, and NumPy's seeded
+generator (`SeedSequence` + `PCG64`, in `NumpyRandom.swift`) for Datamosh, so
+a seed lays the same glitch on a phone as it does on the desktop and in the
+CLI. Pixel Sort permutes whole pixels, as on the desktop, so nothing is
+invented; premultiplied alpha is unpremultiplied and re-premultiplied exactly
+where the desktop does it.
+
+With a selection, the filter runs over the layer and every pixel outside the
+selection is put back — the desktop's hard-mask path, the only path here
+since iOS selections carry no feather. Text layers are refused for the reason
+the bucket refuses them. Each filter works in 256-row bands where the maths is
+per pixel; Denoise holds two full-size chroma planes and Datamosh a snapshot to
+sample from, and those are counted against the memory budget before the
+filter starts, so a layer too large to filter is refused with the low-memory
+notice rather than a crash.
+
 ### Importing from Photos or from Files
 
 **Import Image…** asks where the picture is coming from before it asks which
@@ -613,11 +647,11 @@ link, require Beta App Review on the first build of a version.
 ## Initial-edition boundary
 
 The iPad edition currently covers persistent layered raster/PencilKit painting,
-the paint bucket, the magic wand and pixel selections, image import,
-document-wide undo, and flattened image export. The desktop edition remains the
-authoritative home for OpenRaster round trips, marquee and lasso selections,
-adjustments, filters, appearance effects on non-text layers, editable
-vectors, automation,
+the paint bucket, the magic wand and pixel selections, the seven built-in
+filters, image import, document-wide undo, and flattened image export. The
+desktop edition remains the authoritative home for OpenRaster round trips,
+marquee and lasso selections, adjustments, filter plugins and smart filters,
+appearance effects on non-text layers, editable vectors, automation,
 CLI, and MCP. An unsigned GitHub artifact is a reproducible developer build,
 not an App Store-signed IPA.
 

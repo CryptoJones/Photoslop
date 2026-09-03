@@ -330,6 +330,14 @@ extension XCUIApplication {
     "Move Text": "Text",
     "Fit Text…": "Text",
     "Effects…": "Text",
+    // The Filters submenu (#327) is nested at every width.
+    "Sepia": "Filters",
+    "Pixelate": "Filters",
+    "Denoise (Chroma)": "Filters",
+    "Retro Console (8-Bit)": "Filters",
+    "Pixel Sort (Glitch)": "Filters",
+    "Datamosh + Chromatic Aberration": "Filters",
+    "Film Negative → Positive": "Filters",
   ]
 
   /// Open More Actions and wait until its rows are actually on screen.
