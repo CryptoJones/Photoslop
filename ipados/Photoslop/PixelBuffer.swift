@@ -263,7 +263,10 @@ struct PixelBuffer {
   }
 
   /// Every channel of a premultiplied word multiplied by `weight / 255`.
-  private static func scaled(_ word: UInt32, by weight: UInt8) -> UInt32 {
+  /// A premultiplied word faded to `weight / 255` of itself. Used by `over`
+  /// for a stroke landing through a selection, and by Copy (#374) for pixels
+  /// read out through one.
+  static func scaled(_ word: UInt32, by weight: UInt8) -> UInt32 {
     switch weight {
     case 0: return 0
     case 255: return word

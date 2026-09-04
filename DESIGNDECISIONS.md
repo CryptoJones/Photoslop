@@ -532,6 +532,51 @@ refresh allocates anything it did not before.
 
 ---
 
+---
+
+## DD-016 — A copy through a selection is weighted, and the selection's actions live on the strip
+
+**Status: Accepted (2026-09-03).**
+
+Two decisions from [#374](https://github.com/CryptoJones/Photoslop/issues/374),
+which was filed from a plain report: *a selection could be made with the wand,
+and then there was no way to delete, cut or copy it.*
+
+**Copy is weighted, where the desktop's is clipped.** `action_copy` on the
+desktop crops to the selection's bounds and clips with a hard `setClipPath`,
+because on the desktop `selection_feather` is read by exactly two callers —
+`_run_filter` and the CLI's filter path. Everything else there, including
+Delete Selection and the brushes, ignores the feather. On iOS the feather is
+read by everything that writes through a selection (DD-015), so a hard-clipped
+copy would take back more than Cut removed and Paste would put a hard edge over
+a soft hole. So Copy multiplies each pixel by `SelectionMask.weight(at:)`, the
+same value Delete Selection reads, and the round trip closes: what Paste
+restores is exactly what Cut took. The divergence is deliberate and the desktop
+is the side that should move; it is not this PR's to move.
+
+**A copy remembers where it came from, but only while it is ours.** The
+desktop keeps `pixel_clip` plus a `_clip_from_us` flag so a paste of its own
+copy returns to its origin while a paste of someone else's lands at the
+top-left. A flag is not enough on iOS, where any app may write to
+`UIPasteboard` while this one is backgrounded, so the origin is stamped with
+`UIPasteboard.general.changeCount` and honoured only while that still matches.
+A stale origin, or one that no longer touches a resized canvas, falls back to
+the top-left rather than pasting off-screen.
+
+**The selection's actions are contextual, not menu items.** Delete Selection
+shipped in 2.22.0 inside the Select menu, which on iPhone is inside More
+Actions: three levels down, behind a system `UIMenu` that shows no indicator of
+what it holds — the same class of defect as #313, one level deeper. The report
+that produced this entry is the evidence, from someone who had been using the
+wand since it shipped. The repair is not a fourth menu row but a contextual
+group: while a selection exists, Cut / Copy / Paste / Delete sit in the tool
+strip's leading zone, the part that never has to be scrolled to, and they go
+away with the selection. The compact toolbar budget stays at three (DD-010's
+successor rule, #313) because the strip is not the toolbar. The menu rows stay
+where the keyboard shortcuts live.
+
+---
+
 *New decisions get the next DD number. Reversing one requires a new entry
 that names the entry it supersedes — history is append-only.*
 

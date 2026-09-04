@@ -260,6 +260,29 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
       if selection == nil { strokeClipCache = nil }
     }
   }
+  /// Where the last Copy took its pixels from, and the pasteboard generation
+  /// it was written at — the desktop's `pixel_clip` origin plus its
+  /// `_clip_from_us` flag (#374). Paste puts a copy this app made back where
+  /// it came from; once anything else writes to the pasteboard the generation
+  /// no longer matches and the origin is forgotten, so a screenshot or an
+  /// image copied in another app lands at the top-left instead.
+  private var pasteOrigin: (point: CGPoint, generation: Int)?
+
+  /// The remembered origin, but only while the pasteboard still holds the copy
+  /// that produced it.
+  var ownedPasteOrigin: CGPoint? {
+    guard let pasteOrigin, pasteOrigin.generation == UIPasteboard.general.changeCount else {
+      return nil
+    }
+    return pasteOrigin.point
+  }
+
+  /// Record where a Copy came from, stamped with the pasteboard generation it
+  /// just created.
+  func rememberPasteOrigin(_ point: CGPoint) {
+    pasteOrigin = (point, UIPasteboard.general.changeCount)
+  }
+
   /// Bumped when the live canvas should drop the strokes it is showing under
   /// a selection — once the composite has caught up with their baked pixels —
   /// so the `activeDrawingKey` changes and `PencilCanvas` re-applies the
@@ -1349,6 +1372,20 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
       let image = Self.solidImage(size: canvasSize, color: .clear)
       let layer = RasterLayer(name: uniqueName(base: "Paint Layer"), image: image)
       layers.append(layer)
+      activeLayerID = layer.id
+    }
+  }
+
+  /// Place `image` as a new layer above the active one, as one undo step.
+  ///
+  /// Lives here rather than in the Clipboard extension (#374) because the undo
+  /// wrapper and the name deduplicator are private to the store, and Paste is
+  /// not a good enough reason to open either of them up.
+  func insertLayer(image: UIImage, named base: String, actionName: String) {
+    mutate(actionName: actionName) {
+      let layer = RasterLayer(name: uniqueName(base: base), image: image)
+      let above = activeLayerID.flatMap { id in layers.firstIndex(where: { $0.id == id }) }
+      layers.insert(layer, at: above.map { $0 + 1 } ?? layers.count)
       activeLayerID = layer.id
     }
   }

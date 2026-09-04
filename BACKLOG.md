@@ -55,6 +55,12 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] iOS Cut, Copy and Paste for selections — the pasteboard trio over the
+  selection mask, weighted so a feathered Cut and Paste round-trips, a copy
+  this app made returning to its own origin; and the selection's actions
+  lifted out of the third level of the iPhone menu onto the tool strip, where
+  Delete Selection had been sitting unfound since 2.22.0 (DD-016)
+  ([#374](https://github.com/CryptoJones/Photoslop/issues/374)) — shipped v2.28.0
 - [x] iOS filters — the seven desktop built-ins (Sepia, Pixelate, Denoise,
   Retro Console, Pixel Sort, Datamosh + Chromatic Aberration, Film Negative)
   ported over `PixelBuffer` behind a Filters submenu with parameter sheets;

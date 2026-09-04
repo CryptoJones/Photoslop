@@ -4,6 +4,35 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.28.0] — 2026-09-03
+
+### Added
+- **Cut, Copy and Paste on iOS** (#374): the selected pixels of the active
+  layer go to the system pasteboard cropped to the selection's bounds, and
+  come back as a new layer above the active one. Cut is Copy and Delete
+  Selection as a single undo step named "Cut", the desktop's
+  `beginMacro("Cut")`. A copy this app made remembers where it came from and
+  pastes back into the same place — the desktop's `pixel_clip` origin and its
+  `_clip_from_us` guard, kept honest here by the pasteboard's generation
+  counter — while a screenshot or an image copied in another app lands at the
+  top-left. Copy reads the selection's weights, so a feathered selection
+  copies with its soft edge and Cut → Paste is a round trip (DD-016).
+- **The selection's actions are one tap away** (#374). While a selection is
+  up, Cut, Copy, Paste and Delete Selection appear in the tool strip's leading
+  zone — the part that never has to be scrolled to — and disappear with it.
+  They work the same whichever tool made the selection: wand, marquee or
+  lasso.
+
+### Fixed
+- **Delete Selection was unreachable in practice on iPhone** (#374). It has
+  shipped since 2.22.0 at More Actions ▸ Select ▸ Delete Selection: three
+  levels down, inside a system `UIMenu` that cannot advertise what is under
+  it. The operator who asked for this feature had been selecting with the wand
+  for a version and a half and never found it. It keeps its menu row and its
+  Delete shortcut, and is now also on the strip beside Cut and Copy. This is
+  #313's lesson one level deeper — an action nobody can find is not a shipped
+  action.
+
 ## [2.27.0] — 2026-09-03
 
 ### Added
