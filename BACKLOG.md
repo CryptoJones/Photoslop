@@ -8,10 +8,18 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
-- [ ] iOS appearance-effect follow-ups: the Effects sheet on raster and photo
-  layers (needs banded or budgeted effect planes for canvas-sized alpha),
-  Gaussian blur and feather rendering (the fill-override kinds), and fill
-  opacity ([#372](https://github.com/CryptoJones/Photoslop/issues/372))
+- [ ] iOS appearance-effect follow-ups, two of three parts left: the Effects
+  sheet on raster and photo layers (needs banded or budgeted effect planes for
+  canvas-sized alpha) and Gaussian blur / feather rendering (the fill-override
+  kinds). **Fill opacity shipped in v2.31.0**
+  ([#372](https://github.com/CryptoJones/Photoslop/issues/372))
+
+- [ ] Port Beam Dither to the Swift filter library, with a
+  `gen-dither-fixture.py` proving word-for-word parity as the existing seven
+  filters do. Deferred deliberately: #384 was scoped to the desktop app. Error
+  diffusion is the awkward part — it is inherently sequential and will not
+  vectorise over `PixelBuffer`
+  ([#385](https://github.com/CryptoJones/Photoslop/issues/385))
 
 ### Desktop
 
@@ -45,6 +53,11 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] Beam Dither filter — six error-diffusion kernels, Bayer ordered
+  dithering, and a CRT beam-modulation mode where the picture deflects a
+  scanline raster instead of stippling it; conditioning stage and mono / tonal
+  / colour inking, on desktop and CLI
+  ([#384](https://github.com/CryptoJones/Photoslop/issues/384)) — shipped v2.32.0
 - [x] `photoslop-cli --sample X,Y` — the composite colour at a point as JSON,
   repeatable so N points cost one decode; the query form of the Eyedropper,
   which closes the last surface gap the iOS tool left open

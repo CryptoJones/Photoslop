@@ -24,6 +24,7 @@ from typing import NamedTuple
 import numpy as np
 from PySide6.QtGui import QImage
 
+from photoslop import dither
 from photoslop.adjust import CHUNK_ROWS
 from photoslop.npimage import view_u32
 
@@ -184,6 +185,12 @@ def parse_params(cls: type[Filter], text: str) -> dict:
             if value not in spec.choices:
                 raise ValueError(f"{cls.name}: {key} must be one of " + ", ".join(spec.choices))
             values[key] = value
+            continue
+        if spec.type == "str":
+            # A free-text value among several parameters, which is why it may
+            # not contain a comma — that is the separator. The single-param
+            # case above stays the escape hatch for values that need one.
+            values[key] = num.strip()
             continue
         try:
             v = int(num) if spec.type == "int" else float(num)
@@ -621,6 +628,254 @@ class FilmNegativeFilter(Filter):
             _store_premultiplied(chunk, a, out_r, out_g, out_b)
 
 
+def _hex_rgb(text, fallback: tuple[int, int, int]) -> tuple[int, int, int]:
+    """``#RRGGBB`` (or ``RRGGBB``, or ``#RGB``) to a 0-255 triple.
+
+    A colour that cannot be read falls back rather than raising: these arrive
+    from a free-text box, and a half-typed value should not abort a render the
+    user is watching.
+    """
+    raw = str(text).strip().lstrip("#")
+    if len(raw) == 3:
+        raw = "".join(c * 2 for c in raw)
+    if len(raw) != 6:
+        return fallback
+    try:
+        return (int(raw[0:2], 16), int(raw[2:4], 16), int(raw[4:6], 16))
+    except ValueError:
+        return fallback
+
+
+def _downsample(plane: np.ndarray, factor: int) -> np.ndarray:
+    """Block-average by an integer factor, which is what makes the dither
+    coarse: the algorithm sees one value per output cell, so a cell is either
+    on or off as a whole rather than dissolving into per-pixel noise."""
+    if factor <= 1:
+        return plane
+    height, width = plane.shape
+    rows, cols = height // factor, width // factor
+    if rows == 0 or cols == 0:
+        return plane
+    trimmed = plane[: rows * factor, : cols * factor]
+    return trimmed.reshape(rows, factor, cols, factor).mean(axis=(1, 3))
+
+
+def _upsample(plane: np.ndarray, factor: int, shape: tuple[int, int]) -> np.ndarray:
+    """Nearest-neighbour back up to ``shape``. Nearest, never smooth: the whole
+    point is hard-edged cells, and any interpolation here would reintroduce the
+    intermediate tones the dither just spent its effort removing."""
+    if factor <= 1 and plane.shape == shape:
+        return plane
+    grown = np.repeat(np.repeat(plane, factor, axis=0), factor, axis=1)
+    height, width = shape
+    if grown.shape[0] < height or grown.shape[1] < width:
+        # The trailing partial cell the block average had to drop.
+        grown = np.pad(
+            grown,
+            ((0, max(0, height - grown.shape[0])), (0, max(0, width - grown.shape[1]))),
+            mode="edge",
+        )
+    return grown[:height, :width]
+
+
+class BeamDitherFilter(Filter):
+    """One-bit rendering with a CRT beam model (#384).
+
+    Two stages, and they are separable on purpose. First the picture is
+    *conditioned* — levels, blur, sharpen, grain — because every dither is only
+    as good as the contrast handed to it: error diffusion applied to a flat
+    photograph gives flat noise, and the same photograph pushed to a hard
+    tonal curve first gives structure. Then it is *rendered*, either by a
+    dither that preserves average tone or by beam modulation that does not.
+
+    The beam mode is the interesting one. A dither asks which pixels to light
+    so the average is right; a beam raster asks what the picture does to a line
+    being swept across it. Bright regions deflect their beam off its resting
+    row and widen it, so the output is bending scanlines that trace contours,
+    which is why it reads as engraving rather than as noise.
+    """
+
+    name = "beam-dither"
+    label = "Beam Dither"
+    params = (
+        ParamSpec(
+            "algorithm",
+            "Algorithm",
+            "choice",
+            0,
+            0,
+            "beam",
+            (
+                "beam",
+                "floyd-steinberg",
+                "atkinson",
+                "jarvis",
+                "stucki",
+                "sierra",
+                "burkes",
+                "bayer-2",
+                "bayer-4",
+                "bayer-8",
+                "threshold",
+            ),
+        ),
+        ParamSpec("mode", "Render mode", "choice", 0, 0, "mono", ("mono", "tonal", "color")),
+        ParamSpec("scale", "Cell size", "int", 1, 32, 3),
+        ParamSpec("levels", "Tone levels", "int", 2, 8, 2),
+        ParamSpec("brightness", "Brightness", "int", -100, 100, 0),
+        ParamSpec("contrast", "Contrast", "int", -100, 100, 0),
+        ParamSpec("blur", "Blur", "int", 0, 20, 0),
+        ParamSpec("sharpen", "Sharpen strength", "int", 0, 300, 0),
+        ParamSpec("sharpen_radius", "Sharpen radius", "int", 1, 20, 2),
+        ParamSpec("noise", "Denoise / Noise", "int", -100, 100, 0),
+        ParamSpec("beam_pitch", "Beam pitch", "int", 2, 64, 6),
+        ParamSpec("beam_amplitude", "Beam displacement", "float", 0.0, 8.0, 1.5),
+        ParamSpec("highlights", "Highlights", "str", 0, 0, "#FFFFFF"),
+        ParamSpec("midtones", "Midtones", "str", 0, 0, "#B0B0B0"),
+        ParamSpec("shadows", "Shadows", "str", 0, 0, "#5A5A5A"),
+        ParamSpec("background", "Background", "str", 0, 0, "#000000"),
+    )
+
+    def apply(self, image: QImage, params: dict) -> None:
+        from photoslop.appearance import _blur_plane
+
+        arr = view_u32(image)
+        alpha = (arr >> np.uint32(24)) & np.uint32(0xFF)
+        red, green, blue = _unpremultiplied_rgb(arr, alpha)
+
+        algorithm = str(params.get("algorithm", "beam"))
+        mode = str(params.get("mode", "mono"))
+        scale = max(1, int(params.get("scale", 3)))
+        levels = max(2, int(params.get("levels", 2)))
+
+        def conditioned(channel: np.ndarray) -> np.ndarray:
+            plane = channel.astype(np.float32) / 255.0
+            return self._condition(plane, params, _blur_plane)
+
+        def rendered(plane: np.ndarray) -> np.ndarray:
+            shape = plane.shape
+            small = _downsample(plane, scale)
+            tone = self._render(small, algorithm, levels, params)
+            return _upsample(tone, scale, shape)
+
+        if mode == "color":
+            # Each channel dithered on its own: the classic indexed-palette
+            # look, where the cross-channel disagreement is what produces the
+            # colour speckle rather than a shared mask tinting a grey.
+            out_r = rendered(conditioned(red))
+            out_g = rendered(conditioned(green))
+            out_b = rendered(conditioned(blue))
+            new_r = np.rint(out_r * 255.0).astype(np.int32)
+            new_g = np.rint(out_g * 255.0).astype(np.int32)
+            new_b = np.rint(out_b * 255.0).astype(np.int32)
+        else:
+            luma = (
+                0.299 * red.astype(np.float32)
+                + 0.587 * green.astype(np.float32)
+                + 0.114 * blue.astype(np.float32)
+            ) / 255.0
+            conditioned_luma = self._condition(luma, params, _blur_plane)
+            tone = rendered(conditioned_luma)
+            new_r, new_g, new_b = self._colorise(tone, conditioned_luma, mode, params)
+
+        _store_premultiplied(arr, alpha, new_r, new_g, new_b)
+
+    @staticmethod
+    def _condition(plane: np.ndarray, params: dict, blur_plane) -> np.ndarray:
+        """Levels, blur, sharpen and grain, in the order a darkroom would.
+
+        Sharpen runs after blur so the pair is a band-pass rather than a
+        cancellation, and grain is added last so the dither sees it as signal —
+        added earlier, the blur would simply erase it.
+        """
+        brightness = float(params.get("brightness", 0)) / 100.0
+        contrast = float(params.get("contrast", 0)) / 100.0
+        plane = np.clip(plane + brightness, 0.0, 1.0)
+        if contrast:
+            # Pivot on mid grey, so contrast opens the tonal range rather than
+            # also shifting its centre the way a plain multiply would.
+            gain = (1.0 + contrast) if contrast > 0 else (1.0 / (1.0 - contrast))
+            plane = np.clip((plane - 0.5) * gain + 0.5, 0.0, 1.0)
+
+        blur = int(params.get("blur", 0))
+        if blur > 0:
+            plane = blur_plane(plane.astype(np.float32), blur)
+
+        sharpen = float(params.get("sharpen", 0)) / 100.0
+        if sharpen > 0:
+            radius = max(1, int(params.get("sharpen_radius", 2)))
+            # Unsharp mask: the picture plus its own missing high frequencies.
+            low = blur_plane(plane.astype(np.float32), radius)
+            plane = np.clip(plane + sharpen * (plane - low), 0.0, 1.0)
+
+        noise = int(params.get("noise", 0))
+        if noise > 0:
+            # Seeded, so the same document and settings render identically —
+            # a filter that changed under a re-render would make the undo
+            # stack lie about what it was restoring.
+            rng = np.random.default_rng(0x0D17)
+            plane = np.clip(
+                plane + rng.uniform(-1.0, 1.0, plane.shape).astype(np.float32) * (noise / 200.0),
+                0.0,
+                1.0,
+            )
+        elif noise < 0:
+            plane = blur_plane(plane.astype(np.float32), max(1, -noise // 20))
+        return plane.astype(np.float32)
+
+    @staticmethod
+    def _render(plane: np.ndarray, algorithm: str, levels: int, params: dict) -> np.ndarray:
+        if algorithm == "beam":
+            coverage = dither.beam_mask(
+                plane,
+                int(params.get("beam_pitch", 6)),
+                float(params.get("beam_amplitude", 1.5)),
+            )
+            # The beam's shoulders are soft, and left that way the result is a
+            # smooth grey edge on every line — which is not what a one-bit
+            # display does. Dithering the coverage breaks those shoulders into
+            # stipple, so a beam thins into dots as it leaves the light instead
+            # of fading to grey, and the whole render stays honestly two-tone.
+            # `levels` is the way out of it: above 2 the beam keeps its
+            # gradient and is merely posterised.
+            if levels <= 2:
+                return dither.ordered_dither(coverage, 4, 2)
+            return dither.quantise(coverage, levels)
+        if algorithm.startswith("bayer-"):
+            return dither.ordered_dither(plane, int(algorithm.split("-")[1]), levels)
+        if algorithm == "threshold":
+            return dither.threshold(plane, levels)
+        return dither.error_diffuse(plane, algorithm, levels)
+
+    @staticmethod
+    def _colorise(tone: np.ndarray, luma: np.ndarray, mode: str, params: dict):
+        """Ink the rendered tone.
+
+        `tonal` is tri-tone mapping: which ink a lit pixel takes is decided by
+        the *original* luminance under it, not by the rendered value, so the
+        shadows keep their own colour even where the dither happens to light
+        them. Deciding from the rendered value instead would collapse every
+        lit pixel onto one ink and lose the tri-tone entirely.
+        """
+        background = _hex_rgb(params.get("background", "#000000"), (0, 0, 0))
+        if mode != "tonal":
+            ink = _hex_rgb(params.get("highlights", "#FFFFFF"), (255, 255, 255))
+            inks = (np.float32(ink[0]), np.float32(ink[1]), np.float32(ink[2]))
+        else:
+            shadows = _hex_rgb(params.get("shadows", "#5A5A5A"), (90, 90, 90))
+            midtones = _hex_rgb(params.get("midtones", "#B0B0B0"), (176, 176, 176))
+            highlights = _hex_rgb(params.get("highlights", "#FFFFFF"), (255, 255, 255))
+            band = np.digitize(luma, [1.0 / 3.0, 2.0 / 3.0])
+            palette = np.array([shadows, midtones, highlights], dtype=np.float32)
+            inks = (palette[band, 0], palette[band, 1], palette[band, 2])
+
+        out = []
+        for channel, back in zip(inks, background, strict=True):
+            mixed = np.float32(back) + (channel - np.float32(back)) * tone
+            out.append(np.clip(np.rint(mixed), 0, 255).astype(np.int32))
+        return out[0], out[1], out[2]
+
+
 def _unpremultiplied_rgb(chunk: np.ndarray, a: np.ndarray):
     """Straight (un-premultiplied) 0-255 channels for a packed ARGB chunk.
 
@@ -688,4 +943,4 @@ def _negative_lut(lo: int, hi: int) -> np.ndarray:
     return np.clip(np.rint(scaled * 255.0), 0, 255).astype(np.int32)
 
 
-_BUILT_INS = (*_BUILT_INS, FilmNegativeFilter)
+_BUILT_INS = (*_BUILT_INS, FilmNegativeFilter, BeamDitherFilter)
