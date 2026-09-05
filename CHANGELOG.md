@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.28.1] — 2026-09-04
+
+### Added
+- `CLAUDE.md`, with `AGENTS.md` symlinked to it: the contributor guide for AI
+  agents working in this repo. It states the simulator-shutdown rule and why
+  it is not optional on a shared 16 GB host, the three-platform parity
+  requirement, and the expectation that `scripts/ci-local.sh` is run rather
+  than assumed. No behaviour change; documentation only.
+
 ## [2.28.0] — 2026-09-03
 
 ### Added
