@@ -477,6 +477,61 @@ def test_info_json(qapp, tmp_path, capsys):
     assert info["layers"][0]["fill_opacity"] == 1.0
 
 
+def test_sample_reports_the_composite_colour(qapp, tmp_path, capsys):
+    """--sample is the query form of the Eyedropper (#380).
+
+    It reads the merged composite, so a point covered by an upper layer must
+    report that layer's colour rather than the background's.
+    """
+    src = make_input(tmp_path, color=QColor(120, 90, 60))
+    assert run([src, "--sample", "10,10"]) == 0
+    samples = json.loads(capsys.readouterr().out)
+    # Always a list, even for one point, so a script need not branch on count.
+    assert samples == [{"x": 10, "y": 10, "rgba": [120, 90, 60, 255], "hex": "#785A3C"}]
+
+
+def test_sample_is_repeatable_and_ordered(qapp, tmp_path, capsys):
+    """Repeatable so N points cost one decode rather than N, and reported in
+    the order asked for rather than sorted."""
+    img = QImage(20, 10, QImage.Format.Format_ARGB32_Premultiplied)
+    img.fill(QColor(12, 200, 87))
+    for x in range(10):
+        for y in range(10):
+            img.setPixelColor(x, y, QColor(255, 0, 0))
+    src = str(tmp_path / "halves.png")
+    img.save(src)
+
+    assert run([src, "--sample", "15,5", "--sample", "2,2"]) == 0
+    samples = json.loads(capsys.readouterr().out)
+    assert [s["hex"] for s in samples] == ["#0CC857", "#FF0000"]
+
+
+def test_sample_off_canvas_is_a_usage_error(qapp, tmp_path):
+    """Outside the canvas there is nothing to sample — the desktop returns
+    None for the same case. Exit 2, not a crash and not a black pixel."""
+    src = make_input(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--sample", "999,999"])
+    assert exc.value.code == 2
+
+
+def test_sample_rejects_a_malformed_point(qapp, tmp_path):
+    src = make_input(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--sample", "10"])
+    assert exc.value.code == 2
+
+
+def test_sample_alone_satisfies_the_nothing_to_do_guard(qapp, tmp_path):
+    """A query needs no --output, the way --info does not."""
+    src = make_input(tmp_path)
+    assert run([src, "--sample", "0,0"]) == 0
+    result = cli.apply_pipeline(input_path=src, sample=["0,0"])
+    assert result["samples"][0]["rgba"][3] == 255
+    with pytest.raises(ValueError, match="nothing to do"):
+        cli.apply_pipeline(input_path=src)
+
+
 def test_flip_and_fill(qapp, tmp_path):
     img = QImage(20, 10, QImage.Format.Format_ARGB32_Premultiplied)
     img.fill(QColor(0, 0, 0))

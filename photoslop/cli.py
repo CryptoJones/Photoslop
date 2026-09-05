@@ -1244,6 +1244,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--info", action="store_true", help="print document info as JSON")
     parser.add_argument(
+        "--sample",
+        action="append",
+        metavar="X,Y",
+        help="print the merged-composite colour at a point as JSON; repeatable, "
+        "and reported in the order given",
+    )
+    parser.add_argument(
         "--allow-large-document",
         action="store_true",
         help="for trusted local files, bypass only the adaptive working-set "
@@ -1364,6 +1371,35 @@ def _export_artboards(doc, directory: str) -> list[str]:
     return export_artboards(doc, directory)
 
 
+def _sample_points(doc, specs: list[str]) -> list[dict]:
+    """The merged-composite colour at each requested point.
+
+    Repeatable because decoding the document is the expensive part, not the
+    sampling: ``Document.sample_color`` composites exactly one pixel per call,
+    so ten points cost ten pixels but only one decode. The result is always a
+    list, one entry per ``--sample`` in the order given — a single point is a
+    one-element list rather than a bare object, so a script never has to branch
+    on how many it asked for.
+    """
+    out = []
+    for spec in specs:
+        x, y = _ints(spec, 2, "--sample")
+        color = doc.sample_color(x, y)
+        if color is None:
+            raise _ValueError(
+                f"--sample: ({x}, {y}) is outside the {doc.size.width()}x{doc.size.height()} canvas"
+            )
+        out.append(
+            {
+                "x": x,
+                "y": y,
+                "rgba": [color.red(), color.green(), color.blue(), color.alpha()],
+                "hex": f"#{color.red():02X}{color.green():02X}{color.blue():02X}",
+            }
+        )
+    return out
+
+
 def _doc_info(doc) -> dict:
     from photoslop.appearance import normalize_effects
 
@@ -1412,6 +1448,7 @@ def apply_pipeline(
     operations: list[tuple[str, str]] | None = None,
     output: str | None = None,
     info: bool = False,
+    sample: list[str] | None = None,
     export_artboards: str | None = None,
     allow_large_document: bool = False,
     allow_unsafe_plugins: bool = False,
@@ -1425,7 +1462,8 @@ def apply_pipeline(
 
     ``operations`` is an ordered list of ``(op_name, value)`` pairs (value ``""``
     for flag ops). Returns a dict that may carry ``info`` (document JSON),
-    ``artboards`` (written paths), and ``output`` (the written file).
+    ``artboards`` (written paths), ``samples`` (one entry per requested point)
+    and ``output`` (the written file).
 
     Raises ``ValueError`` for bad inputs/op values (the CLI's exit-code-2 class).
     """
@@ -1455,13 +1493,15 @@ def apply_pipeline(
     result: dict = {}
     if info:
         result["info"] = _doc_info(doc)
+    if sample:
+        result["samples"] = _sample_points(doc, sample)
     if export_artboards:
         result["artboards"] = _export_artboards(doc, export_artboards)
     if output:
         _write_output(doc, output, ctx.proof_space, ctx.cmyk_icc or None)
         result["output"] = output
-    if not (info or export_artboards or output):
-        raise _ValueError("nothing to do: request output, info, or export_artboards")
+    if not (info or sample or export_artboards or output):
+        raise _ValueError("nothing to do: request output, info, sample, or export_artboards")
     return result
 
 
@@ -1492,14 +1532,16 @@ def main(argv: list[str] | None = None) -> int:
             OPS[op][2](ctx, value)
         if args.info:
             print(json.dumps(_doc_info(doc), indent=2))
+        if args.sample:
+            print(json.dumps(_sample_points(doc, args.sample), indent=2))
         if args.export_artboards:
             written = _export_artboards(doc, args.export_artboards)
             for path in written:
                 print(path)
         if args.output:
             _write_output(doc, args.output, ctx.proof_space, ctx.cmyk_icc or None)
-        if not (args.info or args.export_artboards or args.output):
-            parser.error("nothing to do: give --output, --info, or --export-artboards")
+        if not (args.info or args.sample or args.export_artboards or args.output):
+            parser.error("nothing to do: give --output, --info, --sample, or --export-artboards")
     except _ValueError as exc:
         parser.exit(_EXIT_CODES[exc.code], f"photoslop-cli: error [{exc.code.value}]: {exc}\n")
     except Exception as exc:  # engine/backend/IO failures
