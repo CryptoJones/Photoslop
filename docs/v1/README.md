@@ -1,7 +1,7 @@
 # Photoslop v1 Documentation
 
 The authoritative reference for every Photoslop feature — desktop app and
-command line — as of **v2.28.0**.
+command line — as of **v2.28.1**.
 
 | Guide | Covers |
 |---|---|
