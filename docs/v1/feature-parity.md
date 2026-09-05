@@ -24,7 +24,7 @@ client exposes it.
 | Colour sampling (eyedropper) | ✅ `I`, composite-aware, Shift → background | ✅ composite-aware, into the single ink swatch | ✅ `--sample X,Y`, composite-aware, repeatable | — |
 | Selections/filters/vectors/text | ✅ | 🟡 wand, marquee and lasso selections with feathering; brushes, bucket, Delete Selection and Cut/Copy/Paste honour them; editable text layers; the seven built-in filters, pixel-identical to the desktop; no vectors yet | ✅ shared safe engine operations | ✅ safe subset |
 | One-bit dither / beam modulation | ✅ Beam Dither, 10 algorithms | 🟡 not ported yet ([#385](https://github.com/CryptoJones/Photoslop/issues/385)) | ✅ `--filter beam-dither:…` | — |
-| Live appearance effects (shadow, glow, outline, overlay, bevel) | ✅ 10 kinds on any layer | 🟡 8 kinds on text layers, ported from the desktop renderer, fixture-proven identical; Gaussian blur and feather kept but not drawn | ✅ `--drop-shadow`, `--glow`, `--stroke`, `--effect`, `--set-effects` | ✅ safe subset |
+| Live appearance effects (shadow, glow, outline, overlay, bevel) | ✅ 10 kinds on any layer | 🟡 10 kinds on text layers, ported from the desktop renderer, fixture-proven identical, Gaussian blur and feather included; not yet offered on raster layers ([#372](https://github.com/CryptoJones/Photoslop/issues/372)) | ✅ `--drop-shadow`, `--glow`, `--stroke`, `--effect`, `--set-effects` | ✅ safe subset |
 | Native/third-party plugins | local opt-in | — | local opt-in | denied |
 | Network model operations | local configured endpoint | — | local configured endpoint | denied |
 | Accessibility automation | automated semantics + manual matrix required | native labels + manual matrix required | structured errors | structured tool errors |

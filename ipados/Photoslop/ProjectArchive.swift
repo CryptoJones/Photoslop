@@ -295,12 +295,20 @@ enum ProjectArchive {
         autoreleasepool {
           // Effects at 1x through the scaled context: the planes are the
           // layer's size, not the preview's, and the transform shrinks them.
-          let rendered = layer.hasRenderableEffects
-            ? AppearanceRenderer.planes(for: layer) : ([], .zero)
+          let rendered:
+            (planes: [EffectPlane], origin: CGPoint, fill: UIImage?, fillOrigin: CGPoint) =
+              layer.hasRenderableEffects
+              ? AppearanceRenderer.appearance(for: layer) : ([], .zero, nil, .zero)
           AppearanceRenderer.draw(
             planes: rendered.planes, under: true, origin: rendered.origin,
             layerOpacity: layer.opacity)
-          layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.fillAlpha)
+          if let fill = rendered.fill {
+            fill.draw(
+              in: CGRect(origin: rendered.fillOrigin, size: fill.size),
+              blendMode: .normal, alpha: layer.fillAlpha)
+          } else {
+            layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.fillAlpha)
+          }
           AppearanceRenderer.draw(
             planes: rendered.planes, under: false, origin: rendered.origin,
             layerOpacity: layer.opacity)

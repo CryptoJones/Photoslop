@@ -125,6 +125,17 @@ what it was doing to #227.
   Neon, Letterpress, Chrome, Soft Focus — and picking one replaces the stack,
   as it does there. The canvas previews every change live; **Apply** commits
   the whole edit as one undo step and **Cancel** puts the layer back.
+- **Gaussian Blur** and **Feather** are the two kinds that *replace* the fill
+  rather than drawing a plane beside it: they blur the layer's own pixels. The
+  stack is walked in order, so a blur placed below a drop shadow means the
+  shadow is cast by the blurred silhouette, while the same blur above it
+  softens only the artwork and leaves the shadow sharp. Feather differs from
+  blur in taking opacity away only — it never grows the silhouette, so a
+  feathered layer stays inside its own bounds. Both are the desktop's own
+  `npimage.gaussian_blur`, run in row bands with a halo so the transient is
+  bounded by the radius rather than by the canvas (#347), and proven
+  word-for-word identical to the desktop by
+  `scripts/gen-fill-override-fixture.py` (#372).
 - Effects are never baked into the layer. They are re-drawn from the type each
   time it is composited, so Edit Text, Fit Text and Move Text keep them; they
   are included in Flatten, in every export, and in the document preview; and

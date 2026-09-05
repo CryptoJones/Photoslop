@@ -188,6 +188,141 @@ enum AppearanceRenderer {
     return result
   }
 
+  /// `npimage._box_sum` along one axis: the sum of each (2r+1)-wide window,
+  /// the window truncated at the edges with zero outside rather than the edge
+  /// value repeated. Exact in Int64, which is what lets the banded blur below
+  /// be bit-identical to the same maths run over a whole image.
+  static func boxSum(
+    _ values: [Int64], width: Int, height: Int, radius: Int, vertical: Bool
+  ) -> [Int64] {
+    let count = vertical ? height : width
+    guard count > 0 else { return values }
+    var out = [Int64](repeating: 0, count: values.count)
+    let lanes = vertical ? width : height
+    var prefix = [Int64](repeating: 0, count: count + 1)
+    for lane in 0..<lanes {
+      // One column (vertical) or one row (horizontal), as a running sum.
+      for i in 0..<count {
+        let index = vertical ? i * width + lane : lane * width + i
+        prefix[i + 1] = prefix[i] + values[index]
+      }
+      for i in 0..<count {
+        let hi = min(count, i + radius + 1)
+        let lo = max(0, i - radius)
+        let index = vertical ? i * width + lane : lane * width + i
+        out[index] = prefix[hi] - prefix[lo]
+      }
+    }
+    return out
+  }
+
+  /// `npimage.gaussian_blur`: a triple box blur over all four premultiplied
+  /// channels, in row bands with a 3r halo.
+  ///
+  /// Banded on purpose, and this is the answer to the memory question #372
+  /// asked. The desktop hit the same wall in #347 and solved it here rather
+  /// than by rendering at reduced scale: the three vertical passes are exact
+  /// Int64 window sums, so where a band boundary falls cannot change the
+  /// result, and the horizontal passes are per-row and cannot see a boundary
+  /// at all. The transient is therefore bounded by the band plus its halo —
+  /// by the radius, not by the picture — while the output stays identical to
+  /// the whole-image maths, which is what keeps desktop parity intact.
+  ///
+  /// The halo above a band must come from a carry of the ORIGINAL rows: each
+  /// band is written before the next is computed, so reading those rows back
+  /// out of the buffer would blur the blur.
+  static func blurRGBA(_ buffer: PixelBuffer, radius: Int) -> PixelBuffer {
+    let r = max(1, radius / 2 + 1)
+    let width = buffer.width, height = buffer.height
+    guard width > 0, height > 0 else { return buffer }
+    var out = buffer
+    let halo = 3 * r
+    let divisor = Double(pow(Double(2 * r + 1), 6.0))
+
+    PixelBuffer.forEachBand(height: height) { band in
+      let top = max(0, band.lowerBound - halo)
+      let bottom = min(height, band.upperBound + halo)
+      let rows = bottom - top
+      // The source rows for this band come from the untouched original.
+      var plane = [Int64](repeating: 0, count: width * rows)
+      for shift in [UInt32(24), 16, 8, 0] {
+        buffer.withWords { words in
+          for y in 0..<rows {
+            let src = (top + y) * width
+            let dst = y * width
+            for x in 0..<width {
+              plane[dst + x] = Int64((words[src + x] >> shift) & 0xFF)
+            }
+          }
+        }
+        var work = plane
+        for _ in 0..<3 {
+          work = boxSum(work, width: width, height: rows, radius: r, vertical: true)
+        }
+        // Crop to the band before the horizontal passes, exactly as the
+        // desktop does: the halo has served its purpose vertically and the
+        // horizontal passes cannot see a row boundary.
+        let bandTop = band.lowerBound - top
+        let bandRows = band.count
+        var cropped = [Int64](repeating: 0, count: width * bandRows)
+        for y in 0..<bandRows {
+          let src = (bandTop + y) * width
+          let dst = y * width
+          for x in 0..<width { cropped[dst + x] = work[src + x] }
+        }
+        for _ in 0..<3 {
+          cropped = boxSum(cropped, width: width, height: bandRows, radius: r, vertical: false)
+        }
+        out.withMutableWords { words in
+          for y in 0..<bandRows {
+            let dst = (band.lowerBound + y) * width
+            let src = y * width
+            for x in 0..<width {
+              let value = UInt32(
+                max(0, min(255, Int((Double(cropped[src + x]) / divisor).rounded()))))
+              let keep = words[dst + x] & ~(UInt32(0xFF) << shift)
+              words[dst + x] = keep | (value << shift)
+            }
+          }
+        }
+      }
+    }
+    return out
+  }
+
+  /// `appearance.render`'s feather branch: blur, then keep the *lesser* of the
+  /// blurred and the original alpha.
+  ///
+  /// That minimum is the whole difference between feather and blur. A blur
+  /// grows the silhouette outward; feather may only eat into it, so a
+  /// feathered layer stays inside its own bounds and reads as a softened edge
+  /// rather than a halo.
+  ///
+  /// The colour is rescaled to the alpha that survives, because the buffer is
+  /// premultiplied: leaving the blurred colour against a reduced alpha would
+  /// brighten the edge as it faded. The arithmetic is deliberately Double and
+  /// deliberately truncating — numpy promotes `uint32 / float32` to float64
+  /// and `astype(uint32)` truncates toward zero, and a rounded Float here
+  /// would disagree with the desktop by one in the last place.
+  static func featherRGBA(_ buffer: PixelBuffer, radius: Int) -> PixelBuffer {
+    var out = blurRGBA(buffer, radius: radius)
+    out.withMutableWords { words in
+      buffer.withWords { original in
+        for index in 0..<words.count {
+          let blurredAlpha = (words[index] >> 24) & 0xFF
+          let originalAlpha = (original[index] >> 24) & 0xFF
+          let target = min(blurredAlpha, originalAlpha)
+          let scale = Double(target) / Double(max(blurredAlpha, 1))
+          let red = UInt32(Double((words[index] >> 16) & 0xFF) * scale)
+          let green = UInt32(Double((words[index] >> 8) & 0xFF) * scale)
+          let blue = UInt32(Double(words[index] & 0xFF) * scale)
+          words[index] = (target << 24) | (red << 16) | (green << 8) | blue
+        }
+      }
+    }
+    return out
+  }
+
   /// `appearance._morph`: threshold at 1, then dilate or erode `amount`
   /// times with a 3x3 structuring element, back to a 0/255 plane.
   static func morph(_ plane: AlphaPlane, amount: Int, grow: Bool) -> AlphaPlane {
@@ -539,18 +674,108 @@ enum AppearanceRenderer {
 
   /// The planes for a layer, or an empty list when it has no enabled,
   /// renderable effect or nothing opaque to cast them from.
-  static func planes(for layer: RasterLayer) -> (planes: [EffectPlane], origin: CGPoint) {
+  /// Zero-padding an RGBA buffer on all four sides.
+  ///
+  /// Padding once, up front, by the total reach of every fill-replacing
+  /// effect is equivalent to the desktop's padding before each one in turn:
+  /// its box sums truncate the window at the array edge with zero outside,
+  /// which *is* zero-padding, so growing the canvas earlier cannot change the
+  /// interior. Doing it once leaves every plane and the replacement fill in
+  /// one coordinate space instead of a different one per effect.
+  static func paddedRGBA(_ buffer: PixelBuffer, pad: Int) -> PixelBuffer {
+    guard pad > 0 else { return buffer }
+    let width = buffer.width + pad * 2
+    let height = buffer.height + pad * 2
+    var out = PixelBuffer(width: width, height: height, words: [UInt32](repeating: 0, count: width * height))
+    buffer.withWords { words in
+      out.withMutableWords { target in
+        for y in 0..<buffer.height {
+          let src = y * buffer.width
+          let dst = (y + pad) * width + pad
+          for x in 0..<buffer.width { target[dst + x] = words[src + x] }
+        }
+      }
+    }
+    return out
+  }
+
+  /// The alpha channel of an RGBA buffer as the plane pipeline's input.
+  static func alphaPlane(of buffer: PixelBuffer) -> AlphaPlane {
+    var plane = AlphaPlane(width: buffer.width, height: buffer.height)
+    buffer.withWords { words in
+      for index in 0..<words.count { plane.values[index] = Float((words[index] >> 24) & 0xFF) }
+    }
+    return plane
+  }
+
+  /// Everything a layer's effect stack contributes to the composite: the
+  /// planes drawn around the fill, and — new in #372 — a replacement *for* the
+  /// fill when the stack carries Gaussian Blur or Feather.
+  ///
+  /// The stack is walked in order, because order is meaningful. A blur placed
+  /// before a drop shadow means the shadow is cast by the blurred silhouette;
+  /// placed after, the shadow is cast by the sharp one and only the artwork
+  /// softens. Computing every plane from one alpha, as this did before fill
+  /// replacement existed, would silently pick one of those readings and be
+  /// wrong about the other.
+  static func appearance(for layer: RasterLayer) -> (
+    planes: [EffectPlane], origin: CGPoint, fill: UIImage?, fillOrigin: CGPoint
+  ) {
     let active = layer.effects.filter {
-      $0.enabled && LayerEffect.renderableKinds.contains($0.kind)
+      $0.enabled && LayerEffect.drawnKinds.contains($0.kind)
     }
-    guard !active.isEmpty, let source = sourcePlane(of: layer.image, effects: active) else {
-      return ([], .zero)
+    guard !active.isEmpty else { return ([], .zero, nil, .zero) }
+
+    let overrides = active.filter { LayerEffect.fillOverrideKinds.contains($0.kind) }
+    if overrides.isEmpty {
+      // The fast path, unchanged: crop to the opaque box plus the stack's
+      // reach, which is much smaller than the canvas for a text layer.
+      guard let source = sourcePlane(of: layer.image, effects: active) else {
+        return ([], .zero, nil, .zero)
+      }
+      return (
+        render(alpha: source.plane, effects: active),
+        CGPoint(
+          x: layer.origin.x + CGFloat(source.originX),
+          y: layer.origin.y + CGFloat(source.originY)),
+        nil, .zero
+      )
     }
-    let planes = render(alpha: source.plane, effects: active)
-    return (
-      planes,
-      CGPoint(
-        x: layer.origin.x + CGFloat(source.originX), y: layer.origin.y + CGFloat(source.originY))
-    )
+
+    guard var source = PixelBuffer(image: layer.image) else { return ([], .zero, nil, .zero) }
+    let pad = overrides.reduce(0) { $0 + max(0, pyRound($1.number("radius")) * 2) }
+    source = paddedRGBA(source, pad: pad)
+
+    var planes: [EffectPlane] = []
+    var run: [LayerEffect] = []
+    func flush() {
+      guard !run.isEmpty else { return }
+      planes += render(alpha: alphaPlane(of: source), effects: run)
+      run.removeAll()
+    }
+    for effect in active {
+      guard LayerEffect.fillOverrideKinds.contains(effect.kind) else {
+        run.append(effect)
+        continue
+      }
+      // A plane run is resolved against the silhouette as it stands *now*,
+      // before this effect changes it.
+      flush()
+      let radius = pyRound(effect.number("radius"))
+      guard radius > 0 else { continue }
+      source =
+        effect.kind == "feather"
+        ? featherRGBA(source, radius: radius) : blurRGBA(source, radius: radius)
+    }
+    flush()
+
+    let origin = CGPoint(x: layer.origin.x - CGFloat(pad), y: layer.origin.y - CGFloat(pad))
+    return (planes, origin, source.makeImage(), origin)
+  }
+
+  /// The pre-#372 entry point, kept for callers that only want the planes.
+  static func planes(for layer: RasterLayer) -> (planes: [EffectPlane], origin: CGPoint) {
+    let rendered = appearance(for: layer)
+    return (rendered.planes, rendered.origin)
   }
 }

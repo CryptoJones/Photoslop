@@ -95,17 +95,21 @@ struct LayerEffect: Codable, Equatable, Identifiable {
     "feather": "Feather",
   ]
 
-  /// The kinds `AppearanceRenderer` draws, in the order the picker offers them.
-  ///
-  /// Gaussian Blur and Feather are the desktop's two *fill-replacing* effects:
-  /// they run `npimage.gaussian_blur` over the layer's RGBA rather than
-  /// colourising its alpha, which is a different algorithm from the plane
-  /// pipeline below. A document carrying one keeps it (the data survives
-  /// untouched) but the iOS composite draws the fill unblurred.
+  /// The kinds drawn as a plane beside the fill, in the order the picker
+  /// offers them. The two that replace the fill instead are below.
   static let renderableKinds = [
     "drop-shadow", "inner-shadow", "outer-glow", "inner-glow", "outline",
     "color-overlay", "gradient-overlay", "bevel-emboss",
   ]
+
+  /// The two kinds that replace the fill instead of adding a plane beside it
+  /// (#372). They blur the layer's premultiplied RGBA rather than colourising
+  /// its alpha, which is a different algorithm and a different place in the
+  /// composite — hence their own list.
+  static let fillOverrideKinds = ["gaussian-blur", "feather"]
+
+  /// Everything the composite draws: planes and fill replacement together.
+  static let drawnKinds = renderableKinds + fillOverrideKinds
 
   /// `photoslop.layer.BLEND_MODES`' names, in the desktop's order.
   static let blendModes = [
