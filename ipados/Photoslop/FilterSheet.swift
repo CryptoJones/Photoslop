@@ -91,6 +91,13 @@ struct FilterSheet: View {
           Text(option.capitalized).tag(option)
         }
       }
+    case .string(let fallback):
+      LabeledContent(spec.label) {
+        TextField(spec.label, text: stringBinding(spec.name, fallback: fallback))
+          .multilineTextAlignment(.trailing)
+          .autocorrectionDisabled()
+          .textInputAutocapitalization(.never)
+      }
       .accessibilityIdentifier("Filter \(spec.name)")
     }
   }
@@ -111,6 +118,12 @@ struct FilterSheet: View {
     Binding(
       get: { values.choice(name, default: fallback) },
       set: { values[name] = .choice($0) })
+  }
+
+  private func stringBinding(_ name: String, fallback: String) -> Binding<String> {
+    Binding(
+      get: { values.string(name, default: fallback) },
+      set: { values[name] = .string($0) })
   }
 }
 

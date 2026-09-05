@@ -97,6 +97,36 @@ enum AppearanceRenderer {
     return (plane, x0, y0)
   }
 
+  /// Full-size working buffers an effect stack holds at once, in layer-buffer
+  /// units, for the memory budget (#354, #372).
+  ///
+  /// This is what made the Effects sheet text-only until now. A text layer's
+  /// source plane is a tight box around its glyphs, but a photo layer's is the
+  /// whole canvas — a `Float` alpha plane the size of the document, plus a
+  /// working copy, plus one colour buffer per plane, all alive together. On a
+  /// 4K canvas that is tens of megabytes each, which is fine on an iPad and is
+  /// the jetsam risk #309 and #311 were about on a 3 GB iPhone.
+  ///
+  /// So the stack is measured and put through the same budget every other
+  /// allocation door in the app goes through, rather than the sheet being
+  /// withheld from raster layers on the assumption that it would always be too
+  /// expensive. Most stacks on most documents fit; the ones that do not are
+  /// refused out loud instead of being discovered by a jetsam kill.
+  static func transientLayers(for effects: [LayerEffect]) -> Int {
+    let drawn = effects.filter { $0.enabled && LayerEffect.drawnKinds.contains($0.kind) }
+    guard !drawn.isEmpty else { return 0 }
+    let planes = drawn.filter { LayerEffect.renderableKinds.contains($0.kind) }.count
+    // the alpha plane, one working copy the blur and morphology pass through,
+    // and the finished colour buffer of every plane, which is held until the
+    // whole stack has been drawn
+    var buffers = 2 + planes
+    if drawn.contains(where: { LayerEffect.fillOverrideKinds.contains($0.kind) }) {
+      // the padded RGBA source and the blur's output, both larger than the layer
+      buffers += 3
+    }
+    return buffers
+  }
+
   /// `appearance.effect_margin`: how far any of these effects can reach
   /// beyond the layer.
   static func margin(of effects: [LayerEffect]) -> Int {

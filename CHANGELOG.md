@@ -4,6 +4,43 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.33.0] — 2026-09-05
+
+### Added
+- **Gaussian Blur and Feather draw on iOS** (#372). The desktop's two
+  fill-replacing effects: they blur the layer's premultiplied RGBA and hand
+  back a replacement fill instead of adding a plane beside it. The blur is
+  `npimage.gaussian_blur` run in row bands with a 3r halo — the memory answer
+  #372 asked for, taken from #347 rather than from the issue's own suggestions,
+  because banding keeps the output identical where a reduced-scale render would
+  have cost desktop parity. Feather keeps the lesser of the blurred and
+  original alpha, so it only eats into a silhouette and never grows one. The
+  effect stack is now walked in order: a blur below a drop shadow means the
+  shadow is cast by the blurred silhouette, above it the shadow stays sharp.
+- **Effects on raster and photo layers** (#372), from the Layers panel. The
+  model, archive and renderer were always layer-agnostic; the entry point was
+  not. A photo layer's effect planes are the whole canvas rather than a box
+  around some glyphs, so the stack is measured and put through the same memory
+  budget every other allocation door uses (#354) — refused out loud instead of
+  discovered as a jetsam kill.
+- **Beam Dither on iOS** (#385), the eighth built-in filter: six
+  error-diffusion kernels, Bayer ordered dithering, and the CRT beam model,
+  with `mono` / `tonal` / `color` inking. Proven word for word against the
+  desktop twice over — `scripts/gen-dither-fixture.py` for the engine and seven
+  new `gen-filter-fixture.py` cases for the whole filter. Free-text `#RRGGBB`
+  filter parameters are new, for the tri-tone inks.
+
+### Fixed
+- **Two precision cliffs in `photoslop.dither`**, both found by the iOS port
+  being unable to reproduce the engine. `beam_mask` built its row index as
+  `float32`, losing ~1e-7 of a phase that a cosine turns into coverage, and
+  `error_diffuse` returned a `float32` plane while every other function in the
+  module returns `float64` — at two levels its values are 0 and 1 and it held
+  them exactly, but at four a third came back as `0.3333333432674408`. Both are
+  invisible in a single render and each is exactly enough to light a different
+  pixel. `filters.BeamDitherFilter` now conditions in `float64` for the same
+  reason: every stage feeds a quantiser.
+
 ## [2.32.0] — 2026-09-05
 
 ### Added

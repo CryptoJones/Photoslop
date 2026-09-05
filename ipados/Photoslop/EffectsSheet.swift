@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import SwiftUI
 
-/// The **Effects…** sheet: a text layer's live appearance stack, edited as a
+/// The **Effects…** sheet: a layer's live appearance stack, edited as a
 /// draft that the canvas previews and Apply commits as one undo step (#316).
 ///
 /// The list is the desktop appearance panel's shape — an ordered stack with

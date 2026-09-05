@@ -486,6 +486,14 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     return available > layerBytes * (count + 1) + reserve
   }
 
+  /// Whether a layer's effect stack can be rendered within the memory budget
+  /// (#372). Raster layers are the reason this exists — their source plane is
+  /// the whole canvas rather than a tight box around some glyphs.
+  func canAffordEffects(for layer: RasterLayer) -> Bool {
+    Self.canAffordLayers(
+      1 + AppearanceRenderer.transientLayers(for: layer.effects), canvas: canvasSize)
+  }
+
   /// The refusal shown when a memory budget check says no (#354): the same
   /// honest stop the batch importer makes, for every other allocation door.
   static let memoryRefusal =

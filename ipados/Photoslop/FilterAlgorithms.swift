@@ -642,3 +642,170 @@ enum FilterAlgorithms {
     }
   }
 }
+
+// MARK: - Beam Dither (#385)
+
+extension FilterAlgorithms {
+  /// `#RRGGBB` (or `RRGGBB`, or `#RGB`) to a 0-255 triple, falling back rather
+  /// than failing: these come from a free-text field, and a half-typed colour
+  /// must not abort a render the user is watching.
+  static func hexRGB(_ text: String, fallback: (Int, Int, Int)) -> (Int, Int, Int) {
+    var raw = text.trimmingCharacters(in: .whitespaces)
+    if raw.hasPrefix("#") { raw.removeFirst() }
+    if raw.count == 3 { raw = raw.map { "\($0)\($0)" }.joined() }
+    guard raw.count == 6, let value = Int(raw, radix: 16) else { return fallback }
+    return ((value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF)
+  }
+
+  /// `photoslop.filters.BeamDitherFilter`: condition, render, ink.
+  ///
+  /// The engine is `Dither`, which is fixture-proven identical to the desktop.
+  /// What lives here is the surrounding pipeline — luminance, the cell-size
+  /// downsample that makes a dither read as chunky, and the inking.
+  static func beamDither(_ buffer: inout PixelBuffer, params: FilterParams) {
+    let width = buffer.width, height = buffer.height
+    guard width > 0, height > 0 else { return }
+
+    let algorithm = params.choice("algorithm", default: "beam")
+    let mode = params.choice("mode", default: "mono")
+    let scale = max(1, params.int("scale", default: 3))
+    let levels = max(2, params.int("levels", default: 2))
+
+    var alpha = [UInt32](repeating: 0, count: width * height)
+    var luma = [Double](repeating: 0, count: width * height)
+    var straight = [(Double, Double, Double)](repeating: (0, 0, 0), count: width * height)
+    buffer.withWords { words in
+      for index in 0..<words.count {
+        let a = (words[index] >> 24) & 0xFF
+        alpha[index] = a
+        // Straight, not premultiplied: statistics over premultiplied values
+        // are pulled toward zero by any partial alpha, so a soft-edged layer
+        // would dither differently from the same pixels at full opacity.
+        let factor = a == 0 ? 0.0 : 255.0 / Double(a)
+        let r = min(255.0, Double((words[index] >> 16) & 0xFF) * factor)
+        let g = min(255.0, Double((words[index] >> 8) & 0xFF) * factor)
+        let b = min(255.0, Double(words[index] & 0xFF) * factor)
+        straight[index] = (r, g, b)
+        luma[index] = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+      }
+    }
+
+    func condition(_ plane: [Double]) -> [Double] {
+      let brightness = Double(params.int("brightness", default: 0)) / 100.0
+      let contrast = Double(params.int("contrast", default: 0)) / 100.0
+      var out = plane.map { min(1.0, max(0.0, $0 + brightness)) }
+      if contrast != 0 {
+        // Pivoted on mid grey, so contrast opens the range rather than also
+        // shifting its centre the way a plain multiply would.
+        let gain = contrast > 0 ? (1.0 + contrast) : (1.0 / (1.0 - contrast))
+        out = out.map { min(1.0, max(0.0, ($0 - 0.5) * gain + 0.5)) }
+      }
+      return out
+    }
+
+    /// Block-average by the cell size: the algorithm sees one value per cell,
+    /// so a cell is on or off as a whole instead of dissolving into per-pixel
+    /// noise. This is what makes a dither read as chunky.
+    func render(_ plane: [Double]) -> [Double] {
+      let cols = max(1, width / scale), rows = max(1, height / scale)
+      var small = [Double](repeating: 0, count: cols * rows)
+      if scale <= 1 {
+        small = plane
+      } else {
+        for y in 0..<rows {
+          for x in 0..<cols {
+            var total = 0.0
+            for dy in 0..<scale {
+              for dx in 0..<scale { total += plane[(y * scale + dy) * width + x * scale + dx] }
+            }
+            small[y * cols + x] = total / Double(scale * scale)
+          }
+        }
+      }
+      let smallWidth = scale <= 1 ? width : cols
+      let smallHeight = scale <= 1 ? height : rows
+
+      let tone: [Double]
+      if algorithm == "beam" {
+        let coverage = Dither.beamMask(
+          small, width: smallWidth, height: smallHeight,
+          pitch: params.int("beam_pitch", default: 6),
+          amplitude: params.float("beam_amplitude", default: 1.5))
+        // The beam's shoulders are soft; dithering them keeps the render
+        // honestly two-tone, so a beam thins into dots leaving the light
+        // instead of fading to grey.
+        tone =
+          levels <= 2
+          ? Dither.orderedDither(
+            coverage, width: smallWidth, height: smallHeight, size: 4, levels: 2)
+          : Dither.quantise(coverage, levels: levels)
+      } else if algorithm.hasPrefix("bayer-") {
+        tone = Dither.orderedDither(
+          small, width: smallWidth, height: smallHeight,
+          size: Int(algorithm.dropFirst("bayer-".count)) ?? 4, levels: levels)
+      } else if algorithm == "threshold" {
+        tone = Dither.quantise(small, levels: levels)
+      } else {
+        tone = Dither.errorDiffuse(
+          small, width: smallWidth, height: smallHeight, kernel: algorithm, levels: levels)
+      }
+
+      guard scale > 1 else { return tone }
+      // Nearest-neighbour back up, never smooth: interpolation would
+      // reintroduce the intermediate tones the dither just removed.
+      var grown = [Double](repeating: 0, count: width * height)
+      for y in 0..<height {
+        let sy = min(smallHeight - 1, y / scale)
+        for x in 0..<width {
+          grown[y * width + x] = tone[sy * smallWidth + min(smallWidth - 1, x / scale)]
+        }
+      }
+      return grown
+    }
+
+    var red = [Double](repeating: 0, count: width * height)
+    var green = red
+    var blue = red
+    if mode == "color" {
+      red = render(condition(straight.map { $0.0 / 255.0 })).map { $0 * 255.0 }
+      green = render(condition(straight.map { $0.1 / 255.0 })).map { $0 * 255.0 }
+      blue = render(condition(straight.map { $0.2 / 255.0 })).map { $0 * 255.0 }
+    } else {
+      let conditioned = condition(luma)
+      let tone = render(conditioned)
+      let background = hexRGB(params.string("background", default: "#000000"), fallback: (0, 0, 0))
+      let highlights = hexRGB(
+        params.string("highlights", default: "#FFFFFF"), fallback: (255, 255, 255))
+      let midtones = hexRGB(params.string("midtones", default: "#B0B0B0"), fallback: (176, 176, 176))
+      let shadows = hexRGB(params.string("shadows", default: "#5A5A5A"), fallback: (90, 90, 90))
+      for index in 0..<tone.count {
+        // Tri-tone picks the ink from the ORIGINAL luminance beneath the
+        // pixel, not from the rendered value: deciding from the rendered
+        // value would collapse every lit pixel onto one ink.
+        let ink: (Int, Int, Int)
+        if mode == "tonal" {
+          let band = conditioned[index]
+          ink = band < 1.0 / 3.0 ? shadows : (band < 2.0 / 3.0 ? midtones : highlights)
+        } else {
+          ink = highlights
+        }
+        red[index] = Double(background.0) + (Double(ink.0) - Double(background.0)) * tone[index]
+        green[index] = Double(background.1) + (Double(ink.1) - Double(background.1)) * tone[index]
+        blue[index] = Double(background.2) + (Double(ink.2) - Double(background.2)) * tone[index]
+      }
+    }
+
+    buffer.withMutableWords { words in
+      for index in 0..<words.count {
+        let a = alpha[index]
+        let scaleA = Double(a) / 255.0
+        func channel(_ value: Double) -> UInt32 {
+          UInt32(max(0, min(255, Int((value * scaleA).rounded()))))
+        }
+        words[index] =
+          (a << 24) | (channel(red[index]) << 16) | (channel(green[index]) << 8)
+          | channel(blue[index])
+      }
+    }
+  }
+}
