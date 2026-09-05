@@ -36,7 +36,7 @@ final class FilterParityTests: XCTestCase {
 
   /// Every fixture case, every filter, word for word.
   func testEveryFixtureCaseMatchesTheDesktop() throws {
-    XCTAssertEqual(FilterFixture.cases.count, 23)
+    XCTAssertEqual(FilterFixture.cases.count, 30)
     var covered = Set<FilterKind>()
     for testCase in FilterFixture.cases {
       let kind = try XCTUnwrap(FilterKind(rawValue: testCase.filter), "filter \(testCase.filter)")
@@ -175,8 +175,20 @@ final class FilterParityTests: XCTestCase {
       ])
     XCTAssertEqual(FilterKind.filmNegative.defaults, ["mode": .choice("auto"), "clip": .float(0.5)])
     XCTAssertEqual(
+      FilterKind.beamDither.defaults,
+      [
+        "algorithm": .choice("beam"), "mode": .choice("mono"), "scale": .int(3),
+        "levels": .int(2), "brightness": .int(0), "contrast": .int(0),
+        "beam_pitch": .int(6), "beam_amplitude": .float(1.5),
+        "highlights": .string("#FFFFFF"), "midtones": .string("#B0B0B0"),
+        "shadows": .string("#5A5A5A"), "background": .string("#000000"),
+      ])
+    XCTAssertEqual(
       FilterKind.allCases.map(\.rawValue),
-      ["sepia", "pixelate", "denoise", "retro-console", "pixel-sort", "datamosh", "film-negative"])
+      [
+        "sepia", "pixelate", "denoise", "retro-console", "pixel-sort", "datamosh",
+        "film-negative", "beam-dither",
+      ])
   }
 
   // MARK: - Through the store

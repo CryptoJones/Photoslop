@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import SwiftUI
 
-/// The **Effects…** sheet: a text layer's live appearance stack, edited as a
+/// The **Effects…** sheet: a layer's live appearance stack, edited as a
 /// draft that the canvas previews and Apply commits as one undo step (#316).
 ///
 /// The list is the desktop appearance panel's shape — an ordered stack with
@@ -163,6 +163,19 @@ struct EffectEditor: View {
           number("Soften", key: "soften", in: 0...20)
           number("Light Angle", key: "angle", in: 0...360, unit: "°")
           number("Altitude", key: "altitude", in: 0...90, unit: "°")
+        case "gaussian-blur", "feather":
+          // The two fill-replacing kinds (#372): they blur the layer's own
+          // pixels rather than adding a plane, so radius is all there is.
+          number("Radius", key: "radius", in: 0...100)
+          Text(
+            effect.kind == "feather"
+              ? "Softens the edge inward. Feather only takes opacity away, so the "
+                + "layer never grows beyond its own bounds."
+              : "Blurs the layer's own pixels. Effects above and below it in the "
+                + "stack still draw from the silhouette as it stands at their turn."
+          )
+          .font(.footnote)
+          .foregroundStyle(.secondary)
         default:
           Text("This effect is kept with the document but is not drawn on iOS.")
             .foregroundStyle(.secondary)

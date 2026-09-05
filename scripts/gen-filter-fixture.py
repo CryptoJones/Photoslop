@@ -106,6 +106,63 @@ INPUTS = [
 
 # (filter name, case name, input name, params, what the case proves)
 CASES = [
+    (
+        "beam-dither",
+        "beam",
+        "gradient16",
+        {"algorithm": "beam", "scale": 1, "beam_pitch": 6, "beam_amplitude": 1.5},
+        "beam modulation: the raster is deflected and its shoulders stippled",
+    ),
+    (
+        "beam-dither",
+        "beam-straight",
+        "gradient22",
+        {"algorithm": "beam", "scale": 3, "beam_amplitude": 0.0, "beam_pitch": 5},
+        "no displacement: pure scanlines, and a cell size that is not a divisor",
+    ),
+    (
+        "beam-dither",
+        "floyd",
+        "gradient16",
+        {"algorithm": "floyd-steinberg", "scale": 1},
+        "serpentine error diffusion over the whole plane",
+    ),
+    (
+        "beam-dither",
+        "atkinson-4",
+        "gradient22",
+        {"algorithm": "atkinson", "scale": 2, "levels": 4},
+        "the 6/8 kernel at four tones, where the thirds are not exact in float32",
+    ),
+    (
+        "beam-dither",
+        "bayer8",
+        "gradient16",
+        {"algorithm": "bayer-8", "scale": 1, "levels": 3},
+        "ordered dithering between adjacent tones",
+    ),
+    (
+        "beam-dither",
+        "tonal",
+        "gradient16",
+        {
+            "algorithm": "floyd-steinberg",
+            "scale": 1,
+            "mode": "tonal",
+            "background": "#000000",
+            "shadows": "#0B3C5D",
+            "midtones": "#6CCFF6",
+            "highlights": "#FFFFFF",
+        },
+        "tri-tone inking, chosen by the original luminance under each pixel",
+    ),
+    (
+        "beam-dither",
+        "colour",
+        "gradient22",
+        {"algorithm": "floyd-steinberg", "scale": 2, "mode": "color"},
+        "each channel dithered on its own",
+    ),
     ("sepia", "default", "gradient16", {"amount": 80}, "the default 80% tone"),
     ("sepia", "full", "gradient16", {"amount": 100}, "a full tone, where the R clamp bites"),
     ("sepia", "off", "gradient16", {"amount": 0}, "amount 0 leaves every word alone"),
@@ -235,11 +292,13 @@ def words(arr: np.ndarray) -> str:
     return "\n".join(rows)
 
 
-def swift_params(params: dict) -> str:
+def swift_params(params: dict, cls=None) -> str:
+    kinds = {spec.key: spec.type for spec in (cls.params if cls else ())}
     parts = []
     for key, value in params.items():
         if isinstance(value, str):
-            parts.append(f'"{key}": .choice("{value}")')
+            case = "string" if kinds.get(key) == "str" else "choice"
+            parts.append(f'"{key}": .{case}("{value}")')
         elif isinstance(value, float):
             parts.append(f'"{key}": .float({value!r})')
         else:
@@ -294,7 +353,7 @@ def main() -> int:
         out += [
             f"    // {doc}",
             f'    Case(filter: "{filter_name}", name: "{case_name}", input: "{input_name}",',
-            f"      params: {swift_params(params)},",
+            f"      params: {swift_params(params, cls)},",
             "      expected: [",
             words(result),
             "    ]),",

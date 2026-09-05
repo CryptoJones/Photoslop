@@ -749,7 +749,11 @@ class BeamDitherFilter(Filter):
         levels = max(2, int(params.get("levels", 2)))
 
         def conditioned(channel: np.ndarray) -> np.ndarray:
-            plane = channel.astype(np.float32) / 255.0
+            # float64 end to end, matching `photoslop.dither`. Every stage
+            # here feeds a quantiser, so a float32 cliff anywhere in the chain
+            # does not soften a value, it lights a different pixel — which is
+            # what stopped the iOS port (#385) reproducing this filter.
+            plane = channel.astype(np.float64) / 255.0
             return self._condition(plane, params, _blur_plane)
 
         def rendered(plane: np.ndarray) -> np.ndarray:
@@ -770,9 +774,9 @@ class BeamDitherFilter(Filter):
             new_b = np.rint(out_b * 255.0).astype(np.int32)
         else:
             luma = (
-                0.299 * red.astype(np.float32)
-                + 0.587 * green.astype(np.float32)
-                + 0.114 * blue.astype(np.float32)
+                0.299 * red.astype(np.float64)
+                + 0.587 * green.astype(np.float64)
+                + 0.114 * blue.astype(np.float64)
             ) / 255.0
             conditioned_luma = self._condition(luma, params, _blur_plane)
             tone = rendered(conditioned_luma)
@@ -799,13 +803,15 @@ class BeamDitherFilter(Filter):
 
         blur = int(params.get("blur", 0))
         if blur > 0:
-            plane = blur_plane(plane.astype(np.float32), blur)
+            plane = blur_plane(plane.astype(np.float32), blur).astype(np.float64)
 
         sharpen = float(params.get("sharpen", 0)) / 100.0
         if sharpen > 0:
             radius = max(1, int(params.get("sharpen_radius", 2)))
             # Unsharp mask: the picture plus its own missing high frequencies.
-            low = blur_plane(plane.astype(np.float32), radius)
+            # npimage's box blur is a float32 helper; the result comes back
+            # into float64 so the rest of the chain stays in one dtype.
+            low = blur_plane(plane.astype(np.float32), radius).astype(np.float64)
             plane = np.clip(plane + sharpen * (plane - low), 0.0, 1.0)
 
         noise = int(params.get("noise", 0))
@@ -815,13 +821,13 @@ class BeamDitherFilter(Filter):
             # stack lie about what it was restoring.
             rng = np.random.default_rng(0x0D17)
             plane = np.clip(
-                plane + rng.uniform(-1.0, 1.0, plane.shape).astype(np.float32) * (noise / 200.0),
+                plane + rng.uniform(-1.0, 1.0, plane.shape) * (noise / 200.0),
                 0.0,
                 1.0,
             )
         elif noise < 0:
-            plane = blur_plane(plane.astype(np.float32), max(1, -noise // 20))
-        return plane.astype(np.float32)
+            plane = blur_plane(plane.astype(np.float32), max(1, -noise // 20)).astype(np.float64)
+        return plane.astype(np.float64)
 
     @staticmethod
     def _render(plane: np.ndarray, algorithm: str, levels: int, params: dict) -> np.ndarray:

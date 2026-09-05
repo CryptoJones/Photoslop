@@ -8,19 +8,6 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
-- [ ] iOS appearance-effect follow-ups, two of three parts left: the Effects
-  sheet on raster and photo layers (needs banded or budgeted effect planes for
-  canvas-sized alpha) and Gaussian blur / feather rendering (the fill-override
-  kinds). **Fill opacity shipped in v2.31.0**
-  ([#372](https://github.com/CryptoJones/Photoslop/issues/372))
-
-- [ ] Port Beam Dither to the Swift filter library, with a
-  `gen-dither-fixture.py` proving word-for-word parity as the existing seven
-  filters do. Deferred deliberately: #384 was scoped to the desktop app. Error
-  diffusion is the awkward part — it is inherently sequential and will not
-  vectorise over `PixelBuffer`
-  ([#385](https://github.com/CryptoJones/Photoslop/issues/385))
-
 ### Desktop
 
 ### CI
@@ -53,6 +40,17 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] iOS appearance-effect follow-ups, all three parts: fill opacity
+  (v2.31.0), Gaussian Blur and Feather drawn through a banded RGBA blur that
+  keeps desktop parity where a reduced-scale render would have lost it, and the
+  Effects sheet on raster and photo layers behind the same memory budget every
+  other allocation door uses
+  ([#372](https://github.com/CryptoJones/Photoslop/issues/372)) — shipped v2.33.0
+- [x] Beam Dither ported to the Swift filter library, proven word for word
+  against the desktop by both a dedicated engine fixture and seven end-to-end
+  filter cases; the port found and fixed two float32 precision cliffs in the
+  desktop engine
+  ([#385](https://github.com/CryptoJones/Photoslop/issues/385)) — shipped v2.33.0
 - [x] Beam Dither filter — six error-diffusion kernels, Bayer ordered
   dithering, and a CRT beam-modulation mode where the picture deflects a
   scanline raster instead of stippling it; conditioning stage and mono / tonal

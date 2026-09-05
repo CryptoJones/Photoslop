@@ -12,6 +12,7 @@ struct EditorView: View {
   @State private var selectedLayerPhotos: [PhotosPickerItem] = []
   @State private var showLayerPhotosPicker = false
   @State private var pendingLayerPhotoPick = false
+  @State private var pendingEffectsSheet = false
   @State private var isAddingLayerPhotos = false
   @State private var showFileImporter = false
   @State private var showLayerFileImporter = false
@@ -239,7 +240,9 @@ struct EditorView: View {
     .sheet(isPresented: $showAbout) { aboutSheet }
     .sheet(isPresented: $showTextOptions) { textOptionsSheet }
     .sheet(isPresented: $showTextEffects) {
-      if let id = activeTextLayer?.id {
+      // Any layer, not only a text one (#372): the model, the archive and the
+      // renderer were always layer-agnostic; only this entry point was not.
+      if let id = store.activeLayerID {
         EffectsSheet(store: store, layerID: id, isPresented: $showTextEffects)
       }
     }
@@ -415,6 +418,10 @@ struct EditorView: View {
         pendingLayerPhotoPick = false
         showLayerImportOptions = true
       }
+      if pendingEffectsSheet {
+        pendingEffectsSheet = false
+        openEffects()
+      }
     } content: {
       NavigationStack {
         layerSidebar
@@ -482,6 +489,18 @@ struct EditorView: View {
         }
         .disabled(isAddingLayerPhotos)
         .accessibilityLabel("New layer from photo")
+        Button {
+          if isCompact {
+            pendingEffectsSheet = true
+            showLayers = false
+          } else {
+            openEffects()
+          }
+        } label: {
+          Image(systemName: "sparkles")
+        }
+        .disabled(store.activeLayer == nil)
+        .accessibilityLabel("Layer effects")
         Button(action: store.duplicateActiveLayer) {
           Image(systemName: "square.on.square")
         }
@@ -1349,11 +1368,29 @@ struct EditorView: View {
       // follows the words through Edit Text and Move Text (#316). Inside the
       // text submenu on iPhone, so the top level does not grow (#313).
       Button {
-        showTextEffects = true
+        openEffects()
       } label: {
         Label("Effects…", systemImage: "sparkles")
       }
     }
+  }
+
+  /// Open the Effects sheet for the active layer, or refuse out loud.
+  ///
+  /// The budget check is the reason this is a function rather than a flag. A
+  /// text layer's effect planes are a tight box around its glyphs; a photo
+  /// layer's are the whole canvas, and a stack of them on a 4K document is
+  /// tens of megabytes per plane. Every other allocation door in the app is
+  /// measured before it opens (#354) and this one is no different — refusing
+  /// here is an honest stop, where discovering it during a drag is a jetsam
+  /// kill with the document unsaved.
+  private func openEffects() {
+    guard let layer = store.activeLayer else { return }
+    guard store.canAffordEffects(for: layer) else {
+      store.memoryPressureNotice = EditorStore.memoryRefusal
+      return
+    }
+    showTextEffects = true
   }
 
   /// One entry point, with the source chosen in the sheet.

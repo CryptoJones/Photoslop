@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.32.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.33.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -125,6 +125,17 @@ what it was doing to #227.
   Neon, Letterpress, Chrome, Soft Focus — and picking one replaces the stack,
   as it does there. The canvas previews every change live; **Apply** commits
   the whole edit as one undo step and **Cancel** puts the layer back.
+- **Gaussian Blur** and **Feather** are the two kinds that *replace* the fill
+  rather than drawing a plane beside it: they blur the layer's own pixels. The
+  stack is walked in order, so a blur placed below a drop shadow means the
+  shadow is cast by the blurred silhouette, while the same blur above it
+  softens only the artwork and leaves the shadow sharp. Feather differs from
+  blur in taking opacity away only — it never grows the silhouette, so a
+  feathered layer stays inside its own bounds. Both are the desktop's own
+  `npimage.gaussian_blur`, run in row bands with a halo so the transient is
+  bounded by the radius rather than by the canvas (#347), and proven
+  word-for-word identical to the desktop by
+  `scripts/gen-fill-override-fixture.py` (#372).
 - Effects are never baked into the layer. They are re-drawn from the type each
   time it is composited, so Edit Text, Fit Text and Move Text keep them; they
   are included in Flatten, in every export, and in the document preview; and
@@ -506,16 +517,29 @@ the brushes all honour it; the feather rides with it as a weight per pixel.
 
 ### Filters
 
-The **Filters** submenu of **More Actions** holds the seven built-in filters
+The **Filters** submenu of **More Actions** holds the eight built-in filters
 of the desktop **Filters** menu — **Sepia**, **Pixelate**, **Denoise
 (Chroma)**, **Retro Console (8-Bit)**, **Pixel Sort (Glitch)**, **Datamosh +
-Chromatic Aberration** and **Film Negative → Positive** — in the desktop's
-order. Each row opens a sheet built from the same parameters the desktop
+Chromatic Aberration**, **Film Negative → Positive** and **Beam Dither** — in
+the desktop's order. Each row opens a sheet built from the same parameters the desktop
 dialog and `photoslop-cli --filter` take, with the same ranges and defaults:
 an integer is a slider (a 0/1 flag such as Dither is a switch), a float a
 finer slider, a choice a picker. **Apply** runs the filter over the active
 layer as one undo step, named for the filter; **Cancel** changes nothing.
 There is no live preview, as the desktop dialog has none.
+
+**Beam Dither** (#385) is one-bit rendering: six error-diffusion kernels
+(Floyd–Steinberg, Atkinson, Jarvis, Stucki, Sierra, Burkes) scanned serpentine,
+Bayer ordered dithering at 2, 4 and 8, and a **beam** mode that is not a dither
+at all — it draws a raster of horizontal beams and lets the picture deflect
+them the way a CRT's vertical coil is driven by a signal, so the image renders
+as bending, thickening scanlines rather than a cloud of dots. **Cell size** is
+what makes a render read as chunky and is also the cost control, because error
+diffusion is sequential by nature and cannot vectorise the way the other seven
+filters do. **Render mode** inks it: `mono`, `tonal` (tri-tone, the ink chosen
+by the original luminance beneath each pixel) or `color` (each channel dithered
+on its own). The four ink colours are `#RRGGBB` text fields — the first
+free-text filter parameters in the app.
 
 The filters are ports of `photoslop.filters` over the iOS `PixelBuffer`, and
 they produce the *same pixels*, not a similar look: `scripts/gen-filter-fixture.py`

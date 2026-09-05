@@ -8,6 +8,9 @@ enum FilterParamValue: Equatable {
   case int(Int)
   case float(Double)
   case choice(String)
+  /// Free text. Beam Dither's inks are `#RRGGBB`, which is neither a number
+  /// nor a fixed set of options.
+  case string(String)
 }
 
 typealias FilterParams = [String: FilterParamValue]
@@ -35,6 +38,11 @@ extension Dictionary where Key == String, Value == FilterParamValue {
     if case .choice(let value) = self[key] { return value }
     return fallback
   }
+
+  func string(_ key: String, default fallback: String) -> String {
+    if case .string(let value) = self[key] { return value }
+    return fallback
+  }
 }
 
 /// The desktop `ParamSpec`: what the parameter sheet builds a control from.
@@ -43,6 +51,7 @@ struct FilterParamSpec: Identifiable {
     case int(min: Int, max: Int, default: Int)
     case float(min: Double, max: Double, default: Double)
     case choice(options: [String], default: String)
+    case string(default: String)
   }
 
   let name: String
@@ -56,6 +65,7 @@ struct FilterParamSpec: Identifiable {
     case .int(_, _, let value): return .int(value)
     case .float(_, _, let value): return .float(value)
     case .choice(_, let value): return .choice(value)
+    case .string(let value): return .string(value)
     }
   }
 
@@ -77,6 +87,7 @@ enum FilterKind: String, CaseIterable, Identifiable {
   case pixelSort = "pixel-sort"
   case datamosh
   case filmNegative = "film-negative"
+  case beamDither = "beam-dither"
 
   var id: String { rawValue }
 
@@ -90,6 +101,7 @@ enum FilterKind: String, CaseIterable, Identifiable {
     case .pixelSort: return "Pixel Sort (Glitch)"
     case .datamosh: return "Datamosh + Chromatic Aberration"
     case .filmNegative: return "Film Negative → Positive"
+    case .beamDither: return "Beam Dither"
     }
   }
 
@@ -140,6 +152,36 @@ enum FilterKind: String, CaseIterable, Identifiable {
         ),
         FilterParamSpec(name: "clip", label: "Clip (%)", kind: .float(min: 0, max: 5, default: 0.5)),
       ]
+    case .beamDither:
+      return [
+        FilterParamSpec(
+          name: "algorithm", label: "Algorithm",
+          kind: .choice(
+            options: [
+              "beam", "floyd-steinberg", "atkinson", "jarvis", "stucki", "sierra", "burkes",
+              "bayer-2", "bayer-4", "bayer-8", "threshold",
+            ], default: "beam")),
+        FilterParamSpec(
+          name: "mode", label: "Render mode",
+          kind: .choice(options: ["mono", "tonal", "color"], default: "mono")),
+        FilterParamSpec(name: "scale", label: "Cell size", kind: .int(min: 1, max: 32, default: 3)),
+        FilterParamSpec(name: "levels", label: "Tone levels", kind: .int(min: 2, max: 8, default: 2)),
+        FilterParamSpec(
+          name: "brightness", label: "Brightness", kind: .int(min: -100, max: 100, default: 0)),
+        FilterParamSpec(
+          name: "contrast", label: "Contrast", kind: .int(min: -100, max: 100, default: 0)),
+        FilterParamSpec(
+          name: "beam_pitch", label: "Beam pitch", kind: .int(min: 2, max: 64, default: 6)),
+        FilterParamSpec(
+          name: "beam_amplitude", label: "Beam displacement",
+          kind: .float(min: 0, max: 8, default: 1.5)),
+        FilterParamSpec(
+          name: "highlights", label: "Highlights", kind: .string(default: "#FFFFFF")),
+        FilterParamSpec(name: "midtones", label: "Midtones", kind: .string(default: "#B0B0B0")),
+        FilterParamSpec(name: "shadows", label: "Shadows", kind: .string(default: "#5A5A5A")),
+        FilterParamSpec(
+          name: "background", label: "Background", kind: .string(default: "#000000")),
+      ]
     }
   }
 
@@ -157,6 +199,9 @@ enum FilterKind: String, CaseIterable, Identifiable {
     case .datamosh: return 2
     case .retroConsole: return 1
     case .sepia, .pixelate, .pixelSort, .filmNegative: return 0
+    // The luminance plane, the downscaled working plane, and the rendered
+    // tone plane, all Double and all alive together.
+    case .beamDither: return 3
     }
   }
 
@@ -179,6 +224,8 @@ enum FilterKind: String, CaseIterable, Identifiable {
         &buffer, low: params.int("low", default: 60), high: params.int("high", default: 200),
         vertical: params.int("vertical", default: 0) != 0,
         reverse: params.int("reverse", default: 0) != 0)
+    case .beamDither:
+      FilterAlgorithms.beamDither(&buffer, params: params)
     case .datamosh:
       FilterAlgorithms.datamosh(
         &buffer, block: params.int("block", default: 16), amount: params.int("amount", default: 35),

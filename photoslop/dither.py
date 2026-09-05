@@ -145,7 +145,11 @@ def error_diffuse(lum: np.ndarray, kernel: str, levels: int = 2) -> np.ndarray:
     steps = max(2, int(levels)) - 1
 
     rows = [row.tolist() for row in lum.astype(np.float64)]
-    out = np.empty((height, width), dtype=np.float32)
+    # float64 like every other function here returns. float32 was the odd one
+    # out and quietly lossy: at levels=2 its only values are 0 and 1, which it
+    # holds exactly, but at 4 levels a third comes back as 0.3333333432674408
+    # and the plane no longer means quite what the arithmetic computed.
+    out = np.empty((height, width), dtype=np.float64)
     for y in range(height):
         row = rows[y]
         rightwards = y % 2 == 0
@@ -212,7 +216,12 @@ def beam_mask(lum: np.ndarray, pitch: int, amplitude: float, bend: float = 1.0) 
     """
     height, width = lum.shape
     pitch = max(2, int(pitch))
-    rows = np.arange(height, dtype=np.float32).reshape(-1, 1)
+    # float64, not float32: the row index feeds a phase that a cosine turns
+    # into a coverage value, and a float32 divide here throws away about 1e-7
+    # of it for nothing. That is invisible in a single render and is exactly
+    # enough to flip a stippled pixel, which is what stopped the iOS port
+    # (#385) from reproducing this engine until the cliff was removed.
+    rows = np.arange(height, dtype=np.float64).reshape(-1, 1)
     # Phase along the vertical raster, advanced by the signal. `bend` lets the
     # deflection be dialled out entirely (straight scanlines) without losing
     # the intensity modulation.

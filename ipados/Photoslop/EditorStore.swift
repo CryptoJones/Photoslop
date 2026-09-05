@@ -127,7 +127,7 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
 
   /// Whether the composite has effects to draw for this layer.
   var hasRenderableEffects: Bool {
-    effects.contains { $0.enabled && LayerEffect.renderableKinds.contains($0.kind) }
+    effects.contains { $0.enabled && LayerEffect.drawnKinds.contains($0.kind) }
   }
 
   /// What the layer's own pixels are drawn at: both opacities, since fill
@@ -484,6 +484,14 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     guard available > 0 else { return true }
     let layerBytes = Int(canvas.width.rounded()) * Int(canvas.height.rounded()) * 4
     return available > layerBytes * (count + 1) + reserve
+  }
+
+  /// Whether a layer's effect stack can be rendered within the memory budget
+  /// (#372). Raster layers are the reason this exists — their source plane is
+  /// the whole canvas rather than a tight box around some glyphs.
+  func canAffordEffects(for layer: RasterLayer) -> Bool {
+    Self.canAffordLayers(
+      1 + AppearanceRenderer.transientLayers(for: layer.effects), canvas: canvasSize)
   }
 
   /// The refusal shown when a memory budget check says no (#354): the same
@@ -1739,11 +1747,20 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
           // The desktop's draw_layer order: effects under the fill, the
           // fill, effects over it. Planes are rendered here and released
           // with the pool — nothing is kept per layer between composites.
-          let rendered = AppearanceRenderer.planes(for: layer)
+          let rendered = AppearanceRenderer.appearance(for: layer)
           AppearanceRenderer.draw(
             planes: rendered.planes, under: true, origin: rendered.origin,
             layerOpacity: layer.opacity)
-          layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.fillAlpha)
+          // Gaussian Blur and Feather hand back a replacement fill, which is
+          // drawn at its own origin: it is larger than the layer, by the
+          // padding the blur needed to spread into.
+          if let fill = rendered.fill {
+            fill.draw(
+              in: CGRect(origin: rendered.fillOrigin, size: fill.size),
+              blendMode: .normal, alpha: layer.fillAlpha)
+          } else {
+            layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.fillAlpha)
+          }
           AppearanceRenderer.draw(
             planes: rendered.planes, under: false, origin: rendered.origin,
             layerOpacity: layer.opacity)
