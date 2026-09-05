@@ -195,7 +195,11 @@ final class LayerEffectsTests: XCTestCase {
 
   // MARK: The project archive
 
-  func testProjectRoundTripKeepsEffectsAsVersionFour() throws {
+  /// Effects survive the archive, and the manifest version is pinned on
+  /// purpose: a bump has to be a decision about what older documents do, not
+  /// something that happens quietly. Version 4 introduced effects; version 5
+  /// added fill opacity (#372), which is why this now reads 5.
+  func testProjectRoundTripKeepsEffectsAtTheCurrentVersion() throws {
     let (store, id) = try storeWithSquare()
     var glow = try XCTUnwrap(LayerEffect(kind: "outer-glow", parameters: ["size": 9]))
     glow.opacity = 0.5
@@ -208,8 +212,13 @@ final class LayerEffectsTests: XCTestCase {
     let wrapper = try ProjectArchive.encode(try store.snapshot(contentType: .photoslopProject))
     let manifestData = try XCTUnwrap(wrapper.fileWrappers?["manifest.json"]?.regularFileContents)
     let manifest = try JSONDecoder().decode(ProjectManifest.self, from: manifestData)
-    XCTAssertEqual(manifest.version, 4)
-    XCTAssertEqual(ProjectManifest.currentVersion, 4)
+    XCTAssertEqual(manifest.version, ProjectManifest.currentVersion)
+    XCTAssertEqual(
+      ProjectManifest.currentVersion, 5,
+      """
+      the archive format moved — decide what a document written by the previous \
+      version does when this one opens it, then update this number
+      """)
     XCTAssertNil(manifest.layers[0].effects, "a layer with no effects writes no key")
     XCTAssertEqual(manifest.layers[1].effects?.effects, [glow, shadow])
 

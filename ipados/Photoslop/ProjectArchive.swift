@@ -71,7 +71,7 @@ struct ProjectManifest: Codable {
   /// same JSON `photoslop-effects` carries in an `.ora` — so a future ORA
   /// round trip is a copy, not a translation. A version 3 document has none
   /// and decodes with an empty stack, which is what it showed.
-  static let currentVersion = 4
+  static let currentVersion = 5
   static let oldestReadableVersion = 1
 
   var version: Int
@@ -102,6 +102,11 @@ struct ProjectManifest: Codable {
     var origin: PixelPoint?
     /// The layer's live effects, absent when it has none and before version 4.
     var effects: EffectStack?
+    /// Scales the fill without the effects, from version 5. Absent when it is
+    /// 1, and absent from every document written before it existed — which is
+    /// why reading it falls back to 1 rather than to zero, where a missing key
+    /// would otherwise erase the artwork of every layer in an older project.
+    var fillOpacity: Double?
   }
 
   /// A layer's effect list as the manifest carries it, read leniently: an
@@ -165,6 +170,7 @@ enum ProjectArchive {
         // describing a layer far outside the canvas it claims to belong to.
         isLayerFrameValid($0.frame, canvas: state.canvasSize) && $0.name.count <= 4_096
           && $0.opacity.isFinite && (0...1).contains($0.opacity)
+          && $0.fillOpacity.isFinite && (0...1).contains($0.fillOpacity)
       })
     else {
       throw ProjectArchiveError.resourceLimit("The project exceeds iPad resource limits.")
@@ -183,7 +189,8 @@ enum ProjectArchive {
           origin: $0.origin == .zero
             ? nil
             : .init(x: Int($0.origin.x.rounded()), y: Int($0.origin.y.rounded())),
-          effects: $0.effects.isEmpty ? nil : .init($0.effects)
+          effects: $0.effects.isEmpty ? nil : .init($0.effects),
+          fillOpacity: $0.fillOpacity == 1 ? nil : $0.fillOpacity
         )
       }
     )
@@ -256,6 +263,7 @@ enum ProjectArchive {
         drawing: payload.drawing,
         isVisible: record.isVisible,
         opacity: record.opacity,
+        fillOpacity: record.fillOpacity ?? 1,
         text: record.text,
         // The origin was left out when #309 introduced it, so a bounded text
         // layer's preview drew it at the top-left wherever it sat (#316).
@@ -292,7 +300,7 @@ enum ProjectArchive {
           AppearanceRenderer.draw(
             planes: rendered.planes, under: true, origin: rendered.origin,
             layerOpacity: layer.opacity)
-          layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
+          layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.fillAlpha)
           AppearanceRenderer.draw(
             planes: rendered.planes, under: false, origin: rendered.origin,
             layerOpacity: layer.opacity)
@@ -300,7 +308,7 @@ enum ProjectArchive {
             // Rasterised at the preview's own scale — a preview-sized bitmap,
             // not a canvas-sized one.
             layer.drawing.image(from: bounds, scale: scale).draw(
-              in: bounds, blendMode: .normal, alpha: layer.opacity)
+              in: bounds, blendMode: .normal, alpha: layer.fillAlpha)
           }
         }
       }
@@ -336,6 +344,7 @@ enum ProjectArchive {
         guard seen.insert(record.id).inserted,
           record.name.count <= 4_096,
           record.opacity.isFinite, (0...1).contains(record.opacity),
+          record.fillOpacity.map { $0.isFinite && (0...1).contains($0) } ?? true,
           let files = layerFolders[record.id.uuidString]?.fileWrappers,
           let imageData = files["image.png"]?.regularFileContents,
           let drawingData = files["drawing.data"]?.regularFileContents,
@@ -366,6 +375,10 @@ enum ProjectArchive {
           drawing: drawing,
           isVisible: record.isVisible,
           opacity: record.opacity,
+          // Fill opacity arrived with version 5. A missing key is a fully
+          // painted layer, never a blank one — the other reading would erase
+          // the artwork of every layer in every project written before it.
+          fillOpacity: manifest.version >= 5 ? record.fillOpacity ?? 1 : 1,
           text: record.text,
           origin: origin,
           // Effects arrived with version 4; an older manifest carrying the

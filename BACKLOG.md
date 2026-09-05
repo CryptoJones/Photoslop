@@ -8,10 +8,11 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
-- [ ] iOS appearance-effect follow-ups: the Effects sheet on raster and photo
-  layers (needs banded or budgeted effect planes for canvas-sized alpha),
-  Gaussian blur and feather rendering (the fill-override kinds), and fill
-  opacity ([#372](https://github.com/CryptoJones/Photoslop/issues/372))
+- [ ] iOS appearance-effect follow-ups, two of three parts left: the Effects
+  sheet on raster and photo layers (needs banded or budgeted effect planes for
+  canvas-sized alpha) and Gaussian blur / feather rendering (the fill-override
+  kinds). **Fill opacity shipped in v2.31.0**
+  ([#372](https://github.com/CryptoJones/Photoslop/issues/372))
 
 ### Desktop
 
