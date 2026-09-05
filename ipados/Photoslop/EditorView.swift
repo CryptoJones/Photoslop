@@ -444,6 +444,7 @@ struct EditorView: View {
             onSelect: { store.select(layer.id) },
             onVisibleChanged: { store.setVisible($0, for: layer.id) },
             onOpacityChanged: { store.setOpacity($0, for: layer.id) },
+            onFillOpacityChanged: { store.setFillOpacity($0, for: layer.id) },
             onRename: { store.rename($0, for: layer.id) }
           )
           .tag(layer.id)
@@ -2478,6 +2479,7 @@ private struct LayerRow: View {
   let onSelect: () -> Void
   let onVisibleChanged: (Bool) -> Void
   let onOpacityChanged: (Double) -> Void
+  let onFillOpacityChanged: (Double) -> Void
   let onRename: (String) -> Void
   @State private var name = ""
 
@@ -2516,6 +2518,26 @@ private struct LayerRow: View {
         Text("100%")
       }
       .controlSize(.small)
+      .accessibilityIdentifier("Layer opacity")
+      // Fill opacity earns its own row rather than hiding behind a disclosure:
+      // it is the control that makes a shadow-only layer possible, and a
+      // second slider is cheaper to understand than a menu that explains it.
+      Slider(
+        value: Binding(get: { layer.fillOpacity }, set: onFillOpacityChanged),
+        in: 0...1
+      ) {
+        Text("Fill")
+      } minimumValueLabel: {
+        Text("Fill")
+          .font(.caption2)
+      } maximumValueLabel: {
+        Text("\(Int((layer.fillOpacity * 100).rounded()))%")
+          .font(.caption2)
+          .monospacedDigit()
+      }
+      .controlSize(.small)
+      .accessibilityIdentifier("Layer fill opacity")
+      .accessibilityLabel("Fill opacity")
     }
     .contentShape(Rectangle())
     .onTapGesture(perform: onSelect)
@@ -2523,7 +2545,8 @@ private struct LayerRow: View {
     .accessibilityLabel("\(layer.name) layer")
     .accessibilityValue(
       "\(layer.isVisible ? "visible" : "hidden"), "
-        + "\(Int((layer.opacity * 100).rounded())) percent opacity"
+        + "\(Int((layer.opacity * 100).rounded())) percent opacity, "
+        + "\(Int((layer.fillOpacity * 100).rounded())) percent fill"
     )
     .accessibilityHint("Double tap to make active; use the eye button to toggle visibility")
   }

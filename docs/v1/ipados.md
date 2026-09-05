@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.29.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.31.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -160,6 +160,13 @@ what it was doing to #227.
   Select All, Deselect, Invert Selection and **Delete Selection**, which is
   how a background comes off a photo: wand it, delete it. The bucket stays
   inside the selection. See [Magic wand and selections](#magic-wand-and-selections).
+- **Fill opacity** is a second slider on each layer row. It fades the layer's
+  own pixels - its image and any strokes not yet baked into it - and leaves its
+  effects untouched, so a layer can be turned down to nothing and keep casting
+  its shadow. The **Opacity** slider above it still fades artwork and effects
+  together; the two multiply. It is the desktop's Layer Style - Fill Opacity...,
+  and it is stored in the project (manifest version 5), written only when it is
+  not 100%, so a document made before it existed opens fully painted.
 - The **Eyedropper** sets the ink to the colour under a tap, so the next stroke
   paints with what is already on the canvas. It samples the merged composite
   rather than the active layer, exactly as the desktop's Eyedropper (`I`) does.

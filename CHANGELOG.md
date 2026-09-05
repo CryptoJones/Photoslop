@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.31.0] — 2026-09-05
+
+### Added
+- **Fill opacity on iOS** (#372): the desktop's `Layer.fill_opacity` (Layer
+  Style - Fill Opacity...), as a second slider in the layer row. It fades a
+  layer's own pixels - image *and* unbaked strokes - while leaving its effects
+  at full strength, which is what makes a shadow-only or knockout layer
+  possible. Plain layer opacity still fades both together; the two multiply.
+  Saved in the project as manifest version 5, written only when it is not 1,
+  and a document from before it existed opens fully painted.
+
 ## [2.29.0] — 2026-09-04
 
 ### Added

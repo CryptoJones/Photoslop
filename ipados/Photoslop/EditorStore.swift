@@ -83,6 +83,12 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
   private(set) var drawingRevision: Int
   var isVisible: Bool
   var opacity: Double
+  /// Scales the layer's own pixels without touching its effects — the
+  /// desktop's `Layer.fill_opacity` (Layer Style ▸ Fill Opacity…). Turning
+  /// this down on a layer carrying a drop shadow fades the artwork and leaves
+  /// the shadow at full strength, which is what makes a knockout or an
+  /// effects-only layer possible; `opacity` fades both together.
+  var fillOpacity: Double
   /// Set on text layers. The image is rendered from this, so keeping it is what
   /// lets the words be re-edited and the text be moved after it is placed.
   var text: TextContent?
@@ -123,6 +129,11 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
   var hasRenderableEffects: Bool {
     effects.contains { $0.enabled && LayerEffect.renderableKinds.contains($0.kind) }
   }
+
+  /// What the layer's own pixels are drawn at: both opacities, since fill
+  /// opacity narrows the layer opacity rather than replacing it. Effects are
+  /// drawn at `opacity` alone, which is the whole point of the pair.
+  var fillAlpha: Double { opacity * fillOpacity }
 
   /// The rectangle this layer occupies on the canvas.
   var frame: CGRect { CGRect(origin: origin, size: image.size) }
@@ -195,6 +206,7 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
     drawing: PKDrawing = PKDrawing(),
     isVisible: Bool = true,
     opacity: Double = 1,
+    fillOpacity: Double = 1,
     text: TextContent? = nil,
     source: LayerSource? = nil,
     placement: CGRect? = nil,
@@ -210,6 +222,7 @@ struct RasterLayer: Identifiable, @unchecked Sendable {
     self.drawingRevision = Self.nextDrawingRevision()
     self.isVisible = isVisible
     self.opacity = opacity
+    self.fillOpacity = fillOpacity
     self.text = text
     self.source = source
     self.placement = placement
@@ -1552,6 +1565,13 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }
   }
 
+  func setFillOpacity(_ fillOpacity: Double, for id: UUID) {
+    guard layers.contains(where: { $0.id == id }) else { return }
+    mutate(actionName: "Fill Opacity") {
+      update(id) { $0.fillOpacity = min(1, max(0, fillOpacity)) }
+    }
+  }
+
   func rename(_ name: String, for id: UUID) {
     let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !cleaned.isEmpty, layers.contains(where: { $0.id == id }) else { return }
@@ -1723,12 +1743,12 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
           AppearanceRenderer.draw(
             planes: rendered.planes, under: true, origin: rendered.origin,
             layerOpacity: layer.opacity)
-          layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
+          layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.fillAlpha)
           AppearanceRenderer.draw(
             planes: rendered.planes, under: false, origin: rendered.origin,
             layerOpacity: layer.opacity)
         } else {
-          layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
+          layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.fillAlpha)
         }
         guard layer.id != excludedID, !layer.drawing.strokes.isEmpty else { return }
         // Strokes are rasterised over the box they occupy, not the canvas:
@@ -1736,10 +1756,12 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
         // hundred kilobytes rather than 48 MB.
         let strokeBox = layer.drawing.bounds.intersection(bounds).integral
         guard !strokeBox.isEmpty else { return }
+        // Strokes are fill, not effects: an unbaked stroke fades with the
+        // pixels it will become, not with the shadow cast around them.
         layer.drawing.image(from: strokeBox, scale: 1).draw(
           in: strokeBox,
           blendMode: .normal,
-          alpha: layer.opacity
+          alpha: layer.fillAlpha
         )
       }
     }
