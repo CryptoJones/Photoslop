@@ -15,25 +15,6 @@ sync — check an item here when its issue closes.
 
 ### Desktop
 
-- [ ] A user reports the desktop version "doesn't work" — no symptom, platform
-  or install method yet, and it does not reproduce. The old leading guess is
-  dead: the shipped 2.9.0 macOS artifact is Notarized Developer ID, accepted
-  by Gatekeeper under a quarantine attribute, and launches (checked
-  2026-08-14, details on the issue). New leading suspect: **Windows**, whose
-  artifact is literally named UNSIGNED and gets a SmartScreen wall. Held open
-  until the reporter supplies platform, install route, and what "doesn't
-  work" looked like
-  ([#273](https://github.com/CryptoJones/Photoslop/issues/273))
-
-### CLI
-
-- [ ] `photoslop-cli --sample X,Y` printing the merged-composite colour at a
-  point, the query form of the Eyedropper that desktop and iOS both have. The
-  engine primitive already exists (`Document.sample_color`); what it needs is
-  the flag, a place in the "nothing to do" guard alongside `--info`, and a
-  decision on whether it composites once for N points
-  ([#380](https://github.com/CryptoJones/Photoslop/issues/380))
-
 ### CI
 
 
@@ -64,6 +45,16 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] `photoslop-cli --sample X,Y` — the composite colour at a point as JSON,
+  repeatable so N points cost one decode; the query form of the Eyedropper,
+  which closes the last surface gap the iOS tool left open
+  ([#380](https://github.com/CryptoJones/Photoslop/issues/380)) — shipped v2.30.0
+- [x] Desktop "doesn't work" report closed as **cannot reproduce**: never
+  reproduced, no platform or install route ever supplied, and the one concrete
+  hypothesis (macOS Gatekeeper) was chased and killed — the shipped 2.9.0
+  artifact is Notarized Developer ID and launches under quarantine. The
+  residual Windows-SmartScreen suspicion is already tracked as #287
+  ([#273](https://github.com/CryptoJones/Photoslop/issues/273)) — closed 2026-09-05
 - [x] iOS Eyedropper — a tap sets the ink to the merged-composite colour under
   it, the desktop's `I` without the background swatch iOS has no use for;
   sampled through the same compositing pass that draws the canvas, one pixel

@@ -28,6 +28,15 @@ photoslop-cli shot.cr2 --resize 1600x1067 --auto-levels \
 - `--export-artboards DIR` — each artboard as `<name>.png`.
 - `--info` — document JSON (size, dpi, layers, effects, vector IDs/types,
   artboards) to stdout.
+- `--sample X,Y` — the merged-composite colour at one canvas point, as JSON:
+  `[{"x": …, "y": …, "rgba": [r, g, b, a], "hex": "#RRGGBB"}]`. This is the
+  query form of the GUI's Eyedropper (`I`) and the iOS Eyedropper tool, and it
+  reads the *composite* — the colour actually visible at that point, not the
+  active layer's. **Repeatable**: pass it more than once and each point is
+  reported in the order given, because decoding the document is the expensive
+  part and sampling a point is not. The result is always a list, so a script
+  need not branch on how many points it asked for. A point outside the canvas
+  is a usage error (exit 2). Like `--info`, it needs no `--output`.
 - `--version`.
 - `--allow-large-document` relaxes only the adaptive working-memory estimate
   for trusted local files; hard geometry/archive/parser limits remain.
@@ -165,6 +174,9 @@ photoslop-cli portrait.jpg --import-layer trees.jpg --blend-mode screen \
 
 # inspect an ORA without opening the GUI
 photoslop-cli project.ora --info | jq '.layers[].name'
+
+# read the colour under two points, without opening the GUI
+photoslop-cli shot.jpg --sample 120,340 --sample 900,120 | jq -r '.[].hex'
 
 # a print-ready A4 canvas from nothing, developed entirely headless
 photoslop-cli --new A4 --dpi 300 --fill 245,240,230 \

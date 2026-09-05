@@ -4,6 +4,26 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.30.0] — 2026-09-05
+
+### Added
+- **`photoslop-cli --sample X,Y`** (#380): the merged-composite colour at a
+  canvas point as JSON — `[{"x", "y", "rgba", "hex"}]` — closing the last
+  surface gap left by the iOS Eyedropper. Desktop and iOS could both sample a
+  colour; the CLI could not. It reads the composite, not the active layer, so
+  it answers "what colour is visible here". **Repeatable**, because decoding
+  the document is the expensive part and sampling a point is not: ten points
+  cost one decode. The result is always a list, so a script never branches on
+  how many points it asked for. A point outside the canvas is a usage error
+  (exit 2), and like `--info` it needs no `--output`. Also exposed through
+  `apply_pipeline(sample=[...])`, the engine the MCP server drives.
+- **`EyedropperUITests`**: the iOS Eyedropper driven through the real UI, not
+  just its sampler. A new document is white and the default ink is black, so
+  sampling the canvas and then filling with the Bucket must leave the centre
+  pixel white — if the tool were a no-op the same fill would turn it black.
+  Bucket and Wand already had UI coverage; the Eyedropper shipped in 2.29.0
+  without any.
+
 ## [2.29.0] — 2026-09-04
 
 ### Added
