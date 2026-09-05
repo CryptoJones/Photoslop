@@ -25,6 +25,15 @@ sync — check an item here when its issue closes.
   work" looked like
   ([#273](https://github.com/CryptoJones/Photoslop/issues/273))
 
+### CLI
+
+- [ ] `photoslop-cli --sample X,Y` printing the merged-composite colour at a
+  point, the query form of the Eyedropper that desktop and iOS both have. The
+  engine primitive already exists (`Document.sample_color`); what it needs is
+  the flag, a place in the "nothing to do" guard alongside `--info`, and a
+  decision on whether it composites once for N points
+  ([#380](https://github.com/CryptoJones/Photoslop/issues/380))
+
 ### CI
 
 
@@ -55,6 +64,12 @@ sync — check an item here when its issue closes.
 
 ## Done
 
+- [x] iOS Eyedropper — a tap sets the ink to the merged-composite colour under
+  it, the desktop's `I` without the background swatch iOS has no use for;
+  sampled through the same compositing pass that draws the canvas, one pixel
+  at a time, so it cannot drift from what is on screen and cannot allocate a
+  canvas to answer with four bytes
+  ([#379](https://github.com/CryptoJones/Photoslop/issues/379)) — shipped v2.29.0
 - [x] iOS Cut, Copy and Paste for selections — the pasteboard trio over the
   selection mask, weighted so a feathered Cut and Paste round-trips, a copy
   this app made returning to its own origin; and the selection's actions

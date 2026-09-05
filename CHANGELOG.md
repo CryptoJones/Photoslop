@@ -4,6 +4,29 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.29.0] — 2026-09-04
+
+### Added
+- **Eyedropper on iOS** (#379): a tap sets the ink to the colour under it, so
+  the next stroke paints with what is already on the canvas. It samples the
+  **merged composite** rather than the active layer, as the desktop's
+  Eyedropper (`I`) does — the pixel you point at usually belongs to a layer
+  below, and picking the colour you can actually see is the whole point of the
+  tool. A tap on a transparent pixel is ignored rather than arming a
+  transparent ink. No width and no tolerance: it reads one pixel, so there is
+  no region to grow. The ink swatch stays on screen while it is armed, because
+  that is where the sampled colour appears.
+
+### Changed
+- `EditorStore.render(layers:size:)` now draws through a shared
+  `drawComposite`, which `EditorStore.sampleColor(layers:size:at:)` also uses.
+  The eyedropper therefore samples through the very pass that draws the
+  canvas, so the colour it reports cannot drift from the colour on screen, and
+  it composites **exactly one pixel** — sampling by flattening would allocate
+  the whole canvas (48 MB on a 4000x3000 document) to answer with four bytes,
+  which is the class of allocation door #309 and #348-#354 spent a release
+  closing.
+
 ## [2.28.1] — 2026-09-04
 
 ### Added

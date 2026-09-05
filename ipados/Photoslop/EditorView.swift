@@ -2076,9 +2076,31 @@ struct EditorView: View {
   private func tapCanvas(_ point: CGPoint) {
     if tool.selectsOnTap {
       selectAtTap(point)
+    } else if tool.samplesOnTap {
+      sampleAtTap(point)
     } else {
       fillAtTap(point)
     }
+  }
+
+  /// The eyedropper's tap: the merged-composite colour under it becomes the
+  /// ink, so the next stroke paints with what was already on the canvas.
+  ///
+  /// It samples the composite rather than the active layer, as the desktop
+  /// does — picking the colour you can actually see is the whole point of the
+  /// tool, and the pixel you point at often belongs to a layer below. A tap on
+  /// a transparent pixel is ignored rather than arming a transparent ink,
+  /// which is also what the desktop tool does.
+  ///
+  /// Nothing here can fail out loud: sampling writes no pixels and allocates
+  /// one, so there is no memory refusal to report.
+  private func sampleAtTap(_ point: CGPoint) {
+    guard
+      let sampled = EditorStore.sampleColor(
+        layers: store.layers, size: store.canvasSize, at: point),
+      sampled.cgColor.alpha > 0
+    else { return }
+    inkColor = Color(sampled)
   }
 
   /// The wand's tap (#326): the region of similar colour under it on the

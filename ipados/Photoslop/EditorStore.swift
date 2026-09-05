@@ -1688,47 +1688,106 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     let format = UIGraphicsImageRendererFormat()
     format.scale = 1
     format.opaque = false
-    let bounds = CGRect(origin: .zero, size: size)
     return UIGraphicsImageRenderer(size: size, format: format).image { context in
       context.cgContext.interpolationQuality = .high
-      // One pool per layer: the stroke bitmap below is a transient that
-      // otherwise lives until the whole composite returns, so five stroke
-      // layers cost five of them at once, on every refresh of a drag (#355).
-      for layer in layers where layer.isVisible && layer.opacity > 0 {
-        autoreleasepool {
-          // A layer occupies its own frame, which is the whole canvas for
-          // every layer that predates bounded extents (#309) and a tight box
-          // around the glyphs for a text layer. Drawing into `bounds`
-          // unconditionally would stretch a bounded layer across the canvas.
-          if layer.hasRenderableEffects {
-            // The desktop's draw_layer order: effects under the fill, the
-            // fill, effects over it. Planes are rendered here and released
-            // with the pool — nothing is kept per layer between composites.
-            let rendered = AppearanceRenderer.planes(for: layer)
-            AppearanceRenderer.draw(
-              planes: rendered.planes, under: true, origin: rendered.origin,
-              layerOpacity: layer.opacity)
-            layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
-            AppearanceRenderer.draw(
-              planes: rendered.planes, under: false, origin: rendered.origin,
-              layerOpacity: layer.opacity)
-          } else {
-            layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
-          }
-          guard layer.id != excludedID, !layer.drawing.strokes.isEmpty else { return }
-          // Strokes are rasterised over the box they occupy, not the canvas:
-          // a signature in one corner of a 4000x3000 document is a few
-          // hundred kilobytes rather than 48 MB.
-          let strokeBox = layer.drawing.bounds.intersection(bounds).integral
-          guard !strokeBox.isEmpty else { return }
-          layer.drawing.image(from: strokeBox, scale: 1).draw(
-            in: strokeBox,
-            blendMode: .normal,
-            alpha: layer.opacity
-          )
+      drawComposite(
+        layers: layers, bounds: CGRect(origin: .zero, size: size),
+        excludingDrawingFor: excludedID)
+    }
+  }
+
+  /// The layer stack drawn bottom to top into whatever context is current.
+  ///
+  /// `render` and `sampleColor` share this so the colour the eyedropper
+  /// reports cannot drift from the colour the canvas shows: the sampler is
+  /// this same compositing pass, run over a one-pixel context.
+  private static func drawComposite(
+    layers: [RasterLayer],
+    bounds: CGRect,
+    excludingDrawingFor excludedID: UUID?
+  ) {
+    // One pool per layer: the stroke bitmap below is a transient that
+    // otherwise lives until the whole composite returns, so five stroke
+    // layers cost five of them at once, on every refresh of a drag (#355).
+    for layer in layers where layer.isVisible && layer.opacity > 0 {
+      autoreleasepool {
+        // A layer occupies its own frame, which is the whole canvas for
+        // every layer that predates bounded extents (#309) and a tight box
+        // around the glyphs for a text layer. Drawing into `bounds`
+        // unconditionally would stretch a bounded layer across the canvas.
+        if layer.hasRenderableEffects {
+          // The desktop's draw_layer order: effects under the fill, the
+          // fill, effects over it. Planes are rendered here and released
+          // with the pool — nothing is kept per layer between composites.
+          let rendered = AppearanceRenderer.planes(for: layer)
+          AppearanceRenderer.draw(
+            planes: rendered.planes, under: true, origin: rendered.origin,
+            layerOpacity: layer.opacity)
+          layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
+          AppearanceRenderer.draw(
+            planes: rendered.planes, under: false, origin: rendered.origin,
+            layerOpacity: layer.opacity)
+        } else {
+          layer.image.draw(in: layer.frame, blendMode: .normal, alpha: layer.opacity)
         }
+        guard layer.id != excludedID, !layer.drawing.strokes.isEmpty else { return }
+        // Strokes are rasterised over the box they occupy, not the canvas:
+        // a signature in one corner of a 4000x3000 document is a few
+        // hundred kilobytes rather than 48 MB.
+        let strokeBox = layer.drawing.bounds.intersection(bounds).integral
+        guard !strokeBox.isEmpty else { return }
+        layer.drawing.image(from: strokeBox, scale: 1).draw(
+          in: strokeBox,
+          blendMode: .normal,
+          alpha: layer.opacity
+        )
       }
     }
+  }
+
+  /// Merged-composite colour at one canvas point, or nil outside the canvas.
+  ///
+  /// This is the desktop's `Document.sample_color`, and deliberately the same
+  /// shape: it composites **exactly one pixel**. Sampling by flattening
+  /// through `render(layers:size:)` would allocate the entire canvas — 48 MB
+  /// on a 4000x3000 document — to answer with four bytes, and that is the
+  /// class of allocation door #309 and #348-#355 spent a release closing.
+  ///
+  /// Alpha is returned as sampled; the caller decides what a transparent
+  /// pixel means, the way the desktop tool ignores one rather than painting
+  /// with it.
+  static func sampleColor(
+    layers: [RasterLayer],
+    size: CGSize,
+    at point: CGPoint
+  ) -> UIColor? {
+    let x = Int(point.x.rounded(.down))
+    let y = Int(point.y.rounded(.down))
+    guard x >= 0, y >= 0, CGFloat(x) < size.width, CGFloat(y) < size.height else { return nil }
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = false
+    let pixel = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1), format: format)
+      .image { context in
+        context.cgContext.interpolationQuality = .high
+        // The sampled point is moved onto the origin of the one-pixel
+        // context, so every layer draws at its ordinary canvas position and
+        // Core Graphics clips away all of it but the pixel under the finger.
+        context.cgContext.translateBy(x: -CGFloat(x), y: -CGFloat(y))
+        drawComposite(
+          layers: layers, bounds: CGRect(origin: .zero, size: size),
+          excludingDrawingFor: nil)
+      }
+    guard let word = PixelBuffer.probe(image: pixel, x: 0, y: 0) else { return nil }
+    let a = Int((word >> 24) & 0xFF)
+    guard a > 0 else { return UIColor(white: 0, alpha: 0) }
+    // The composite is premultiplied; undo it so the swatch shows the colour
+    // as painted rather than as darkened by its own alpha.
+    func channel(_ shift: UInt32) -> CGFloat {
+      CGFloat(min(255, Int((word >> shift) & 0xFF) * 255 / a)) / 255
+    }
+    return UIColor(
+      red: channel(16), green: channel(8), blue: channel(0), alpha: CGFloat(a) / 255)
   }
 
   static func solidImage(size: CGSize, color: UIColor) -> UIImage {
