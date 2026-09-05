@@ -25,6 +25,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
   case wand
   case rectSelect
   case lasso
+  case eyedropper
 
   var id: String { rawValue }
 
@@ -38,6 +39,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .wand: "Magic Wand"
     case .rectSelect: "Rectangle Select"
     case .lasso: "Lasso Select"
+    case .eyedropper: "Eyedropper"
     }
   }
 
@@ -51,11 +53,15 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .wand: "wand.and.rays"
     case .rectSelect: "rectangle.dashed"
     case .lasso: "lasso"
+    case .eyedropper: "eyedropper"
     }
   }
 
   /// Whether the ink colour and opacity controls apply to this tool.
-  var usesInk: Bool { inkType != nil || fillsOnTap }
+  ///
+  /// The eyedropper paints nothing, but it is the tool that *sets* the ink,
+  /// so the swatch stays on screen: it is where the sampled colour appears.
+  var usesInk: Bool { inkType != nil || fillsOnTap || samplesOnTap }
 
   /// Whether the brush width control applies to this tool.
   var usesWidth: Bool { inkType != nil }
@@ -66,9 +72,13 @@ enum BrushTool: String, CaseIterable, Identifiable {
   /// Whether a tap on the canvas selects instead of a stroke painting.
   var selectsOnTap: Bool { self == .wand }
 
+  /// Whether a tap on the canvas samples the colour under it into the ink
+  /// swatch, the desktop's Eyedropper (`I`).
+  var samplesOnTap: Bool { self == .eyedropper }
+
   /// Whether the tool acts on a tap rather than a stroke, so the canvas is
   /// told to hand taps over and hold strokes back.
-  var actsOnTap: Bool { fillsOnTap || selectsOnTap }
+  var actsOnTap: Bool { fillsOnTap || selectsOnTap || samplesOnTap }
 
   /// Whether a one-finger drag draws a selection shape instead of a stroke
   /// (#370). The canvas treats it like an overlay: drawing is suspended and
@@ -78,14 +88,16 @@ enum BrushTool: String, CaseIterable, Identifiable {
   /// Whether the tool produces a selection, so the combine mode applies.
   var selects: Bool { selectsOnTap || selectsByDrag }
 
-  /// Whether the colour tolerance control applies to this tool.
-  var usesTolerance: Bool { actsOnTap }
+  /// Whether the colour tolerance control applies to this tool. The
+  /// eyedropper reads the one pixel under the finger, so it has no region
+  /// to grow and no tolerance to grow it by.
+  var usesTolerance: Bool { fillsOnTap || selectsOnTap }
 
   /// Whether the stroke shape changes with how far the Pencil is tilted.
   var respondsToTilt: Bool {
     switch self {
     case .pencil, .marker: true
-    case .pen, .eraser, .bucket, .wand, .rectSelect, .lasso: false
+    case .pen, .eraser, .bucket, .wand, .rectSelect, .lasso, .eyedropper: false
     }
   }
 
@@ -94,7 +106,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .pen: .pen
     case .pencil: .pencil
     case .marker: .marker
-    case .eraser, .bucket, .wand, .rectSelect, .lasso: nil
+    case .eraser, .bucket, .wand, .rectSelect, .lasso, .eyedropper: nil
     }
   }
 

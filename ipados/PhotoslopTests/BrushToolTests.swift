@@ -59,9 +59,11 @@ final class BrushToolTests: XCTestCase {
 
   func testOnlyTheWandSelectsOnTapAndTakesNoInk() {
     XCTAssertEqual(BrushTool.allCases.filter(\.selectsOnTap), [.wand])
-    XCTAssertEqual(BrushTool.allCases.filter(\.actsOnTap), [.bucket, .wand])
-    // Both tap tools take a tolerance; the wand paints nothing, so no ink.
+    XCTAssertEqual(BrushTool.allCases.filter(\.actsOnTap), [.bucket, .wand, .eyedropper])
+    // The bucket and the wand grow a region, so they take a tolerance; the
+    // eyedropper (#379) taps too but reads a single pixel, so it does not.
     XCTAssertEqual(BrushTool.allCases.filter(\.usesTolerance), [.bucket, .wand])
+    // The wand paints nothing, so no ink.
     XCTAssertFalse(BrushTool.wand.usesInk)
     XCTAssertFalse(BrushTool.wand.usesWidth)
     XCTAssertFalse(BrushTool.wand.respondsToTilt)

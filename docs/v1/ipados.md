@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.28.1 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.29.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -160,6 +160,12 @@ what it was doing to #227.
   Select All, Deselect, Invert Selection and **Delete Selection**, which is
   how a background comes off a photo: wand it, delete it. The bucket stays
   inside the selection. See [Magic wand and selections](#magic-wand-and-selections).
+- The **Eyedropper** sets the ink to the colour under a tap, so the next stroke
+  paints with what is already on the canvas. It samples the merged composite
+  rather than the active layer, exactly as the desktop's Eyedropper (`I`) does.
+  It has no width and no tolerance — it reads one pixel — and the ink swatch
+  stays on the strip while it is armed, because that is where the sampled
+  colour lands. See [Eyedropper](#eyedropper).
 - **About Photoslop** introduces the app the way the desktop edition does: Le
   Basilisk, the name with no platform attached, and the same one-line
   description, over the licence and repository link. It also reports the
@@ -295,6 +301,37 @@ chosen origin rather than a centred one. That is deliberate: a layer is pixels
 *and* PencilKit strokes *and* possibly a text anchor, all of which have to travel
 together, and a second code path would be a second chance to forget one. The
 result agrees with `photoslop-cli --crop X,Y,W,H` for the same rectangle.
+### Eyedropper
+
+Pick **Eyedropper** from the tool palette and tap the canvas. The colour under
+the tap becomes the ink, and the swatch on the strip shows it immediately —
+switch back to a brush and the next stroke paints with it.
+
+It samples the **merged composite**, not the active layer. That is the desktop's
+`Document.sample_color` behaviour and it is the only one that makes sense for a
+picker: the pixel you point at usually belongs to a layer below the one you are
+painting on, and the whole reason to reach for the tool is to pick up a colour
+you can see. A layer that is hidden, or at zero opacity, is not on screen and so
+is not sampled; a half-opaque layer samples as the blend the canvas actually
+drew.
+
+Two rules, both stated so they are not surprises:
+
+- **A transparent pixel is ignored.** Tapping a hole in the picture leaves the
+  ink alone rather than arming an invisible colour, which is what the desktop
+  tool does with the same tap.
+- **There is no Shift for the background.** The desktop keeps a foreground and
+  a background swatch and Shift-clicks into the second; iOS has a single ink,
+  so the tool sets that. Nothing is lost, because nothing on iOS reads a
+  background swatch.
+
+Sampling costs one pixel, not one canvas. `EditorStore.sampleColor` composites
+a 1x1 context through the same `drawComposite` pass that draws the whole canvas
+— the same layer order, opacities, effects and strokes — with the sampled point
+translated onto that single pixel. Two things follow: the colour reported cannot
+drift from the colour shown, and sampling a 4000x3000 document allocates four
+bytes rather than the 48 MB a flatten would (#309, #348-#354).
+
 ### Paint bucket
 
 Pick **Bucket** from the tool palette and tap the canvas. The pixels connected
