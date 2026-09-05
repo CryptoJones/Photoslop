@@ -4,6 +4,38 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.32.0] — 2026-09-05
+
+### Added
+- **Beam Dither filter** (#384), on the desktop and in `photoslop-cli`. A
+  one-bit renderer built from scratch, carrying two genuinely different ideas
+  behind one control set.
+  - **Dithering** preserves average tone. Six error-diffusion kernels
+    (Floyd-Steinberg, Atkinson, Jarvis, Stucki, Sierra, Burkes) scanned
+    serpentine so the residual error cannot drift the same way on every row
+    and print as diagonal worming, plus Bayer ordered dithering at 2, 4 and 8,
+    built from the doubling recurrence rather than typed out.
+  - **Beam modulation** does not preserve tone, and that is the point. It
+    draws a raster of horizontal beams and lets the picture deflect them, the
+    way a CRT's vertical deflection coil is driven by a signal: bright pixels
+    push their beam off its resting row and widen it, so the image renders as
+    bending, thickening scanlines that trace contours rather than as a cloud
+    of dots. Soft shoulders are stippled at `levels=2` so beams thin into dots
+    leaving the light instead of fading to grey.
+  - A conditioning stage first — brightness, contrast, blur, unsharp mask,
+    seeded grain — because a dither is only as good as the contrast handed to
+    it, and `mono` / `tonal` / `color` inking after, where tri-tone picks each
+    lit pixel's ink from the *original* luminance beneath it so shadows keep
+    their own colour.
+- `photoslop/dither.py`: the algorithms as pure numpy with no Qt import, which
+  keeps them testable as arithmetic and portable to the iOS filter library
+  (#385).
+
+### Changed
+- `filters.parse_params` now accepts `str` parameters in a multi-parameter
+  filter, not only as a lone free-text parameter. The dialog already rendered
+  them; only the parser had no branch, which is what a `#RRGGBB` ink needs.
+
 ## [2.29.0] — 2026-09-04
 
 ### Added

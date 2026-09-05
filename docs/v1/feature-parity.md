@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v2.29.0** against six
+An honest, category-by-category comparison of **Photoslop v2.32.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -23,6 +23,7 @@ client exposes it.
 | Paint bucket (flood fill) | ✅ | ✅ ported from the desktop fill, fixture-proven identical | 🟡 `--fill` fills the whole layer | — |
 | Colour sampling (eyedropper) | ✅ `I`, composite-aware, Shift → background | ✅ composite-aware, into the single ink swatch | 🟡 no colour query yet ([#380](https://github.com/CryptoJones/Photoslop/issues/380)) | — |
 | Selections/filters/vectors/text | ✅ | 🟡 wand, marquee and lasso selections with feathering; brushes, bucket, Delete Selection and Cut/Copy/Paste honour them; editable text layers; the seven built-in filters, pixel-identical to the desktop; no vectors yet | ✅ shared safe engine operations | ✅ safe subset |
+| One-bit dither / beam modulation | ✅ Beam Dither, 10 algorithms | 🟡 not ported yet ([#385](https://github.com/CryptoJones/Photoslop/issues/385)) | ✅ `--filter beam-dither:…` | — |
 | Live appearance effects (shadow, glow, outline, overlay, bevel) | ✅ 10 kinds on any layer | 🟡 8 kinds on text layers, ported from the desktop renderer, fixture-proven identical; Gaussian blur and feather kept but not drawn | ✅ `--drop-shadow`, `--glow`, `--stroke`, `--effect`, `--set-effects` | ✅ safe subset |
 | Native/third-party plugins | local opt-in | — | local opt-in | denied |
 | Network model operations | local configured endpoint | — | local configured endpoint | denied |
@@ -33,7 +34,7 @@ client exposes it.
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 2.29.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
+| **Photoslop** | 2.32.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
