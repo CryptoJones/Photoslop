@@ -41,6 +41,8 @@
 	<string>public.app-category.graphics-design</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Photoslop saves pictures you export to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Photoslop imports images you choose for editing.</string>
 	<key>UIApplicationSceneManifest</key>
