@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.33.2 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.35.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -168,9 +168,10 @@ what it was doing to #227.
   selected. Its options are the same **Tolerance** slider, a **Contiguous**
   toggle (off is the desktop's colour-range mode) and a combine mode that
   stands in for the desktop's Shift and Alt clicks. The **Select** menu holds
-  Select All, Deselect, Invert Selection and **Delete Selection**, which is
-  how a background comes off a photo: wand it, delete it. The bucket stays
-  inside the selection. See [Magic wand and selections](#magic-wand-and-selections).
+  Select All, Deselect, Invert Selection, **Delete Selection** — which is
+  how a background comes off a photo: wand it, delete it — and **Fill
+  Selection**, which paints the shape instead of emptying it. The bucket
+  stays inside the selection. See [Magic wand and selections](#magic-wand-and-selections).
 - **Fill opacity** is a second slider on each layer row. It fades the layer's
   own pixels - its image and any strokes not yet baked into it - and leaves its
   effects untouched, so a layer can be turned down to nothing and keep casting
@@ -441,15 +442,28 @@ deselects under New Selection and does nothing under Add or Subtract. A tap
 that never moves does nothing at all — Deselect is in the Select menu. Both
 tools take no ink and, like the wand, work on a text layer.
 
-### Cut, Copy and Paste
+### Fill, Cut, Copy and Paste
 
-While a selection is up, **Cut**, **Copy**, **Paste** and **Delete Selection**
-appear together at the left of the tool strip, next to Undo and Redo, and go
-away when the selection does (#374). That is the one-tap route, and it is
-where these belong: making a selection is a modal act, and on a phone the
+While a selection is up, **Fill Selection**, **Cut**, **Copy**, **Paste** and
+**Delete Selection** appear together at the left of the tool strip, next to
+Undo and Redo, and go away when the selection does (#374, #393). That is the
+one-tap route, and it is where these belong: making a selection is a modal act, and on a phone the
 Select menu is inside **More**, which is a system menu that cannot show what
 is under it — Delete Selection shipped there in 2.22.0 and went unfound. The
-same four commands stay in the Select menu, with ⌘X / ⌘C / ⌘V for a keyboard.
+same commands stay in the Select menu, with ⌘X / ⌘C / ⌘V and ⌥Delete for a
+keyboard.
+
+- **Fill Selection** (⌥Delete) paints every selected pixel of the active
+  layer with the ink the swatch shows, one undo step (#393). This is the
+  counterpart to Delete Selection, and it is not the bucket: the bucket
+  grows a region of *similar colour* from a tap and stops at the
+  selection's edge, so a lasso across a photo takes the ink only where it
+  was tapped. Fill Selection takes the shape. The ink is premultiplied
+  exactly as the bucket premultiplies it, so the same swatch writes the
+  same word through either route, and a feathered selection fills by
+  weight — full inside, fading over the ramp. Text layers are refused for
+  the reason they refuse the bucket. On the desktop this is Edit ▸ Fill
+  Selection (`Shift+Backspace`); headless it is `--fill-selection R,G,B`.
 
 - **Copy** puts the selected pixels of the active layer on the system
   pasteboard, cropped to the selection's bounds. With nothing selected it

@@ -101,6 +101,7 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--clear` | erase the selection to transparency (headless Cut) |
 | `--flip` `h|v` | mirror the target layer(s) |
 | `--fill` `R,G,B` | fill the whole target layer with a colour |
+| `--fill-selection` `R,G,B` | fill the selection with a colour |
 | `--text` `"X,Y,SIZE[,R,G,B][,FAMILY]:TEXT"` | rasterise text onto a new layer (default colour black, system font) |
 | `--text-rich` `"X,Y:<html>"` | rasterise **rich HTML** text onto a new layer — per-letter colour, font-family, bold/italic (the headless mirror of the GUI Text tool's styled editor) |
 | `--shape` `KIND,X,Y,W,H,R,G,B` | rect/ellipse/line onto a schema-v1 native vector layer (direct crisp rendering, ORA fallback, re-renders on --resize) |

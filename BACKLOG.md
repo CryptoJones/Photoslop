@@ -12,6 +12,14 @@ sync — check an item here when its issue closes.
 
 ### CI
 
+- [ ] `scripts/ci-local.sh ios` fails its iPhone leg on
+  `LayerFromPhotoUITests.testChosenPhotosBecomeLayersOverWhatIsAlreadyThere`
+  while the same commit is green on CI and the class is green in isolation —
+  reproduced on an unmodified `76ca80b`, so it is the shared-app suite order or
+  decode timing, not any one branch. A pre-push gate that is red for a reason
+  unrelated to the change under test is a gate people learn to push past
+  ([#394](https://github.com/CryptoJones/Photoslop/issues/394))
+
 
 ### Windows
 
@@ -39,6 +47,13 @@ sync — check an item here when its issue closes.
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## Done
+
+- [x] Fill a selection with a colour, on all three editions: iOS **Fill
+  Selection** in the tool strip's selection group and the Select menu
+  (⌥Delete), desktop Edit ▸ Fill Selection (`Shift+Backspace`), and
+  `photoslop-cli --fill-selection R,G,B`. The bucket floods a region of similar
+  colour; this takes the whole shape, and fades through a feathered selection
+  ([#393](https://github.com/CryptoJones/Photoslop/issues/393)) — shipped v2.35.0
 
 - [x] iOS appearance-effect follow-ups, all three parts: fill opacity
   (v2.31.0), Gaussian Blur and Feather drawn through a banded RGBA blur that
