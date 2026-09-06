@@ -4,6 +4,14 @@ All adjustments are banded LUT operations (premultiplication-aware) with
 live, debounced previews from pristine copies — Cancel restores byte-exactly,
 OK lands one undo step.
 
+## One-shot
+- **Invert** (`Ctrl+I`): every channel to `255 - c`. The only adjustment here
+  without a dialog, so it runs through the filter plumbing instead of the
+  preview-and-commit path: one undo step, and **a selection confines it**,
+  which the dialog-driven adjustments above do not do — they work on whole
+  layers. Inverting twice returns the original exactly. CLI mirror:
+  `--invert`.
+
 ## The dialogs
 - **Levels** (`Ctrl+L`): input black/white points + gamma, with **Auto**
   (0.1% luminance percentiles).

@@ -28,7 +28,8 @@
 `Ctrl+Shift+Alt+E` stamp visible
 
 ## Adjustments
-`Ctrl+L` Levels · `Ctrl+M` Curves · `Ctrl+U` Hue/Saturation · `Ctrl+B` Color Balance
+`Ctrl+L` Levels · `Ctrl+M` Curves · `Ctrl+U` Hue/Saturation · `Ctrl+B` Color Balance ·
+`Ctrl+I` Invert
 
 ## Image & transforms
 `Ctrl+T` Free Transform · `Ctrl+Shift+T` Warp · `Ctrl+Alt+I` Image Size ·

@@ -44,6 +44,7 @@ PAIR_ARGS = {
     "content-aware-scale": ["--content-aware-scale", "36x26"],
     "levels": ["--levels", "10,240,1.2"],
     "auto-levels": ["--auto-levels"],
+    "invert": ["--invert"],
     "hue-sat": ["--hue-sat", "30,10,5"],
     "color-balance": ["--color-balance", "10,0,0,0,5,0,0,0,-10"],
     "curves": ["--curves", "0:10,255:245"],

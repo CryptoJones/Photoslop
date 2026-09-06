@@ -8,6 +8,12 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
+- [ ] Port Invert to iOS for parity with the desktop's Image ▸ Adjustments ▸
+  Invert and `--invert`. The maths is trivial over `PixelBuffer`; the open
+  question is where it belongs, since iOS has a Filters submenu and no
+  Adjustments group — worth deciding once, because Levels and Curves will want
+  the same home ([#389](https://github.com/CryptoJones/Photoslop/issues/389))
+
 ### Desktop
 
 ### CI

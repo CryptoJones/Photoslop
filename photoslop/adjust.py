@@ -84,9 +84,26 @@ def levels_lut(
     return np.clip(np.round(out), 0, 255).astype(np.uint8)
 
 
-def apply_luts(img: QImage, luts: np.ndarray) -> None:
+def invert_luts() -> np.ndarray:
+    """The (3, 256) LUTs for Invert: every channel mapped to 255 - c.
+
+    A lookup table rather than arithmetic over the pixels, because that is what
+    every other adjustment here already is — so Invert inherits the same
+    premultiplication handling and the same row banding for free.
+    """
+    return np.repeat(np.arange(255, -1, -1, dtype=np.uint8)[None, :], 3, axis=0)
+
+
+def apply_luts(img: QImage, luts: np.ndarray, mask: np.ndarray | None = None) -> None:
     """Apply (3, 256) per-channel LUTs in place, premultiplication-aware and
-    processed in row bands (same frugality contract as apply_settings)."""
+    processed in row bands (same frugality contract as apply_settings).
+
+    With `mask`, only the pixels it marks are written — the hard-selection
+    contract `_run_filter` and `_filter_region` hand to their operation. The
+    dialog-driven adjustments do not pass one; they work on whole layers
+    through `ScopedAdjustMixin`. Invert does, because it arrives through the
+    filter plumbing, where a selection is expected to confine the result.
+    """
     arr = view_u32(img)
     height = arr.shape[0]
     for y0 in range(0, height, CHUNK_ROWS):
@@ -112,12 +129,17 @@ def apply_luts(img: QImage, luts: np.ndarray) -> None:
             g = g * a // 255
             b = b * a // 255
 
-        chunk[:] = (
+        mapped = (
             (a.astype(np.uint32) << np.uint32(24))
             | (r.astype(np.uint32) << np.uint32(16))
             | (g.astype(np.uint32) << np.uint32(8))
             | b.astype(np.uint32)
         )
+        if mask is None:
+            chunk[:] = mapped
+        else:
+            band = mask[y0 : y0 + CHUNK_ROWS]
+            chunk[band] = mapped[band]
 
 
 def curve_lut(points: list[tuple[float, float]]) -> np.ndarray:
