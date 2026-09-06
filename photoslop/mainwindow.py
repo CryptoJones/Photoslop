@@ -732,6 +732,9 @@ class MainWindow(QMainWindow):
         m_edit.addSeparator()
         m_edit.addAction(self._act("&Fill Layer", "Alt+Backspace", self.action_fill_layer))
         m_edit.addAction(
+            self._act("Fill &Selection", "Shift+Backspace", self.action_fill_selection)
+        )
+        m_edit.addAction(
             self._act("Fill Selection (Content-&Aware)", "Shift+F5", self.action_content_aware_fill)
         )
         m_edit.addAction(
@@ -3270,6 +3273,46 @@ class MainWindow(QMainWindow):
             )
         )
         doc.notify_pixels(layer.bounds())
+
+    def action_fill_selection(self) -> None:
+        """Fill the selected region of the active layer with the foreground colour.
+
+        Fill Layer deliberately ignores the selection (`test_fill_layer_credits`),
+        so until now the only way to put a flat colour inside a wand or lasso
+        shape was to tap the bucket in it once per region of similar colour —
+        which is not the same operation, and on a multi-coloured region is not
+        the same result. This is the operation `docs/v1/selections.md` has
+        always described, and the desktop half of the iOS Fill Selection (#393).
+
+        Selection-aware plumbing comes from `_run_filter`, so a feathered
+        selection blends by weights exactly as a filter does. Synchronously:
+        writing one word per selected pixel is not worth a background task, and
+        the fill stays one immediate undo step at any layer size.
+        """
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        if doc.selection is None:
+            self.statusBar().showMessage("Fill Selection needs a selection", 4000)
+            return
+        from photoslop import npimage
+
+        colour = self.options.foreground
+        word = npimage.premultiplied_u32(
+            colour.red(), colour.green(), colour.blue(), colour.alpha()
+        )
+
+        def apply(image, mask):
+            pixels = npimage.view_u32(image)
+            # A feathered selection arrives here with no mask: `_run_filter`
+            # fills the layer and then blends it back by the weights, which is
+            # what makes the fill's edge fade.
+            if mask is None:
+                pixels[:] = word
+            else:
+                pixels[mask] = word
+
+        self._run_filter("Fill Selection", apply, force_sync=True)
 
     def _build_about(self) -> QMessageBox:
         from photoslop.appicon import mascot_pixmap

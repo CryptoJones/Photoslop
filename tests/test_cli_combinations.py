@@ -73,6 +73,7 @@ PAIR_ARGS = {
     "filter": ["--filter", "pixelate:size=4"],
     "flip": ["--flip", "h"],
     "fill": ["--fill", "10,200,40"],
+    "fill-selection": ["--select", "3,3,6,6", "--fill-selection", "10,200,40", "--deselect"],
     "text": ["--text", "2,2,8,0,120,255:Hi"],
     "text-rich": ["--text-rich", '2,2:<span style="color:#0078ff;font-size:8pt">Hi</span>'],
     "shape": ["--shape", "rect,2,2,10,8,255,0,0"],

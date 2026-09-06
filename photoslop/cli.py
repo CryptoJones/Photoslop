@@ -809,6 +809,41 @@ def _op_fill(ctx: Context, value: str) -> None:
         layer.fx_cache = None
 
 
+def _op_fill_selection(ctx: Context, value: str) -> None:
+    """Fill the selection with a flat colour — the headless Fill Selection.
+
+    `--fill` paints the whole layer and `--clear` empties the selection; this
+    is the third corner, and the one the iPad's Fill Selection button and the
+    desktop's Shift+Backspace do (#393). A feathered selection blends by the
+    same weights every other selection-aware op uses, so the fill's edge fades
+    rather than steps.
+    """
+    from PySide6.QtGui import QImage
+
+    from photoslop import npimage
+
+    r, g, b = _ints(value, 3, "--fill-selection")
+    if not all(0 <= channel <= 255 for channel in (r, g, b)):
+        raise _ValueError("--fill-selection: channels are 0..255")
+    doc = ctx.doc
+    if doc.selection is None:
+        raise _ValueError("--fill-selection needs a selection earlier in the pipeline")
+    word = npimage.premultiplied_u32(r, g, b, 255)
+    for layer in _target_layers(ctx):
+        before = QImage(layer.image)
+        layer.image = QImage(before)  # fresh COW handle; the write below detaches
+        if doc.selection_feather > 0:
+            weights = npimage.feathered_weights(
+                doc.selection, layer.image.size(), layer.offset, doc.selection_feather
+            )
+            npimage.view_u32(layer.image)[:] = word
+            npimage.blend_by_weights(layer.image, before, weights)
+        else:
+            mask = npimage.selection_mask(doc.selection, layer.image.size(), layer.offset)
+            npimage.view_u32(layer.image)[mask] = word
+        layer.fx_cache = None
+
+
 def _op_text(ctx: Context, value: str) -> None:
     from PySide6.QtCore import QPoint
     from PySide6.QtGui import QColor, QFont
@@ -1160,6 +1195,7 @@ OPS: dict = {
     "clear": (None, "erase the selection to transparency (headless Cut)", _op_clear),
     "flip": ("h|v", "mirror the target layer(s)", _op_flip),
     "fill": ("R,G,B", "fill the whole target layer with a colour", _op_fill),
+    "fill-selection": ("R,G,B", "fill the selection with a colour", _op_fill_selection),
     "text": (
         '"X,Y,SIZE[,R,G,B][,FAMILY]:TEXT"',
         "rasterise text onto a new layer (default colour black, system font)",

@@ -4,6 +4,51 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.35.0] — 2026-09-06
+
+### Added
+- **Fill a selection with a colour, on all three editions** (#393). The
+  operator's report was iPhone-shaped — "I need a way to fill a selection with
+  a color" — and the gap was everywhere. A selection could be made, deleted,
+  cut and copied; nothing painted it. The Paint Bucket is a different
+  operation: it grows a region of *similar colour* from a tap and stops at the
+  selection's edge, so a lasso across a photo takes the ink only where it was
+  tapped.
+  - **iOS**: **Fill Selection** joins Cut, Copy, Paste and Delete Selection in
+    the tool strip's selection group, one tap from a fresh selection, and sits
+    in the Select menu at ⌥Delete. It takes the ink the swatch already shows,
+    premultiplied exactly as the bucket premultiplies it, so the same swatch
+    writes the same word through either route; a feathered selection fills by
+    weight, fading over the ramp the way Delete Selection fades. One undo step.
+    Text layers are refused out loud, as they refuse the bucket.
+  - **Desktop**: Edit ▸ **Fill Selection** (`Shift+Backspace`), the foreground
+    colour through the existing selection plumbing, so a feathered selection
+    blends by the same weights a filter does. Fill Layer (`Alt+Backspace`)
+    still ignores the selection deliberately, as its test has always asserted;
+    these are two commands, not one.
+  - **CLI**: `--fill-selection R,G,B` — the third corner beside `--fill`
+    (whole layer) and `--clear` (empty the selection). 62 shared engine ops.
+  - `docs/v1/selections.md` had claimed since v1 that "every selection-aware
+    operation (fills, filters, adjustments, CLI ops)" honours the selection.
+    Fills were the exception; now they are not.
+
+## [2.33.2] — 2026-09-05
+
+### Changed
+- **App Store listing refreshed for the current app** (#257). The description
+  was written in August and named none of selections, live effects, fill
+  opacity, the eyedropper, or the eight filters.
+- **Screenshots retaken from the project's own artwork**, deterministically, by
+  the new `scripts/stage-store-screenshots.sh`. The previous set showed a
+  postage-stamp canvas floating in an empty grey screen with a hairline
+  scribble on it: the canvas renders zoom-to-fit, so on a phone a 1024-wide
+  document is a couple of hundred points across and the staging test's default
+  strokes landed sub-pixel. "The app appears empty" is a rejection cause the
+  issue itself warns about.
+- Corrected this repo's own claim that the Paid Applications agreement is
+  required for a free app. It is not: a free app with no in-app purchases is
+  covered by the Apple Developer Program License Agreement.
+
 ## [2.33.0] — 2026-09-05
 
 ### Added

@@ -24,6 +24,15 @@ Grow / shrink / smooth the selection with numpy morphology, previewed live.
 Gives the selection a soft edge; subsequent operations blend by normalized
 feathered weights (border-corrected — no under-counting at image edges).
 
+## Fill Selection (`Shift+Backspace`)
+Fills the selected region of the active layer with the foreground colour,
+one undo step; a feathered selection fades over its ramp. Fill Layer
+(`Alt+Backspace`) deliberately ignores the selection and paints the whole
+layer — the two are separate commands. Headless: `--fill-selection R,G,B`.
+The bucket is a third thing again: it grows a region of similar colour from
+a click and stops at the selection's edge, so on a selection spanning more
+than one colour it paints only the region clicked in.
+
 ## Content-Aware Fill (`Shift+F5`)
 Diffusion-inpaints the selected region from its boundary.
 

@@ -899,7 +899,8 @@ struct EditorView: View {
     .background(.bar)
   }
 
-  /// Cut, Copy, Paste and Delete for the selection that is up (#374).
+  /// Fill, Cut, Copy, Paste and Delete for the selection that is up (#374,
+  /// #393).
   ///
   /// These exist in the Select menu too, which is where their keyboard
   /// shortcuts live and where an iPad user with a keyboard will look. They are
@@ -909,10 +910,20 @@ struct EditorView: View {
   /// and never found Delete Selection, which has shipped since 2.22.0. An
   /// action nobody can find is not a shipped action.
   ///
-  /// Icon-only, because four labelled buttons is more than the phone strip's
-  /// leading zone holds, and each carries its label for VoiceOver and for the
-  /// UI tests.
+  /// Icon-only, because four labelled buttons was already more than the phone
+  /// strip's leading zone holds, and each carries its label for VoiceOver and
+  /// for the UI tests. The strip scrolls, so a fifth costs reach rather than
+  /// presence.
   @ViewBuilder private var selectionActionBar: some View {
+    // Fill leads the group: it is the one action here that *paints*, and it is
+    // the one the shape was made for (#393). Cut, Copy, Paste and Delete move
+    // the selected pixels somewhere else; this is what puts something in them.
+    Button(action: fillSelection) {
+      Label("Fill Selection", systemImage: "paintbrush.pointed.fill")
+    }
+    .labelStyle(.iconOnly)
+    .disabled(store.activeLayer == nil)
+    .accessibilityIdentifier("Fill Selection")
     Button(action: cutSelection) {
       Label("Cut", systemImage: "scissors")
     }
@@ -1214,6 +1225,14 @@ struct EditorView: View {
       .disabled(!store.canPaste)
       .keyboardShortcut("v", modifiers: .command)
       Divider()
+      // The desktop's Fill Layer shortcut, confined to the selection the way
+      // the fill itself is (#393). Backspace rather than Delete keeps it clear
+      // of Delete Selection, which is Delete with no modifier.
+      Button(action: fillSelection) {
+        Label("Fill Selection", systemImage: "paintbrush.pointed.fill")
+      }
+      .disabled(store.selection == nil || store.activeLayer == nil)
+      .keyboardShortcut(.delete, modifiers: .option)
       Button(role: .destructive, action: deleteSelection) {
         Label("Delete Selection", systemImage: "trash")
       }
@@ -2158,6 +2177,17 @@ struct EditorView: View {
       errorMessage =
         "Text layers stay editable, so a selection cannot be cut out of one. "
         + "Select a paint layer and delete from that."
+    }
+  }
+
+  /// Fill Selection (#393): the selected pixels take the ink as the swatch
+  /// shows it, so the shape the wand or the lasso made becomes a shape of flat
+  /// colour. A text layer is refused out loud, as the bucket refuses it.
+  private func fillSelection() {
+    if store.fillSelection(color: UIColor(inkColor), opacity: inkOpacity) == .textLayer {
+      errorMessage =
+        "Text layers stay editable, so paint cannot be filled into one. "
+        + "Select a paint layer, or add one, and fill that."
     }
   }
 

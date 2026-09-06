@@ -58,6 +58,7 @@ CASES = {
     "clear": (None, None),
     "flip": ("h", "diagonal"),
     "fill": ("10,200,40", "10,200"),
+    "fill-selection": ("10,200,40", "10,200"),
     "text": ("5,5,10:hello", "5,5,10"),
     "text-rich": ('5,5:<span style="color:#ff0000">Hi</span>', "5:oops"),
     "shape": ("rect,5,5,20,15,255,0,0", "blob,1,1,5,5,0,0,0"),
@@ -319,6 +320,64 @@ def test_select_confines_and_deselect_releases(qapp, tmp_path):
         == 0
     )
     assert out_image(tmp_path).pixelColor(30, 30).red() > 140
+
+
+def test_fill_selection_paints_the_shape_and_nothing_outside_it(qapp, tmp_path):
+    """`--fill` paints the layer and `--clear` empties the selection; this is
+    the third corner (#393). The whole selection takes the colour, which is
+    what tells it apart from the bucket's flood."""
+    src = make_input(tmp_path, QColor(100, 100, 100))
+    assert (
+        run(
+            [
+                src,
+                "--select",
+                "5,5,10,10",
+                "--fill-selection",
+                "10,200,40",
+                "--output",
+                tmp_path / "out.png",
+            ]
+        )
+        == 0
+    )
+    out = out_image(tmp_path)
+    assert out.pixelColor(7, 7) == QColor(10, 200, 40)
+    assert out.pixelColor(14, 14) == QColor(10, 200, 40)  # the far corner too
+    assert out.pixelColor(30, 30) == QColor(100, 100, 100)  # outside untouched
+
+
+def test_fill_selection_without_a_selection_is_a_usage_error(qapp, tmp_path):
+    src = make_input(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--fill-selection", "10,200,40", "--output", tmp_path / "out.png"])
+    assert exc.value.code == 2
+
+
+def test_fill_selection_fades_through_a_feathered_selection(qapp, tmp_path):
+    src = make_input(tmp_path, QColor(0, 0, 0))
+    assert (
+        run(
+            [
+                src,
+                "--select",
+                "20,10,20,20",
+                "--feather",
+                "6",
+                "--fill-selection",
+                "255,255,255",
+                "--output",
+                tmp_path / "out.png",
+            ]
+        )
+        == 0
+    )
+    out = out_image(tmp_path)
+    middle = out.pixelColor(30, 20).red()
+    edge = out.pixelColor(20, 20).red()
+    assert middle > 240, "the middle of a feathered selection still fills"
+    assert 0 < edge < middle, f"the ramp neither filled nor skipped: {edge}"
+    assert out.pixelColor(2, 2).red() == 0, "beyond the ramp nothing is painted"
 
 
 def test_select_ellipse_excludes_box_corners(qapp, tmp_path):

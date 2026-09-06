@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import XCTest
 
-/// Cut, Copy, Paste and Delete for a selection, as a running app sees them
-/// (#374).
+/// Fill, Cut, Copy, Paste and Delete for a selection, as a running app sees
+/// them (#374, #393).
 ///
 /// The unit tests prove the pixels are right. This proves the buttons are
 /// *findable*, which is the actual defect the issue was filed for: Delete
@@ -32,7 +32,7 @@ final class SelectionClipboardUITests: UITestCase {
 
     selectWithWand(app)
 
-    for action in ["Cut", "Copy", "Paste", "Delete Selection"] {
+    for action in ["Fill Selection", "Cut", "Copy", "Paste", "Delete Selection"] {
       XCTAssertTrue(
         app.buttons[action].firstMatch.waitForExistence(timeout: 10),
         "\(action) is not one tap away with a selection up")
@@ -72,6 +72,41 @@ final class SelectionClipboardUITests: UITestCase {
     XCTAssertEqual(
       XCTWaiter().wait(for: [restored], timeout: 20), .completed,
       "one undo did not take the whole cut back: \(probe.value ?? "nil")")
+  }
+
+  /// The one this feature was asked for (#393): a selection, one tap, and the
+  /// shape is a colour. The default ink is opaque black, so the probed pixel
+  /// goes from white to black.
+  func testFillFromTheStripPaintsTheSelectedPixels() {
+    let app = openEditor()
+    app.terminate()
+    _ = app.wait(for: .notRunning, timeout: 30)
+    app.openNewDocument()
+
+    let probe = app.staticTexts["Pixel probe"].firstMatch
+    XCTAssertTrue(probe.waitForExistence(timeout: 10), "the pixel probe is not exposed")
+    XCTAssertEqual(probe.value as? String, "FFFFFFFF", "a new document is opaque white")
+
+    selectWithWand(app)
+    let fill = app.buttons["Fill Selection"].firstMatch
+    XCTAssertTrue(fill.waitForExistence(timeout: 10), "Fill Selection is not on the strip")
+    fill.tap()
+
+    let filled = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value == %@", "FF000000"), object: probe)
+    XCTAssertEqual(
+      XCTWaiter().wait(for: [filled], timeout: 20), .completed,
+      "the pixel did not take the ink: \(probe.value ?? "nil")")
+
+    let undo = app.buttons["Undo"].firstMatch
+    XCTAssertTrue(undo.waitForExistence(timeout: 10))
+    XCTAssertTrue(undo.isEnabled, "the fill did not register an undo step")
+    undo.tap()
+    let restored = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value == %@", "FFFFFFFF"), object: probe)
+    XCTAssertEqual(
+      XCTWaiter().wait(for: [restored], timeout: 20), .completed,
+      "one undo did not take the fill back: \(probe.value ?? "nil")")
   }
 
   func testPasteBecomesAvailableAfterACopyAndAddsALayer() {

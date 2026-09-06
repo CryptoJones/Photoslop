@@ -16,44 +16,84 @@ final class StoreScreenshotStagingUITests: UITestCase {
       "screenshot staging runs only when explicitly asked for; see #257")
 
     let app = openEditor()
-    app.selectTool("Pen")
 
-    // Synthesized touches are finger touches, and finger drawing starts off
-    // on an iPad — without this every drag below pans the canvas instead of
-    // painting on it. A phone starts with it on (#313), which is why this
-    // reads the toggle rather than flipping it.
-    app.setFingerDrawing(true)
+    // Import the artwork rather than scribbling one.
+    //
+    // The screenshots this replaces drew a few strokes by hand and looked it:
+    // the canvas renders zoom-to-fit, so on a phone a 1024-wide document is a
+    // couple of hundred points across and a default 8px stroke lands
+    // sub-pixel — a hairline scratch on a postage stamp, in the middle of a
+    // grey screen. That reads as an empty app, which is a listing problem and
+    // an App Review one.
+    //
+    // `scripts/stage-store-screenshots.sh` puts `docs/appstore/artwork` into
+    // the simulator's photo library first, so the picture below is the
+    // project's own artwork. Importing it also puts the feature being
+    // photographed on screen: a photo brought in as its own layer.
+    XCTAssertTrue(app.openLayerList(), "the layer list could not be reached")
+    let addPhoto = app.buttons["New layer from photo"].firstMatch
+    XCTAssertTrue(addPhoto.waitForExistence(timeout: 15), "no way to import a photo")
+    addPhoto.tap()
 
-    // A little skyline of strokes, by coordinate *within the drawable canvas*
-    // — window fractions were tried first and mostly landed on the grey
-    // around the canvas, which pans the scroll view instead of painting.
-    let canvas = app.descendants(matching: .any)
+    XCTAssertTrue(app.buttons["Choose"].waitForExistence(timeout: 20), "no import source sheet")
+    app.buttons["Choose"].tap()
+
+    let thumbnails = app.images.matching(NSPredicate(format: "label BEGINSWITH 'Photo,'"))
+    try XCTSkipUnless(
+      thumbnails.element(boundBy: 0).waitForExistence(timeout: 25),
+      "the simulator's photo library is empty; run scripts/stage-store-screenshots.sh")
+    // The picker is a remote view and reports thumbnails as not hittable, so
+    // tap the middle of the element's own frame.
+    thumbnails.element(boundBy: 0)
+      .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    // Named `addButton`, not `add`: a local called `add` shadows XCTest's own
+    // `add(_:)` and the attachment at the end of this test silently stops
+    // compiling.
+    let addButton = app.buttons["Add"].firstMatch
+    if addButton.waitForExistence(timeout: 10) { addButton.tap() }
+
+    // The import lands behind a placement box; committing it leaves the
+    // editor's ordinary chrome, which is what the listing should show.
+    let place = app.buttons["Apply Placement"].firstMatch
+    XCTAssertTrue(place.waitForExistence(timeout: 30), "the placement box never appeared")
+    place.tap()
+
+    // Committing the placement can raise "the image hangs over the canvas".
+    // Answer it, or the placement bar stays up and the screenshot catches the
+    // placement chrome instead of the editor's.
+    let crop = app.buttons["Crop to Canvas"].firstMatch
+    if crop.waitForExistence(timeout: 5) { crop.tap() }
+
+    if place.exists {
+      // A second, deliberate tap on the button's own centre. The bar sits at
+      // the bottom of a regular-width window where the first tap can land on
+      // the safe-area inset rather than the control.
+      place.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+      if crop.waitForExistence(timeout: 5) { crop.tap() }
+    }
+    XCTAssertFalse(
+      place.waitForExistence(timeout: 8),
+      "the placement bar is still up: \(app.buttons.allElementsBoundByIndex.map(\.label))")
+
+    // Zoom in so the picture fills the frame. The canvas opens zoomed to fit
+    // the scroll view's whole area, which on a tall phone leaves a landscape
+    // document sitting small in the middle of a lot of grey — accurate, but it
+    // photographs as an empty app.
+    let art = app.descendants(matching: .any)
       .matching(NSPredicate(format: "label == %@", "Editable image canvas")).firstMatch
-    XCTAssertTrue(canvas.waitForExistence(timeout: 15), "no drawable canvas on screen")
-    func at(_ dx: CGFloat, _ dy: CGFloat) -> XCUICoordinate {
-      canvas.coordinate(withNormalizedOffset: CGVector(dx: dx, dy: dy))
-    }
-    let strokes: [((CGFloat, CGFloat), (CGFloat, CGFloat))] = [
-      ((0.20, 0.70), (0.32, 0.30)),
-      ((0.32, 0.30), (0.44, 0.70)),
-      ((0.44, 0.70), (0.56, 0.22)),
-      ((0.56, 0.22), (0.68, 0.70)),
-      ((0.15, 0.78), (0.85, 0.78)),
-    ]
-    for ((fromX, fromY), (toX, toY)) in strokes {
-      at(fromX, fromY).press(
-        forDuration: 0.15,
-        thenDragTo: at(toX, toY),
-        withVelocity: .slow,
-        thenHoldForDuration: 0.1)
-    }
-
-    app.addText("Proudly Made in Nebraska")
-    // Placing text leaves the move-it banner up; the screenshot wants the
-    // editor's ordinary chrome.
-    let done = app.buttons["Done"].firstMatch
-    if done.waitForExistence(timeout: 10), done.isHittable {
-      done.tap()
+    if art.waitForExistence(timeout: 15) {
+      // Adaptive, not a fixed factor: the same pinch that fills a phone
+      // overshoots an iPad, where a landscape canvas already spans most of the
+      // frame, and crops into the picture. Aim for the canvas covering about
+      // four fifths of the window's width, and never zoom out.
+      let window = app.windows.firstMatch.frame.width
+      let canvasWidth = art.frame.width
+      if window > 0, canvasWidth > 0 {
+        let wanted = (window * 0.8) / canvasWidth
+        if wanted > 1.15 {
+          art.pinch(withScale: min(wanted, 3.0), velocity: 1.2)
+        }
+      }
     }
 
     // The document autosaves; reaching the editor again is enough to know the

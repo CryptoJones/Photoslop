@@ -17,7 +17,8 @@
 ## Edit
 `Ctrl+Z` / `Ctrl+Shift+Z` undo/redo · `Ctrl+X` cut · `Ctrl+C` copy ·
 `Ctrl+V` paste as layer · `Ctrl+A` select all · `Ctrl+D` deselect ·
-`Alt+Backspace` Fill Layer · `Shift+F5` Content-Aware Fill ·
+`Alt+Backspace` Fill Layer · `Shift+Backspace` Fill Selection ·
+`Shift+F5` Content-Aware Fill ·
 `Ctrl+Alt+D` Feather Selection · `Ctrl+Alt+R` Refine Selection · `F9` Play Action
 
 ## Layers
