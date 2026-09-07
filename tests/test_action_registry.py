@@ -79,3 +79,15 @@ def test_registered_shortcuts_are_unique_and_keep_escape_for_canvas(qapp):
     assert win.action_registry.entries["export"][0].shortcut == "Ctrl+Alt+Shift+S"
     assert win.action_registry.entries["cancel.tasks"][0].shortcut == "Ctrl+Esc"
     assert "Esc" not in shortcuts
+
+
+def test_quit_stays_enabled_without_a_document(qapp):
+    win = MainWindow()
+    win.action_registry.update()
+    spec, action = win.action_registry.entries["close"]
+    assert spec.label == "Quit"
+    assert spec.prerequisite == "always"
+    assert action.isEnabled()
+    win.add_document(Document.new(QSize(20, 20), 72, "doc", QColor("white")))
+    win.action_registry.update()
+    assert action.isEnabled()

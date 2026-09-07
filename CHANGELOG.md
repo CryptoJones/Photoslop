@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.36.2] — 2026-09-14
+
+### Fixed
+- **File ▸ Quit was greyed out on the desktop whenever no document was open.**
+  The action registry infers each command's prerequisite from its slot's name,
+  and Quit's slot is the window's own `close`, which carries none of the
+  always-on tokens (`new`, `open`, `about`, `quit`, …), so it was filed under
+  "needs a document" alongside Save and Close Tab. The item now declares
+  `always` explicitly, and a test holds it enabled on an empty window. iOS has
+  no Quit item and the CLI has no menu, so nothing is owed on the other two
+  editions.
+
 ## [2.36.1] — 2026-09-14
 
 ### Fixed
