@@ -696,7 +696,19 @@ class MainWindow(QMainWindow):
         m_file.addAction(self._act("&Export…", "Ctrl+Alt+Shift+S", self.action_export))
         m_file.addSeparator()
         m_file.addAction(self._act("&Close Tab", "Ctrl+W", self.action_close_tab))
-        m_file.addAction(self._act("&Quit", "Ctrl+Q", self.close, role=QAction.MenuRole.QuitRole))
+        m_file.addAction(
+            self._act(
+                "&Quit",
+                "Ctrl+Q",
+                self.close,
+                role=QAction.MenuRole.QuitRole,
+                # The slot is QMainWindow.close, whose name carries none of the
+                # tokens the registry treats as always-on, so without this the
+                # inference files Quit under "document" and the item greys out
+                # the moment the last tab closes (or before the first opens).
+                prerequisite="always",
+            )
+        )
 
         m_edit = menu.addMenu("&Edit")
         m_edit.addAction(
