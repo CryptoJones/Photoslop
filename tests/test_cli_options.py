@@ -25,6 +25,7 @@ CASES = {
     "content-aware-scale": ("40x30", "40"),
     "levels": ("10,240,1.2", "10,240"),
     "auto-levels": (None, None),
+    "invert": (None, None),
     "hue-sat": ("30,10,0", "30"),
     "color-balance": ("10,0,0,0,0,0,0,0,-10", "1,2,3"),
     "curves": ("0:20,255:235", "0:20:40"),

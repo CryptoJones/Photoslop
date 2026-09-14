@@ -800,6 +800,8 @@ class MainWindow(QMainWindow):
         m_adjustments.addAction(self._act("&Point Color…", "Ctrl+Shift+U", self.action_point_color))
         m_adjustments.addAction(self._act("Color &Balance…", "Ctrl+B", self.action_color_balance))
         m_adjustments.addAction(self._act("Cur&ves…", "Ctrl+M", self.action_curves))
+        m_adjustments.addSeparator()
+        m_adjustments.addAction(self._act("&Invert", "Ctrl+I", self.action_invert))
         m_image.addSeparator()
         m_image.addAction(self._act("Assign &Profile…", None, self.action_assign_profile))
         m_image.addAction(self._act("Convert to Profi&le…", None, self.action_convert_profile))
@@ -3076,6 +3078,20 @@ class MainWindow(QMainWindow):
         else:
             color.convert_profile(doc, space)
         self.statusBar().showMessage(f"Document profile: {color.describe(doc.icc_space)}", 4000)
+
+    def action_invert(self) -> None:
+        """Image ▸ Adjustments ▸ Invert: every channel to 255 - c.
+
+        The only adjustment here with no dialog, so it goes through the filter
+        plumbing rather than `ScopedAdjustMixin`: one undo step, and a
+        selection confines it the way it confines a filter. Photoshop's Ctrl+I,
+        which is free here — the eyedropper is plain `I`, no modifier.
+        """
+        from photoslop.adjust import apply_luts, invert_luts
+
+        luts = invert_luts()
+        self._run_filter("Invert", lambda img, m: apply_luts(img, luts, m))
+        self._record_step("Invert", lambda w: w.action_invert())
 
     def action_curves(self) -> None:
         doc = self.current_doc()

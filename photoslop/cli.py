@@ -262,6 +262,14 @@ def _op_levels(ctx: Context, value: str) -> None:
         _filter_region(ctx, layer, lambda img, m, luts=luts: adjust.apply_luts(img, luts))
 
 
+def _op_invert(ctx: Context, value: str) -> None:
+    from photoslop import adjust
+
+    luts = adjust.invert_luts()
+    for layer in _target_layers(ctx):
+        _filter_region(ctx, layer, lambda img, m, luts=luts: adjust.apply_luts(img, luts, m))
+
+
 def _op_auto_levels(ctx: Context, value: str) -> None:
     import numpy as np
 
@@ -1111,6 +1119,7 @@ OPS: dict = {
     "content-aware-scale": ("WxH", "seam-carve the target layer(s)", _op_cas),
     "levels": ("B,W,GAMMA", "levels adjustment", _op_levels),
     "auto-levels": (None, "0.1%%-percentile auto levels", _op_auto_levels),
+    "invert": (None, "invert every channel (255 - c); honours a selection", _op_invert),
     "hue-sat": ("H,S,L", "hue/saturation/lightness (-180..180,-100..100)", _op_hue_sat),
     "color-balance": ("9 INTS", "shadows,midtones,highlights r,g,b each", _op_color_balance),
     "curves": ("X:Y,...", "master curve points in 0..255", _op_curves),

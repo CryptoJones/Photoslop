@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.36.0] — 2026-09-06
+
+### Added
+- **Invert** under Image ▸ Adjustments (`Ctrl+I`), and `photoslop-cli
+  --invert`. Every channel to `255 - c`, as a LUT so it inherits the same
+  premultiplication handling and row banding the other adjustments use.
+  It is the only adjustment in that menu with no dialog, so it runs through the
+  filter plumbing rather than the preview-and-commit path: one undo step, and
+  **a selection confines it** — which the dialog-driven adjustments do not do,
+  since they work on whole layers through `ScopedAdjustMixin`.
+- `adjust.apply_luts` takes an optional `mask`, the hard-selection contract
+  `_run_filter` and `_filter_region` already hand their operation. Existing
+  callers pass none and are unchanged.
+
 ## [2.35.0] — 2026-09-06
 
 ### Added

@@ -68,6 +68,7 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--content-aware-scale` `WxH` | seam-carve the target layer(s) |
 | `--levels` `B,W,GAMMA` | levels adjustment |
 | `--auto-levels` | 0.1%-percentile auto levels |
+| `--invert` | invert every channel (`255 - c`); honours a selection |
 | `--hue-sat` `H,S,L` | hue/saturation/lightness (-180..180,-100..100) |
 | `--raw-develop` `"KEY=VAL,..."` | re-develop a raw input: `exposure` (EV), `temp` (K), `tint`, `highlights`, `shadows` — 16-bit transient, 8-bit out |
 | `--lens-correct` | distortion + vignetting from the input's EXIF (`photoslop[lens]`) |
