@@ -4,6 +4,33 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.36.1] — 2026-09-14
+
+### Fixed
+- **iOS asked for the whole photo library when it only wanted to save one
+  picture.** `PhotoLibrarySaver` requests `.addOnly` access, but
+  `NSPhotoLibraryAddUsageDescription` was missing, so iOS fell back to the
+  read/write key and showed the full-library prompt: thumbnails of the user's
+  photos, a "Limit Access…" option, and the *import* usage string —
+  "Photoslop imports images you choose for editing" — shown to someone who had
+  just tapped Export. Far more access than the app needs, a purpose string that
+  does not describe what is happening, and a Guideline 5.1.1 risk on
+  submission. The add-only key is now declared and the prompt is the plain
+  "add to your photo library" one.
+- The key belongs in `ipados/project.yml`, not in `Info.plist`: XcodeGen
+  generates that file from the spec, so an edit to the plist is overwritten by
+  the next `xcodegen generate` and never reaches the build. The first attempt
+  at this fix did exactly that and looked applied while the built app still
+  carried the old keys.
+
+### Added
+- `FirstRunPhotosTests`, which exercises export-to-Photos with the permission
+  still undecided — the state a first-run user and App Review are in. Every
+  other export test runs against a simulator that was granted `photos-add`
+  beforehand, which is precisely why this was invisible: the prompt never
+  appeared, so nobody saw what it said. It asserts the read-only prompt does
+  *not* appear, then answers the real one and requires the save to confirm.
+
 ## [2.36.0] — 2026-09-06
 
 ### Added
