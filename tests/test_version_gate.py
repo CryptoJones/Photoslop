@@ -139,6 +139,9 @@ def test_bump_gate_compares_versions_not_strings(base, rejected):
         ("feat/crop-layer", False),
         ("", False),
         ("not-a-release/v1", False),  # prefix must be at the start
+        ("dependabot/pip/python-dependencies-6577f2fa5f", True),
+        ("dependabot/github_actions/github-actions-03db81fe05", True),
+        ("fix/dependabot/x", False),
     ],
 )
 def test_release_branches_are_exempt_from_the_bump_rule(head_ref, exempt):
