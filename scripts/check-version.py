@@ -49,6 +49,7 @@ def _base_version(base_ref: str) -> str | None:
 
 
 RELEASE_BRANCH_PREFIX = "release/"
+DEPENDABOT_BRANCH_PREFIX = "dependabot/"
 
 
 def _check_version_was_bumped(version: str, base_ref: str, head_ref: str = "") -> None:
@@ -67,6 +68,14 @@ def _check_version_was_bumped(version: str, base_ref: str, head_ref: str = "") -
         # so the rule would make the release wrong rather than keep it honest.
         print(
             f"version {version}: {head_ref} is a release branch, bump check skipped",
+            file=sys.stderr,
+        )
+        return
+    if head_ref.startswith(DEPENDABOT_BRANCH_PREFIX):
+        # Dependabot cannot edit the version declarations, so its PRs could
+        # never pass. A dependency bump rides along with the next release.
+        print(
+            f"version {version}: {head_ref} is a dependabot branch, bump check skipped",
             file=sys.stderr,
         )
         return

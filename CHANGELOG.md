@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.36.3] — 2026-09-15
+
+### Fixed
+- **CI: Dependabot PRs could never pass the version gate.** Every PR must bump
+  the version, but Dependabot cannot edit the version declarations, so
+  `check-version.py` failed each of its PRs (#399). `dependabot/` branches are
+  now exempt, like `release/` branches.
+- **CI: `critical-coverage` timed out on main after passing.** The whole suite
+  under coverage takes ~23 minutes, and the floor check then ran past the
+  25-minute job limit (#398's push run). The limit is now 40 minutes.
+
 ## [2.36.2] — 2026-09-14
 
 ### Fixed
