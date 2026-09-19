@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.37.1] — 2026-09-19
+
+### Fixed
+- **Security: `pip-audit` failed the `audit` check on three pre-existing `anyio` CVEs.**
+  `anyio` 4.14.1 (locked in `uv.lock`, pulled in transitively by MCP, httpx, pydantic
+  and starlette) carried CVE-2026-63374, CVE-2026-64847 and CVE-2026-63349, fixed in
+  4.14.2. Bumped to 4.15.1. This is a follow-up to the 2.37.0 Invert port (#402).
+
 ## [2.37.0] — 2026-09-19
 
 ### Added
