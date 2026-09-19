@@ -175,6 +175,39 @@ enum FilterAlgorithms {
     }
   }
 
+  // MARK: - Invert
+
+  /// `Image ▸ Adjustments ▸ Invert` and `photoslop-cli --invert` (#389): each
+  /// channel mapped to `255 - c` on straight (un-premultiplied) colour, so the
+  /// same pixels come out at any opacity. The desktop arrives here through
+  /// `apply_luts(image, invert_luts())` — a reverse-ramp LUT that un-premultiply,
+  /// inverts and re-premultiplies in exactly these integer steps — so this port
+  /// matches it word for word. A selection is honoured by `EditorStore.applyFilter`,
+  /// which restores the pixels outside it, as on desktop.
+  static func invert(_ buffer: inout PixelBuffer) {
+    let width = buffer.width, height = buffer.height
+    buffer.withMutableWords { words in
+      PixelBuffer.forEachBand(height: height) { rows in
+        for index in (rows.lowerBound * width)..<(rows.upperBound * width) {
+          let word = words[index]
+          let a = alpha(word)
+          // un-premultiply to straight colour, floor-divided as the desktop's
+          // `r * 255 // safe_a` does (no value can actually exceed 255)
+          let safeA = max(a, 1)
+          let sr = min(255, red(word) * 255 / safeA)
+          let sg = min(255, green(word) * 255 / safeA)
+          let sb = min(255, blue(word) * 255 / safeA)
+          // invert: the reverse ramp is 255 - c per channel
+          let r = 255 - sr
+          let g = 255 - sg
+          let b = 255 - sb
+          // re-premultiply by this pixel's own alpha
+          words[index] = pack(a: a, r: r * a / 255, g: g * a / 255, b: b * a / 255)
+        }
+      }
+    }
+  }
+
   // MARK: - Pixelate
 
   /// `PixelateFilter`: shrink by `size` and enlarge back, both nearest.

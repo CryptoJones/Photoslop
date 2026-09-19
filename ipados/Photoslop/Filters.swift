@@ -88,6 +88,10 @@ enum FilterKind: String, CaseIterable, Identifiable {
   case datamosh
   case filmNegative = "film-negative"
   case beamDither = "beam-dither"
+  /// `Image ▸ Adjustments ▸ Invert` / `photoslop-cli --invert` — the only
+  /// adjustment ported so far (#389). It takes no parameters, so a filter row
+  /// with no `ParamSpec`s applies it directly instead of opening a sheet.
+  case invert
 
   var id: String { rawValue }
 
@@ -102,6 +106,7 @@ enum FilterKind: String, CaseIterable, Identifiable {
     case .datamosh: return "Datamosh + Chromatic Aberration"
     case .filmNegative: return "Film Negative → Positive"
     case .beamDither: return "Beam Dither"
+    case .invert: return "Invert"
     }
   }
 
@@ -182,6 +187,8 @@ enum FilterKind: String, CaseIterable, Identifiable {
         FilterParamSpec(
           name: "background", label: "Background", kind: .string(default: "#000000")),
       ]
+    case .invert:
+      return []
     }
   }
 
@@ -198,7 +205,7 @@ enum FilterKind: String, CaseIterable, Identifiable {
     case .denoise: return 2
     case .datamosh: return 2
     case .retroConsole: return 1
-    case .sepia, .pixelate, .pixelSort, .filmNegative: return 0
+    case .sepia, .pixelate, .pixelSort, .filmNegative, .invert: return 0
     // The luminance plane, the downscaled working plane, and the rendered
     // tone plane, all Double and all alive together.
     case .beamDither: return 3
@@ -236,6 +243,8 @@ enum FilterKind: String, CaseIterable, Identifiable {
       let mode =
         FilterAlgorithms.FilmNegativeMode(rawValue: params.choice("mode", default: "auto")) ?? .auto
       FilterAlgorithms.filmNegative(&buffer, mode: mode, clip: params.float("clip", default: 0.5))
+    case .invert:
+      FilterAlgorithms.invert(&buffer)
     }
   }
 }

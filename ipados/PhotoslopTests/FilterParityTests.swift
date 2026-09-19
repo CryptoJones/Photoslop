@@ -36,7 +36,7 @@ final class FilterParityTests: XCTestCase {
 
   /// Every fixture case, every filter, word for word.
   func testEveryFixtureCaseMatchesTheDesktop() throws {
-    XCTAssertEqual(FilterFixture.cases.count, 30)
+    XCTAssertEqual(FilterFixture.cases.count, 32)
     var covered = Set<FilterKind>()
     for testCase in FilterFixture.cases {
       let kind = try XCTUnwrap(FilterKind(rawValue: testCase.filter), "filter \(testCase.filter)")
@@ -187,8 +187,9 @@ final class FilterParityTests: XCTestCase {
       FilterKind.allCases.map(\.rawValue),
       [
         "sepia", "pixelate", "denoise", "retro-console", "pixel-sort", "datamosh",
-        "film-negative", "beam-dither",
+        "film-negative", "beam-dither", "invert",
       ])
+    XCTAssertEqual(FilterKind.invert.defaults, [:])
   }
 
   // MARK: - Through the store
@@ -260,6 +261,42 @@ final class FilterParityTests: XCTestCase {
       }
     }
     XCTAssertGreaterThan(changedInside, 0, "the selection contained something to change")
+  }
+
+  /// Invert is one undo step, and the selection confines it — the iOS mirror
+  /// of the desktop `test_menu_action_is_one_undo_step_and_selection_aware`
+  /// (#389): selected pixels are inverted, the rest restored, and undo puts
+  /// every byte back under the action name "Invert".
+  func testInvertIsOneUndoStepAndSelectionAware() throws {
+    let (store, undoManager, before) = try makeStore(with: "gradient16")
+    var bits = [Bool](repeating: false, count: 16 * 12)
+    for y in 3..<9 {
+      for x in 2..<10 { bits[y * 16 + x] = true }
+    }
+    store.setSelection(SelectionMask(width: 16, height: 12, bits: bits))
+    var whole = PixelBuffer(width: 16, height: 12, words: before)
+    FilterAlgorithms.invert(&whole)
+
+    undoManager.beginUndoGrouping()
+    XCTAssertEqual(store.applyFilter(.invert, params: [:]), .applied)
+    undoManager.endUndoGrouping()
+    XCTAssertTrue(undoManager.canUndo)
+    XCTAssertEqual(undoManager.undoActionName, "Invert")
+
+    let after = try layerWords(store)
+    var changedInside = 0
+    for i in 0..<after.count {
+      if bits[i] {
+        XCTAssertEqual(after[i], whole.words[i], "selected pixel \(i) is inverted")
+        if after[i] != before[i] { changedInside += 1 }
+      } else {
+        XCTAssertEqual(after[i], before[i], "pixel \(i) outside the selection is untouched")
+      }
+    }
+    XCTAssertGreaterThan(changedInside, 0, "the selection contained something to invert")
+
+    undoManager.undo()
+    XCTAssertEqual(try layerWords(store), before)
   }
 
   /// A text layer is refused, and the refusal registers no undo step.

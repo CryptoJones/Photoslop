@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.37.0] — 2026-09-19
+
+### Added
+- **Invert is now available on iPadOS/iOS (#389).** `Image ▸ Adjustments ▸
+  Invert` and `photoslop-cli --invert` gain their three-platform parity
+  counterpart: a parameterless `Invert` row in the iOS **Filters** submenu that
+  applies in one tap, no sheet, and an exact integer-arithmetic port of the
+  desktop LUT path — un-premultiply → `255 - c` → re-premultiply — so every
+  pixel matches `apply_luts(img, invert_luts())`, selections included.
+
 ## [2.36.3] — 2026-09-15
 
 ### Fixed

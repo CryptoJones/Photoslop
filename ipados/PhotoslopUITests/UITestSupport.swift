@@ -338,6 +338,7 @@ extension XCUIApplication {
     "Pixel Sort (Glitch)": "Filters",
     "Datamosh + Chromatic Aberration": "Filters",
     "Film Negative → Positive": "Filters",
+    "Invert": "Filters",
   ]
 
   /// Open More Actions and wait until its rows are actually on screen.
