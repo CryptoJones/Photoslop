@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 from PySide6.QtGui import QImage
 
-from photoslop import filters, npimage
+from photoslop import adjust, filters, npimage
 
 OUT = Path(__file__).resolve().parent.parent / "ipados/PhotoslopTests/Fixtures/FilterFixture.swift"
 
@@ -282,6 +282,22 @@ CASES = [
         {"mode": "color", "clip": 0.0},
         "colour with nothing clipped",
     ),
+    (
+        "invert",
+        "default",
+        "gradient16",
+        {},
+        "255 - c on a gradient that carries a transparent pixel, a half-alpha"
+        " column and a quarter-alpha row — the un-premultiply and re-premultiply"
+        " path the desktop LUTs take",
+    ),
+    (
+        "invert",
+        "wide",
+        "gradient22",
+        {},
+        "the same alpha traps on a 22x18 canvas, exercising a band boundary",
+    ),
 ]
 
 
@@ -303,6 +319,8 @@ def swift_params(params: dict, cls=None) -> str:
             parts.append(f'"{key}": .float({value!r})')
         else:
             parts.append(f'"{key}": .int({int(value)})')
+    if not parts:
+        return "[:]"
     return "[" + ", ".join(parts) + "]"
 
 
@@ -341,10 +359,20 @@ def main() -> int:
         out += [f'    "{name}": Image(width: {w}, height: {h}, words: [', words(arr), "    ]),"]
     out += ["  ]", "", "  static let cases: [Case] = ["]
     for filter_name, case_name, input_name, params, doc in CASES:
-        cls = registry[filter_name]
         _w, _h, arr = inputs[input_name]
         img = make_image(arr.copy())
-        cls().apply(img, dict(params))
+        if filter_name == "invert":
+            # Invert is an adjustment (desktop Image ▸ Adjustments ▸ Invert and
+            # `--invert`), not a filter-registry plugin: `examples/invert-filter`
+            # already reserves the `invert` name with different maths. So drive
+            # Invert through its real desktop code path — the reverse-ramp LUTs in
+            # `apply_luts` — and let the port below match those words, not a
+            # reconstruction of them (#389).
+            cls = None
+            adjust.apply_luts(img, adjust.invert_luts())
+        else:
+            cls = registry[filter_name]
+            cls().apply(img, dict(params))
         result = npimage.view_u32(img).copy()
         expect_change = filter_name != "sepia" or params["amount"] != 0
         if expect_change and np.array_equal(result, arr):

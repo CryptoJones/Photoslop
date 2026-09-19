@@ -1162,10 +1162,18 @@ struct EditorView: View {
   private var filtersMenu: some View {
     Menu {
       ForEach(FilterKind.allCases) { kind in
-        Button {
-          filterToConfigure = kind
-        } label: {
-          Text(kind.label)
+        if kind.params.isEmpty {
+          // A parameterless adjustment has no sheet to show — Invert (#389),
+          // like the desktop's Ctrl+I, applies in one tap.
+          Button(kind.label) {
+            runFilter(kind, params: [:])
+          }
+        } else {
+          Button {
+            filterToConfigure = kind
+          } label: {
+            Text(kind.label)
+          }
         }
       }
     } label: {

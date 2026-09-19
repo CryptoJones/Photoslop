@@ -63,4 +63,37 @@ final class FilterUITests: UITestCase {
     XCTAssertTrue(cancel.waitForNonExistence(timeout: 10), "the sheet did not close")
     XCTAssertEqual(probe.value as? String, "FFFFFFFF", "Cancel changed a pixel")
   }
+
+  /// Invert has no parameters, so its Filters row applies directly — no sheet,
+  /// no Apply step — the way the desktop's Ctrl+I works (#389). An opaque white
+  /// background inverts to opaque black, and Undo restores it.
+  func testInvertFromTheFiltersMenuInvertsAndUndoRestoresIt() {
+    let app = openEditor()
+    app.terminate()
+    _ = app.wait(for: .notRunning, timeout: 30)
+    app.openNewDocument()
+
+    let probe = app.staticTexts["Pixel probe"].firstMatch
+    XCTAssertTrue(probe.waitForExistence(timeout: 10), "the pixel probe is not exposed")
+    XCTAssertEqual(
+      probe.value as? String, "FFFFFFFF",
+      "a new document's background is opaque white")
+
+    app.chooseAction("Invert")
+    let inverted = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value == %@", "FF000000"), object: probe)
+    XCTAssertEqual(
+      XCTWaiter().wait(for: [inverted], timeout: 20), .completed,
+      "the probe pixel is not the desktop's invert of white: \(probe.value ?? "nil")")
+
+    let undo = app.buttons["Undo"].firstMatch
+    XCTAssertTrue(undo.waitForExistence(timeout: 10))
+    XCTAssertTrue(undo.isEnabled, "Invert did not register an undo step")
+    undo.tap()
+    let restored = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value == %@", "FFFFFFFF"), object: probe)
+    XCTAssertEqual(
+      XCTWaiter().wait(for: [restored], timeout: 20), .completed,
+      "undo did not restore the white background")
+  }
 }
