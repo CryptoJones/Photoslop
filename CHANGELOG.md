@@ -27,7 +27,11 @@ follows [SemVer](https://semver.org).
   was still kept for, the XCTest daemon failing to start a UI-testing session
   (`XCTDaemonErrorDomain Code=19`) before any test runs, is re-run once by
   `scripts/xcodebuild-test.sh`, and only that one. Every other failure now reds
-  the build the first time it happens.
+  the build the first time it happens. The first run without retries showed
+  what they had been hiding: the #394 test had failed on CI in 8 of the last 12
+  iPadOS runs and passed only on the retry, and `NewDocumentUITests` gave the
+  canvas-size sheet 30 seconds where the shared launch helper gives it 60. Both
+  are fixed.
 
 ## [2.37.1] — 2026-09-19
 

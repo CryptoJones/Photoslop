@@ -12,12 +12,17 @@ final class NewDocumentUITests: UITestCase {
   /// Both tests here are about creating a document, so neither can reuse the
   /// shared editor: `openLaunchScene()` starts them from a fresh launch and
   /// tells the base class its editor is gone.
+  ///
+  /// The sheet gets the same 60 seconds `openNewDocument()` gives it. A cold
+  /// launch on the CI runner is about three times slower than a dev machine
+  /// (#236); at 30 seconds this failed on CI once retries were removed (#238),
+  /// while the editor was simply still coming up.
   func testCreatingADocumentAsksForItsCanvasSize() {
     let app = openLaunchScene()
     app.buttons["Create Document"].firstMatch.tap()
 
     XCTAssertTrue(
-      app.buttons["Use This Size"].waitForExistence(timeout: 30),
+      app.buttons["Use This Size"].waitForExistence(timeout: 60),
       "a new document opened without ever asking for its canvas size")
     XCTAssertTrue(app.buttons["Cancel"].exists, "the sheet should be refusable")
   }
@@ -28,7 +33,7 @@ final class NewDocumentUITests: UITestCase {
     app.buttons["Create Document"].firstMatch.tap()
 
     let useThisSize = app.buttons["Use This Size"]
-    XCTAssertTrue(useThisSize.waitForExistence(timeout: 30), "size sheet never appeared")
+    XCTAssertTrue(useThisSize.waitForExistence(timeout: 60), "size sheet never appeared")
 
     let hd = app.buttons["HD, 1920 by 1080 px"]
     XCTAssertTrue(hd.waitForExistence(timeout: 10), "the preset list is missing HD")
