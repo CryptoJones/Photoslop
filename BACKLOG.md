@@ -8,11 +8,10 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
-- [x] Port Invert to iOS for parity with the desktop's Image ▸ Adjustments ▸
-  Invert and `--invert`. The maths is trivial over `PixelBuffer`; the open
-  question is where it belongs, since iOS has a Filters submenu and no
-  Adjustments group — worth deciding once, because Levels and Curves will want
-  the same home ([#389](https://github.com/CryptoJones/Photoslop/issues/389))
+- [ ] iOS builds drop `NSPhotoLibraryAddUsageDescription`: #391 added it to
+  `Info.plist`, which XcodeGen regenerates, and never to `project.yml`, so
+  shipped builds still ask for the whole library on export
+  ([#404](https://github.com/CryptoJones/Photoslop/issues/404))
 
 ### Desktop
 
@@ -26,23 +25,7 @@ sync — check an item here when its issue closes.
   unrelated to the change under test is a gate people learn to push past
   ([#394](https://github.com/CryptoJones/Photoslop/issues/394))
 
-
-### Windows
-
-- [ ] Sign the Windows portable bundle via SignPath Foundation's free OSS code
-  signing: policy page is in `docs/code-signing-policy.md`; apply at
-  signpath.org, then wire signing into `portable.yml` for `v*` tag builds and
-  drop `UNSIGNED` from the artifact name
-  ([#287](https://github.com/CryptoJones/Photoslop/issues/287))
-
 ### Standing
-
-- [ ] App Store GA — what is needed beyond TestFlight is now prepared in
-  `docs/appstore/` (metadata, age-rating answers, Data-Not-Collected privacy
-  label, screenshots at both required sizes, and a repeatable staging test to
-  retake them). The app is to be **free**. What remains is the maintainer's:
-  the paid-agreements acceptance and the final Submit
-  ([#257](https://github.com/CryptoJones/Photoslop/issues/257))
 
 - [ ] The iPadOS job still passes `-retry-tests-on-failure -test-iterations 2`,
   for one failure mode only: the XCTest daemon failing to initialise a UI-testing
@@ -52,7 +35,31 @@ sync — check an item here when its issue closes.
   simulators. Closing this needs a runner that does not drop the accessibility
   session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
+## On hold
+
+Paused at the maintainer's direction (2026-09-23) until there has been
+more testing. Both issues carry the `on-hold` label.
+
+- [ ] Sign the Windows portable bundle via SignPath Foundation's free OSS code
+  signing: policy page is in `docs/code-signing-policy.md`; apply at
+  signpath.org, then wire signing into `portable.yml` for `v*` tag builds and
+  drop `UNSIGNED` from the artifact name
+  ([#287](https://github.com/CryptoJones/Photoslop/issues/287))
+
+- [ ] App Store GA — what is needed beyond TestFlight is now prepared in
+  `docs/appstore/` (metadata, age-rating answers, Data-Not-Collected privacy
+  label, screenshots at both required sizes, and a repeatable staging test to
+  retake them). The app is to be **free**. What remains is the maintainer's:
+  the paid-agreements acceptance and the final Submit
+  ([#257](https://github.com/CryptoJones/Photoslop/issues/257))
+
 ## Done
+
+- [x] Port Invert to iOS for parity with the desktop's Image ▸ Adjustments ▸
+  Invert and `--invert`. The maths is trivial over `PixelBuffer`; the open
+  question is where it belongs, since iOS has a Filters submenu and no
+  Adjustments group — worth deciding once, because Levels and Curves will want
+  the same home ([#389](https://github.com/CryptoJones/Photoslop/issues/389)) — shipped v2.37.0
 
 - [x] Fill a selection with a colour, on all three editions: iOS **Fill
   Selection** in the tool strip's selection group and the Select menu

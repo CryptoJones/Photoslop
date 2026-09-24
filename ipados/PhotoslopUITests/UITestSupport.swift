@@ -112,6 +112,26 @@ class UITestCase: XCTestCase {
     return app
   }
 
+  /// The editor on a document this test made, not the shared one.
+  ///
+  /// For tests whose assertion depends on how much is already in the document.
+  /// The layer list is a lazy `List`, so only rows on screen reach the
+  /// accessibility tree: once earlier tests have stacked enough layers into the
+  /// shared document, `cells.count` stops at the screen edge and a "two more
+  /// layers" delta never arrives (#394). A new document starts with one layer,
+  /// so the whole list fits. Costs one launch; the editor it reaches becomes
+  /// the shared one for the tests after it.
+  @discardableResult
+  func openFreshEditor(file: StaticString = #filePath, line: UInt = #line) -> XCUIApplication {
+    let app = Self.app
+    Self.editorIsUp = false
+    app.terminate()
+    _ = app.wait(for: .notRunning, timeout: 30)
+    app.openNewDocument(file: file, line: line)
+    Self.editorIsUp = true
+    return app
+  }
+
   /// A fresh launch stopped on the launch scene, for tests about document
   /// creation itself. Invalidates the shared editor: after this, the next
   /// `openEditor()` launches from scratch.

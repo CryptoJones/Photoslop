@@ -5,6 +5,7 @@ on:
     paths:
       - "ipados/**"
       - "scripts/build-ipados.sh"
+      - "scripts/xcodebuild-test.sh"
       - ".github/workflows/ipados.yml"
   push:
     tags:
@@ -76,15 +77,12 @@ jobs:
           xcrun simctl list devices available | grep -E "$IPAD_ID|$IPHONE_ID"
           echo "ipad=$IPAD_ID" >> "$GITHUB_OUTPUT"
           echo "iphone=$IPHONE_ID" >> "$GITHUB_OUTPUT"
-      # Two iterations, and for exactly one failure mode: the XCTest daemon
-      # failing to bring up a UI-testing session at all —
-      #
-      #   Failed to initialize for UI testing: XCTDaemonErrorDomain Code=19
-      #   "Failed call to AXDisableAccessibilityOnTermination"
-      #
-      # Zero tests execute when that happens. There is no app involved, no
-      # assertion to wait on, and nothing test code can reach; retrying the
-      # invocation is the only remedy available to us.
+      # No test retries (#238). The one failure mode that is not ours — the
+      # XCTest daemon failing to bring up a UI-testing session at all
+      # (XCTDaemonErrorDomain Code=19, AXDisableAccessibilityOnTermination),
+      # where zero tests execute and no app is involved — is re-run by
+      # scripts/xcodebuild-test.sh, and only that one. Any other failure reds
+      # the build on its first occurrence.
       #
       # Every cause that was about this project is fixed rather than absorbed: a
       # narrow iPad overflowing its navigation bar and losing Export (#227 one
@@ -93,13 +91,12 @@ jobs:
       # the documents the last one made; a layer-count assertion racing an async
       # decode; queries enumerating the system document browser's hierarchy until
       # XCTest could not snapshot them; a cold simulator charging its
-      # first-document cost to whichever test ran first; and the canvas-size
-      # question being asked more than once. The suite passes with no retries at
-      # all on erased simulators, and the iPad leg passed here with none.
+      # first-document cost to whichever test ran first; the canvas-size
+      # question being asked more than once; and a layer count read off a lazy
+      # list that the shared document had grown past the screen (#394).
       #
-      # Keep this number at two. The lower it is, the less room there is for the
-      # next real defect to hide as flakiness — which is what it was doing to
-      # #227 for months.
+      # `-retry-tests-on-failure` retried any failing test, which is how #227
+      # hid as flakiness for months. Do not bring it back.
       # The export-to-Photos tests need permission to add to the photo library;
       # without it the save stalls on the system consent dialog and the test
       # reports "no confirmation", which is true and nothing to do with the code
@@ -129,12 +126,11 @@ jobs:
       - name: Run iPad tests
         working-directory: ipados
         run: |
-          xcodebuild \
+          ../scripts/xcodebuild-test.sh \
             -project Photoslop-iPadOS.xcodeproj \
             -scheme PhotoslopIPad \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.ipad }}' \
-            -retry-tests-on-failure -test-iterations 2 \
             ${{ github.ref_type == 'tag' && '-only-testing:PhotoslopIPadTests' || '' }} \
             CODE_SIGNING_ALLOWED=NO \
             test
@@ -155,12 +151,11 @@ jobs:
       - name: Run iPhone tests
         working-directory: ipados
         run: |
-          xcodebuild \
+          ../scripts/xcodebuild-test.sh \
             -project Photoslop-iPadOS.xcodeproj \
             -scheme PhotoslopIPad \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.iphone }}' \
-            -retry-tests-on-failure -test-iterations 2 \
             ${{ github.ref_type == 'tag' && '-only-testing:PhotoslopIPadTests' || '' }} \
             CODE_SIGNING_ALLOWED=NO \
             test

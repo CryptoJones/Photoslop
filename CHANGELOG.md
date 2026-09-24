@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.37.2] — 2026-09-23
+
+### Fixed
+- **iOS: exporting to Photos still asked for the whole photo library (#404).**
+  The v2.35.1 fix (#391) put `NSPhotoLibraryAddUsageDescription` in
+  `Info.plist` only. Every build regenerates that file from
+  `ipados/project.yml` with XcodeGen, which dropped the key, so CI and TestFlight
+  builds kept raising the full read/write prompt with the *import* purpose
+  string. The key is now in the spec, and `tests/test_ios_info_plist.py` fails
+  if any usage description in the plist is missing from the spec.
+- **iOS UI tests: the photo-layer test failed the local pre-push gate (#394).**
+  `testChosenPhotosBecomeLayersOverWhatIsAlreadyThere` counted the layer list's
+  cells, but the list is lazy and only on-screen rows reach the accessibility
+  tree. In the full suite the shared document had accumulated enough layers
+  that the count stopped at the screen edge (6, expected 8). The test now opens
+  its own document through a new `openFreshEditor()` helper.
+
+### Changed
+- **CI: the iPadOS job no longer retries failing tests (#238).**
+  `-retry-tests-on-failure -test-iterations 2` is gone. The one failure mode it
+  was still kept for, the XCTest daemon failing to start a UI-testing session
+  (`XCTDaemonErrorDomain Code=19`) before any test runs, is re-run once by
+  `scripts/xcodebuild-test.sh`, and only that one. Every other failure now reds
+  the build the first time it happens.
+
 ## [2.37.1] — 2026-09-19
 
 ### Fixed
