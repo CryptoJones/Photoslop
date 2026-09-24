@@ -15,6 +15,19 @@ follows [SemVer](https://semver.org).
   `scripts/check-critical-coverage.py` is now two points under what the module
   measures today.
 
+- **iOS UI tests: a dropped Create Document tap no longer fails a test
+  (#408).** On the CI runner a tap on the launch scene can be lost while the
+  scene settles. Nothing happens, and the 180-second editor wait then fails as
+  "the editor never came up". `openNewDocument` taps again only after 45
+  seconds with no canvas-size sheet, no editor, and the button still there to
+  tap, so a slow but working creation is never tapped twice.
+- **CI: a failed iPadOS job keeps its test results (#408).** Each device's
+  `.xcresult` bundle, with XCTest's failure screenshot and view hierarchy, is
+  uploaded as an artifact. Until now a UI-test failure left only a log of
+  waits, which says when a wait expired but not what was on screen.
+- **Tests:** the `sysconf` fallback test no longer fails on Windows, where
+  `os.sysconf` does not exist.
+
 ### Added
 - **Tests for every rejection path in `resources.py` (#406).** It is the
   boundary between untrusted input and an allocation. Most of its refusals had

@@ -17,6 +17,12 @@ sync — check an item here when its issue closes.
   rejection path in `resources.py` plus `services.py`'s error paths
   ([#406](https://github.com/CryptoJones/Photoslop/issues/406))
 
+- [ ] iOS UI tests: a dropped `Create Document` tap on the CI runner failed a
+  test as "the editor never came up", with no screenshot to diagnose it from;
+  `openNewDocument` now checks that the tap took, and a failed iPadOS job
+  uploads its `.xcresult` bundles
+  ([#408](https://github.com/CryptoJones/Photoslop/issues/408))
+
 ## On hold
 
 Paused at the maintainer's direction (2026-09-23) until there has been

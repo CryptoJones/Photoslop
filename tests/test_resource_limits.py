@@ -41,7 +41,7 @@ def test_physical_memory_falls_back_when_sysconf_is_unavailable(monkeypatch):
     def unavailable(_name):
         raise OSError("no sysconf")
 
-    monkeypatch.setattr(resources.os, "sysconf", unavailable)
+    monkeypatch.setattr(resources.os, "sysconf", unavailable, raising=False)
     assert resources._physical_memory() == 4 << 30
 
 

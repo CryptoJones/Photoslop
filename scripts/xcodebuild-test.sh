@@ -31,7 +31,21 @@ only_daemon_failed() {
 log="$(mktemp -t xcodebuild-test)"
 trap 'rm -f "$log"' EXIT
 
+# xcodebuild refuses a -resultBundlePath that already exists, so a re-run has
+# to clear the first attempt's bundle before it starts.
+result_bundle=""
+previous=""
+for arg in "$@"; do
+  if [ "$previous" = "-resultBundlePath" ]; then
+    result_bundle="$arg"
+  fi
+  previous="$arg"
+done
+
 for attempt in 1 2; do
+  if [ -n "$result_bundle" ]; then
+    rm -rf "$result_bundle"
+  fi
   xcodebuild "$@" 2>&1 | tee "$log"
   status="${PIPESTATUS[0]}"
   if [ "$status" -eq 0 ]; then

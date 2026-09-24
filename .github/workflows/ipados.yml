@@ -132,6 +132,7 @@ jobs:
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.ipad }}' \
             ${{ github.ref_type == 'tag' && '-only-testing:PhotoslopIPadTests' || '' }} \
+            -resultBundlePath "$RUNNER_TEMP/xcresult/ipad.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
             test
       # Granted per device, immediately before its own tests. Booting both
@@ -157,8 +158,20 @@ jobs:
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.iphone }}' \
             ${{ github.ref_type == 'tag' && '-only-testing:PhotoslopIPadTests' || '' }} \
+            -resultBundlePath "$RUNNER_TEMP/xcresult/iphone.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
             test
+      # A failed UI test is otherwise evidence-free: the log records the waits
+      # but not what was on screen when one expired. The result bundle holds
+      # XCTest's failure screenshot and hierarchy (#408).
+      - name: Keep the test results of a failed run
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: xcresult-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/xcresult
+          retention-days: 14
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Photoslop-iPadOS-unsigned-validation-only

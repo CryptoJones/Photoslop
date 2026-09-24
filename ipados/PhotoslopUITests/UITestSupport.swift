@@ -277,6 +277,29 @@ extension XCUIApplication {
       create.waitForExistence(timeout: 60), "launch scene never appeared", file: file, line: line)
     create.tap()
 
+    // Make sure the tap took. On the CI runner a tap can land while the launch
+    // scene is still settling and be dropped: nothing happens, the launch
+    // scene just sits there, and the 180-second editor wait below expires as
+    // "the editor never came up" (#408, SelectionClipboardUITests on the
+    // iPhone leg). Re-tap only after 45 seconds in which the sheet has not
+    // come, the editor has not come and Create Document has not left. A slow
+    // but live creation does one of those, so it is never tapped twice.
+    let sizeSheet = buttons["Use This Size"].firstMatch
+    let editor = navigationBars.buttons["Export Image"].firstMatch
+    func tapTook() -> Bool {
+      for _ in 0..<45 {
+        if sizeSheet.waitForExistence(timeout: 1) || editor.exists || !create.exists {
+          return true
+        }
+      }
+      return false
+    }
+    for _ in 1...2 {
+      if tapTook() { break }
+      guard create.isHittable else { break }
+      create.tap()
+    }
+
     // The canvas-size question can be asked more than once, so answer it until
     // it stops being asked rather than assuming a single sheet.
     //
@@ -292,7 +315,7 @@ extension XCUIApplication {
     // Waiting for the sheet to actually leave still matters: a `navigationBars`
     // query run mid-dismissal can match the sheet's own bar instead of the
     // editor's, so a toolbar assertion fails for reasons unrelated to toolbars.
-    let useThisSize = buttons["Use This Size"].firstMatch
+    let useThisSize = sizeSheet
     for _ in 1...3 {
       guard useThisSize.waitForExistence(timeout: 60) else { break }
       useThisSize.tap()
