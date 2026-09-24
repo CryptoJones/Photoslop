@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.37.3] — 2026-09-24
+
+### Changed
+- **CI: the critical-coverage floors now guard something (#406).** They were set
+  in July against a hand-picked test list that under-measured, and stayed there
+  after the job began measuring the whole suite, so most sat 30–50 points below
+  real coverage. `commands.py` measured 93.7% against a 46% floor, which means
+  half its tests could have gone without the gate noticing. Every floor in
+  `scripts/check-critical-coverage.py` is now two points under what the module
+  measures today.
+
+### Added
+- **Tests for every rejection path in `resources.py` (#406).** It is the
+  boundary between untrusted input and an allocation. Most of its refusals had
+  never run: boolean and non-positive dimensions, the pixel-area cap, the DPI
+  range, a file that grows after its size check, the XML size, node and depth
+  caps, and the ZIP member checks (too many entries, duplicates, encrypted
+  members, oversize members, a suspicious compression ratio, an oversize total,
+  and a member whose size disagrees with its header). Coverage 78% → 97%.
+- **Tests for `services.py`'s error paths (#406):** the SVG route, a missing
+  optional codec, an encoder that refuses, a ticketed export, artboard export
+  (off-canvas boards skipped, names deduplicated case-insensitively, an encoder
+  failure), feathered filter blending, the model service's refusal of null or
+  mis-sized backend results, and the white base for JPEG and BMP.
+
 ## [2.37.2] — 2026-09-23
 
 ### Fixed

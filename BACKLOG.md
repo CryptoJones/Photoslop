@@ -12,6 +12,11 @@ sync — check an item here when its issue closes.
 
 ### CI
 
+- [ ] Critical-coverage floors sat 30–50 points under measured coverage, so the
+  gate could not see a regression; ratchet them to measured − 2, and test every
+  rejection path in `resources.py` plus `services.py`'s error paths
+  ([#406](https://github.com/CryptoJones/Photoslop/issues/406))
+
 ## On hold
 
 Paused at the maintainer's direction (2026-09-23) until there has been
