@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.37.1 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.37.2 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -32,8 +32,9 @@ regresses unnoticed. Toolbar reachability is covered by XCUITest rather than
 the unit suite: whether a control survives a real navigation bar is a question
 only a running app can answer.
 
-The XCUITests run with `-retry-tests-on-failure -test-iterations 2`, down from
-three, and what the flag covers has changed completely.
+The XCUITests run with **no test retries**. They used to run with
+`-retry-tests-on-failure -test-iterations 3`, then 2, and what that flag was
+absorbing turned out to be defects, not noise.
 
 The suite used to fail a different test on most runs, which was read as harness
 raciness on the evidence that fifteen consecutive launches inside one test method
@@ -73,8 +74,8 @@ With all six fixed the suite passes with **no retries at all** on erased
 simulators — an iPad mini (A17 Pro) and an iPhone 17 Pro, 13 UI and 59 unit tests
 green on each — and the iPad leg has passed on CI with none.
 
-What the two iterations still cover is not ours to fix: the XCTest daemon
-occasionally fails to bring up a UI-testing session at all —
+One failure is not ours to fix: the XCTest daemon occasionally fails to bring
+up a UI-testing session at all —
 
 ```
 Failed to initialize for UI testing: XCTDaemonErrorDomain Code=19
@@ -83,9 +84,18 @@ Failed to initialize for UI testing: XCTDaemonErrorDomain Code=19
 
 — and **zero tests execute** when it does. No app is involved, there is no
 assertion to wait on, and nothing in test code can reach it; retrying the
-invocation is the only remedy available. Keep the number at two: the lower it is,
-the less room there is for the next real defect to hide as flakiness, which is
-what it was doing to #227.
+invocation is the only remedy available. `scripts/xcodebuild-test.sh` does
+exactly that and nothing more: it re-runs `xcodebuild` once when the log shows
+this daemon error, and lets every other failure — an assertion, a timeout, a
+crash — red the build the first time (#238). Do not bring
+`-retry-tests-on-failure` back; it is how #227 hid as flakiness for months.
+
+A seventh cause turned up in the local pre-push gate after that (#394): the
+photo-layer test counted rows of the layer list, which is a lazy `List` whose
+off-screen rows never reach the accessibility tree. Once earlier tests had
+stacked enough layers into the shared document, the count stopped at the screen
+edge and "two more layers" never arrived. The test now makes its own document
+through `openFreshEditor()`.
 
 ## Editing workflow
 
