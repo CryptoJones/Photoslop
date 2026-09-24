@@ -28,8 +28,20 @@ def test_the_export_prompt_asks_to_add_not_to_read():
     assert "NSPhotoLibraryAddUsageDescription" in _usage_descriptions()
 
 
-def test_every_usage_description_survives_xcodegen():
+def _app_target_spec() -> str:
+    """The `PhotoslopIPad` target's block only.
+
+    The thumbnail extension has its own `info.properties`; a key there does not
+    reach the app's plist, so it must not satisfy this check.
+    """
     spec = SPEC.read_text(encoding="utf-8")
+    match = re.search(r"^  PhotoslopIPad:\n(.*?)(?=^  \S)", spec, re.MULTILINE | re.DOTALL)
+    assert match, "project.yml has no PhotoslopIPad target"
+    return match.group(1)
+
+
+def test_every_usage_description_survives_xcodegen():
+    spec = _app_target_spec()
     for key, text in _usage_descriptions().items():
         match = re.search(rf"^\s+{key}:\s*(.+)$", spec, re.MULTILINE)
         assert match, f"{key} is in Info.plist but not project.yml; xcodegen drops it"

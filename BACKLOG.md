@@ -8,32 +8,9 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
-- [ ] iOS builds drop `NSPhotoLibraryAddUsageDescription`: #391 added it to
-  `Info.plist`, which XcodeGen regenerates, and never to `project.yml`, so
-  shipped builds still ask for the whole library on export
-  ([#404](https://github.com/CryptoJones/Photoslop/issues/404))
-
 ### Desktop
 
 ### CI
-
-- [ ] `scripts/ci-local.sh ios` fails its iPhone leg on
-  `LayerFromPhotoUITests.testChosenPhotosBecomeLayersOverWhatIsAlreadyThere`
-  while the same commit is green on CI and the class is green in isolation —
-  reproduced on an unmodified `76ca80b`, so it is the shared-app suite order or
-  decode timing, not any one branch. A pre-push gate that is red for a reason
-  unrelated to the change under test is a gate people learn to push past
-  ([#394](https://github.com/CryptoJones/Photoslop/issues/394))
-
-### Standing
-
-- [ ] The iPadOS job still passes `-retry-tests-on-failure -test-iterations 2`,
-  for one failure mode only: the XCTest daemon failing to initialise a UI-testing
-  session (`XCTDaemonErrorDomain Code=19`, `AXDisableAccessibilityOnTermination`),
-  where zero tests execute and no app is involved. All six causes that belonged
-  to this project are fixed, and the suite passes with no retries on erased
-  simulators. Closing this needs a runner that does not drop the accessibility
-  session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
 
 ## On hold
 
@@ -54,6 +31,24 @@ more testing. Both issues carry the `on-hold` label.
   ([#257](https://github.com/CryptoJones/Photoslop/issues/257))
 
 ## Done
+
+- [x] iOS builds drop `NSPhotoLibraryAddUsageDescription`: #391 added it to
+  `Info.plist`, which XcodeGen regenerates, and never to `project.yml`, so
+  shipped builds still asked for the whole library on export. Now in the spec,
+  guarded by `tests/test_ios_info_plist.py`
+  ([#404](https://github.com/CryptoJones/Photoslop/issues/404)) — shipped v2.37.2
+
+- [x] `scripts/ci-local.sh ios` failed its iPhone leg on
+  `LayerFromPhotoUITests.testChosenPhotosBecomeLayersOverWhatIsAlreadyThere`:
+  the layer list is lazy, so the cell count stopped at the screen edge once the
+  shared document held enough layers. The test now makes its own document
+  ([#394](https://github.com/CryptoJones/Photoslop/issues/394)) — shipped v2.37.2
+
+- [x] The iPadOS job no longer retries failing tests. `-retry-tests-on-failure`
+  is gone; `scripts/xcodebuild-test.sh` re-runs `xcodebuild` once only when the
+  XCTest daemon failed to start a UI-testing session (`XCTDaemonErrorDomain
+  Code=19`) and no other test failed
+  ([#238](https://github.com/CryptoJones/Photoslop/issues/238)) — shipped v2.37.2
 
 - [x] Port Invert to iOS for parity with the desktop's Image ▸ Adjustments ▸
   Invert and `--invert`. The maths is trivial over `PixelBuffer`; the open
