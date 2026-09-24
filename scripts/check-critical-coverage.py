@@ -8,21 +8,23 @@ import argparse
 import json
 from pathlib import Path
 
-# Floors were set just below the 2026-07-21 measured baseline documented in
-# docs/v1/coverage.md. They are intentionally module-specific, not an invented
-# repository-wide percentage.
+# Floors sit two points under what each module measured on 2026-09-24 (#406),
+# with the job measuring the whole suite. The July floors were calibrated to a
+# hand-picked test list that under-measured and left most of them 30-50 points
+# below reality, so a module could lose half its tests without failing the
+# gate. Raise a floor when coverage rises; never lower one to make a PR pass.
 MINIMUM = {
-    "photoslop/atomicio.py": 88,
-    "photoslop/commands.py": 46,
-    "photoslop/document.py": 48,
-    "photoslop/io_ora.py": 63,
-    "photoslop/io_svg.py": 51,
-    "photoslop/modeladapter.py": 70,
-    "photoslop/recovery.py": 84,
-    "photoslop/resources.py": 76,
-    "photoslop/server.py": 77,
-    "photoslop/services.py": 53,
-    "photoslop/tasks.py": 84,
+    "photoslop/atomicio.py": 93,
+    "photoslop/commands.py": 91,
+    "photoslop/document.py": 95,
+    "photoslop/io_ora.py": 90,
+    "photoslop/io_svg.py": 82,
+    "photoslop/modeladapter.py": 83,
+    "photoslop/recovery.py": 96,
+    "photoslop/resources.py": 98,
+    "photoslop/server.py": 79,
+    "photoslop/services.py": 96,
+    "photoslop/tasks.py": 89,
 }
 
 
