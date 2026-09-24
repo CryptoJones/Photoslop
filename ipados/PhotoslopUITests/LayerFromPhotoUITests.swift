@@ -64,9 +64,12 @@ final class LayerFromPhotoUITests: UITestCase {
   }
 
   /// The whole point: photos join the document instead of replacing it.
+  ///
+  /// On its own document: the count below is of on-screen rows, and the shared
+  /// document can hold more layers than the sheet shows (#394).
   func testChosenPhotosBecomeLayersOverWhatIsAlreadyThere() throws {
     try skipUnlessCompact()
-    let app = openEditor()
+    let app = openFreshEditor()
 
     XCTAssertTrue(app.openLayerList(), "the layer list could not be reached")
     XCTAssertTrue(app.cells.firstMatch.waitForExistence(timeout: 15))

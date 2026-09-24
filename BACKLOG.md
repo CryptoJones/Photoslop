@@ -8,34 +8,20 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
-- [x] Port Invert to iOS for parity with the desktop's Image ▸ Adjustments ▸
-  Invert and `--invert`. The maths is trivial over `PixelBuffer`; the open
-  question is where it belongs, since iOS has a Filters submenu and no
-  Adjustments group — worth deciding once, because Levels and Curves will want
-  the same home ([#389](https://github.com/CryptoJones/Photoslop/issues/389))
-
 ### Desktop
 
 ### CI
 
-- [ ] `scripts/ci-local.sh ios` fails its iPhone leg on
-  `LayerFromPhotoUITests.testChosenPhotosBecomeLayersOverWhatIsAlreadyThere`
-  while the same commit is green on CI and the class is green in isolation —
-  reproduced on an unmodified `76ca80b`, so it is the shared-app suite order or
-  decode timing, not any one branch. A pre-push gate that is red for a reason
-  unrelated to the change under test is a gate people learn to push past
-  ([#394](https://github.com/CryptoJones/Photoslop/issues/394))
+## On hold
 
-
-### Windows
+Paused at the maintainer's direction (2026-09-23) until there has been
+more testing. Both issues carry the `on-hold` label.
 
 - [ ] Sign the Windows portable bundle via SignPath Foundation's free OSS code
   signing: policy page is in `docs/code-signing-policy.md`; apply at
   signpath.org, then wire signing into `portable.yml` for `v*` tag builds and
   drop `UNSIGNED` from the artifact name
   ([#287](https://github.com/CryptoJones/Photoslop/issues/287))
-
-### Standing
 
 - [ ] App Store GA — what is needed beyond TestFlight is now prepared in
   `docs/appstore/` (metadata, age-rating answers, Data-Not-Collected privacy
@@ -44,15 +30,31 @@ sync — check an item here when its issue closes.
   the paid-agreements acceptance and the final Submit
   ([#257](https://github.com/CryptoJones/Photoslop/issues/257))
 
-- [ ] The iPadOS job still passes `-retry-tests-on-failure -test-iterations 2`,
-  for one failure mode only: the XCTest daemon failing to initialise a UI-testing
-  session (`XCTDaemonErrorDomain Code=19`, `AXDisableAccessibilityOnTermination`),
-  where zero tests execute and no app is involved. All six causes that belonged
-  to this project are fixed, and the suite passes with no retries on erased
-  simulators. Closing this needs a runner that does not drop the accessibility
-  session, or Apple ([#238](https://github.com/CryptoJones/Photoslop/issues/238))
-
 ## Done
+
+- [x] iOS builds drop `NSPhotoLibraryAddUsageDescription`: #391 added it to
+  `Info.plist`, which XcodeGen regenerates, and never to `project.yml`, so
+  shipped builds still asked for the whole library on export. Now in the spec,
+  guarded by `tests/test_ios_info_plist.py`
+  ([#404](https://github.com/CryptoJones/Photoslop/issues/404)) — shipped v2.37.2
+
+- [x] `scripts/ci-local.sh ios` failed its iPhone leg on
+  `LayerFromPhotoUITests.testChosenPhotosBecomeLayersOverWhatIsAlreadyThere`:
+  the layer list is lazy, so the cell count stopped at the screen edge once the
+  shared document held enough layers. The test now makes its own document
+  ([#394](https://github.com/CryptoJones/Photoslop/issues/394)) — shipped v2.37.2
+
+- [x] The iPadOS job no longer retries failing tests. `-retry-tests-on-failure`
+  is gone; `scripts/xcodebuild-test.sh` re-runs `xcodebuild` once only when the
+  XCTest daemon failed to start a UI-testing session (`XCTDaemonErrorDomain
+  Code=19`) and no other test failed
+  ([#238](https://github.com/CryptoJones/Photoslop/issues/238)) — shipped v2.37.2
+
+- [x] Port Invert to iOS for parity with the desktop's Image ▸ Adjustments ▸
+  Invert and `--invert`. The maths is trivial over `PixelBuffer`; the open
+  question is where it belongs, since iOS has a Filters submenu and no
+  Adjustments group — worth deciding once, because Levels and Curves will want
+  the same home ([#389](https://github.com/CryptoJones/Photoslop/issues/389)) — shipped v2.37.0
 
 - [x] Fill a selection with a colour, on all three editions: iOS **Fill
   Selection** in the tool strip's selection group and the Select menu
