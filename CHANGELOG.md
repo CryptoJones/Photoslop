@@ -24,6 +24,14 @@ follows [SemVer](https://semver.org).
   console, so anything they printed vanished. They now attach to the parent
   terminal's console when printing.
 
+- **Windows: `photoslop-cli --help` no longer crashes with a
+  `UnicodeEncodeError`.** A Windows console or pipe defaults to a legacy code
+  page, and the help text carried a `≈` it cannot encode. The traceback
+  replaced the help. `photoslop-cli` and `photoslop-mcp` now print a
+  replacement character for anything the console cannot show. The `≈` is gone
+  from the help text too. This dated back to v1.3.0 and surfaced when this
+  release's tests began printing help on Windows CI.
+
 ### Added
 - **`photoslop-mcp --version`**, matching `photoslop-cli --version`.
 

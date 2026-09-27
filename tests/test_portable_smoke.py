@@ -81,7 +81,12 @@ def _run_without_gui(module: str, argv: list[str]):
     call_argv = argv[1:] if module == "photoslop.cli" else argv
     code = _NO_GUI_PROBE.format(module=module, argv=argv, call_argv=call_argv)
     return subprocess.run(
-        [sys.executable, "-c", code], capture_output=True, text=True, timeout=60, check=False
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=60,
+        check=False,
     )
 
 
@@ -103,6 +108,25 @@ def test_help_and_version_print_without_starting_qt(module, argv, expected):
     result = _run_without_gui(module, argv)
     assert result.returncode == 0, result.stderr
     assert result.stdout.startswith(expected)
+
+
+@pytest.mark.parametrize(
+    ("module", "argv"),
+    [
+        ("photoslop.cli", ["photoslop-cli", "--help"]),
+        ("photoslop.server", ["photoslop-mcp", "--help"]),
+        ("photoslop.app", ["photoslop", "--help"]),
+    ],
+)
+def test_help_survives_a_console_that_cannot_encode_it(module, argv, monkeypatch):
+    """A Windows console or pipe defaults to a legacy code page (cp1252), and
+    help text outside it raised UnicodeEncodeError mid-print (seen on
+    windows-latest CI). ASCII is stricter still, so any non-ASCII character in
+    today's or tomorrow's help text exercises the same path."""
+    monkeypatch.setenv("PYTHONIOENCODING", "ascii")
+    result = _run_without_gui(module, argv)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("usage:")
 
 
 def test_cli_usage_error_does_not_start_qt():
