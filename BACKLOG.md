@@ -43,6 +43,13 @@ more testing. Both issues carry the `on-hold` label.
 
 ## Done
 
+- [x] `photoslop --help`, `-h` and `--version` opened the full editor instead
+  of printing; they now print and exit with no Qt application. An audit of every
+  entry point also stopped `--cli`/`--mcp` importing the editor window and
+  `photoslop-cli` starting Qt before parsing arguments, and added
+  `photoslop-mcp --version`
+  ([#409](https://github.com/CryptoJones/Photoslop/issues/409)) — shipped v2.37.4
+
 - [x] iOS builds drop `NSPhotoLibraryAddUsageDescription`: #391 added it to
   `Info.plist`, which XcodeGen regenerates, and never to `project.yml`, so
   shipped builds still asked for the whole library on export. Now in the spec,

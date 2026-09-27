@@ -282,6 +282,7 @@ def build_server(*, root: str | os.PathLike[str] | None = None, allow_overwrite:
 def main() -> None:
     """Console entry point. Serves over stdio unless another transport is asked for."""
     parser = argparse.ArgumentParser(prog="photoslop-mcp")
+    parser.add_argument("--version", action="version", version=f"photoslop-mcp {__version__}")
     parser.add_argument(
         "--root",
         default=os.getcwd(),

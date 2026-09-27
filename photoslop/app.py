@@ -6,15 +6,74 @@ from __future__ import annotations
 import sys
 import tempfile
 from pathlib import Path
-
-from PySide6.QtCore import QSize
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QApplication
+from typing import TYPE_CHECKING
 
 from photoslop import __version__
-from photoslop.appicon import app_icon
-from photoslop.document import Document
-from photoslop.mainwindow import MainWindow
+
+# The Qt widget stack and the editor window are imported inside main(), after
+# the argv checks below. `photoslop --help`, `--version`, `--cli` and `--mcp`
+# never need a window, and importing MainWindow alone costs most of a second.
+if TYPE_CHECKING:
+    from photoslop.mainwindow import MainWindow
+
+USAGE = """\
+usage: photoslop [FILE ...]
+       photoslop --cli [ARGS ...]
+       photoslop --mcp [ARGS ...]
+       photoslop -h | --help | --version
+
+Opens the Photoslop editor with each FILE loaded as a document, or a blank
+800x600 canvas when none is given.
+
+  --cli       run the headless editor (same as photoslop-cli); see --cli --help
+  --mcp       run the MCP server (same as photoslop-mcp); see --mcp --help
+  -h, --help  show this message and exit
+  --version   print the version and exit
+"""
+
+
+def _attach_console() -> None:
+    """Give a windowed Windows build somewhere to print.
+
+    pip's `photoslop` launcher on Windows is a gui-script (pythonw) and the
+    portable Photoslop.exe is built --windowed, so a terminal user's stdout is
+    None there and anything printed simply vanishes. Borrow the parent
+    process's console when there is one; do nothing anywhere else.
+    """
+    if sys.platform != "win32" or (sys.stdout is not None and sys.stderr is not None):
+        return
+    try:
+        import ctypes
+
+        attach_parent_process = -1
+        if not ctypes.windll.kernel32.AttachConsole(attach_parent_process):
+            return
+        console = open("CONOUT$", "w", encoding="utf-8")  # noqa: SIM115 - lives for the process
+    except Exception:
+        return
+    if sys.stdout is None:
+        sys.stdout = console
+    if sys.stderr is None:
+        sys.stderr = console
+
+
+def _info_entry_point(argv: list[str]):
+    """Answer -h / --help / --version without creating a QApplication (#409).
+
+    Same rule as the --cli/--mcp selector: the flag has to lead, so a file
+    literally named `--help` later in argv still opens as a document.
+    """
+    if len(argv) < 2 or argv[1] not in ("-h", "--help", "--version"):
+        return None
+    text = f"photoslop {__version__}\n" if argv[1] == "--version" else USAGE
+
+    def show() -> int:
+        if sys.stdout is not None:
+            sys.stdout.write(text)
+            sys.stdout.flush()
+        return 0
+
+    return show
 
 
 def _console_entry_point(argv: list[str]):
@@ -50,9 +109,19 @@ def _console_entry_point(argv: list[str]):
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
-    delegate = _console_entry_point(argv)
+    delegate = _info_entry_point(argv) or _console_entry_point(argv)
     if delegate is not None:
+        _attach_console()
         return delegate()
+
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QApplication
+
+    from photoslop.appicon import app_icon
+    from photoslop.document import Document
+    from photoslop.mainwindow import MainWindow
+
     portable_smoke = "--portable-smoke" in argv
     argv = [item for item in argv if item != "--portable-smoke"]
     app = QApplication(argv)
@@ -96,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
 
 def _run_portable_smoke(window: MainWindow) -> None:
     """Exercise Qt widgets, codecs, engine rendering, export, and import."""
+    from PySide6.QtGui import QColor
+
     from photoslop.services import ExportRequest, ExportService, FileService
 
     document = window.current_doc()

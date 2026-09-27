@@ -1551,8 +1551,6 @@ def apply_pipeline(
 
 
 def main(argv: list[str] | None = None) -> int:
-    _ensure_qt()
-
     parser = build_parser()
     args = parser.parse_args(argv)
     pipeline = getattr(args, "pipeline", None) or []
@@ -1560,6 +1558,9 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("give an input file or --new, not both")
     if not args.input and not args.new:
         parser.error("give an input file, or start blank with --new")
+    # Only now: --help, --version and usage errors have already exited, and
+    # none of them needs even a headless Qt application (#409).
+    _ensure_qt()
     try:
         doc = (
             _load_document(args.input, allow_large=args.allow_large_document)
