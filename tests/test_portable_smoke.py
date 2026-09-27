@@ -129,10 +129,17 @@ def test_help_survives_a_console_that_cannot_encode_it(module, argv, monkeypatch
     assert result.stdout.startswith("usage:")
 
 
-def test_cli_usage_error_does_not_start_qt():
-    result = _run_without_gui("photoslop.cli", ["photoslop-cli"])
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    [
+        (["photoslop-cli"], "give an input file"),
+        (["photoslop-cli", "--new", "8x8"], "nothing to do"),
+    ],
+)
+def test_cli_usage_error_does_not_start_qt(argv, message):
+    result = _run_without_gui("photoslop.cli", argv)
     assert result.returncode == 2, result.stderr
-    assert "give an input file" in result.stderr
+    assert message in result.stderr
 
 
 def test_version_reports_the_package_version():
