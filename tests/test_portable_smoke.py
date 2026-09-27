@@ -52,3 +52,115 @@ def test_selector_passes_remaining_arguments_through(monkeypatch):
     delegate = _console_entry_point(["photoslop", "--mcp", "--root", "/tmp", "--allow-overwrite"])
     assert delegate() == 0
     assert seen["argv"] == ["photoslop-mcp", "--root", "/tmp", "--allow-overwrite"]
+
+
+# --- #409: informational flags must never bring up the GUI ------------------
+
+_NO_GUI_PROBE = """
+import sys
+from {module} import main
+sys.argv = {argv!r}
+try:
+    # photoslop-mcp's main() reads sys.argv; the other two take argv.
+    rc = main() if {module!r} == "photoslop.server" else main({call_argv!r})
+except SystemExit as exc:
+    rc = exc.code
+assert "photoslop.mainwindow" not in sys.modules, "editor window was imported"
+if "PySide6.QtCore" in sys.modules:
+    from PySide6.QtCore import QCoreApplication
+    assert QCoreApplication.instance() is None, "a Qt application was created"
+sys.exit(rc)
+"""
+
+
+def _run_without_gui(module: str, argv: list[str]):
+    """Run one entry point in a fresh interpreter, so no qapp fixture hides a
+    QApplication the code under test created."""
+    import subprocess
+
+    call_argv = argv[1:] if module == "photoslop.cli" else argv
+    code = _NO_GUI_PROBE.format(module=module, argv=argv, call_argv=call_argv)
+    return subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=60,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("module", "argv", "expected"),
+    [
+        ("photoslop.app", ["photoslop", "--help"], "usage: photoslop [FILE ...]"),
+        ("photoslop.app", ["photoslop", "-h"], "usage: photoslop [FILE ...]"),
+        ("photoslop.app", ["photoslop", "--version"], "photoslop "),
+        ("photoslop.app", ["photoslop", "--cli", "--help"], "usage: photoslop-cli"),
+        ("photoslop.app", ["photoslop", "--mcp", "--version"], "photoslop-mcp "),
+        ("photoslop.cli", ["photoslop-cli", "--help"], "usage: photoslop-cli"),
+        ("photoslop.cli", ["photoslop-cli", "--version"], "photoslop-cli "),
+        ("photoslop.server", ["photoslop-mcp", "--help"], "usage: photoslop-mcp"),
+        ("photoslop.server", ["photoslop-mcp", "--version"], "photoslop-mcp "),
+    ],
+)
+def test_help_and_version_print_without_starting_qt(module, argv, expected):
+    result = _run_without_gui(module, argv)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith(expected)
+
+
+@pytest.mark.parametrize(
+    ("module", "argv"),
+    [
+        ("photoslop.cli", ["photoslop-cli", "--help"]),
+        ("photoslop.server", ["photoslop-mcp", "--help"]),
+        ("photoslop.app", ["photoslop", "--help"]),
+    ],
+)
+def test_help_survives_a_console_that_cannot_encode_it(module, argv, monkeypatch):
+    """A Windows console or pipe defaults to a legacy code page (cp1252), and
+    help text outside it raised UnicodeEncodeError mid-print (seen on
+    windows-latest CI). ASCII is stricter still, so any non-ASCII character in
+    today's or tomorrow's help text exercises the same path."""
+    monkeypatch.setenv("PYTHONIOENCODING", "ascii")
+    result = _run_without_gui(module, argv)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("usage:")
+
+
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    [
+        (["photoslop-cli"], "give an input file"),
+        (["photoslop-cli", "--new", "8x8"], "nothing to do"),
+    ],
+)
+def test_cli_usage_error_does_not_start_qt(argv, message):
+    result = _run_without_gui("photoslop.cli", argv)
+    assert result.returncode == 2, result.stderr
+    assert message in result.stderr
+
+
+def test_version_reports_the_package_version():
+    # In a subprocess: were --version to regress into the GUI path, an
+    # in-process call would sit in the Qt event loop and hang the suite.
+    from photoslop import __version__
+
+    result = _run_without_gui("photoslop.app", ["photoslop", "--version"])
+    assert result.stdout == f"photoslop {__version__}\n"
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["photoslop"],
+        ["photoslop", "picture.png"],
+        # a file genuinely named --help must open, not print usage
+        ["photoslop", "picture.png", "--help"],
+    ],
+)
+def test_info_flags_are_ignored_unless_they_lead(argv):
+    from photoslop.app import _info_entry_point
+
+    assert _info_entry_point(argv) is None

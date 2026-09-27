@@ -173,6 +173,15 @@ run_desktop() {
   # it boots Qt offscreen, then imports and exports through the real codecs.
   QT_QPA_PLATFORM=offscreen "$work/venv/bin/photoslop" --portable-smoke
 
+  say "photoslop --help and --version print and exit without the GUI (#409)"
+  # Offscreen and under an alarm: a regression that falls through to the editor
+  # fails here instead of putting a window on the desktop and hanging the run.
+  QT_QPA_PLATFORM=offscreen perl -e 'alarm 30; exec @ARGV' "$work/venv/bin/photoslop" --help | grep -q '^usage: photoslop'
+  test "$(QT_QPA_PLATFORM=offscreen perl -e 'alarm 30; exec @ARGV' "$work/venv/bin/photoslop" --version)" = "photoslop $installed" || {
+    echo "photoslop --version did not print the installed version" >&2
+    return 1
+  }
+
   say "The CLI renders a real file"
   "$work/venv/bin/photoslop-cli" --new 64x64 --fill 255,0,0 -o "$work/out.png"
   test -s "$work/out.png" || { echo "the CLI produced no output" >&2; return 1; }

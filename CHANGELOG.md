@@ -4,6 +4,37 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.37.4] — 2026-09-26
+
+### Fixed
+- **`photoslop --help`, `-h` and `--version` print and exit instead of opening
+  the editor (#409).** They used to fall through to the file-opening path, find
+  no file, and show a blank 800×600 document. From SSH or a script that put a
+  window on someone's desktop and hung the call until it was closed. Like
+  `--cli` and `--mcp`, the flag has to lead, so a file literally named
+  `--help` later on the command line still opens.
+- **No other command starts Qt it does not need (#409).** An audit of every
+  entry point found three more cases. `photoslop --cli` and `photoslop --mcp`
+  imported the whole editor window before handing off. `photoslop-cli` started
+  its headless Qt application before parsing arguments, so `--help`,
+  `--version` and usage errors paid for it. Both now bring Qt up only when
+  there is work for it.
+- **Windows: `--help` output is visible from a terminal.** pip's `photoslop`
+  launcher and the portable `Photoslop.exe` are windowed programs with no
+  console, so anything they printed vanished. They now attach to the parent
+  terminal's console when printing.
+
+- **Windows: `photoslop-cli --help` no longer crashes with a
+  `UnicodeEncodeError`.** A Windows console or pipe defaults to a legacy code
+  page, and the help text carried a `≈` it cannot encode. The traceback
+  replaced the help. `photoslop-cli` and `photoslop-mcp` now print a
+  replacement character for anything the console cannot show. The `≈` is gone
+  from the help text too. This dated back to v1.3.0 and surfaced when this
+  release's tests began printing help on Windows CI.
+
+### Added
+- **`photoslop-mcp --version`**, matching `photoslop-cli --version`.
+
 ## [2.37.3] — 2026-09-24
 
 ### Changed

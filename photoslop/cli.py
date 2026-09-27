@@ -13,6 +13,7 @@ Exit codes: 0 success · 2 usage/value errors · 1 runtime failures.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import sys
@@ -1167,7 +1168,7 @@ OPS: dict = {
     "point-color": (
         '"KEY=VAL,..."',
         "targeted hue-band HSL: hue (required), range, dh, ds, "
-        "dl, uniform — skin tones ≈ hue=20,range=28",
+        "dl, uniform — skin tones: about hue=20,range=28",
         _op_point_color,
     ),
     "gaussian-blur": ("RADIUS", "gaussian blur (selection-aware)", _op_gaussian_blur),
@@ -1550,9 +1551,24 @@ def apply_pipeline(
     return result
 
 
-def main(argv: list[str] | None = None) -> int:
-    _ensure_qt()
+def tolerate_console_encoding() -> None:
+    """Print what the console can show instead of crashing on what it can't.
 
+    A Windows console or pipe defaults to a legacy code page such as cp1252,
+    and the help text and error messages carry characters outside it. Python's
+    default is to raise UnicodeEncodeError mid-print, which turned
+    `photoslop-cli --help` into a traceback. Replacing the odd character keeps
+    the rest readable. JSON output is unaffected; json.dumps escapes to ASCII.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            with contextlib.suppress(OSError, ValueError):
+                reconfigure(errors="replace")
+
+
+def main(argv: list[str] | None = None) -> int:
+    tolerate_console_encoding()
     parser = build_parser()
     args = parser.parse_args(argv)
     pipeline = getattr(args, "pipeline", None) or []
@@ -1560,6 +1576,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("give an input file or --new, not both")
     if not args.input and not args.new:
         parser.error("give an input file, or start blank with --new")
+    if not (args.info or args.sample or args.export_artboards or args.output):
+        parser.error("nothing to do: give --output, --info, --sample, or --export-artboards")
+    # Only now: --help, --version and usage errors have already exited, and
+    # none of them needs even a headless Qt application (#409).
+    _ensure_qt()
     try:
         doc = (
             _load_document(args.input, allow_large=args.allow_large_document)
@@ -1585,8 +1606,6 @@ def main(argv: list[str] | None = None) -> int:
                 print(path)
         if args.output:
             _write_output(doc, args.output, ctx.proof_space, ctx.cmyk_icc or None)
-        if not (args.info or args.sample or args.export_artboards or args.output):
-            parser.error("nothing to do: give --output, --info, --sample, or --export-artboards")
     except _ValueError as exc:
         parser.exit(_EXIT_CODES[exc.code], f"photoslop-cli: error [{exc.code.value}]: {exc}\n")
     except Exception as exc:  # engine/backend/IO failures

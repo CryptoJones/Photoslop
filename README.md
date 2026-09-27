@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v2.37.3-orange)]()
+[![Version](https://img.shields.io/badge/version-v2.37.4-orange)]()
 
 > **💚 Support Photoslop** — if this app saves you money or RAM, consider tossing a few bucks at the project:
 > **CashApp [`$cryptojones`](https://cash.app/$cryptojones)** · **Venmo [`@CryptoJones`](https://venmo.com/u/CryptoJones)**
@@ -113,6 +113,9 @@ Prefer a one-command launcher? From a checkout, run **`./run.sh`**
 (Linux/macOS) or **`run.cmd`** (Windows) — each bootstraps `uv` if it's
 missing, then starts the app. Any arguments pass straight through to
 `photoslop` (e.g. `./run.sh path/to/image.png`).
+
+`photoslop --help` and `photoslop --version` print and exit without opening a
+window, so they are safe to run over SSH or from a script.
 
 ### Portable downloads
 
