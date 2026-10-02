@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.37.5] — 2026-10-01
+
+### Changed
+- **Rebuilt and re-signed with the new Apple Developer ID (G2 Sub-CA)
+  certificate; no functional changes.** Apple's original Developer ID
+  intermediate expires on 2027-02-01, so the signing identity CI uses for the
+  macOS portable build was rotated to one issued by the Developer ID G2 Sub-CA.
+  This release exists to exercise that identity end to end — import, codesign,
+  notarize — before the old one stops being trusted.
+
 ## [2.37.4] — 2026-09-26
 
 ### Fixed
