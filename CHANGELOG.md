@@ -14,6 +14,13 @@ follows [SemVer](https://semver.org).
   This release exists to exercise that identity end to end — import, codesign,
   notarize — before the old one stops being trusted.
 
+### Security
+- **Lockfile: pyjwt 2.13.0 → 2.15.1 and urllib3 2.7.0 → 2.8.0.** Both are
+  transitive (via `mcp` and `requests`) and both picked up advisories after
+  v2.37.4 shipped (PYSEC-2026-4140 through -4152, PYSEC-2026-4175 through
+  -4177). The release gate refuses to publish assets while the dependency
+  audit fails, so this rides along. No code changes.
+
 ## [2.37.4] — 2026-09-26
 
 ### Fixed
