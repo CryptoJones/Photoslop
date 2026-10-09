@@ -15,7 +15,68 @@ sync — check an item here when its issue closes.
   `QApplication` is created
   ([#409](https://github.com/CryptoJones/Photoslop/issues/409))
 
+- [x] Complete blend mode suite — implement remaining 14 layer blend modes
+  (Linear Burn, Linear Dodge/Add, Vivid Light, Linear Light, Pin Light, Hard Mix,
+  Darker Color, Lighter Color, Subtract, Divide, Hue, Saturation, Color,
+  Luminosity, and Dissolve) across desktop, CLI, and iOS, evaluated via
+  vectorized NumPy during viewport compositing without extra layer buffers
+  ([#414](https://github.com/CryptoJones/Photoslop/issues/414))
+
+- [ ] Poisson multigrid gradient-domain solver for Healing Brush and Spot
+  Healing — replace diffusion averaging with a cascadic multigrid Laplace
+  solver (Δf = div v) with SOR sweeps, seamlessly transplanting texture across
+  resolution pyramids while matching local illumination without halos
+  ([#415](https://github.com/CryptoJones/Photoslop/issues/415))
+
+- [ ] Magnetic Lasso — intelligent scissors selection tool snapping to edges
+  via live-wire Dijkstra graph search on gradient magnitude, edge direction,
+  and non-maximum suppression; lazy 128px tile cache bounds memory on multi-MP
+  images ([#416](https://github.com/CryptoJones/Photoslop/issues/416))
+
+- [ ] Select and Mask — upgrade Refine Selection with Kaiming He's Guided Image
+  Filter, smart radius adaptation, contrast, shift edge, and color
+  decontamination to cleanly extract hair, fur, and soft defocus boundaries
+  ([#417](https://github.com/CryptoJones/Photoslop/issues/417))
+
+- [ ] Fast large-radius blur — 3-pass separable running-sum box blur
+  approximation for Gaussian blur, executing in O(1) time per pixel independent
+  of radius to enable real-time previews on multi-megapixel photos
+  ([#418](https://github.com/CryptoJones/Photoslop/issues/418))
+
+- [ ] Filter: Liquify — interactive mesh displacement grid (Forward Warp,
+  Smooth, Reconstruct, Twirl, Pucker, Bloat, Push Left, and Freeze/Thaw masks)
+  with bicubic Catmull-Rom upsampling and replayable stroke records
+  ([#419](https://github.com/CryptoJones/Photoslop/issues/419))
+
+- [ ] Edit: Puppet Warp — mesh pin deformation via As-Rigid-As-Possible (ARAP)
+  energy minimization over layer alpha coverage with cotangent Laplacian weights
+  and conjugate-gradient sparse solves (Rigid, Normal, and Distort modes)
+  ([#420](https://github.com/CryptoJones/Photoslop/issues/420))
+
+- [ ] Color Swatches: import and export Adobe .aco (v1/v2) and .ase palette
+  files across desktop, CLI, and iOS color pickers with 16-bit precision and
+  swatch names ([#421](https://github.com/CryptoJones/Photoslop/issues/421))
+
+- [ ] Adjustment: Color Lookup — creative 3D LUT grading (.cube and .3dl files)
+  via fast trilinear interpolation, streamed in row chunks under DD-001
+  ([#422](https://github.com/CryptoJones/Photoslop/issues/422))
+
+- [ ] Layer Styles: separate Fill Opacity from Layer Opacity (allowing layer
+  pixel content to fade while retaining 100% effect visibility), add Satin
+  effect, and apply 5×5 chamfer distance transforms for stroke and choke contours
+  ([#423](https://github.com/CryptoJones/Photoslop/issues/423))
+
+- [ ] Vectors: Make Work Path from Selection — Potrace-style contour tracing,
+  vertex simplification, and cubic Bézier curve fitting on selection boundary
+  masks to generate resolution-independent vector paths
+  ([#424](https://github.com/CryptoJones/Photoslop/issues/424))
+
 ### CI
+
+- [ ] Adversarial fuzzing suite — test harness exercising every registered
+  command, filter, adjustment, and CLI parameter with extreme, invalid, NaN,
+  and boundary inputs to guarantee the engine never crashes or leaks memory
+  ([#425](https://github.com/CryptoJones/Photoslop/issues/425))
 
 - [ ] Critical-coverage floors sat 30–50 points under measured coverage, so the
   gate could not see a regression; ratchet them to measured − 2, and test every

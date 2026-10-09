@@ -675,7 +675,11 @@ enum AppearanceRenderer {
     case "soft-light": return .softLight
     case "difference": return .difference
     case "exclusion": return .exclusion
-    case "addition": return .plusLighter
+    case "addition", "linear-dodge": return .plusLighter
+    case "hue": return .hue
+    case "saturation": return .saturation
+    case "color": return .color
+    case "luminosity": return .luminosity
     default: return .normal
     }
   }

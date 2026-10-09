@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.37.6] — 2026-10-09
+
+### Added
+- **Complete blend mode suite (#414).** Implemented the remaining 14 layer blend
+  modes (Linear Burn, Linear Dodge/Add, Vivid Light, Linear Light, Pin Light,
+  Hard Mix, Darker Color, Lighter Color, Subtract, Divide, Hue, Saturation,
+  Color, Luminosity, and Dissolve) across desktop GUI, CLI, and iPadOS/iOS.
+  Evaluated via vectorized NumPy during viewport compositing without extra layer
+  buffers, upholding the DD-001 bounded memory model.
+
 ## [2.37.5] — 2026-10-01
 
 ### Changed

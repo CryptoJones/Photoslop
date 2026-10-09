@@ -351,16 +351,35 @@ class MergeDownCommand(QUndoCommand):
         merged = blank_image(union.size())
         p = QPainter(merged)
         p.translate(-union.topLeft())
-        # Lower layer: blend mode is irrelevant on transparent, but draw_layer
-        # applies mask, fill-opacity, and effects so they are baked in.
         p.setOpacity(lower.opacity)
-        p.setCompositionMode(BLEND_MODES[lower.blend_mode])
+        cm_lower = BLEND_MODES.get(lower.blend_mode) or _SOURCE
+        p.setCompositionMode(cm_lower)
         draw_layer(p, doc, lower, union)
         if upper.visible:
-            p.setOpacity(upper.opacity)
-            p.setCompositionMode(BLEND_MODES[upper.blend_mode])
-            draw_layer(p, doc, upper, union)
-        p.end()
+            from photoslop.blends import CUSTOM_BLEND_MODES, blend_u32_inplace
+
+            if upper.blend_mode in CUSTOM_BLEND_MODES:
+                p.end()
+                src_buf = blank_image(union.size())
+                sp = QPainter(src_buf)
+                sp.translate(-union.topLeft())
+                draw_layer(sp, doc, upper, union)
+                sp.end()
+                blend_u32_inplace(
+                    view_u32(merged),
+                    view_u32(src_buf),
+                    upper.blend_mode,
+                    opacity=upper.opacity,
+                    origin_x=union.x(),
+                    origin_y=union.y(),
+                )
+            else:
+                p.setOpacity(upper.opacity)
+                p.setCompositionMode(BLEND_MODES[upper.blend_mode])
+                draw_layer(p, doc, upper, union)
+                p.end()
+        else:
+            p.end()
 
         lower.image = merged
         lower.offset = union.topLeft()
