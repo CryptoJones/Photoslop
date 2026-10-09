@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.37.5] — 2026-10-01
+
+### Changed
+- **Rebuilt and re-signed with the new Apple Developer ID (G2 Sub-CA)
+  certificate; no functional changes.** Apple's original Developer ID
+  intermediate expires on 2027-02-01, so the signing identity CI uses for the
+  macOS portable build was rotated to one issued by the Developer ID G2 Sub-CA.
+  This release exists to exercise that identity end to end — import, codesign,
+  notarize — before the old one stops being trusted.
+
+### Security
+- **Lockfile: pyjwt 2.13.0 → 2.15.1 and urllib3 2.7.0 → 2.8.0.** Both are
+  transitive (via `mcp` and `requests`) and both picked up advisories after
+  v2.37.4 shipped (PYSEC-2026-4140 through -4152, PYSEC-2026-4175 through
+  -4177). The release gate refuses to publish assets while the dependency
+  audit fails, so this rides along. No code changes.
+
 ## [2.37.4] — 2026-09-26
 
 ### Fixed
