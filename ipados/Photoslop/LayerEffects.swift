@@ -113,8 +113,11 @@ struct LayerEffect: Codable, Equatable, Identifiable {
 
   /// `photoslop.layer.BLEND_MODES`' names, in the desktop's order.
   static let blendModes = [
-    "normal", "multiply", "screen", "overlay", "darken", "lighten", "color-dodge",
-    "color-burn", "hard-light", "soft-light", "difference", "exclusion", "addition",
+    "normal", "dissolve", "darken", "multiply", "color-burn", "linear-burn",
+    "darker-color", "lighten", "screen", "color-dodge", "linear-dodge", "addition",
+    "lighter-color", "overlay", "soft-light", "hard-light", "vivid-light",
+    "linear-light", "pin-light", "hard-mix", "difference", "exclusion",
+    "subtract", "divide", "hue", "saturation", "color", "luminosity",
   ]
 
   var label: String { Self.labels[kind] ?? kind }

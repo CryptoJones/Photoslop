@@ -338,7 +338,11 @@ class CanvasView(QWidget):
             if not layer.visible:
                 continue
             p.setOpacity(layer.opacity)
-            p.setCompositionMode(BLEND_MODES[layer.blend_mode])
+            cm = BLEND_MODES.get(layer.blend_mode)
+            if cm is not None:
+                p.setCompositionMode(cm)
+            else:
+                p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
             if transform_session is not None and layer is transform_session.layer:
                 # live transform preview: painter transforms, no resampling
                 transform_session.draw_preview(p)

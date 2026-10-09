@@ -40,13 +40,23 @@ def clip_base_for(doc: Document, layer: Layer) -> Layer | None:
     return None
 
 
-def render_region(doc: Document, region: QRect, exclude: Layer | None = None) -> QImage:
+def render_region(
+    doc: Document,
+    region: QRect,
+    exclude: Layer | None = None,
+    background: QColor | None = None,
+) -> QImage:
     """Composite every visible layer's contribution to a canvas-space region
     into a region-sized image — the offscreen path used when adjustment
-    layers exist (they post-process the accumulated composite below them)."""
+    layers exist (they post-process the accumulated composite below them)
+    or custom blend modes are evaluated via NumPy."""
     from photoslop.adjust import apply_luts
+    from photoslop.blends import CUSTOM_BLEND_MODES, blend_u32_inplace
+    from photoslop.npimage import view_u32
 
     out = blank_image(region.size())
+    if background is not None:
+        out.fill(background)
     p = QPainter(out)
     p.translate(-region.topLeft())
     index = 0
@@ -75,21 +85,92 @@ def render_region(doc: Document, region: QRect, exclude: Layer | None = None) ->
             gp = QPainter(group_buf)
             gp.translate(-region.topLeft())
             for member in run:
-                gp.setOpacity(member.opacity)
-                gp.setCompositionMode(BLEND_MODES[member.blend_mode])
-                draw_layer(gp, doc, member, region)
+                if member.blend_mode in CUSTOM_BLEND_MODES:
+                    gp.end()
+                    _blend_layer_into(group_buf, doc, member, region)
+                    gp = QPainter(group_buf)
+                    gp.translate(-region.topLeft())
+                else:
+                    gp.setOpacity(member.opacity)
+                    gp.setCompositionMode(BLEND_MODES[member.blend_mode])
+                    draw_layer(gp, doc, member, region)
             gp.end()
-            p.setOpacity(props.get("opacity", 1.0))
-            p.setCompositionMode(BLEND_MODES[props.get("blend_mode", "normal")])
-            p.drawImage(region.topLeft(), group_buf)
+            group_blend = props.get("blend_mode", "normal")
+            group_opacity = float(props.get("opacity", 1.0))
+            if group_blend in CUSTOM_BLEND_MODES:
+                p.end()
+                src_arr = view_u32(group_buf)
+                dst_arr = view_u32(out)
+                blend_u32_inplace(
+                    dst_arr,
+                    src_arr,
+                    group_blend,
+                    opacity=group_opacity,
+                    origin_x=region.x(),
+                    origin_y=region.y(),
+                )
+                p = QPainter(out)
+                p.translate(-region.topLeft())
+            else:
+                p.setOpacity(group_opacity)
+                p.setCompositionMode(BLEND_MODES[group_blend])
+                p.drawImage(region.topLeft(), group_buf)
             index = j
             continue
-        p.setOpacity(layer.opacity)
-        p.setCompositionMode(BLEND_MODES[layer.blend_mode])
-        draw_layer(p, doc, layer, region)
+
+        if layer.blend_mode in CUSTOM_BLEND_MODES:
+            p.end()
+            _blend_layer_into(out, doc, layer, region)
+            p = QPainter(out)
+            p.translate(-region.topLeft())
+        else:
+            p.setOpacity(layer.opacity)
+            p.setCompositionMode(BLEND_MODES[layer.blend_mode])
+            draw_layer(p, doc, layer, region)
         index += 1
     p.end()
     return out
+
+
+def _blend_layer_into(target_buf: QImage, doc: Document, layer: Layer, region: QRect) -> None:
+    """Blend one layer into a region-sized buffer using vectorized NumPy
+    without extra layer buffers."""
+    from photoslop.blends import blend_u32_inplace
+    from photoslop.npimage import view_u32
+
+    margin = _effects_margin(layer.effects) if layer.effects else 0
+    layer_extent = layer.bounds()
+    if margin:
+        layer_extent = layer_extent.adjusted(-margin, -margin, margin, margin)
+
+    area = region.intersected(layer_extent)
+    if area.isEmpty():
+        return
+
+    # Draw layer contribution into an area-bounded buffer (at most region-sized, never whole canvas)
+    src_buf = blank_image(area.size())
+    sp = QPainter(src_buf)
+    sp.translate(-area.topLeft())
+    draw_layer(sp, doc, layer, area)
+    sp.end()
+
+    # Destination slice in target_buf
+    rx = area.x() - region.x()
+    ry = area.y() - region.y()
+    rw = area.width()
+    rh = area.height()
+
+    target_slice = view_u32(target_buf)[ry : ry + rh, rx : rx + rw]
+    src_slice = view_u32(src_buf)
+
+    blend_u32_inplace(
+        target_slice,
+        src_slice,
+        layer.blend_mode,
+        opacity=layer.opacity,
+        origin_x=area.x(),
+        origin_y=area.y(),
+    )
 
 
 def _effects_margin(effects: list) -> int:
@@ -124,7 +205,11 @@ def _draw_effects(p: QPainter, appearance, region: QRect, under: bool, origin: Q
         area = region.intersected(QRect(offset, plane.image.size()))
         if not area.isEmpty():
             p.setOpacity(base_opacity * plane.opacity)
-            p.setCompositionMode(BLEND_MODES[plane.blend_mode])
+            cm = BLEND_MODES.get(plane.blend_mode)
+            if cm is not None:
+                p.setCompositionMode(cm)
+            else:
+                p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
             p.drawImage(area.topLeft(), plane.image, area.translated(-offset))
     p.setOpacity(base_opacity)
     p.setCompositionMode(base_mode)
@@ -238,10 +323,21 @@ class Document(QObject):
     def has_adjustments(self) -> bool:
         return any(layer.visible and layer.adjustment is not None for layer in self.layers)
 
+    def has_custom_blends(self) -> bool:
+        from photoslop.blends import CUSTOM_BLEND_MODES
+
+        for layer in self.layers:
+            if layer.visible and layer.blend_mode in CUSTOM_BLEND_MODES:
+                return True
+        for props in self.group_props.values():
+            if props.get("blend_mode") in CUSTOM_BLEND_MODES:
+                return True
+        return False
+
     def needs_offscreen(self) -> bool:
-        """True when compositing needs the buffered path: adjustment layers
-        or groups with non-default opacity/blend."""
-        return self.has_adjustments() or bool(self.group_props)
+        """True when compositing needs the buffered path: adjustment layers,
+        groups with non-default opacity/blend, or custom blend modes."""
+        return self.has_adjustments() or bool(self.group_props) or self.has_custom_blends()
 
     def canvas_rect(self) -> QRect:
         return QRect(QPoint(0, 0), self.size)
@@ -337,11 +433,11 @@ class Document(QObject):
 
     def flatten(self, background: QColor | None = None) -> QImage:
         """Composite all visible layers into a new canvas-sized image."""
+        if self.needs_offscreen():
+            return render_region(self, self.canvas_rect(), background=background)
         out = blank_image(self.size)
         if background is not None:
             out.fill(background)
-        if self.needs_offscreen():
-            return render_region(self, self.canvas_rect())
         p = QPainter(out)
         for layer in self.layers:
             if layer.visible:

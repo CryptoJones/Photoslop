@@ -16,25 +16,52 @@ from PySide6.QtGui import QImage, QPainter, Qt
 FORMAT = QImage.Format.Format_ARGB32_Premultiplied
 
 _CM = QPainter.CompositionMode
-BLEND_MODES: dict[str, QPainter.CompositionMode] = {
+BLEND_MODES: dict[str, QPainter.CompositionMode | None] = {
+    # Normal group
     "normal": _CM.CompositionMode_SourceOver,
-    "multiply": _CM.CompositionMode_Multiply,
-    "screen": _CM.CompositionMode_Screen,
-    "overlay": _CM.CompositionMode_Overlay,
+    "dissolve": None,
+    # Darken group
     "darken": _CM.CompositionMode_Darken,
-    "lighten": _CM.CompositionMode_Lighten,
-    "color-dodge": _CM.CompositionMode_ColorDodge,
+    "multiply": _CM.CompositionMode_Multiply,
     "color-burn": _CM.CompositionMode_ColorBurn,
-    "hard-light": _CM.CompositionMode_HardLight,
+    "linear-burn": None,
+    "darker-color": None,
+    # Lighten group
+    "lighten": _CM.CompositionMode_Lighten,
+    "screen": _CM.CompositionMode_Screen,
+    "color-dodge": _CM.CompositionMode_ColorDodge,
+    "linear-dodge": _CM.CompositionMode_Plus,
+    "addition": _CM.CompositionMode_Plus,
+    "lighter-color": None,
+    # Contrast group
+    "overlay": _CM.CompositionMode_Overlay,
     "soft-light": _CM.CompositionMode_SoftLight,
+    "hard-light": _CM.CompositionMode_HardLight,
+    "vivid-light": None,
+    "linear-light": None,
+    "pin-light": None,
+    "hard-mix": None,
+    # Inversion group
     "difference": _CM.CompositionMode_Difference,
     "exclusion": _CM.CompositionMode_Exclusion,
-    "addition": _CM.CompositionMode_Plus,
+    "subtract": None,
+    "divide": None,
+    # Component (HSL) group
+    "hue": None,
+    "saturation": None,
+    "color": None,
+    "luminosity": None,
 }
 
 # OpenRaster composite-op names (GIMP/Krita-interoperable)
 ORA_OPS = {
-    name: f"svg:{'src-over' if name == 'normal' else 'plus' if name == 'addition' else name}"
+    name: (
+        "svg:src-over"
+        if name == "normal"
+        else "svg:plus"
+        if name in ("addition", "linear-dodge")
+        else f"svg:{name}"
+    )
     for name in BLEND_MODES
 }
 ORA_OPS_REVERSE = {v: k for k, v in ORA_OPS.items()}
