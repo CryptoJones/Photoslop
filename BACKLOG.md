@@ -10,6 +10,11 @@ sync — check an item here when its issue closes.
 
 ### Desktop
 
+- [ ] `photoslop --help` (and `-h`, `--version`) opens the GUI with a blank
+  document instead of printing usage; handle them when they lead argv, before
+  `QApplication` is created
+  ([#409](https://github.com/CryptoJones/Photoslop/issues/409))
+
 ### CI
 
 - [ ] Critical-coverage floors sat 30–50 points under measured coverage, so the
