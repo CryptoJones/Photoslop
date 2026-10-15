@@ -8,13 +8,6 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
-- [ ] Redesign the editor chrome as a studio: dark neutral surround, white
-  chrome with one accent for state, every tool on screen (a rail beside the
-  canvas on iPad, a two-row dock on iPhone), a contextual options capsule,
-  layer thumbnails with the active layer's opacities above the list; and fix
-  the iPhone canvas opening at a quarter of the screen width
-  ([#428](https://github.com/CryptoJones/Photoslop/issues/428))
-
 ### Desktop
 
 - [ ] `photoslop --help` (and `-h`, `--version`) opens the GUI with a blank
@@ -23,6 +16,14 @@ sync — check an item here when its issue closes.
   ([#409](https://github.com/CryptoJones/Photoslop/issues/409))
 
 ### CI
+
+- [ ] The iPadOS workflow's iPhone leg has failed on every branch since
+  2026-10-09 — a fresh launch after `terminate()` misses its 180-second editor
+  wait and More Actions submenus miss their 10-second window on the runner,
+  while the iPad leg, local runs and a narrowed phone leg on the same runner
+  all pass; needs a full-leg xcresult from the runner and a look at what
+  changed on the `macos-15` image in early October
+  ([#430](https://github.com/CryptoJones/Photoslop/issues/430))
 
 - [ ] Critical-coverage floors sat 30–50 points under measured coverage, so the
   gate could not see a regression; ratchet them to measured − 2, and test every
@@ -54,6 +55,15 @@ more testing. Both issues carry the `on-hold` label.
   ([#257](https://github.com/CryptoJones/Photoslop/issues/257))
 
 ## Done
+
+- [x] iOS editor redesigned as a studio: dark neutral surround, white chrome
+  with one accent for state, every tool on screen (a rail beside the canvas on
+  iPad, a two-row dock on iPhone), a contextual options capsule, layer
+  thumbnails with the active layer's opacities above the list; plus the
+  iPhone canvas opening at a quarter of the screen width, offscreen strokes
+  taking their colour from the appearance, and a slider drag eating the undo
+  history ([#428](https://github.com/CryptoJones/Photoslop/issues/428)) —
+  shipped v2.38.0
 
 - [x] `photoslop --help`, `-h` and `--version` opened the full editor instead
   of printing; they now print and exit with no Qt application. An audit of every
