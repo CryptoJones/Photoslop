@@ -280,24 +280,65 @@ extension XCUIApplication {
     }
     XCTAssertTrue(
       create.waitForExistence(timeout: 60), "launch scene never appeared", file: file, line: line)
-    create.tap()
+    createDocument(file: file, line: line)
 
-    // Make sure the tap took. On the CI runner a tap can land while the launch
-    // scene is still settling and be dropped: nothing happens, the launch
-    // scene just sits there, and the 180-second editor wait below expires as
-    // "the editor never came up" (#408, SelectionClipboardUITests on the
-    // iPhone leg). Re-tap only after 45 seconds in which the sheet has not
-    // come, the editor has not come and Create Document has not left. A slow
-    // but live creation does one of those, so it is never tapped twice.
+    // The canvas-size question can be asked more than once, so answer it until
+    // it stops being asked rather than assuming a single sheet.
+    //
+    // Reopening a still-blank document asks again — that is the app's documented
+    // behaviour, not a bug: a new document is written to disk and reopened
+    // through `init(configuration:)`, and the opening path recognises an
+    // untouched one. Answering exactly once was fine while every test inherited
+    // the last one's documents, and stopped being fine once the store was
+    // emptied at launch, because more of the runs now start from a genuinely new
+    // document. The old code tapped the first sheet and then asserted the button
+    // was gone, which a second sheet fails by simply existing.
+    //
+    // Waiting for the sheet to actually leave still matters: a `navigationBars`
+    // query run mid-dismissal can match the sheet's own bar instead of the
+    // editor's, so a toolbar assertion fails for reasons unrelated to toolbars.
+    let useThisSize = buttons["Use This Size"].firstMatch
+    for _ in 1...3 {
+      guard useThisSize.waitForExistence(timeout: 60) else { break }
+      useThisSize.tap()
+      guard useThisSize.waitForNonExistence(timeout: 30) else { continue }
+      // Gone for now — but give a re-ask a moment to arrive before moving on.
+      if !useThisSize.waitForExistence(timeout: 3) { break }
+    }
+    XCTAssertFalse(
+      useThisSize.exists, "the canvas size sheet never dismissed", file: file, line: line)
+
+    XCTAssertTrue(
+      navigationBars.buttons["Export Image"].firstMatch.waitForExistence(timeout: 180),
+      "the editor never came up", file: file, line: line)
+  }
+
+  /// Tap Create Document on the launch scene, and make sure the tap took.
+  ///
+  /// On the CI runner a tap can land while the launch scene is still settling
+  /// and be dropped: nothing happens, the launch scene just sits there, and
+  /// whatever the caller waits for next expires — "the editor never came up"
+  /// (#408, SelectionClipboardUITests on the iPhone leg), "size sheet never
+  /// appeared" (NewDocumentUITests on the iPad leg, which tapped once and
+  /// waited). Re-tap only after 45 seconds in which the sheet has not come,
+  /// the editor has not come and Create Document has not left. A slow but
+  /// live creation does one of those, so it is never tapped twice.
+  ///
+  /// The document browser's own refusal is handled here too. Seen on the
+  /// iPhone leg when a launch followed a terminate closely enough that the
+  /// browser's staging package from the last creation was still in the way:
+  /// the tap took, the browser put up "Unable to Import Document", and the
+  /// editor wait spent its whole 180 seconds on an alert. Dismissed and the
+  /// creation retried, rather than waited out.
+  func createDocument(file: StaticString = #filePath, line: UInt = #line) {
+    let create = buttons["Create Document"].firstMatch
     let sizeSheet = buttons["Use This Size"].firstMatch
     let editor = navigationBars.buttons["Export Image"].firstMatch
-    // The document browser's own refusal. Seen on the iPhone leg when a
-    // launch followed a terminate closely enough that the browser's staging
-    // package from the last creation was still in the way: the tap took, the
-    // browser put up "Unable to Import Document", and the editor wait below
-    // spent its whole 180 seconds on an alert. Dismissed and the creation
-    // retried, rather than waited out.
     let importFailed = alerts["Unable to Import Document"].firstMatch
+    XCTAssertTrue(
+      create.waitForExistence(timeout: 60), "no Create Document to tap", file: file, line: line)
+    create.tap()
+
     func tapTook() -> Bool {
       for _ in 0..<45 {
         if sizeSheet.waitForExistence(timeout: 1) || editor.exists || !create.exists {
@@ -316,36 +357,6 @@ extension XCUIApplication {
       guard create.waitForExistence(timeout: 5), create.isHittable else { break }
       create.tap()
     }
-
-    // The canvas-size question can be asked more than once, so answer it until
-    // it stops being asked rather than assuming a single sheet.
-    //
-    // Reopening a still-blank document asks again — that is the app's documented
-    // behaviour, not a bug: a new document is written to disk and reopened
-    // through `init(configuration:)`, and the opening path recognises an
-    // untouched one. Answering exactly once was fine while every test inherited
-    // the last one's documents, and stopped being fine once the store was
-    // emptied at launch, because more of the runs now start from a genuinely new
-    // document. The old code tapped the first sheet and then asserted the button
-    // was gone, which a second sheet fails by simply existing.
-    //
-    // Waiting for the sheet to actually leave still matters: a `navigationBars`
-    // query run mid-dismissal can match the sheet's own bar instead of the
-    // editor's, so a toolbar assertion fails for reasons unrelated to toolbars.
-    let useThisSize = sizeSheet
-    for _ in 1...3 {
-      guard useThisSize.waitForExistence(timeout: 60) else { break }
-      useThisSize.tap()
-      guard useThisSize.waitForNonExistence(timeout: 30) else { continue }
-      // Gone for now — but give a re-ask a moment to arrive before moving on.
-      if !useThisSize.waitForExistence(timeout: 3) { break }
-    }
-    XCTAssertFalse(
-      useThisSize.exists, "the canvas size sheet never dismissed", file: file, line: line)
-
-    XCTAssertTrue(
-      navigationBars.buttons["Export Image"].firstMatch.waitForExistence(timeout: 180),
-      "the editor never came up", file: file, line: line)
   }
 
   /// Get the layer list on screen, wherever this device keeps it.

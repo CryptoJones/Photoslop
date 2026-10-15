@@ -25,8 +25,11 @@ follows [SemVer](https://semver.org).
   well as Documents, since the browser stages a new document there and a
   terminate mid-creation left a package the next Create Document could not
   replace ("Unable to Import Document", then "the editor never came up"
-  180 seconds later — the one-off this suite had logged before). The helper
-  also dismisses that alert and re-taps Create rather than waiting it out,
+  180 seconds later — the one-off this suite had logged before). The tap
+  itself is now `createDocument()`, shared with `NewDocumentUITests`, which
+  had kept a bare one-shot tap and sat on the launch scene for 60 seconds
+  when the runner dropped it. It dismisses that alert and re-taps Create
+  rather than waiting it out,
   and the shared-editor baseline check now also requires that no mode's
   Cancel is on screen, since the palette no longer leaves with a mode's bar.
 - **iOS UI tests pin the palette's new contract.** Every tool's button must
