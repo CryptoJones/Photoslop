@@ -1381,7 +1381,7 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
           PKStroke(ink: PKInk(.pen, color: .black), path: $0.path, transform: $0.transform, mask: $0.mask)
         })
     }
-    return autoreleasepool { PixelBuffer(image: source.image(from: box, scale: 1)) }
+    return autoreleasepool { PixelBuffer(image: source.literalImage(from: box, scale: 1)) }
   }
 
   func addLayer() {
@@ -1775,7 +1775,7 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
         guard !strokeBox.isEmpty else { return }
         // Strokes are fill, not effects: an unbaked stroke fades with the
         // pixels it will become, not with the shadow cast around them.
-        layer.drawing.image(from: strokeBox, scale: 1).draw(
+        layer.drawing.literalImage(from: strokeBox, scale: 1).draw(
           in: strokeBox,
           blendMode: .normal,
           alpha: layer.fillAlpha

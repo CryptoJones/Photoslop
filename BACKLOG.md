@@ -8,6 +8,13 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
+- [ ] Redesign the editor chrome as a studio: dark neutral surround, white
+  chrome with one accent for state, every tool on screen (a rail beside the
+  canvas on iPad, a two-row dock on iPhone), a contextual options capsule,
+  layer thumbnails with the active layer's opacities above the list; and fix
+  the iPhone canvas opening at a quarter of the screen width
+  ([#428](https://github.com/CryptoJones/Photoslop/issues/428))
+
 ### Desktop
 
 - [ ] `photoslop --help` (and `-h`, `--version`) opens the GUI with a blank

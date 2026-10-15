@@ -237,6 +237,18 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
   let canvasView = PKCanvasView()
   private var canvasSize = CGSize.zero
   private var fitted = false
+  /// The bounds the current fit was computed for. A layout at a different
+  /// size refits until the user has zoomed, so the first fit — which on an
+  /// iPhone lands while the view is still being sized for the transition out
+  /// of the document browser — is not the one the document is stuck with.
+  /// Measured on an iPhone 16 Pro: a 2048px document opened 78pt wide, a
+  /// postage stamp in the middle of the screen, because the only fit ever
+  /// taken was against a view a fraction of its final size.
+  private var fittedBounds = CGSize.zero
+  /// Set once the user pinches (or a reveal zooms for them): their zoom is
+  /// theirs, and a rotation or a sidebar sliding in recentres but no longer
+  /// refits.
+  private var userAdjustedZoom = false
   /// Kept clear of the screen edge at the fitted zoom, so a corner handle is
   /// grabbable rather than sitting in the system's edge-gesture strip.
   static let edgeMargin: CGFloat = 28
@@ -294,7 +306,14 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    backgroundColor = UIColor.secondarySystemBackground
+    // The studio's surround (`Studio.backdrop`): a neutral dark that casts no
+    // colour on the picture. The artwork is lifted off it by a shadow, set
+    // where the canvas is sized.
+    backgroundColor = Studio.backdrop
+    contentView.layer.shadowColor = UIColor.black.cgColor
+    contentView.layer.shadowOpacity = 0.6
+    contentView.layer.shadowRadius = 18
+    contentView.layer.shadowOffset = CGSize(width: 0, height: 6)
     scrollView.delegate = self
     imageView.backgroundColor = Self.transparencyPattern
     scrollView.minimumZoomScale = 0.05
@@ -441,7 +460,7 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     super.layoutSubviews()
     scrollView.frame = bounds
     guard canvasSize.width > 0, canvasSize.height > 0 else { return }
-    if !fitted {
+    if !fitted || (!userAdjustedZoom && bounds.size != fittedBounds) {
       // Fit into the bounds *less a margin*, so the artwork never sits flush
       // against the edge of the screen.
       //
@@ -464,6 +483,7 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
       scrollView.minimumZoomScale = min(1, max(0.05, fit * 0.25))
       scrollView.zoomScale = min(1, max(0.05, fit))
       fitted = true
+      fittedBounds = bounds.size
     }
     centerCanvas()
   }
@@ -542,6 +562,7 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
       guard zooming else { return }
       scale = max(scrollView.minimumZoomScale, fitting)
       scrollView.setZoomScale(scale, animated: false)
+      userAdjustedZoom = true
     }
     let visible = rect.insetBy(dx: -padding / scale, dy: -padding / scale)
     scrollView.scrollRectToVisible(contentView.convert(visible, to: scrollView), animated: false)
@@ -575,6 +596,10 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     canvasSize = size
     let frame = CGRect(origin: .zero, size: size)
     contentView.frame = frame
+    // An explicit path, so the shadow is not re-derived from the view's
+    // contents on every zoom; the content view is the document's rectangle
+    // and nothing else.
+    contentView.layer.shadowPath = UIBezierPath(rect: frame).cgPath
     imageView.frame = frame
     canvasView.frame = frame
     // The overlay is exactly the document, so its bounds *are* canvas pixels.
@@ -582,6 +607,7 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     canvasView.contentSize = size
     scrollView.contentSize = size
     fitted = false
+    userAdjustedZoom = false
     setNeedsLayout()
   }
 
@@ -592,6 +618,10 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
   }
 
   func scrollViewDidZoom(_ scrollView: UIScrollView) { centerCanvas() }
+
+  func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+    userAdjustedZoom = true
+  }
 
   private func centerCanvas() {
     let scaledWidth = canvasSize.width * scrollView.zoomScale

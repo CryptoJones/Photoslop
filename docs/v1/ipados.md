@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.37.5 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.38.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -12,20 +12,71 @@ path.
 One binary serves both, adapting to the horizontal size class rather than the
 device name, so an iPad in a narrow Split View gets the phone layout too.
 
-- **Regular width** keeps the layer list in a sidebar beside the canvas, and
-  every document action on the navigation bar.
+- **Regular width** keeps the layer list in a sidebar beside the canvas, a
+  tool rail at the canvas's left edge, and the tool's options in a capsule
+  under it.
 - **Compact width** moves the layer list to a sheet reached from **Layers**,
   because `NavigationSplitView` collapses its sidebar into a pushed column
   there, and reaching the layers would otherwise navigate away from the
-  drawing.
+  drawing; the rail and the options capsule become one dock at the bottom.
 - A phone's navigation bar holds three controls beside the document title, so
   the compact layout picks them rather than leaving the choice to UIKit:
   **Layers**, a **More Actions** menu holding New, Canvas Size, Resize Document,
   Crop, Resize Layer, the text actions, Import Image, and About, and
-  **Export**. Undo and redo move
-  to the leading edge of the tool strip, which never has to be scrolled to.
-- The tool strip narrows its brush picker and width slider at compact width and
-  scrolls horizontally if it still does not fit.
+  **Export**. Undo and redo sit at the leading edge of the dock's options
+  row, which never has to be scrolled to.
+- The dock's options row narrows its sliders at compact width and scrolls
+  horizontally if it still does not fit; the tool row never scrolls.
+
+## The studio
+
+The editor is a dark room around the artwork. The surround behind the canvas is
+a neutral dark grey (`Studio.swift`), the chrome is white on dark, and there is
+one accent — the basilisk's green, desaturated — used only for *state*: the tool
+in hand, the active layer, and the one prominent action of a mode (Crop, Done).
+The app declares `UIUserInterfaceStyle: Dark`, so the document browser, the
+sheets and the launch scene are the same room rather than a light hallway off a
+dark one. Dark chrome is not fashion here: a neutral surround casts no colour on
+the picture, and the system's light grey the canvas used to sit on tinted every
+judgement of a colour made against it.
+
+- **The tool rail** (iPad) is a floating column at the canvas's left edge, where
+  a drawing hand is not: Undo and Redo, then every tool — Pen, Pencil, Marker,
+  Eraser, Bucket, Magic Wand, Rectangle Select, Lasso Select, Eyedropper — one
+  button each, then the ink swatch. Every tool is on screen at once and a
+  switch is one tap. The tools used to sit behind one menu button that showed
+  only the current one, so the set on offer was invisible until the menu
+  opened.
+- **The options capsule** (iPad) floats under the canvas and holds only what the
+  tool in hand uses: the tool's name, the brush width for an ink, Tolerance and
+  the combine mode for the Bucket and the selection tools, and — while a
+  selection is up — Fill, Cut, Copy, Paste and Delete Selection at its leading
+  edge. A mode's own bar (Crop, placement) takes the capsule's place for as
+  long as the mode is up.
+- **The dock** (iPhone) is the same two things stacked at the bottom edge:
+  the options row above, with Undo and Redo leading and the ink swatch beside
+  the slider; the nine tools below, sharing the width so each is a finger wide
+  and none is scrolled off. A mode's bar replaces the dock while it is up.
+- **The layers panel** shows a thumbnail per layer — the layer's pixels and
+  strokes over a checkerboard, rendered off the main actor at 44pt and re-made
+  only when the layer changes — with its name, what it is (Paint or Text, its
+  effective opacity when under 100%, Effects when it has any) and its eye. The
+  active layer's **Opacity** and **Fill** sliders sit above the list, the way a
+  layer palette keeps them, rather than inside every row. The actions — add,
+  new layer from photo, effects, duplicate, merge down, reorder, delete — are a
+  row of icons under the list.
+- **The canvas** opens zoomed to fit the room it actually has, and refits when
+  that room changes — a rotation, the sidebar sliding in — until the first
+  pinch, after which the zoom is yours. On a phone the only fit used to be
+  taken while the view was still being sized for the transition out of the
+  document browser, so a 2048px document opened 78pt wide.
+
+The UI tests pin the palette's contract: every tool's button exists, is
+hittable, lies inside the window, and is at least 40pt on a side on both the
+CI iPad and the CI iPhone (`EditorToolbarUITests`), and exactly one carries
+the "Tool, …" label of the tool in hand. A tenth tool either fits at a
+finger's size or turns that test red, rather than quietly going back behind a
+menu.
 
 CI runs the simulator suite on both an iPad and an iPhone so neither layout
 regresses unnoticed. Toolbar reachability is covered by XCUITest rather than
@@ -107,12 +158,13 @@ through `openFreshEditor()`.
   alone, so tilting the Pencil does not change its stroke. Pencil and Marker
   also read the Pencil's altitude and azimuth and broaden as it is laid over,
   which is the tool to reach for when shading. Pen remains the default.
-- Set ink colour, stroke opacity and brush width from the bottom tool strip.
-  Colour and opacity share one control — a swatch showing the ink as it will
-  actually paint, opening a popover with both. They share a slot deliberately:
-  the strip is budgeted for an iPad mini in portrait, where it has overflowed
-  before and put the ink controls off the edge of the screen (#246), so its item
-  count may not grow.
+- Set ink colour, stroke opacity and brush width from the tool rail and the
+  options capsule (iPad) or the dock (iPhone). Colour and opacity share one
+  control — a swatch showing the ink as it will actually paint, opening a
+  popover with both. They share a slot deliberately: the phone's options row
+  is budgeted for the narrowest device, where the old strip overflowed and put
+  the ink controls off the edge of the screen (#246), so its item count may
+  not grow.
 - **Add Text** puts text on its own layer, on top of the stack, centred on the
   canvas and ready to move. The anchor is the text's top-left, the same
   convention as `photoslop-cli --text "X,Y,SIZE[,R,G,B]:TEXT"`.
@@ -171,7 +223,7 @@ through `openFreshEditor()`.
 - The **Bucket** fills the region of similar colour under a tap with the ink
   as the swatch shows it, colour and opacity both, on the active layer, as one
   undo step. Its one option is **Tolerance** (0–255, 32 to start, the desktop's
-  default), which takes the width slider's slot on the strip. See
+  default), which takes the width slider's slot in the options. See
   [Paint bucket](#paint-bucket).
 - The **Magic Wand** selects the region of similar colour under a tap — the
   flood with the write swapped for a mask — and the marching ants show what is
@@ -193,7 +245,7 @@ through `openFreshEditor()`.
   paints with what is already on the canvas. It samples the merged composite
   rather than the active layer, exactly as the desktop's Eyedropper (`I`) does.
   It has no width and no tolerance — it reads one pixel — and the ink swatch
-  stays on the strip while it is armed, because that is where the sampled
+  stays on screen while it is armed, because that is where the sampled
   colour lands. See [Eyedropper](#eyedropper).
 - **About Photoslop** introduces the app the way the desktop edition does: Le
   Basilisk, the name with no platform attached, and the same one-line
@@ -333,7 +385,7 @@ result agrees with `photoslop-cli --crop X,Y,W,H` for the same rectangle.
 ### Eyedropper
 
 Pick **Eyedropper** from the tool palette and tap the canvas. The colour under
-the tap becomes the ink, and the swatch on the strip shows it immediately —
+the tap becomes the ink, and the ink swatch shows it immediately —
 switch back to a brush and the next stroke paints with it.
 
 It samples the **merged composite**, not the active layer. That is the desktop's
@@ -455,8 +507,9 @@ tools take no ink and, like the wand, work on a text layer.
 ### Fill, Cut, Copy and Paste
 
 While a selection is up, **Fill Selection**, **Cut**, **Copy**, **Paste** and
-**Delete Selection** appear together at the left of the tool strip, next to
-Undo and Redo, and go away when the selection does (#374, #393). That is the
+**Delete Selection** appear together at the leading edge of the tool options —
+the capsule under the canvas on an iPad, the dock's options row on a phone —
+and go away when the selection does (#374, #393). That is the
 one-tap route, and it is where these belong: making a selection is a modal act, and on a phone the
 Select menu is inside **More**, which is a system menu that cannot show what
 is under it — Delete Selection shipped there in 2.22.0 and went unfound. The

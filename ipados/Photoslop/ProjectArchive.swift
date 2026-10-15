@@ -315,7 +315,7 @@ enum ProjectArchive {
           if !layer.drawing.strokes.isEmpty {
             // Rasterised at the preview's own scale — a preview-sized bitmap,
             // not a canvas-sized one.
-            layer.drawing.image(from: bounds, scale: scale).draw(
+            layer.drawing.literalImage(from: bounds, scale: scale).draw(
               in: bounds, blendMode: .normal, alpha: layer.fillAlpha)
           }
         }

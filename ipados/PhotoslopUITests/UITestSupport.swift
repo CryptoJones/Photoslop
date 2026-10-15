@@ -174,14 +174,19 @@ class UITestCase: XCTestCase {
     let export = app.navigationBars.buttons["Export Image"].firstMatch
     // The navigation bar alone is not enough. Crop replaces only the *bottom*
     // bar, so Export stays put and a crop left running looks exactly like the
-    // baseline — the next test then fails on "the tool palette is not on the
-    // strip", having inherited a mode it never entered. The palette is what
-    // proves the editor's ordinary chrome is back.
+    // baseline — the next test then fails on "Brush width is not on screen",
+    // having inherited a mode it never entered. The palette proves the
+    // editor's ordinary chrome is up; the absence of a mode's Cancel proves
+    // no mode is. Both are needed now that the palette is a rail beside the
+    // canvas and stays put while a mode owns the bottom bar.
     let palette = app.buttons.matching(
       NSPredicate(format: "label BEGINSWITH %@", "Tool, ")
     ).firstMatch
+    let modeExit = app.buttons.matching(
+      NSPredicate(format: "identifier IN %@", ["Cancel Crop", "Cancel Placement"])
+    ).firstMatch
     for _ in 1...4 {
-      if export.exists, export.isHittable, palette.exists { return true }
+      if export.exists, export.isHittable, palette.exists, !modeExit.exists { return true }
 
       var tookAnExit = false
       for label in ["Cancel", "Done", "OK"] {
@@ -198,7 +203,7 @@ class UITestCase: XCTestCase {
       }
     }
     return export.waitForExistence(timeout: 10) && export.isHittable
-      && palette.waitForExistence(timeout: 10)
+      && palette.waitForExistence(timeout: 10) && !modeExit.exists
   }
 
   override func tearDown() {
@@ -286,17 +291,29 @@ extension XCUIApplication {
     // but live creation does one of those, so it is never tapped twice.
     let sizeSheet = buttons["Use This Size"].firstMatch
     let editor = navigationBars.buttons["Export Image"].firstMatch
+    // The document browser's own refusal. Seen on the iPhone leg when a
+    // launch followed a terminate closely enough that the browser's staging
+    // package from the last creation was still in the way: the tap took, the
+    // browser put up "Unable to Import Document", and the editor wait below
+    // spent its whole 180 seconds on an alert. Dismissed and the creation
+    // retried, rather than waited out.
+    let importFailed = alerts["Unable to Import Document"].firstMatch
     func tapTook() -> Bool {
       for _ in 0..<45 {
         if sizeSheet.waitForExistence(timeout: 1) || editor.exists || !create.exists {
           return true
         }
+        if importFailed.exists {
+          importFailed.buttons["OK"].firstMatch.tap()
+          _ = importFailed.waitForNonExistence(timeout: 10)
+          return false
+        }
       }
       return false
     }
-    for _ in 1...2 {
+    for _ in 1...3 {
       if tapTook() { break }
-      guard create.isHittable else { break }
+      guard create.waitForExistence(timeout: 5), create.isHittable else { break }
       create.tap()
     }
 
@@ -532,25 +549,28 @@ extension XCUIApplication {
 
   /// Choose a drawing tool from the palette.
   ///
-  /// The tools are behind one menu button rather than spread across a segmented
-  /// control, so picking one is two taps and the strip's width no longer
-  /// depends on how many there are.
+  /// Every tool is its own button, on screen at once: the rail beside the
+  /// canvas on an iPad, the bottom row of the dock on a phone. A tool's
+  /// identifier is its name, and the one in hand is labelled "Tool, <name>",
+  /// so picking one is a single tap and proving which one is in hand is a
+  /// label query.
   func selectTool(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
     let palette = buttons.matching(
       NSPredicate(format: "label BEGINSWITH %@", "Tool, ")
     ).firstMatch
     XCTAssertTrue(
-      palette.waitForExistence(timeout: 15), "the tool palette is not on the strip",
+      palette.waitForExistence(timeout: 15), "the tool palette is not on screen",
       file: file, line: line)
     if palette.label == "Tool, \(name)" { return }
-    palette.tap()
 
     let choice = buttons[name].firstMatch
     XCTAssertTrue(
       choice.waitForExistence(timeout: 10), "\(name) is missing from the tool palette",
       file: file, line: line)
     choice.tap()
-    _ = buttons["Tool, \(name)"].firstMatch.waitForExistence(timeout: 10)
+    XCTAssertTrue(
+      buttons["Tool, \(name)"].firstMatch.waitForExistence(timeout: 10),
+      "tapping \(name) did not make it the tool in hand", file: file, line: line)
   }
 
   /// Reach About, which sits on the bar at regular width and in the actions menu

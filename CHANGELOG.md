@@ -4,6 +4,54 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.38.0] — Unreleased
+
+### Changed
+- **iOS: the editor is a studio now, not a sample.** The canvas sits in a
+  neutral dark surround (`UIUserInterfaceStyle: Dark`), the chrome is white on
+  dark, and the one accent — the basilisk's green — marks state only: the tool
+  in hand, the active layer, a mode's one prominent action. Every tool is on
+  screen at once: a floating tool rail beside the canvas on iPad (Undo, Redo,
+  the nine tools, the ink) and a two-row dock on iPhone (options above, the
+  nine tools sharing the width below), where before the tools hid behind one
+  menu button showing only the current one. The tool's options — brush width,
+  Tolerance, the combine mode, the selection's Fill/Cut/Copy/Paste/Delete —
+  float in a capsule under the canvas on iPad. The layers panel shows a
+  thumbnail per layer, keeps the active layer's Opacity and Fill sliders above
+  the list rather than inside every row, and puts the layer actions in a row
+  of icons. Desktop is unchanged. (#428)
+- **iOS UI tests: the launch helper survives the document browser's own
+  refusal.** `-PhotoslopFreshDocumentStore` now empties the app's `tmp` as
+  well as Documents, since the browser stages a new document there and a
+  terminate mid-creation left a package the next Create Document could not
+  replace ("Unable to Import Document", then "the editor never came up"
+  180 seconds later — the one-off this suite had logged before). The helper
+  also dismisses that alert and re-taps Create rather than waiting it out,
+  and the shared-editor baseline check now also requires that no mode's
+  Cancel is on screen, since the palette no longer leaves with a mode's bar.
+- **iOS UI tests pin the palette's new contract.** Every tool's button must
+  exist, be hittable, lie inside the window and be at least 40pt on a side on
+  both CI devices, and exactly one carries the "Tool, …" label of the tool in
+  hand; `selectTool` is one tap. The old "the picker costs one button" test
+  went with the menu it pinned.
+
+### Fixed
+- **iOS: strokes rendered off screen took their colours from the appearance.**
+  PencilKit treats an ink colour as a light-mode value and swaps it under a
+  dark trait collection — black paints white. The on-screen canvas was already
+  pinned to light; `PKDrawing.image(from:scale:)` was not, so the composite,
+  the bake through a selection, the eyedropper's sample, the document preview
+  and (now) the layer thumbnail all followed the current appearance. Latent on
+  any device in dark mode; the unit tests caught it the moment the app went
+  dark. Every offscreen render now goes through `PKDrawing.literalImage`,
+  which pins the trait collection to light for the render. (#428)
+- **iOS: a new document opened at a quarter of the screen width on iPhone.**
+  The canvas took its only zoom-to-fit while the view was still being sized
+  for the transition out of the document browser — a 2048px document opened
+  78pt wide, a postage stamp in the middle of the screen. The canvas now refits
+  whenever its bounds change until the first pinch, after which the zoom is
+  the user's; a rotation or the sidebar sliding in refits too. (#428)
+
 ## [2.37.5] — 2026-10-01
 
 ### Changed
