@@ -456,12 +456,18 @@ extension XCUIApplication {
   /// finds nothing, and reads as the row being missing.
   func openMoreActions(file: StaticString = #filePath, line: UInt = #line) {
     let more = navigationBars.buttons["More Actions"].firstMatch
+    let opened = buttons["Import Image…"].firstMatch
     XCTAssertTrue(
       more.waitForExistence(timeout: 15), "no More Actions menu on the bar", file: file, line: line)
-    more.tap()
-    XCTAssertTrue(
-      buttons["Import Image…"].firstMatch.waitForExistence(timeout: 10),
-      "More Actions did not open", file: file, line: line)
+    // Tapped again if the menu does not come, for the same reason a submenu
+    // row is (see `revealAction`): a tap the runner drops leaves the bar
+    // exactly as it was, and the button is still there to tap.
+    for _ in 1...3 {
+      more.tap()
+      if opened.waitForExistence(timeout: 10) { break }
+      guard more.exists, more.isHittable else { break }
+    }
+    XCTAssertTrue(opened.exists, "More Actions did not open", file: file, line: line)
   }
 
   /// Close an open menu without choosing anything from it.
@@ -484,6 +490,17 @@ extension XCUIApplication {
   /// action is looked for on the top level first and behind its submenu only
   /// when it is not there. Tests name the action; which menu this device
   /// shows is not their business.
+  ///
+  /// The tap on the submenu row is repeated when it does not take (#430).
+  /// Intermittently on the CI runner's iPhone leg the row is tapped, the
+  /// submenu never opens, and the top level simply stays up — the runner's
+  /// xcresult shows the menu's nine rows still on screen with the Text row
+  /// untouched, after XCTest had spent a full minute inside the tap waiting
+  /// for animations the app never reported finishing. The same tap a
+  /// second later opens the submenu. That one-minute wait is XCTest's own
+  /// and is paid before this code gets control back; the retry is what
+  /// turns it from a failed test into a slow one. If the menu closed under
+  /// the tap instead, it is reopened before the row is tapped again.
   @discardableResult
   func revealAction(
     _ label: String, file: StaticString = #filePath, line: UInt = #line
@@ -495,7 +512,14 @@ extension XCUIApplication {
       XCTAssertTrue(
         row.waitForExistence(timeout: 10),
         "neither \(label) nor the \(submenu) submenu is in More Actions", file: file, line: line)
-      row.tap()
+      for _ in 1...3 {
+        row.tap()
+        if action.waitForExistence(timeout: 10) { break }
+        if !buttons["Import Image…"].firstMatch.exists, !row.exists {
+          openMoreActions(file: file, line: line)
+        }
+        guard row.waitForExistence(timeout: 10), row.isHittable else { break }
+      }
     }
     XCTAssertTrue(
       action.waitForExistence(timeout: 10), "\(label) is missing from More Actions",

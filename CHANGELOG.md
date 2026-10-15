@@ -20,6 +20,16 @@ follows [SemVer](https://semver.org).
   neither the size sheet, the editor nor the launch scene arriving, which
   gives the file provider a fresh client. A slow but live creation shows one
   of those inside the minute and is never cut short.
+- **iOS UI tests: a More Actions submenu row that does not open is tapped
+  again (#430).** The other signature of the same leg — "Fit Text… is
+  missing from More Actions", "Effects… is missing", "Add Text is missing" —
+  turned out to be a dropped tap, not a missing row: the runner's xcresult
+  shows the top-level menu still open with the Text row untouched, after
+  XCTest had spent a minute inside the tap waiting for animations the app
+  never reported finishing. `revealAction` now taps the submenu row again
+  when its contents do not arrive, reopening the menu first if the tap
+  closed it, and `openMoreActions` taps the bar button again on the same
+  terms. A dropped tap costs the test XCTest's minute; it no longer fails it.
 
 ## [2.38.0] — Unreleased
 

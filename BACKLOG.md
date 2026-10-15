@@ -21,9 +21,10 @@ sync — check an item here when its issue closes.
   branch since 2026-10-09 — the runner's xcresult shows the system document
   browser hanging on the new document after a `terminate()` + relaunch, which
   cascades at 180 s per later fresh launch; the runner image is unchanged.
-  `createDocument` now relaunches once after 60 s on the hung cell. Still
-  open: whether the full phone leg stays green over several runs, and the
-  More Actions submenu rows that miss their 10-second window on the runner
+  `createDocument` now relaunches once after 60 s on the hung cell, and the
+  other signature — a More Actions submenu row "missing" — is a dropped tap
+  on the submenu row, which `revealAction` now repeats. Still open: whether
+  the full phone leg stays green over several runs
   ([#430](https://github.com/CryptoJones/Photoslop/issues/430))
 
 - [ ] Critical-coverage floors sat 30–50 points under measured coverage, so the
