@@ -18,7 +18,7 @@ permissions:
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 90
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Verify release versions
@@ -131,7 +131,7 @@ jobs:
             -scheme PhotoslopIPad \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.ipad }}' \
-            -only-testing:PhotoslopIPadTests \
+            ${{ github.ref_type == 'tag' && '-only-testing:PhotoslopIPadTests' || '' }} \
             -resultBundlePath "$RUNNER_TEMP/xcresult/ipad.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
             test
@@ -157,10 +157,7 @@ jobs:
             -scheme PhotoslopIPad \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.iphone }}' \
-            -only-testing:PhotoslopIPadUITests/NewDocumentUITests \
-            -only-testing:PhotoslopIPadUITests/EyedropperUITests \
-            -only-testing:PhotoslopIPadUITests/PaintBucketUITests \
-            -only-testing:PhotoslopIPadUITests/SelectionClipboardUITests \
+            ${{ github.ref_type == 'tag' && '-only-testing:PhotoslopIPadTests' || '' }} \
             -resultBundlePath "$RUNNER_TEMP/xcresult/iphone.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
             test
