@@ -174,14 +174,19 @@ class UITestCase: XCTestCase {
     let export = app.navigationBars.buttons["Export Image"].firstMatch
     // The navigation bar alone is not enough. Crop replaces only the *bottom*
     // bar, so Export stays put and a crop left running looks exactly like the
-    // baseline — the next test then fails on "the tool palette is not on the
-    // strip", having inherited a mode it never entered. The palette is what
-    // proves the editor's ordinary chrome is back.
+    // baseline — the next test then fails on "Brush width is not on screen",
+    // having inherited a mode it never entered. The palette proves the
+    // editor's ordinary chrome is up; the absence of a mode's Cancel proves
+    // no mode is. Both are needed now that the palette is a rail beside the
+    // canvas and stays put while a mode owns the bottom bar.
     let palette = app.buttons.matching(
       NSPredicate(format: "label BEGINSWITH %@", "Tool, ")
     ).firstMatch
+    let modeExit = app.buttons.matching(
+      NSPredicate(format: "identifier IN %@", ["Cancel Crop", "Cancel Placement"])
+    ).firstMatch
     for _ in 1...4 {
-      if export.exists, export.isHittable, palette.exists { return true }
+      if export.exists, export.isHittable, palette.exists, !modeExit.exists { return true }
 
       var tookAnExit = false
       for label in ["Cancel", "Done", "OK"] {
@@ -198,7 +203,7 @@ class UITestCase: XCTestCase {
       }
     }
     return export.waitForExistence(timeout: 10) && export.isHittable
-      && palette.waitForExistence(timeout: 10)
+      && palette.waitForExistence(timeout: 10) && !modeExit.exists
   }
 
   override func tearDown() {
@@ -275,30 +280,7 @@ extension XCUIApplication {
     }
     XCTAssertTrue(
       create.waitForExistence(timeout: 60), "launch scene never appeared", file: file, line: line)
-    create.tap()
-
-    // Make sure the tap took. On the CI runner a tap can land while the launch
-    // scene is still settling and be dropped: nothing happens, the launch
-    // scene just sits there, and the 180-second editor wait below expires as
-    // "the editor never came up" (#408, SelectionClipboardUITests on the
-    // iPhone leg). Re-tap only after 45 seconds in which the sheet has not
-    // come, the editor has not come and Create Document has not left. A slow
-    // but live creation does one of those, so it is never tapped twice.
-    let sizeSheet = buttons["Use This Size"].firstMatch
-    let editor = navigationBars.buttons["Export Image"].firstMatch
-    func tapTook() -> Bool {
-      for _ in 0..<45 {
-        if sizeSheet.waitForExistence(timeout: 1) || editor.exists || !create.exists {
-          return true
-        }
-      }
-      return false
-    }
-    for _ in 1...2 {
-      if tapTook() { break }
-      guard create.isHittable else { break }
-      create.tap()
-    }
+    createDocument(file: file, line: line)
 
     // The canvas-size question can be asked more than once, so answer it until
     // it stops being asked rather than assuming a single sheet.
@@ -315,7 +297,7 @@ extension XCUIApplication {
     // Waiting for the sheet to actually leave still matters: a `navigationBars`
     // query run mid-dismissal can match the sheet's own bar instead of the
     // editor's, so a toolbar assertion fails for reasons unrelated to toolbars.
-    let useThisSize = sizeSheet
+    let useThisSize = buttons["Use This Size"].firstMatch
     for _ in 1...3 {
       guard useThisSize.waitForExistence(timeout: 60) else { break }
       useThisSize.tap()
@@ -329,6 +311,52 @@ extension XCUIApplication {
     XCTAssertTrue(
       navigationBars.buttons["Export Image"].firstMatch.waitForExistence(timeout: 180),
       "the editor never came up", file: file, line: line)
+  }
+
+  /// Tap Create Document on the launch scene, and make sure the tap took.
+  ///
+  /// On the CI runner a tap can land while the launch scene is still settling
+  /// and be dropped: nothing happens, the launch scene just sits there, and
+  /// whatever the caller waits for next expires — "the editor never came up"
+  /// (#408, SelectionClipboardUITests on the iPhone leg), "size sheet never
+  /// appeared" (NewDocumentUITests on the iPad leg, which tapped once and
+  /// waited). Re-tap only after 45 seconds in which the sheet has not come,
+  /// the editor has not come and Create Document has not left. A slow but
+  /// live creation does one of those, so it is never tapped twice.
+  ///
+  /// The document browser's own refusal is handled here too. Seen on the
+  /// iPhone leg when a launch followed a terminate closely enough that the
+  /// browser's staging package from the last creation was still in the way:
+  /// the tap took, the browser put up "Unable to Import Document", and the
+  /// editor wait spent its whole 180 seconds on an alert. Dismissed and the
+  /// creation retried, rather than waited out.
+  func createDocument(file: StaticString = #filePath, line: UInt = #line) {
+    let create = buttons["Create Document"].firstMatch
+    let sizeSheet = buttons["Use This Size"].firstMatch
+    let editor = navigationBars.buttons["Export Image"].firstMatch
+    let importFailed = alerts["Unable to Import Document"].firstMatch
+    XCTAssertTrue(
+      create.waitForExistence(timeout: 60), "no Create Document to tap", file: file, line: line)
+    create.tap()
+
+    func tapTook() -> Bool {
+      for _ in 0..<45 {
+        if sizeSheet.waitForExistence(timeout: 1) || editor.exists || !create.exists {
+          return true
+        }
+        if importFailed.exists {
+          importFailed.buttons["OK"].firstMatch.tap()
+          _ = importFailed.waitForNonExistence(timeout: 10)
+          return false
+        }
+      }
+      return false
+    }
+    for _ in 1...3 {
+      if tapTook() { break }
+      guard create.waitForExistence(timeout: 5), create.isHittable else { break }
+      create.tap()
+    }
   }
 
   /// Get the layer list on screen, wherever this device keeps it.
@@ -532,25 +560,28 @@ extension XCUIApplication {
 
   /// Choose a drawing tool from the palette.
   ///
-  /// The tools are behind one menu button rather than spread across a segmented
-  /// control, so picking one is two taps and the strip's width no longer
-  /// depends on how many there are.
+  /// Every tool is its own button, on screen at once: the rail beside the
+  /// canvas on an iPad, the bottom row of the dock on a phone. A tool's
+  /// identifier is its name, and the one in hand is labelled "Tool, <name>",
+  /// so picking one is a single tap and proving which one is in hand is a
+  /// label query.
   func selectTool(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
     let palette = buttons.matching(
       NSPredicate(format: "label BEGINSWITH %@", "Tool, ")
     ).firstMatch
     XCTAssertTrue(
-      palette.waitForExistence(timeout: 15), "the tool palette is not on the strip",
+      palette.waitForExistence(timeout: 15), "the tool palette is not on screen",
       file: file, line: line)
     if palette.label == "Tool, \(name)" { return }
-    palette.tap()
 
     let choice = buttons[name].firstMatch
     XCTAssertTrue(
       choice.waitForExistence(timeout: 10), "\(name) is missing from the tool palette",
       file: file, line: line)
     choice.tap()
-    _ = buttons["Tool, \(name)"].firstMatch.waitForExistence(timeout: 10)
+    XCTAssertTrue(
+      buttons["Tool, \(name)"].firstMatch.waitForExistence(timeout: 10),
+      "tapping \(name) did not make it the tool in hand", file: file, line: line)
   }
 
   /// Reach About, which sits on the bar at regular width and in the actions menu

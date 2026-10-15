@@ -169,7 +169,10 @@ struct EditorView: View {
     let isNew: Bool
   }
 
-  var body: some View {
+  /// The navigation container, in a property of its own so `body`'s modifier
+  /// chain keeps a type the compiler can resolve — adding one more modifier
+  /// inline tipped it past "unable to type-check this expression".
+  private var root: some View {
     Group {
       if isCompact {
         // NavigationSplitView collapses its sidebar into a pushed column at
@@ -180,11 +183,23 @@ struct EditorView: View {
         NavigationSplitView {
           layerSidebar
             .navigationTitle("Layers")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Studio.chrome, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .navigationSplitViewColumnWidth(min: 280, ideal: 300, max: 380)
         } detail: {
           editorSurface
         }
       }
     }
+    // Neutral chrome: white icons on dark, with the accent reserved for state
+    // and for the one prominent action of a mode. The system blue on every
+    // button was the other half of what made the editor look like a template.
+    .tint(.white)
+  }
+
+  var body: some View {
+    root
     .fileImporter(
       isPresented: $showFileImporter,
       allowedContentTypes: [.image],
@@ -351,67 +366,66 @@ struct EditorView: View {
     .onChange(of: undoManager) { _, manager in store.undoManager = manager }
   }
 
+  /// The canvas with its chrome around it.
+  ///
+  /// Two layouts. An iPad has the width for a tool rail beside the canvas and
+  /// the height for a floating options bar under it; a phone has neither, and
+  /// gets a dock: options above, tools below, the whole thing one bar at the
+  /// bottom edge where a thumb already is.
+  ///
+  /// The rail and the bars are laid out *beside* the canvas rather than
+  /// floated over it, and painted to look afloat on the backdrop. Floating
+  /// them over the canvas would have put the bottom crop handle of a tall
+  /// document under the options bar — the canvas fits itself to the bounds it
+  /// is given, so giving it the bounds that are actually free is what keeps
+  /// every handle of a freshly opened document reachable.
   private var editorSurface: some View {
     VStack(spacing: 0) {
-      PencilCanvas(
-        backgroundImage: store.canvasBackground,
-        canvasSize: store.canvasSize,
-        drawing: store.activeCanvasDrawing,
-        drawingKey: store.activeDrawingKey,
-        inkColor: UIColor(inkColor.opacity(inkOpacity)),
-        inkWidth: inkWidth,
-        tool: tool,
-        drawsWithFinger: drawsWithFinger,
-        drawingOpacity: store.activeLayer?.isVisible == true
-          ? (store.activeLayer?.opacity ?? 1)
-          : 0,
-        // While a selection is up the live stroke is clipped to it, and what
-        // lifts off is baked through it (#370, DD-015).
-        strokeClip: store.strokeClip(),
-        onCanvasDragged: isMovingText ? moveText : nil,
-        // A tap tool owns the tap only while nothing else owns the canvas.
-        onCanvasTapped: tool.actsOnTap && !isMovingText && !isCropping && placement == nil
-          ? tapCanvas : nil,
-        onZoomScaleChanged: { canvasZoom = $0 },
-        // Drawing is suspended while a box owns the canvas, so a drag moves the
-        // rectangle rather than painting under it. Pinch, zoom and two-finger
-        // pan keep working throughout — switching off hit-testing for the whole
-        // scroll view is what took them away before (#270).
-        // A marquee or lasso drag is an overlay for this purpose (#370).
-        overlayIsActive: isCropping || placement != nil || tool.selectsByDrag,
-        onBoxDrag: handleBoxDrag,
-        reveal: boxReveal,
-        onDrawingChanged: { store.setDrawing($0, erasing: tool == .eraser) }
-      ) {
-        canvasOverlay
+      HStack(spacing: 0) {
+        if !isCompact {
+          toolRail
+            .padding(.leading, 12)
+            .padding(.vertical, 12)
+        }
+        canvas
       }
-      if isMovingText { placementBanner }
+      if !isCompact {
+        regularBottomBar
+          .padding(.horizontal, 16)
+          .padding(.vertical, 10)
+      }
+      if isMovingText && isCompact { placementBanner }
       // Layout priority so the bar is allocated its height before the canvas
       // takes the rest. Without it the canvas is greedy and the bar is pushed
       // below the visible area — which is how the crop controls ended up at
       // y=1147 on a screen 834 tall in landscape, present in the hierarchy and
       // impossible to tap.
-      Group {
-        if isCropping {
-          cropBar
-        } else if placement != nil {
-          placementBar
-        } else {
-          toolStrip
+      if isCompact {
+        Group {
+          if isCropping {
+            dockedMode { cropBar }
+          } else if placement != nil {
+            dockedMode { placementBar }
+          } else {
+            compactDock
+          }
         }
+        .layoutPriority(1)
+        // Above the canvas in z-order as well. Belt and braces: clipping stops
+        // the overlay reaching down here, and this stops anything else that
+        // does from winning the touch.
+        .zIndex(1)
       }
-      .layoutPriority(1)
-      // Above the canvas in z-order as well. Belt and braces: clipping stops the
-      // overlay reaching down here, and this stops anything else that does from
-      // winning the touch.
-      .zIndex(1)
       if Self.pixelProbeEnabled { pixelProbe }
     }
+    .background(Color(uiColor: Studio.backdrop))
     // No .navigationTitle here on purpose. DocumentGroup binds the title to
     // the document's file name and drives Rename through it; setting a
     // constant title replaces that binding, so tapping Rename opened a field
     // with nowhere to write and the keyboard dismissed immediately.
     .navigationBarTitleDisplayMode(.inline)
+    .toolbarBackground(Studio.chrome, for: .navigationBar)
+    .toolbarBackground(.visible, for: .navigationBar)
     .toolbar { documentToolbar }
     .sheet(isPresented: $showLayers) {
       if pendingLayerPhotoPick {
@@ -427,97 +441,249 @@ struct EditorView: View {
         layerSidebar
           .navigationTitle("Layers")
           .navigationBarTitleDisplayMode(.inline)
+          .toolbarBackground(Studio.chrome, for: .navigationBar)
+          .toolbarBackground(.visible, for: .navigationBar)
           .toolbar {
             ToolbarItem(placement: .confirmationAction) {
               Button("Done") { showLayers = false }
             }
           }
       }
+      .presentationBackground(Studio.chrome)
+    }
+  }
+
+  private var canvas: some View {
+    PencilCanvas(
+      backgroundImage: store.canvasBackground,
+      canvasSize: store.canvasSize,
+      drawing: store.activeCanvasDrawing,
+      drawingKey: store.activeDrawingKey,
+      inkColor: UIColor(inkColor.opacity(inkOpacity)),
+      inkWidth: inkWidth,
+      tool: tool,
+      drawsWithFinger: drawsWithFinger,
+      drawingOpacity: store.activeLayer?.isVisible == true
+        ? (store.activeLayer?.opacity ?? 1)
+        : 0,
+      // While a selection is up the live stroke is clipped to it, and what
+      // lifts off is baked through it (#370, DD-015).
+      strokeClip: store.strokeClip(),
+      onCanvasDragged: isMovingText ? moveText : nil,
+      // A tap tool owns the tap only while nothing else owns the canvas.
+      onCanvasTapped: tool.actsOnTap && !isMovingText && !isCropping && placement == nil
+        ? tapCanvas : nil,
+      onZoomScaleChanged: { canvasZoom = $0 },
+      // Drawing is suspended while a box owns the canvas, so a drag moves the
+      // rectangle rather than painting under it. Pinch, zoom and two-finger
+      // pan keep working throughout — switching off hit-testing for the whole
+      // scroll view is what took them away before (#270).
+      // A marquee or lasso drag is an overlay for this purpose (#370).
+      overlayIsActive: isCropping || placement != nil || tool.selectsByDrag,
+      onBoxDrag: handleBoxDrag,
+      reveal: boxReveal,
+      onDrawingChanged: { store.setDrawing($0, erasing: tool == .eraser) }
+    ) {
+      canvasOverlay
+    }
+    .overlay(alignment: .top) {
+      if isMovingText && !isCompact {
+        placementBanner
+          .floatingPanel()
+          .padding(.top, 12)
+      }
     }
   }
 
   private var layerSidebar: some View {
+    LayerPanel(
+      store: store,
+      isAddingPhotos: isAddingLayerPhotos,
+      onNewLayerFromPhoto: {
+        // At compact width the layer list is a sheet, and a picker asked for
+        // while it is up is silently dropped: the flag flips and nothing
+        // appears, the same way #229's canvas sheet was lost. Close the layer
+        // list first and let its dismissal raise the picker. On iPad the list
+        // is a sidebar rather than a sheet, so it can present straight away.
+        if isCompact {
+          pendingLayerPhotoPick = true
+          showLayers = false
+        } else {
+          showLayerImportOptions = true
+        }
+      },
+      onEffects: {
+        if isCompact {
+          pendingEffectsSheet = true
+          showLayers = false
+        } else {
+          openEffects()
+        }
+      })
+  }
+
+  /// The iPad's tool rail: undo and redo, the tools, the ink — a column at
+  /// the canvas's left edge, where a drawing hand is not.
+  private var toolRail: some View {
+    // Plain when the window is tall enough for the whole column — every iPad
+    // in either orientation — and scrolling when it is not, as a short Stage
+    // Manager window at regular width can be, so the ink and the last tools
+    // never fall off the bottom with no way to reach them.
+    ViewThatFits(in: .vertical) {
+      toolRailColumn
+      ScrollView(.vertical, showsIndicators: false) { toolRailColumn }
+    }
+    .buttonStyle(.icon)
+    .padding(4)
+    .floatingPanel()
+  }
+
+  private var toolRailColumn: some View {
+    VStack(spacing: 2) {
+      undoButton.accessibilityIdentifier("Undo")
+      redoButton.accessibilityIdentifier("Redo")
+      railDivider
+      ToolButtons(tool: $tool)
+      if tool.usesInk {
+        railDivider
+        inkButton
+          .frame(width: 44, height: 44)
+      }
+    }
+  }
+
+  private var railDivider: some View {
+    Rectangle()
+      .fill(Studio.hairline)
+      .frame(width: 24, height: 1)
+      .padding(.vertical, 4)
+  }
+
+  /// What sits under the canvas on an iPad: the mode's bar while a mode is
+  /// up, otherwise the tool's options — one floating capsule, centred.
+  @ViewBuilder
+  private var regularBottomBar: some View {
+    Group {
+      if isCropping {
+        cropBar
+      } else if placement != nil {
+        placementBar
+      } else {
+        HStack(spacing: 14) {
+          toolOptions
+        }
+      }
+    }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 8)
+    .frame(minHeight: 56)
+    .floatingPanel()
+    .frame(maxWidth: 720)
+  }
+
+  /// The phone's dock: the options row, which scrolls when a selection's
+  /// actions join it, over the tool row, which never does — nine tools share
+  /// the width, so every one is on screen and under a thumb.
+  private var compactDock: some View {
     VStack(spacing: 0) {
-      List(
-        selection: Binding(
-          get: { store.activeLayerID },
-          set: { if let id = $0 { store.select(id) } }
-        )
-      ) {
-        ForEach(Array(store.layers.enumerated()).reversed(), id: \.element.id) { _, layer in
-          LayerRow(
-            layer: layer,
-            isActive: layer.id == store.activeLayerID,
-            onSelect: { store.select(layer.id) },
-            onVisibleChanged: { store.setVisible($0, for: layer.id) },
-            onOpacityChanged: { store.setOpacity($0, for: layer.id) },
-            onFillOpacityChanged: { store.setFillOpacity($0, for: layer.id) },
-            onRename: { store.rename($0, for: layer.id) }
-          )
-          .tag(layer.id)
+      Divider().overlay(Studio.hairline)
+      ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 10) {
+          undoButton.accessibilityIdentifier("Undo")
+          redoButton.accessibilityIdentifier("Redo")
+          Divider().frame(height: 24)
+          toolOptions
         }
-        .onMove { source, destination in
-          let count = store.layers.count
-          let translated = IndexSet(source.map { count - 1 - $0 })
-          let target = max(0, min(count, count - destination))
-          store.moveLayers(fromOffsets: translated, toOffset: target)
-        }
+        .buttonStyle(.icon)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
       }
-
-      HStack {
-        Button(action: store.addLayer) { Image(systemName: "plus") }
-          .accessibilityLabel("Add layer")
-        Button {
-          // At compact width the layer list is a sheet, and a picker asked for
-          // while it is up is silently dropped: the flag flips and nothing
-          // appears, the same way #229's canvas sheet was lost. Close the layer
-          // list first and let its dismissal raise the picker. On iPad the list
-          // is a sidebar rather than a sheet, so it can present straight away.
-          if isCompact {
-            pendingLayerPhotoPick = true
-            showLayers = false
-          } else {
-            showLayerImportOptions = true
-          }
-        } label: {
-
-          if isAddingLayerPhotos {
-            ProgressView()
-          } else {
-            Image(systemName: "photo.badge.plus")
-          }
-        }
-        .disabled(isAddingLayerPhotos)
-        .accessibilityLabel("New layer from photo")
-        Button {
-          if isCompact {
-            pendingEffectsSheet = true
-            showLayers = false
-          } else {
-            openEffects()
-          }
-        } label: {
-          Image(systemName: "sparkles")
-        }
-        .disabled(store.activeLayer == nil)
-        .accessibilityLabel("Layer effects")
-        Button(action: store.duplicateActiveLayer) {
-          Image(systemName: "square.on.square")
-        }
-        .accessibilityLabel("Duplicate layer")
-        Button(action: store.mergeActiveDown) { Image(systemName: "square.3.layers.3d.down.right") }
-          .disabled(!store.canMergeDown)
-          .accessibilityLabel("Merge layer down")
-        Spacer()
-        EditButton()
-        Button(role: .destructive, action: store.deleteActiveLayer) {
-          Image(systemName: "trash")
-        }
-        .disabled(!store.canDeleteLayer)
-        .accessibilityLabel("Delete layer")
+      HStack(spacing: 0) {
+        ToolButtons(tool: $tool, fills: true)
       }
-      .buttonStyle(.bordered)
-      .padding(10)
+      .padding(.horizontal, 4)
+      .padding(.bottom, 2)
+    }
+    .background(Studio.chrome)
+  }
+
+  /// A mode's bar on a phone: docked where the tool dock was, full width.
+  private func dockedMode<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+    VStack(spacing: 0) {
+      Divider().overlay(Studio.hairline)
+      content()
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+    .background(Studio.chrome)
+  }
+
+  /// Only the options this tool actually uses, which is how the desktop
+  /// contextual options bar already works. The eraser has no ink or width,
+  /// and showing both disabled cost ~170pt of a strip that did not have it
+  /// to spare.
+  ///
+  /// While a selection is up, what to *do* with it leads (#374). Making a
+  /// selection is a modal act: it is the only thing on screen the user is
+  /// thinking about, so its actions earn the bar's leading zone for exactly
+  /// as long as one exists.
+  @ViewBuilder
+  private var toolOptions: some View {
+    if store.selection != nil {
+      selectionActionBar
+      Divider().frame(height: 24)
+    }
+    // The tool's name, with its icon where there is room for one; the phone's
+    // dock already shows the icon lit in the row below.
+    Group {
+      if isCompact {
+        Text(tool.displayName)
+      } else {
+        Label(tool.displayName, systemImage: tool.symbolName)
+      }
+    }
+    .font(.subheadline.weight(.semibold))
+    .lineLimit(1)
+    .fixedSize()
+    .accessibilityHidden(true)
+    // The rail already shows the ink on an iPad; the dock has no rail.
+    if tool.usesInk && isCompact {
+      inkButton
+    }
+    if tool.usesWidth {
+      Slider(
+        value: $inkWidth,
+        in: BrushMetrics.minimumWidth...BrushMetrics.maximumWidth(for: store.canvasSize),
+        step: 1)
+        .frame(width: isCompact ? 130 : 200)
+        .accessibilityLabel("Brush width")
+        .accessibilityIdentifier("Brush width")
+      Text("\(Int(inkWidth))")
+        .font(.caption.monospacedDigit())
+        .foregroundStyle(.secondary)
+        .frame(width: 28, alignment: .leading)
+        .accessibilityHidden(true)
+    } else if tool.usesTolerance {
+      // The tap tools' one slider, in the width slider's slot: how far a
+      // pixel may differ from the tapped one, per channel, and still be
+      // filled or selected.
+      Text("Tolerance")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .fixedSize()
+        .accessibilityHidden(true)
+      Slider(value: $regionTolerance, in: 0...255, step: 1)
+        .frame(width: isCompact ? 130 : 200)
+        .accessibilityLabel("Tolerance")
+        .accessibilityIdentifier("Tolerance")
+      Text("\(Int(regionTolerance))")
+        .font(.caption.monospacedDigit())
+        .foregroundStyle(.secondary)
+        .frame(width: 28, alignment: .leading)
+        .accessibilityHidden(true)
+    }
+    if tool.selects {
+      wandOptionsMenu
     }
   }
 
@@ -541,9 +707,12 @@ struct EditorView: View {
       ZStack {
         Circle().fill(.white)
         Circle().fill(inkColor.opacity(inkOpacity))
-        Circle().strokeBorder(.secondary, lineWidth: 1)
+        Circle().strokeBorder(Color.white.opacity(0.6), lineWidth: 1.5)
       }
-      .frame(width: 28, height: 28)
+      .frame(width: 30, height: 30)
+      .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+      .frame(width: Studio.iconSide, height: Studio.iconSide)
+      .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .accessibilityIdentifier("Ink color")
@@ -726,6 +895,7 @@ struct EditorView: View {
   private var placementBar: some View {
     HStack(spacing: 14) {
       Button("Cancel", role: .cancel, action: cancelPlacement)
+        .foregroundStyle(.secondary)
         .accessibilityIdentifier("Cancel Placement")
 
       Spacer(minLength: 0)
@@ -753,11 +923,10 @@ struct EditorView: View {
 
       Button("Done", action: applyPlacement)
         .buttonStyle(.borderedProminent)
+        .tint(Studio.accent)
+        .foregroundStyle(.black)
         .accessibilityIdentifier("Apply Placement")
     }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 10)
-    .background(.bar)
   }
 
   /// The crop mode's own bar, replacing the tool strip while it is up.
@@ -769,6 +938,7 @@ struct EditorView: View {
   private var cropBar: some View {
     HStack(spacing: 14) {
       Button("Cancel", role: .cancel, action: cancelCrop)
+        .foregroundStyle(.secondary)
         .accessibilityIdentifier("Cancel Crop")
 
       Spacer(minLength: 0)
@@ -808,95 +978,10 @@ struct EditorView: View {
 
       Button("Crop", action: { applyCrop(cropRect) })
         .buttonStyle(.borderedProminent)
+        .tint(Studio.accent)
+        .foregroundStyle(.black)
         .accessibilityIdentifier("Apply Crop")
     }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 10)
-    .background(.bar)
-  }
-
-  private var toolStrip: some View {
-    ScrollView(.horizontal, showsIndicators: false) {
-      HStack(spacing: 14) {
-        // Undo and redo are used mid-drawing and cannot go behind a menu, so
-        // they live here rather than on the bar — at the leading edge, which is
-        // the part of the strip that never has to be scrolled to. This is every
-        // width, not just the phone: no navigation bar in the app has a spare
-        // slot for them now that each one is budgeted for its narrowest device.
-        undoButton.labelStyle(.iconOnly).accessibilityIdentifier("Undo")
-        redoButton.labelStyle(.iconOnly).accessibilityIdentifier("Redo")
-        Divider().frame(height: 24)
-
-        // While a selection is up, what to *do* with it belongs here and not
-        // three levels down a menu (#374). Making a selection is a modal act:
-        // it is the only thing on screen the user is thinking about, so its
-        // actions earn the strip's leading zone — the part that never has to
-        // be scrolled to — for exactly as long as one exists.
-        if store.selection != nil {
-          selectionActionBar
-          Divider().frame(height: 24)
-        }
-
-        // A palette, not a segmented control. The segmented picker was a fixed
-        // 240pt for four tools, which is most of a phone's strip and the reason
-        // the ink well and width slider were scrolled off the end of it. It also
-        // could not have taken a fifth tool: six in 240pt is 40pt each, under
-        // the 44pt minimum touch target. A menu costs one button's width no
-        // matter how many tools there are, so adding one stops being a layout
-        // question.
-        Menu {
-          Picker("Tool", selection: $tool) {
-            ForEach(BrushTool.allCases) { brush in
-              Label(brush.displayName, systemImage: brush.symbolName).tag(brush)
-            }
-          }
-          .pickerStyle(.inline)
-        } label: {
-          Label(tool.displayName, systemImage: tool.symbolName)
-        }
-        .accessibilityLabel("Tool, \(tool.displayName)")
-
-        // Only the options this tool actually uses, which is how the desktop
-        // contextual options bar already works. The eraser has no ink or width,
-        // and showing both disabled cost ~170pt of a strip that did not have it
-        // to spare.
-        if tool.usesInk {
-          inkButton
-        }
-        if tool.usesWidth {
-          Slider(
-            value: $inkWidth,
-            in: BrushMetrics.minimumWidth...BrushMetrics.maximumWidth(for: store.canvasSize),
-            step: 1)
-            .frame(width: isCompact ? 130 : 180)
-            .accessibilityLabel("Brush width")
-            .accessibilityIdentifier("Brush width")
-          Text("\(Int(inkWidth))")
-            .font(.caption.monospacedDigit())
-            .frame(width: 24, alignment: .leading)
-            .accessibilityHidden(true)
-        } else if tool.usesTolerance {
-          // The tap tools' one slider, in the width slider's slot so the
-          // strip stays within its iPad-mini budget (#246): how far a pixel
-          // may differ from the tapped one, per channel, and still be filled
-          // or selected.
-          Slider(value: $regionTolerance, in: 0...255, step: 1)
-            .frame(width: isCompact ? 130 : 180)
-            .accessibilityLabel("Tolerance")
-            .accessibilityIdentifier("Tolerance")
-          Text("\(Int(regionTolerance))")
-            .font(.caption.monospacedDigit())
-            .frame(width: 24, alignment: .leading)
-            .accessibilityHidden(true)
-        }
-        if tool.selects {
-          wandOptionsMenu
-        }
-      }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 10)
-    }
-    .background(.bar)
   }
 
   /// Fill, Cut, Copy, Paste and Delete for the selection that is up (#374,
@@ -911,43 +996,41 @@ struct EditorView: View {
   /// action nobody can find is not a shipped action.
   ///
   /// Icon-only, because four labelled buttons was already more than the phone
-  /// strip's leading zone holds, and each carries its label for VoiceOver and
-  /// for the UI tests. The strip scrolls, so a fifth costs reach rather than
+  /// dock's options row holds, and each carries its label for VoiceOver and
+  /// for the UI tests. That row scrolls, so a fifth costs reach rather than
   /// presence.
   @ViewBuilder private var selectionActionBar: some View {
     // Fill leads the group: it is the one action here that *paints*, and it is
     // the one the shape was made for (#393). Cut, Copy, Paste and Delete move
     // the selected pixels somewhere else; this is what puts something in them.
-    Button(action: fillSelection) {
-      Label("Fill Selection", systemImage: "paintbrush.pointed.fill")
+    Group {
+      Button(action: fillSelection) {
+        Label("Fill Selection", systemImage: "paintbrush.pointed.fill")
+      }
+      .disabled(store.activeLayer == nil)
+      .accessibilityIdentifier("Fill Selection")
+      Button(action: cutSelection) {
+        Label("Cut", systemImage: "scissors")
+      }
+      .disabled(store.activeLayer == nil)
+      .accessibilityIdentifier("Cut")
+      Button(action: copySelection) {
+        Label("Copy", systemImage: "doc.on.doc")
+      }
+      .disabled(store.activeLayer == nil)
+      .accessibilityIdentifier("Copy")
+      Button(action: paste) {
+        Label("Paste", systemImage: "doc.on.clipboard")
+      }
+      .disabled(!store.canPaste)
+      .accessibilityIdentifier("Paste")
+      Button(role: .destructive, action: deleteSelection) {
+        Label("Delete Selection", systemImage: "trash")
+      }
+      .disabled(store.activeLayer == nil)
+      .accessibilityIdentifier("Delete Selection")
     }
-    .labelStyle(.iconOnly)
-    .disabled(store.activeLayer == nil)
-    .accessibilityIdentifier("Fill Selection")
-    Button(action: cutSelection) {
-      Label("Cut", systemImage: "scissors")
-    }
-    .labelStyle(.iconOnly)
-    .disabled(store.activeLayer == nil)
-    .accessibilityIdentifier("Cut")
-    Button(action: copySelection) {
-      Label("Copy", systemImage: "doc.on.doc")
-    }
-    .labelStyle(.iconOnly)
-    .disabled(store.activeLayer == nil)
-    .accessibilityIdentifier("Copy")
-    Button(action: paste) {
-      Label("Paste", systemImage: "doc.on.clipboard")
-    }
-    .labelStyle(.iconOnly)
-    .disabled(!store.canPaste)
-    .accessibilityIdentifier("Paste")
-    Button(role: .destructive, action: deleteSelection) {
-      Label("Delete Selection", systemImage: "trash")
-    }
-    .labelStyle(.iconOnly)
-    .disabled(store.activeLayer == nil)
-    .accessibilityIdentifier("Delete Selection")
+    .buttonStyle(.icon)
   }
 
   /// Two layouts, because a phone's navigation bar cannot hold the iPad's.
@@ -1970,17 +2053,22 @@ struct EditorView: View {
     return layer
   }
 
+  /// The one-line instruction while Move Text is armed. Floats over the top
+  /// of the canvas on an iPad; sits above the dock on a phone.
   private var placementBanner: some View {
     HStack(spacing: 12) {
       Image(systemName: "hand.draw")
+        .foregroundStyle(Studio.accent)
       Text("Drag the text to move it")
-      Spacer()
+      if isCompact { Spacer() }
       Button("Done") { isMovingText = false }
+        .fontWeight(.semibold)
+        .foregroundStyle(Studio.accent)
     }
     .font(.callout)
     .padding(.horizontal, 16)
     .padding(.vertical, 10)
-    .background(.tint.opacity(0.15))
+    .background(isCompact ? Studio.chrome : Color.clear)
   }
 
   private var textOptionsSheet: some View {
@@ -2545,85 +2633,6 @@ struct EditorView: View {
         }
       }
     }
-  }
-}
-
-private struct LayerRow: View {
-  let layer: RasterLayer
-  let isActive: Bool
-  let onSelect: () -> Void
-  let onVisibleChanged: (Bool) -> Void
-  let onOpacityChanged: (Double) -> Void
-  let onFillOpacityChanged: (Double) -> Void
-  let onRename: (String) -> Void
-  @State private var name = ""
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack {
-        Button {
-          onVisibleChanged(!layer.isVisible)
-        } label: {
-          Image(systemName: layer.isVisible ? "eye" : "eye.slash")
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(layer.isVisible ? "Hide layer" : "Show layer")
-
-        TextField(
-          "Layer name",
-          text: Binding(
-            get: { name.isEmpty ? layer.name : name },
-            set: { name = $0 }
-          )
-        )
-        .onSubmit {
-          onRename(name)
-          name = ""
-        }
-        .fontWeight(isActive ? .semibold : .regular)
-      }
-      Slider(
-        value: Binding(get: { layer.opacity }, set: onOpacityChanged),
-        in: 0...1
-      ) {
-        Text("Opacity")
-      } minimumValueLabel: {
-        Text("0%")
-      } maximumValueLabel: {
-        Text("100%")
-      }
-      .controlSize(.small)
-      .accessibilityIdentifier("Layer opacity")
-      // Fill opacity earns its own row rather than hiding behind a disclosure:
-      // it is the control that makes a shadow-only layer possible, and a
-      // second slider is cheaper to understand than a menu that explains it.
-      Slider(
-        value: Binding(get: { layer.fillOpacity }, set: onFillOpacityChanged),
-        in: 0...1
-      ) {
-        Text("Fill")
-      } minimumValueLabel: {
-        Text("Fill")
-          .font(.caption2)
-      } maximumValueLabel: {
-        Text("\(Int((layer.fillOpacity * 100).rounded()))%")
-          .font(.caption2)
-          .monospacedDigit()
-      }
-      .controlSize(.small)
-      .accessibilityIdentifier("Layer fill opacity")
-      .accessibilityLabel("Fill opacity")
-    }
-    .contentShape(Rectangle())
-    .onTapGesture(perform: onSelect)
-    .accessibilityElement(children: .contain)
-    .accessibilityLabel("\(layer.name) layer")
-    .accessibilityValue(
-      "\(layer.isVisible ? "visible" : "hidden"), "
-        + "\(Int((layer.opacity * 100).rounded())) percent opacity, "
-        + "\(Int((layer.fillOpacity * 100).rounded())) percent fill"
-    )
-    .accessibilityHint("Double tap to make active; use the eye button to toggle visibility")
   }
 }
 

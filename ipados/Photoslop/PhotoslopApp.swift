@@ -23,16 +23,30 @@ struct PhotoslopApp: App {
   /// the launch scene — which is the "came up on a screen nobody asked for"
   /// half of #238. Starting from empty makes every test's first screen the same
   /// screen.
+  ///
+  /// The temporary directory is emptied too. The document browser stages a
+  /// new document at `tmp/Untitled.photoslop` and moves it into Documents;
+  /// a test that terminates the app mid-creation leaves that package behind,
+  /// and the next launch's Create Document then fails to stage into the same
+  /// name — "Unable to Import Document: Untitled.photoslop couldn't be
+  /// opened", with the editor never coming up. Nothing the app keeps lives
+  /// in tmp, so a launch that starts from an empty store starts from an
+  /// empty staging area as well.
   private static func emptyDocumentStoreIfAskedTo() {
     guard ProcessInfo.processInfo.arguments.contains("-PhotoslopFreshDocumentStore") else { return }
     let manager = FileManager.default
-    guard
-      let documents = manager.urls(for: .documentDirectory, in: .userDomainMask).first,
-      let contents = try? manager.contentsOfDirectory(
-        at: documents, includingPropertiesForKeys: nil)
-    else { return }
-    for url in contents {
-      try? manager.removeItem(at: url)
+    var folders = [manager.temporaryDirectory]
+    if let documents = manager.urls(for: .documentDirectory, in: .userDomainMask).first {
+      folders.append(documents)
+    }
+    for folder in folders {
+      guard
+        let contents = try? manager.contentsOfDirectory(
+          at: folder, includingPropertiesForKeys: nil)
+      else { continue }
+      for url in contents {
+        try? manager.removeItem(at: url)
+      }
     }
   }
 

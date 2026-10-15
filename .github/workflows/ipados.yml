@@ -18,7 +18,11 @@ permissions:
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 90
+    # Measured 2026-10-15: the iPad leg takes ~31 minutes on the runner and the
+    # phone leg ~45, plus the build; 90 left no room for one slow test, and a
+    # job killed by the timeout skips the xcresult upload that #408 added, so a
+    # failing leg left no evidence (#430).
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Verify release versions

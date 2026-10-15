@@ -16,10 +16,12 @@ final class NewDocumentUITests: UITestCase {
   /// The sheet gets the same 60 seconds `openNewDocument()` gives it. A cold
   /// launch on the CI runner is about three times slower than a dev machine
   /// (#236); at 30 seconds this failed on CI once retries were removed (#238),
-  /// while the editor was simply still coming up.
+  /// while the editor was simply still coming up. The tap goes through
+  /// `createDocument()`, which re-taps a tap the runner dropped (#408) — a
+  /// bare tap here sat on the launch scene for the whole 60 seconds once.
   func testCreatingADocumentAsksForItsCanvasSize() {
     let app = openLaunchScene()
-    app.buttons["Create Document"].firstMatch.tap()
+    app.createDocument()
 
     XCTAssertTrue(
       app.buttons["Use This Size"].waitForExistence(timeout: 60),
@@ -30,7 +32,7 @@ final class NewDocumentUITests: UITestCase {
   /// Answering has to actually take effect, not just dismiss.
   func testChoosingAPresetResizesTheCanvas() {
     let app = openLaunchScene()
-    app.buttons["Create Document"].firstMatch.tap()
+    app.createDocument()
 
     let useThisSize = app.buttons["Use This Size"]
     XCTAssertTrue(useThisSize.waitForExistence(timeout: 60), "size sheet never appeared")

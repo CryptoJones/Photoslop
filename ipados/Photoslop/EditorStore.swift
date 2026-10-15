@@ -1381,7 +1381,7 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
           PKStroke(ink: PKInk(.pen, color: .black), path: $0.path, transform: $0.transform, mask: $0.mask)
         })
     }
-    return autoreleasepool { PixelBuffer(image: source.image(from: box, scale: 1)) }
+    return autoreleasepool { PixelBuffer(image: source.literalImage(from: box, scale: 1)) }
   }
 
   func addLayer() {
@@ -1566,18 +1566,43 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }
   }
 
-  func setOpacity(_ opacity: Double, for id: UUID) {
+  /// A slider sends a stream of these; `coalesce` keeps the drag one undo
+  /// step, as `moveTextLayer` keeps a text drag one. Every sample used to be
+  /// its own step, so one drag of the opacity slider ran through the 32-deep
+  /// history and pushed the edits before it out of reach.
+  func setOpacity(_ opacity: Double, for id: UUID, coalesce: Bool = false) {
     guard layers.contains(where: { $0.id == id }) else { return }
-    mutate(actionName: "Layer Opacity") {
+    mutateCoalescing(actionName: "Layer Opacity", coalesce: coalesce) {
       update(id) { $0.opacity = min(1, max(0, opacity)) }
     }
   }
 
-  func setFillOpacity(_ fillOpacity: Double, for id: UUID) {
+  func setFillOpacity(_ fillOpacity: Double, for id: UUID, coalesce: Bool = false) {
     guard layers.contains(where: { $0.id == id }) else { return }
-    mutate(actionName: "Fill Opacity") {
+    mutateCoalescing(actionName: "Fill Opacity", coalesce: coalesce) {
       update(id) { $0.fillOpacity = min(1, max(0, fillOpacity)) }
     }
+  }
+
+  /// The state from before the first sample of a slider drag, held until the
+  /// sample that ends it registers the whole drag as one step.
+  private var sliderDragOrigin: EditorState?
+
+  /// `mutate` for a change that arrives as a stream of samples. Every sample
+  /// updates the document so the canvas follows the finger; only the last
+  /// one — `coalesce: false` — registers the undo, and it registers the
+  /// return to the state from before the *first*, not the penultimate value.
+  private func mutateCoalescing(actionName: String, coalesce: Bool, _ operation: () -> Void) {
+    let origin = sliderDragOrigin ?? currentState()
+    if coalesce { sliderDragOrigin = origin }
+    objectWillChange.send()
+    operation()
+    mutationRevision += 1
+    if !coalesce {
+      sliderDragOrigin = nil
+      registerUndo(previous: origin, actionName: actionName)
+    }
+    refreshCanvas()
   }
 
   func rename(_ name: String, for id: UUID) {
@@ -1775,7 +1800,7 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
         guard !strokeBox.isEmpty else { return }
         // Strokes are fill, not effects: an unbaked stroke fades with the
         // pixels it will become, not with the shadow cast around them.
-        layer.drawing.image(from: strokeBox, scale: 1).draw(
+        layer.drawing.literalImage(from: strokeBox, scale: 1).draw(
           in: strokeBox,
           blendMode: .normal,
           alpha: layer.fillAlpha

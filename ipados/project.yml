@@ -13,8 +13,8 @@ settings:
     TARGETED_DEVICE_FAMILY: "1,2"
     SUPPORTS_MACCATALYST: NO
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    CURRENT_PROJECT_VERSION: "23705"
-    MARKETING_VERSION: "2.37.5"
+    CURRENT_PROJECT_VERSION: "23800"
+    MARKETING_VERSION: "2.38.0"
     DEVELOPMENT_TEAM: J6P99Q4479
 
 targets:
@@ -69,6 +69,10 @@ targets:
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
         UILaunchScreen: {}
+        # The editor is a dark studio at every setting (Studio.swift); the
+        # document browser, the sheets and the launch scene follow it so the
+        # app is one appearance rather than a dark room off a light hallway.
+        UIUserInterfaceStyle: Dark
         UIRequiresFullScreen: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

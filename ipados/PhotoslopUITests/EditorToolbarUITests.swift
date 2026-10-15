@@ -230,37 +230,41 @@ final class EditorToolbarUITests: UITestCase {
       "there is no opacity control — a translucent stroke is unreachable")
   }
 
-  /// The tool picker must not grow with the number of tools.
+  /// Every tool is on screen, under a finger, without a menu or a scroll.
   ///
-  /// It was a segmented control at a fixed 240pt for four tools, which is most
-  /// of a phone's strip and could not have taken a fifth: six in 240pt is 40pt
-  /// each, under the 44pt minimum touch target. A palette costs one button
-  /// regardless, which is what makes adding a tool a normal change.
-  func testToolPickerCostsOneButtonRegardlessOfToolCount() {
+  /// The tools used to sit behind one menu button that showed only the
+  /// current one: the set on offer was invisible until the menu opened and
+  /// every switch cost two taps. A palette shows them all — the rail beside
+  /// the canvas on an iPad, the bottom row of the dock on a phone — and this
+  /// is what keeps it one: a tenth tool either fits at a finger's size or
+  /// turns this red, rather than quietly going back behind a menu.
+  func testEveryToolIsOnScreenAtFingerSize() {
     let app = openEditor()
+    let window = app.windows.firstMatch.frame
 
-    let picker = app.buttons.matching(
-      NSPredicate(format: "label BEGINSWITH %@", "Tool, ")
-    ).firstMatch
-    XCTAssertTrue(picker.waitForExistence(timeout: 10), "the tool palette is not on the strip")
-    XCTAssertLessThan(
-      picker.frame.width, 160,
-      "the tool control is wide enough to be per-tool rather than a palette")
-
-    // Every tool is still reachable through it. One open is enough: the claim is
-    // that the palette holds them all at a fixed width, not that switching works
-    // four times — and cycling all four cost enough time on a loaded runner to
-    // time out the launch of the *next* test.
-    picker.tap()
-    for name in ["Pen", "Pencil", "Marker", "Eraser"] {
+    let tools = [
+      "Pen", "Pencil", "Marker", "Eraser", "Bucket", "Magic Wand", "Rectangle Select",
+      "Lasso Select", "Eyedropper",
+    ]
+    for name in tools {
+      let button = app.buttons[name].firstMatch
+      XCTAssertTrue(button.waitForExistence(timeout: 10), "\(name) is not in the palette")
+      XCTAssertTrue(button.isHittable, "\(name) is in the palette but cannot be tapped")
       XCTAssertTrue(
-        app.buttons[name].firstMatch.waitForExistence(timeout: 10),
-        "\(name) is missing from the tool palette")
+        window.contains(button.frame),
+        "\(name) is outside the window at \(button.frame); the palette is over budget")
+      XCTAssertGreaterThanOrEqual(
+        min(button.frame.width, button.frame.height), 40,
+        "\(name) is \(button.frame.size), under a finger's size; the palette is over budget")
     }
-    // Leave the palette closed so the next test starts from the editor.
+
+    // Exactly one tool is in hand, and tapping another makes it the one.
+    let inHand = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Tool, "))
+    XCTAssertEqual(inHand.count, 1, "the palette marks \(inHand.count) tools as in hand")
     app.buttons["Eraser"].firstMatch.tap()
     XCTAssertTrue(
       app.buttons["Tool, Eraser"].firstMatch.waitForExistence(timeout: 10),
-      "selecting from the palette did not change the tool")
+      "tapping a tool did not make it the tool in hand")
+    XCTAssertEqual(inHand.count, 1, "selecting a tool left \(inHand.count) marked as in hand")
   }
 }
