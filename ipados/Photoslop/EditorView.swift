@@ -525,6 +525,20 @@ struct EditorView: View {
   /// The iPad's tool rail: undo and redo, the tools, the ink — a column at
   /// the canvas's left edge, where a drawing hand is not.
   private var toolRail: some View {
+    // Plain when the window is tall enough for the whole column — every iPad
+    // in either orientation — and scrolling when it is not, as a short Stage
+    // Manager window at regular width can be, so the ink and the last tools
+    // never fall off the bottom with no way to reach them.
+    ViewThatFits(in: .vertical) {
+      toolRailColumn
+      ScrollView(.vertical, showsIndicators: false) { toolRailColumn }
+    }
+    .buttonStyle(.icon)
+    .padding(4)
+    .floatingPanel()
+  }
+
+  private var toolRailColumn: some View {
     VStack(spacing: 2) {
       undoButton.accessibilityIdentifier("Undo")
       redoButton.accessibilityIdentifier("Redo")
@@ -536,9 +550,6 @@ struct EditorView: View {
           .frame(width: 44, height: 44)
       }
     }
-    .buttonStyle(.icon)
-    .padding(4)
-    .floatingPanel()
   }
 
   private var railDivider: some View {

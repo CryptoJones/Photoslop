@@ -45,6 +45,12 @@ follows [SemVer](https://semver.org).
   any device in dark mode; the unit tests caught it the moment the app went
   dark. Every offscreen render now goes through `PKDrawing.literalImage`,
   which pins the trait collection to light for the render. (#428)
+- **iOS: a drag of a layer's Opacity or Fill slider is one undo step.** Every
+  sample of the drag used to register its own, so one drag ran through the
+  32-deep history and pushed the edits before it out of reach. The store
+  coalesces the samples the way it already coalesced a text drag, and the
+  sample that ends the drag registers the return to the value from before
+  the first. A layer name typed and then left without Return is kept too.
 - **iOS: a new document opened at a quarter of the screen width on iPhone.**
   The canvas took its only zoom-to-fit while the view was still being sized
   for the transition out of the document browser — a 2048px document opened

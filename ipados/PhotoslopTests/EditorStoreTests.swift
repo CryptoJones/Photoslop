@@ -38,6 +38,37 @@ final class EditorStoreTests: XCTestCase {
     XCTAssertEqual(store.layers.count, 2)
   }
 
+  /// A slider drag is one undo step (#428). Every sample used to register
+  /// its own, so one drag of the opacity slider ran through the 32-deep
+  /// history and pushed the edits before it out of reach. The samples that
+  /// coalesce must register nothing at all — that is the assertion in the
+  /// middle — and the sample that ends the drag registers the return to the
+  /// value from before the first.
+  func testAnOpacityDragIsOneUndoStep() throws {
+    let store = EditorStore()
+    let undoManager = UndoManager()
+    store.undoManager = undoManager
+    let id = try XCTUnwrap(store.activeLayerID)
+
+    for sample in stride(from: 0.9, through: 0.3, by: -0.1) {
+      store.setOpacity(sample, for: id, coalesce: true)
+    }
+    XCTAssertEqual(store.layers.first { $0.id == id }?.opacity ?? 0, 0.3, accuracy: 0.001)
+    XCTAssertFalse(undoManager.canUndo, "a sample mid-drag registered an undo step")
+
+    store.setOpacity(0.25, for: id)
+    XCTAssertEqual(store.layers.first { $0.id == id }?.opacity ?? 0, 0.25, accuracy: 0.001)
+    XCTAssertTrue(undoManager.canUndo, "the end of the drag registered nothing")
+
+    undoManager.undo()
+    XCTAssertEqual(
+      store.layers.first { $0.id == id }?.opacity ?? 0, 1, accuracy: 0.001,
+      "one undo should return to before the drag")
+
+    undoManager.redo()
+    XCTAssertEqual(store.layers.first { $0.id == id }?.opacity ?? 0, 0.25, accuracy: 0.001)
+  }
+
   func testPhotoslopPackageRoundTripPreservesLayerMetadata() throws {
     let store = EditorStore()
     store.addLayer()

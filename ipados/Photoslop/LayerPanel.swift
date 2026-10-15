@@ -21,8 +21,8 @@ struct LayerPanel: View {
       if let active = store.activeLayer {
         LayerProperties(
           layer: active,
-          onOpacityChanged: { store.setOpacity($0, for: active.id) },
-          onFillOpacityChanged: { store.setFillOpacity($0, for: active.id) })
+          onOpacityChanged: { store.setOpacity($0, for: active.id, coalesce: $1) },
+          onFillOpacityChanged: { store.setFillOpacity($0, for: active.id, coalesce: $1) })
         Divider().overlay(Studio.hairline)
       }
 
@@ -116,8 +116,10 @@ struct LayerPanel: View {
 /// row, which made a row three lines tall and the list a wall of sliders.
 private struct LayerProperties: View {
   let layer: RasterLayer
-  let onOpacityChanged: (Double) -> Void
-  let onFillOpacityChanged: (Double) -> Void
+  /// The value, and whether more samples of the same drag are coming: true
+  /// while the finger is down, false for the sample that ends it.
+  let onOpacityChanged: (Double, Bool) -> Void
+  let onFillOpacityChanged: (Double, Bool) -> Void
 
   var body: some View {
     VStack(spacing: 6) {
@@ -134,14 +136,22 @@ private struct LayerProperties: View {
   }
 
   private func row(
-    _ title: String, value: Double, identifier: String, onChange: @escaping (Double) -> Void
+    _ title: String, value: Double, identifier: String,
+    onChange: @escaping (Double, Bool) -> Void
   ) -> some View {
     HStack(spacing: 10) {
       Text(title)
         .font(.caption)
         .foregroundStyle(.secondary)
         .frame(width: 48, alignment: .leading)
-      Slider(value: Binding(get: { value }, set: onChange), in: 0...1) {
+      // Samples during the drag coalesce; the end of the drag re-sends the
+      // value it settled on as the one sample that registers the undo step.
+      Slider(
+        value: Binding(get: { value }, set: { onChange($0, true) }), in: 0...1,
+        onEditingChanged: { editing in
+          if !editing { onChange(value, false) }
+        }
+      ) {
         Text(title)
       }
       .controlSize(.small)
@@ -163,6 +173,7 @@ private struct LayerRow: View {
   let onVisibleChanged: (Bool) -> Void
   let onRename: (String) -> Void
   @State private var name = ""
+  @FocusState private var isEditingName: Bool
 
   var body: some View {
     HStack(spacing: 12) {
@@ -176,9 +187,13 @@ private struct LayerRow: View {
             set: { name = $0 }
           )
         )
-        .onSubmit {
-          onRename(name)
-          name = ""
+        .focused($isEditingName)
+        .onSubmit(commitRename)
+        // Return is not the only way out of a field: a tap on another row or
+        // the sheet's Done leaves it too, and a name typed and then left that
+        // way was shown and never kept.
+        .onChange(of: isEditingName) { _, editing in
+          if !editing { commitRename() }
         }
         .font(.subheadline.weight(isActive ? .semibold : .regular))
         Text(detail)
@@ -211,6 +226,12 @@ private struct LayerRow: View {
         + "\(Int((layer.fillOpacity * 100).rounded())) percent fill"
     )
     .accessibilityHint("Double tap to make active; use the eye button to toggle visibility")
+  }
+
+  private func commitRename() {
+    guard !name.isEmpty else { return }
+    if name != layer.name { onRename(name) }
+    name = ""
   }
 
   private var detail: String {
@@ -288,7 +309,11 @@ struct LayerThumbnail: View {
     .opacity(layer.isVisible ? 1 : 0.4)
     .accessibilityHidden(true)
     .task(id: key) {
-      image = await Self.render(layer, canvasSize: canvasSize)
+      let rendered = await Self.render(layer, canvasSize: canvasSize)
+      // A key change cancels this task and starts the next; the render it
+      // was awaiting still finishes, and must not land over the newer one.
+      guard !Task.isCancelled else { return }
+      image = rendered
     }
   }
 
