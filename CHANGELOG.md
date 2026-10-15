@@ -60,6 +60,19 @@ follows [SemVer](https://semver.org).
   78pt wide, a postage stamp in the middle of the screen. The canvas now refits
   whenever its bounds change until the first pinch, after which the zoom is
   the user's; a rotation or the sidebar sliding in refits too. (#428)
+- **iOS UI tests: a document browser that hangs opening the new document is
+  relaunched, not waited out (#430).** Intermittently on the CI runner's
+  iPhone leg, a launch that follows a `terminate()` creates
+  `Untitled.photoslop` and then never opens it: the system browser sits on its
+  one greyed-out cell with no scene of ours, the 180-second editor wait
+  expires, and every later test that launches fresh re-rolls the same dice —
+  one hang became a cascade that ran the job into its timeout. The runner
+  image did not change (`macos-15-arm64` 20260907.0337.1 on the last green
+  run, the first failure and the latest green run alike). `createDocument`
+  now terminates and relaunches once after 60 seconds on that cell with
+  neither the size sheet, the editor nor the launch scene arriving, which
+  gives the file provider a fresh client. A slow but live creation shows one
+  of those inside the minute and is never cut short.
 
 ## [2.37.5] — 2026-10-01
 

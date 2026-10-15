@@ -330,14 +330,29 @@ extension XCUIApplication {
   /// the tap took, the browser put up "Unable to Import Document", and the
   /// editor wait spent its whole 180 seconds on an alert. Dismissed and the
   /// creation retried, rather than waited out.
+  ///
+  /// And the browser's hang (#430). Intermittently on the runner's iPhone leg,
+  /// never on the iPad leg or locally, a launch that follows a `terminate()`
+  /// creates `Untitled.photoslop` and then never opens it: the hierarchy
+  /// shows the system browser with its one cell greyed out — `Disabled`, its
+  /// opening-in-progress state — and no scene of ours, for as long as anyone
+  /// waits. The 180-second editor wait then expires, and because every later
+  /// test that launches fresh rolls the same dice, one hang became a cascade
+  /// that ran the job into its timeout. A relaunch gives the file provider a
+  /// fresh client, so after 60 seconds with that cell on screen and nothing
+  /// of ours, the app is terminated and launched again and the creation
+  /// retried, once. A slow but live creation shows the sheet or the editor
+  /// well inside that minute, and is never cut short.
   func createDocument(file: StaticString = #filePath, line: UInt = #line) {
     let create = buttons["Create Document"].firstMatch
     let sizeSheet = buttons["Use This Size"].firstMatch
     let editor = navigationBars.buttons["Export Image"].firstMatch
     let importFailed = alerts["Unable to Import Document"].firstMatch
+    // The system browser's cell for the document it is failing to open. Its
+    // identifier is the file name with the extension as a second word.
+    let stuckDocument = cells["Untitled, photoslop"].firstMatch
     XCTAssertTrue(
       create.waitForExistence(timeout: 60), "no Create Document to tap", file: file, line: line)
-    create.tap()
 
     func tapTook() -> Bool {
       for _ in 0..<45 {
@@ -352,10 +367,32 @@ extension XCUIApplication {
       }
       return false
     }
-    for _ in 1...3 {
-      if tapTook() { break }
-      guard create.waitForExistence(timeout: 5), create.isHittable else { break }
+    func tapUntilItTakes() {
       create.tap()
+      for _ in 1...3 {
+        if tapTook() { break }
+        guard create.waitForExistence(timeout: 5), create.isHittable else { break }
+        create.tap()
+      }
+    }
+    /// True once the browser has sat on its greyed-out cell for a minute with
+    /// neither the sheet, the editor nor the launch scene arriving.
+    func browserIsHung() -> Bool {
+      for _ in 0..<60 {
+        if sizeSheet.waitForExistence(timeout: 1) || editor.exists || create.exists {
+          return false
+        }
+      }
+      return stuckDocument.exists
+    }
+
+    tapUntilItTakes()
+    if browserIsHung() {
+      terminate()
+      _ = wait(for: .notRunning, timeout: 30)
+      launch()
+      guard create.waitForExistence(timeout: 150) else { return }
+      tapUntilItTakes()
     }
   }
 

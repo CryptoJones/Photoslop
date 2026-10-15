@@ -17,12 +17,13 @@ sync — check an item here when its issue closes.
 
 ### CI
 
-- [ ] The iPadOS workflow's iPhone leg has failed on every branch since
-  2026-10-09 — a fresh launch after `terminate()` misses its 180-second editor
-  wait and More Actions submenus miss their 10-second window on the runner,
-  while the iPad leg, local runs and a narrowed phone leg on the same runner
-  all pass; needs a full-leg xcresult from the runner and a look at what
-  changed on the `macos-15` image in early October
+- [ ] The iPadOS workflow's iPhone leg has failed intermittently on every
+  branch since 2026-10-09 — the runner's xcresult shows the system document
+  browser hanging on the new document after a `terminate()` + relaunch, which
+  cascades at 180 s per later fresh launch; the runner image is unchanged.
+  `createDocument` now relaunches once after 60 s on the hung cell. Still
+  open: whether the full phone leg stays green over several runs, and the
+  More Actions submenu rows that miss their 10-second window on the runner
   ([#430](https://github.com/CryptoJones/Photoslop/issues/430))
 
 - [ ] Critical-coverage floors sat 30–50 points under measured coverage, so the
