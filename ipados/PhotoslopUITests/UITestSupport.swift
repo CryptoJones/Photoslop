@@ -330,14 +330,29 @@ extension XCUIApplication {
   /// the tap took, the browser put up "Unable to Import Document", and the
   /// editor wait spent its whole 180 seconds on an alert. Dismissed and the
   /// creation retried, rather than waited out.
+  ///
+  /// And the browser's hang (#430). Intermittently on the runner's iPhone leg,
+  /// never on the iPad leg or locally, a launch that follows a `terminate()`
+  /// creates `Untitled.photoslop` and then never opens it: the hierarchy
+  /// shows the system browser with its one cell greyed out — `Disabled`, its
+  /// opening-in-progress state — and no scene of ours, for as long as anyone
+  /// waits. The 180-second editor wait then expires, and because every later
+  /// test that launches fresh rolls the same dice, one hang became a cascade
+  /// that ran the job into its timeout. A relaunch gives the file provider a
+  /// fresh client, so after 60 seconds with that cell on screen and nothing
+  /// of ours, the app is terminated and launched again and the creation
+  /// retried, once. A slow but live creation shows the sheet or the editor
+  /// well inside that minute, and is never cut short.
   func createDocument(file: StaticString = #filePath, line: UInt = #line) {
     let create = buttons["Create Document"].firstMatch
     let sizeSheet = buttons["Use This Size"].firstMatch
     let editor = navigationBars.buttons["Export Image"].firstMatch
     let importFailed = alerts["Unable to Import Document"].firstMatch
+    // The system browser's cell for the document it is failing to open. Its
+    // identifier is the file name with the extension as a second word.
+    let stuckDocument = cells["Untitled, photoslop"].firstMatch
     XCTAssertTrue(
       create.waitForExistence(timeout: 60), "no Create Document to tap", file: file, line: line)
-    create.tap()
 
     func tapTook() -> Bool {
       for _ in 0..<45 {
@@ -352,10 +367,32 @@ extension XCUIApplication {
       }
       return false
     }
-    for _ in 1...3 {
-      if tapTook() { break }
-      guard create.waitForExistence(timeout: 5), create.isHittable else { break }
+    func tapUntilItTakes() {
       create.tap()
+      for _ in 1...3 {
+        if tapTook() { break }
+        guard create.waitForExistence(timeout: 5), create.isHittable else { break }
+        create.tap()
+      }
+    }
+    /// True once the browser has sat on its greyed-out cell for a minute with
+    /// neither the sheet, the editor nor the launch scene arriving.
+    func browserIsHung() -> Bool {
+      for _ in 0..<60 {
+        if sizeSheet.waitForExistence(timeout: 1) || editor.exists || create.exists {
+          return false
+        }
+      }
+      return stuckDocument.exists
+    }
+
+    tapUntilItTakes()
+    if browserIsHung() {
+      terminate()
+      _ = wait(for: .notRunning, timeout: 30)
+      launch()
+      guard create.waitForExistence(timeout: 150) else { return }
+      tapUntilItTakes()
     }
   }
 
@@ -419,12 +456,18 @@ extension XCUIApplication {
   /// finds nothing, and reads as the row being missing.
   func openMoreActions(file: StaticString = #filePath, line: UInt = #line) {
     let more = navigationBars.buttons["More Actions"].firstMatch
+    let opened = buttons["Import Image…"].firstMatch
     XCTAssertTrue(
       more.waitForExistence(timeout: 15), "no More Actions menu on the bar", file: file, line: line)
-    more.tap()
-    XCTAssertTrue(
-      buttons["Import Image…"].firstMatch.waitForExistence(timeout: 10),
-      "More Actions did not open", file: file, line: line)
+    // Tapped again if the menu does not come, for the same reason a submenu
+    // row is (see `revealAction`): a tap the runner drops leaves the bar
+    // exactly as it was, and the button is still there to tap.
+    for _ in 1...3 {
+      more.tap()
+      if opened.waitForExistence(timeout: 10) { break }
+      guard more.exists, more.isHittable else { break }
+    }
+    XCTAssertTrue(opened.exists, "More Actions did not open", file: file, line: line)
   }
 
   /// Close an open menu without choosing anything from it.
@@ -447,6 +490,17 @@ extension XCUIApplication {
   /// action is looked for on the top level first and behind its submenu only
   /// when it is not there. Tests name the action; which menu this device
   /// shows is not their business.
+  ///
+  /// The tap on the submenu row is repeated when it does not take (#430).
+  /// Intermittently on the CI runner's iPhone leg the row is tapped, the
+  /// submenu never opens, and the top level simply stays up — the runner's
+  /// xcresult shows the menu's nine rows still on screen with the Text row
+  /// untouched, after XCTest had spent a full minute inside the tap waiting
+  /// for animations the app never reported finishing. The same tap a
+  /// second later opens the submenu. That one-minute wait is XCTest's own
+  /// and is paid before this code gets control back; the retry is what
+  /// turns it from a failed test into a slow one. If the menu closed under
+  /// the tap instead, it is reopened before the row is tapped again.
   @discardableResult
   func revealAction(
     _ label: String, file: StaticString = #filePath, line: UInt = #line
@@ -458,7 +512,14 @@ extension XCUIApplication {
       XCTAssertTrue(
         row.waitForExistence(timeout: 10),
         "neither \(label) nor the \(submenu) submenu is in More Actions", file: file, line: line)
-      row.tap()
+      for _ in 1...3 {
+        row.tap()
+        if action.waitForExistence(timeout: 10) { break }
+        if !buttons["Import Image…"].firstMatch.exists, !row.exists {
+          openMoreActions(file: file, line: line)
+        }
+        guard row.waitForExistence(timeout: 10), row.isHittable else { break }
+      }
     }
     XCTAssertTrue(
       action.waitForExistence(timeout: 10), "\(label) is missing from More Actions",
