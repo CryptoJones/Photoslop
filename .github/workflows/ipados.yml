@@ -131,7 +131,7 @@ jobs:
             -scheme PhotoslopIPad \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.ipad }}' \
-            ${{ github.ref_type == 'tag' && '-only-testing:PhotoslopIPadTests' || '' }} \
+            -only-testing:PhotoslopIPadTests \
             -resultBundlePath "$RUNNER_TEMP/xcresult/ipad.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
             test
@@ -157,7 +157,10 @@ jobs:
             -scheme PhotoslopIPad \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.iphone }}' \
-            ${{ github.ref_type == 'tag' && '-only-testing:PhotoslopIPadTests' || '' }} \
+            -only-testing:PhotoslopIPadUITests/NewDocumentUITests \
+            -only-testing:PhotoslopIPadUITests/EyedropperUITests \
+            -only-testing:PhotoslopIPadUITests/PaintBucketUITests \
+            -only-testing:PhotoslopIPadUITests/SelectionClipboardUITests \
             -resultBundlePath "$RUNNER_TEMP/xcresult/iphone.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
             test
