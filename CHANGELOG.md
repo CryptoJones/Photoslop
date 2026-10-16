@@ -4,7 +4,14 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.38.1] — Unreleased
+## [2.38.1] — 2026-10-16
+
+### Docs
+- **App Store screenshots retaken on the studio UI.** The four listing
+  screenshots under `docs/appstore/screenshots/` (iPhone 6.9" and iPad 13",
+  launch scene and editor) still showed the light pre-2.38.0 editor; they are
+  re-staged with `scripts/stage-store-screenshots.sh` on the dark studio
+  layout (#257, #428).
 
 ### CI
 - **iOS UI tests: a document browser that hangs opening the new document is
@@ -31,7 +38,7 @@ follows [SemVer](https://semver.org).
   closed it, and `openMoreActions` taps the bar button again on the same
   terms. A dropped tap costs the test XCTest's minute; it no longer fails it.
 
-## [2.38.0] — Unreleased
+## [2.38.0] — 2026-10-16
 
 ### Changed
 - **iOS: the editor is a studio now, not a sample.** The canvas sits in a
