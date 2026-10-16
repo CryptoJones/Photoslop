@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.38.3] — Unreleased
+
+### Changed
+- **Backlog: #433 moved to Done (shipped v2.38.2) and the stale open entry
+  for #409 removed** — #409 was already listed under Done as shipped in
+  v2.37.4. No code changes.
+
 ## [2.38.2] — 2026-10-16
 
 ### Fixed
