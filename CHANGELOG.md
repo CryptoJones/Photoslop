@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.38.2] — Unreleased
+## [2.38.2] — 2026-10-16
 
 ### Fixed
 - **iOS: zooming in on a large document no longer drives the app to a
