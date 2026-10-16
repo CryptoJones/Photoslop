@@ -779,7 +779,8 @@ before an installed development build will launch.
 ### Measuring memory on a device
 
 When Instruments will not attach to a connected phone (`xctrace` listing it
-as offline), the app can report its own footprint. Launched with
+as offline), the app can report its own footprint. `devicectl` needs Xcode
+15 or newer on the Mac and iOS 17 or newer on the phone. Launched with
 `-PhotoslopLogFootprint`, it prints `phys_footprint` — the number jetsam
 judges it by — every two seconds, and `devicectl --console` streams it:
 

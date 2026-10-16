@@ -10,7 +10,9 @@ import os
 /// cannot always attach:
 ///
 ///     xcrun devicectl device process launch --console --device <udid> \
-///       io.ronin48.photoslop.ipad -PhotoslopLogFootprint
+///       io.ronin48.photoslop.ipad -- -PhotoslopLogFootprint
+///
+/// The `--` matters: without it `devicectl` reads the flag as its own.
 ///
 /// `phys_footprint` is the number jetsam judges the process by — the same one
 /// Xcode's memory gauge shows — so the lines read `footprint=312MB` and can be
