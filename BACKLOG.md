@@ -8,6 +8,13 @@ sync — check an item here when its issue closes.
 
 ### iPadOS / iOS
 
+- [ ] Zooming in on a 2048px document drove the app past 1 GB (the PencilKit
+  drawing view was the whole canvas magnified by the scroll view, rendered at
+  `canvas × zoom × 3` pixels a side) and past ~2.7× the live strokes stopped
+  being drawn; the drawing view is now a window onto the visible part of the
+  document, and `-PhotoslopLogFootprint` measures the footprint on a device
+  ([#433](https://github.com/CryptoJones/Photoslop/issues/433))
+
 ### Desktop
 
 - [ ] `photoslop --help` (and `-h`, `--version`) opens the GUI with a blank
