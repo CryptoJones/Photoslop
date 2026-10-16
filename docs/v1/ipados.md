@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.38.1 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.38.2 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -775,6 +775,25 @@ To run on a physical iPad, generate the project, open it in Xcode, select the
 device. The device must be registered in the developer account and must have
 Developer Mode enabled (Settings, then Privacy & Security, then Developer Mode)
 before an installed development build will launch.
+
+### Measuring memory on a device
+
+When Instruments will not attach to a connected phone (`xctrace` listing it
+as offline), the app can report its own footprint. `devicectl` needs Xcode
+15 or newer on the Mac and iOS 17 or newer on the phone. Launched with
+`-PhotoslopLogFootprint`, it prints `phys_footprint` — the number jetsam
+judges it by — every two seconds, and `devicectl --console` streams it:
+
+```sh
+xcrun devicectl device process launch --console --terminate-existing \
+  --device <udid> io.ronin48.photoslop.ipad -- -PhotoslopLogFootprint
+# [footprint] footprint=64MB peak=870MB available=3007MB
+```
+
+The `--` matters: without it `devicectl` reads the app's flag as its own.
+This is how [#433](https://github.com/CryptoJones/Photoslop/issues/433) was
+measured — a 2048×2048 document at 64 MB fitted and 1 GB zoomed in, before
+the drawing view became a window onto the visible part of the document.
 
 ## TestFlight distribution
 

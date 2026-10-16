@@ -249,6 +249,10 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
   /// theirs, and a rotation or a sidebar sliding in recentres but no longer
   /// refits.
   private var userAdjustedZoom = false
+  /// The part of the document the drawing view currently covers, in document
+  /// pixels, and the zoom it was sized at (#433). See `syncDrawingViewport`.
+  private var drawingViewport = CGRect.zero
+  private var drawingViewportZoom: CGFloat = 0
   /// Kept clear of the screen edge at the fitted zoom, so a corner handle is
   /// grabbable rather than sitting in the system's edge-gesture strip.
   static let edgeMargin: CGFloat = 28
@@ -337,6 +341,11 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     // background, so pin it to light and let the chosen color be literal.
     canvasView.overrideUserInterfaceStyle = .light
     canvasView.isScrollEnabled = false
+    // The drawing view is scrolled by hand to the part of the document it
+    // covers (`syncDrawingViewport`); nothing of its own may move that offset.
+    canvasView.contentInsetAdjustmentBehavior = .never
+    canvasView.showsVerticalScrollIndicator = false
+    canvasView.showsHorizontalScrollIndicator = false
     scrollView.accessibilityLabel = "Zoomable document canvas"
     scrollView.accessibilityHint = "Pinch to zoom and swipe to pan"
 
@@ -486,6 +495,60 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
       fittedBounds = bounds.size
     }
     centerCanvas()
+    syncDrawingViewport()
+  }
+
+  /// Size the drawing view to the part of the document on screen, not to the
+  /// whole document (#433).
+  ///
+  /// PencilKit renders its surface at the view's effective on-screen
+  /// resolution. Laid out as the full canvas inside the zooming scroll view,
+  /// the drawing view was `canvas × zoom × screen scale` pixels on a side:
+  /// 6144² for a 2048px document at 100 %, and growing with every pinch.
+  /// Measured on an iPhone 13 Pro Max: 870 MB for the one layout at 100 %
+  /// before the fit, a sustained 1 GB zoomed in, and past about 2.7× the
+  /// surface outran the GPU's 16384px texture limit and the live strokes
+  /// stopped being drawn at all — "when I try to draw things disappear".
+  ///
+  /// The drawing view is a scroll view of its own, so it can cover a window
+  /// onto the document instead: its frame is the visible rectangle plus half
+  /// a viewport of margin, clamped to the canvas, and its `contentOffset` is
+  /// that rectangle's origin, which keeps the strokes in document pixels and
+  /// the selection mask — positioned in the layer's bounds, which a scroll
+  /// view offsets by `contentOffset` — exactly where they were. Its surface
+  /// is then bounded by the screen whatever the zoom. At the fitted zoom the
+  /// window is the whole canvas, so nothing a test measures against the
+  /// canvas element moves.
+  ///
+  /// Re-sized only when the visible rectangle leaves the window or the zoom
+  /// changes, so an ordinary pan does not re-lay PencilKit out per frame; a
+  /// stroke cannot reach the margin without a pan, and a pan ends the stroke.
+  private func syncDrawingViewport() {
+    guard canvasSize.width > 0, canvasSize.height > 0,
+      scrollView.bounds.width > 0, scrollView.bounds.height > 0
+    else { return }
+    let canvasRect = CGRect(origin: .zero, size: canvasSize)
+    let visible = scrollView.convert(scrollView.bounds, to: contentView)
+    let onScreen = visible.intersection(canvasRect)
+    let zoom = scrollView.zoomScale
+    if zoom == drawingViewportZoom, !onScreen.isNull, drawingViewport.contains(onScreen) {
+      return
+    }
+    var viewport = visible.insetBy(dx: -visible.width / 2, dy: -visible.height / 2)
+      .intersection(canvasRect)
+    if viewport.isNull || viewport.isEmpty {
+      // The document is scrolled wholly off screen (a bounce): park the view
+      // on the corner nearest the viewport rather than giving it no size.
+      viewport = CGRect(
+        x: min(max(0, visible.midX), canvasSize.width - 1),
+        y: min(max(0, visible.midY), canvasSize.height - 1),
+        width: 1, height: 1)
+    }
+    viewport = viewport.integral.intersection(canvasRect)
+    drawingViewport = viewport
+    drawingViewportZoom = zoom
+    canvasView.frame = viewport
+    canvasView.contentOffset = viewport.origin
   }
 
   /// Put the overlay's hosting controller into the scrolling content.
@@ -608,6 +671,10 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     scrollView.contentSize = size
     fitted = false
     userAdjustedZoom = false
+    // Re-windowed in the layout that follows; the full frame above is only
+    // the starting point.
+    drawingViewport = .zero
+    drawingViewportZoom = 0
     setNeedsLayout()
   }
 
@@ -617,7 +684,10 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     makeTransparent(canvasView)
   }
 
-  func scrollViewDidZoom(_ scrollView: UIScrollView) { centerCanvas() }
+  func scrollViewDidZoom(_ scrollView: UIScrollView) {
+    centerCanvas()
+    syncDrawingViewport()
+  }
 
   func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
     userAdjustedZoom = true
@@ -649,7 +719,10 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     onZoomScaleChanged?(scale)
   }
 
-  func scrollViewDidScroll(_ scrollView: UIScrollView) { reportZoomScale() }
+  func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    reportZoomScale()
+    syncDrawingViewport()
+  }
 
   private func makeTransparent(_ view: UIView) {
     view.backgroundColor = .clear

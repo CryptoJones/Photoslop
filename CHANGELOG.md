@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.38.2] — 2026-10-16
+
+### Fixed
+- **iOS: zooming in on a large document no longer drives the app to a
+  gigabyte, and the live strokes no longer vanish past about 2.7× (#433).**
+  The PencilKit drawing view was laid out as the whole document inside the
+  zooming scroll view, and PencilKit renders its surface at the view's
+  effective on-screen resolution — `canvas × zoom × screen scale` pixels on a
+  side. Measured on an iPhone 13 Pro Max with a 2048×2048 document: 870 MB
+  for the one layout at 100 % before the fit, 64–100 MB at the fitted zoom,
+  a sustained 1 GB zoomed in, and "Low Memory … undo history was released"
+  on the way to the GPU's 16384-pixel texture limit, past which the strokes
+  being drawn stopped appearing at all. The drawing view is now a window onto
+  the document — the visible rectangle plus half a viewport of margin, with
+  its own `contentOffset` scrolled to match — so its surface is bounded by
+  the screen whatever the zoom. Strokes, the overlay and the selection mask
+  stay in document pixels; at the fitted zoom the window is the whole canvas.
+
+### Added
+- **iOS: `-PhotoslopLogFootprint` launch argument** prints the process's
+  `phys_footprint` every two seconds, for measuring on a device from the
+  command line when Instruments will not attach
+  (`xcrun devicectl device process launch --console … -- -PhotoslopLogFootprint`).
+  It is how #433 was measured. Off unless asked for.
+
 ## [2.38.1] — 2026-10-16
 
 ### Docs

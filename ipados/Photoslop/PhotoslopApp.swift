@@ -5,6 +5,7 @@ import SwiftUI
 struct PhotoslopApp: App {
   init() {
     PhotoslopApp.emptyDocumentStoreIfAskedTo()
+    FootprintProbe.startIfAskedTo()
     // Read before arming: `begin` sets the marker for THIS session, so the
     // previous session's verdict has to be taken first (#311).
     SessionLifecycle.shared.begin()
