@@ -55,7 +55,7 @@ jobs:
         # step — or a packaged artifact — could reach.
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: "3.12"
       - run: python scripts/check-version.py
@@ -66,7 +66,7 @@ jobs:
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         run: ./scripts/import-macos-signing-certificate.sh
       - run: ./scripts/build-portable-macos.sh
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Photoslop-macOS-portable${{ github.ref_name == 'v1.30.0' && '-SIGNED-NOT-NOTARIZED' || '' }}
           path: |
@@ -103,13 +103,13 @@ jobs:
         # step — or a packaged artifact — could reach.
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: "3.12"
       - run: python scripts/check-version.py
       - shell: pwsh
         run: ./scripts/build-portable-windows.ps1
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Photoslop-Windows-portable${{ startsWith(github.ref, 'refs/tags/v') && '-UNSIGNED' || '' }}
           path: |
@@ -199,11 +199,11 @@ jobs:
         # step — or a packaged artifact — could reach.
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: Photoslop-macOS-portable${{ github.ref_name == 'v1.30.0' && '-SIGNED-NOT-NOTARIZED' || '' }}
           path: dist/macos
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: Photoslop-Windows-portable${{ startsWith(github.ref, 'refs/tags/v') && '-UNSIGNED' || '' }}
           path: dist/windows
