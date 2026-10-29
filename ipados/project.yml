@@ -50,6 +50,26 @@ targets:
             LSHandlerRank: Owner
             LSItemContentTypes:
               - io.ronin48.photoslop.project
+          # Photoshop documents open from the document browser and Files and
+          # are edited in place (#436). `.psd` is the system's own type; `.psb`
+          # is imported below.
+          - CFBundleTypeName: Photoshop Document
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.adobe.photoshop-image
+              - io.ronin48.photoslop.psb
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: io.ronin48.photoslop.psb
+            UTTypeDescription: Photoshop Large Document
+            UTTypeConformsTo:
+              - public.data
+              - public.content
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - psb
+              public.mime-type:
+                - image/vnd.adobe.photoshop
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: io.ronin48.photoslop.project
             UTTypeDescription: Photoslop Project

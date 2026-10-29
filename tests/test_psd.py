@@ -2,6 +2,7 @@
 """Photoshop (.psd) open and export — round trip, interchange shape, limits."""
 
 import struct
+import zlib
 
 import numpy as np
 import pytest
@@ -120,3 +121,94 @@ def test_file_service_routes_psd(qapp, tmp_path):
     FileService.save(_doc(), path)
     doc = FileService.load(path)
     assert [layer.name for layer in doc.layers] == ["Background", "scribble ü"]
+
+
+def _flat(doc):
+    img = doc.flatten()
+    return view_u32(img).copy()
+
+
+def test_psd_export_bakes_effects_and_adjustment_layers(qapp, tmp_path):
+    from photoslop.appearance import new_effect
+
+    doc = Document.new(QSize(40, 30), 72.0, "fx", QColor(90, 120, 150))
+    dot = Layer.blank("dot", QSize(10, 10), QPoint(15, 10))
+    dot.image.fill(QColor(255, 0, 0, 255))
+    dot.effects = [new_effect("drop-shadow")]
+    dot.fill_opacity = 0.5
+    doc.layers.append(dot)
+    invert = Layer.blank("invert", doc.size)
+    invert.adjustment = np.tile(np.arange(255, -1, -1, dtype=np.uint8), (3, 1))
+    doc.layers.append(invert)
+    before = _flat(doc)
+
+    path = str(tmp_path / "fx.psd")
+    save_psd(doc, path)
+    loaded = load_psd(path)
+    assert [layer.name for layer in loaded.layers] == ["Background", "dot", "invert"]
+    baked = loaded.layers[1]
+    assert baked.offset.x() < 15 and baked.image.width() > 10  # padded by the shadow's reach
+    assert baked.fill_opacity == pytest.approx(1.0)  # folded into the pixels, not carried twice
+    assert baked.effects == [] and baked.adjustment is None
+    assert loaded.layers[2].image.size() == doc.size and loaded.layers[2].adjustment is None
+    after = _flat(loaded)
+    diff = np.abs(before.view(np.uint8).astype(int) - after.view(np.uint8).astype(int))
+    assert diff.max() <= 2
+
+
+def _float_psd(compression: int, psb: bool = False) -> bytes:
+    """A hand-written 32-bit float RGB document: 4×2, linear (0.5, 0.0, 1.0)
+    at alpha 1 with its one layer in an ``Lr32`` block, as Photoshop writes."""
+    w, h = 4, 2
+    values = {0: 0.5, 1: 0.0, 2: 1.0, -1: 1.0}
+
+    def plane(v: float) -> bytes:
+        rows = np.full((h, w), v, dtype=">f4")
+        if compression == 0:
+            return b"\x00\x00" + rows.tobytes()
+        raw = rows.tobytes()
+        planar = np.frombuffer(raw, np.uint8).reshape(h, w, 4).transpose(0, 2, 1).reshape(h, w * 4)
+        delta = np.diff(planar, axis=1, prepend=np.zeros((h, 1), np.uint8)).astype(np.uint8)
+        return b"\x00\x03" + zlib.compress(delta.tobytes())
+
+    channels = [(cid, plane(values[cid])) for cid in (-1, 0, 1, 2)]
+    length = (lambda n: struct.pack(">Q", n)) if psb else (lambda n: struct.pack(">I", n))
+    record = struct.pack(">iiii", 0, 0, h, w) + struct.pack(">H", len(channels))
+    for cid, payload in channels:
+        record += struct.pack(">h", cid) + length(len(payload))
+    name = b"\x05Float\x00\x00"  # pascal name padded to 4
+    extra = struct.pack(">I", 0) + struct.pack(">I", 0) + name  # no mask, no blending ranges
+    record += b"8BIMnorm" + bytes([255, 0, 0, 0]) + struct.pack(">I", len(extra)) + extra
+    layer_info = struct.pack(">h", -1) + record + b"".join(p for _, p in channels)
+    if len(layer_info) % 2:
+        layer_info += b"\0"
+    key_len = struct.pack(">Q", len(layer_info)) if psb else struct.pack(">I", len(layer_info))
+    block = b"8BIMLr32" + key_len + layer_info
+    layer_and_mask = length(0) + struct.pack(">I", 0) + block  # empty main section, no global mask
+    merged = b"\x00\x00" + b"".join(
+        np.full((h, w), values[c], dtype=">f4").tobytes() for c in (0, 1, 2, -1)
+    )
+    header = SIGNATURE + struct.pack(">H6xHIIHH", 2 if psb else 1, 4, h, w, 32, 3)
+    return (
+        header
+        + struct.pack(">I", 0)
+        + struct.pack(">I", 0)
+        + length(len(layer_and_mask))
+        + layer_and_mask
+        + merged
+    )
+
+
+@pytest.mark.parametrize("compression,psb", [(0, False), (3, False), (3, True)])
+def test_psd_opens_32bit_float_layers_from_lr32(qapp, tmp_path, compression, psb):
+
+    path = str(tmp_path / ("f.psb" if psb else "f.psd"))
+    with open(path, "wb") as fh:
+        fh.write(_float_psd(compression, psb))
+    doc = load_psd(path)
+    assert doc.size == QSize(4, 2)
+    assert [layer.name for layer in doc.layers] == ["Float"]
+    r, g, b, a = doc.layers[0].image.pixelColor(1, 1).getRgb()
+    assert (abs(r - 188), g, b, a) <= (1, 0, 255, 255)  # linear 0.5 is sRGB 188
+    composite, *_ = probe_psd(path)
+    assert abs(composite.pixelColor(0, 0).red() - 188) <= 1

@@ -7,6 +7,12 @@ extension UTType {
   /// Adobe's registered type for `.psd`. The system knows it and it conforms
   /// to `public.image`, so the `.image` file importer already admits one.
   static let photoshopDocument = UTType("com.adobe.photoshop-image") ?? .image
+  /// `.psb`, the large-document variant, has no system type; Info.plist
+  /// imports this one so the document browser lists and opens it.
+  static let photoshopLargeDocument = UTType(importedAs: "io.ronin48.photoslop.psb")
+  static func isPhotoshop(_ type: UTType) -> Bool {
+    type.conforms(to: .photoshopDocument) || type.conforms(to: .photoshopLargeDocument)
+  }
 }
 
 enum PSDError: LocalizedError {
@@ -322,33 +328,17 @@ enum PSDCodec {
     var mergedHasAlpha = false
     if layerMaskLength > 0 {
       let layerInfoLength = try reader.length()
+      let layerInfoEnd = reader.position + layerInfoLength
       if layerInfoLength > 0 {
-        let signed = try reader.i16()
-        mergedHasAlpha = signed < 0
-        let count = Int(abs(Int32(signed)))
-        guard count <= ProjectArchive.maximumLayers else {
-          throw PSDError.resourceLimit("That document has more than \(ProjectArchive.maximumLayers) layers.")
-        }
-        var records: [LayerRecord] = []
-        for _ in 0..<count { records.append(try readLayerRecord(&reader)) }
-        var pendingGroups: [[Int]] = []  // indices into `layers`, innermost group last
-        for record in records {
-          if record.section == 3 {
-            try skipChannels(&reader, record)
-            pendingGroups.append([])
-            continue
-          }
-          if record.section == 1 || record.section == 2 {
-            try skipChannels(&reader, record)
-            let members = pendingGroups.popLast() ?? []
-            if record.hidden { for index in members { layers[index].isVisible = false } }
-            if !pendingGroups.isEmpty { pendingGroups[pendingGroups.count - 1] += members }
-            continue
-          }
-          let layer = try readLayer(&reader, header: header, record: record, palette: palette, canvas: canvas)
-          layers.append(layer)
-          if !pendingGroups.isEmpty { pendingGroups[pendingGroups.count - 1].append(layers.count - 1) }
-        }
+        (layers, mergedHasAlpha) = try readLayerInfo(&reader, header: header, palette: palette, canvas: canvas)
+      }
+      reader.position = layerInfoEnd
+      if layers.isEmpty, header.depth == 16 || header.depth == 32,
+        var deep = try deepLayerBlock(&reader, end: layerMaskEnd)
+      {
+        // Photoshop keeps a 16/32-bit document's layers in a global
+        // `Lr16`/`Lr32` block and leaves the main layer section empty.
+        (layers, mergedHasAlpha) = try readLayerInfo(&deep, header: header, palette: palette, canvas: canvas)
       }
     }
     reader.position = layerMaskEnd
@@ -358,6 +348,60 @@ enum PSDCodec {
       layers = [RasterLayer(name: "Background", image: image)]
     }
     return EditorState(layers: layers, activeLayerID: layers.last?.id, canvasSize: canvas)
+  }
+
+  /// (bottom-first layers, merged-has-alpha) from a layer info section.
+  private static func readLayerInfo(
+    _ reader: inout ByteReader, header: Header, palette: [UInt8], canvas: CGSize
+  ) throws -> ([RasterLayer], Bool) {
+    var layers: [RasterLayer] = []
+    let signed = try reader.i16()
+    let mergedHasAlpha = signed < 0
+    let count = Int(abs(Int32(signed)))
+    guard count <= ProjectArchive.maximumLayers else {
+      throw PSDError.resourceLimit("That document has more than \(ProjectArchive.maximumLayers) layers.")
+    }
+    var records: [LayerRecord] = []
+    for _ in 0..<count { records.append(try readLayerRecord(&reader)) }
+    var pendingGroups: [[Int]] = []  // indices into `layers`, innermost group last
+    for record in records {
+      if record.section == 3 {
+        try skipChannels(&reader, record)
+        pendingGroups.append([])
+        continue
+      }
+      if record.section == 1 || record.section == 2 {
+        try skipChannels(&reader, record)
+        let members = pendingGroups.popLast() ?? []
+        if record.hidden { for index in members { layers[index].isVisible = false } }
+        if !pendingGroups.isEmpty { pendingGroups[pendingGroups.count - 1] += members }
+        continue
+      }
+      let layer = try readLayer(&reader, header: header, record: record, palette: palette, canvas: canvas)
+      layers.append(layer)
+      if !pendingGroups.isEmpty { pendingGroups[pendingGroups.count - 1].append(layers.count - 1) }
+    }
+    return (layers, mergedHasAlpha)
+  }
+
+  /// A reader over the `Lr16`/`Lr32` global block, or nil. `reader` sits just
+  /// past the layer info; `end` closes the layer and mask section.
+  private static func deepLayerBlock(_ reader: inout ByteReader, end: Int) throws -> ByteReader? {
+    guard reader.position + 4 <= end else { return nil }
+    let globalMask = Int(try reader.u32())
+    reader.position += globalMask
+    let pad = reader.psb ? 4 : 2
+    while reader.position + 12 <= end {
+      let signature = try reader.take(4)
+      guard signature == Array("8BIM".utf8) || signature == Array("8B64".utf8) else { return nil }
+      let key = String(decoding: try reader.take(4), as: UTF8.self)
+      var length = (reader.psb && psbWideKeys.contains(key)) ? Int(try reader.u64()) : Int(try reader.u32())
+      length = min(length, end - reader.position)
+      let data = try reader.take(length)
+      if key == "Lr16" || key == "Lr32" { return ByteReader(bytes: data, psb: reader.psb) }
+      reader.position += (pad - length % pad) % pad
+    }
+    return nil
   }
 
   private static func readHeader(_ reader: inout ByteReader) throws -> Header {
@@ -371,7 +415,7 @@ enum PSDCodec {
     let width = Int(try reader.u32())
     let depth = Int(try reader.u16())
     let mode = Int(try reader.u16())
-    guard [1, 8, 16].contains(depth) else { throw PSDError.unsupported("\(depth)-bit colour") }
+    guard [1, 8, 16, 32].contains(depth) else { throw PSDError.unsupported("\(depth)-bit colour") }
     guard [0, 1, 2, 3, 4, 8, 9].contains(mode) else { throw PSDError.unsupported("colour mode \(mode)") }
     return Header(psb: reader.psb, channels: channels, width: width, height: height, depth: depth, mode: mode)
   }
@@ -469,7 +513,9 @@ enum PSDCodec {
         guard mw > 0, mh > 0, mw * mh <= ProjectArchive.maximumPixels else { continue }
         maskPlane = try decodeChannel(&sub, compression: compression, width: mw, height: mh, depth: header.depth)
       } else if channel.id >= -1, w > 0, h > 0 {
-        planes[channel.id] = try decodeChannel(&sub, compression: compression, width: w, height: h, depth: header.depth)
+        planes[channel.id] = try decodeChannel(
+          &sub, compression: compression, width: w, height: h, depth: header.depth,
+          srgb: header.depth == 32 && channel.id >= 0)
       }
     }
     let visible = !record.hidden
@@ -593,7 +639,7 @@ enum PSDCodec {
       for _ in 0..<(h * header.channels) {
         counts.append(reader.psb ? Int(try reader.u32()) : Int(try reader.u16()))
       }
-      let rowBytes = header.depth == 1 ? (w + 7) / 8 : w * (header.depth == 16 ? 2 : 1)
+      let rowBytes = rowBytes(width: w, depth: header.depth)
       for c in 0..<header.channels {
         var raw: [UInt8] = []
         raw.reserveCapacity(rowBytes * h)
@@ -601,11 +647,15 @@ enum PSDCodec {
           raw += try unpackBits(try reader.take(counts[c * h + y]), expected: rowBytes)
         }
         var sub = ByteReader(bytes: raw, psb: reader.psb)
-        planes[c] = try decodeChannel(&sub, compression: 0, width: w, height: h, depth: header.depth)
+        planes[c] = try decodeChannel(
+          &sub, compression: 0, width: w, height: h, depth: header.depth,
+          srgb: header.depth == 32 && c < header.colourChannels)
       }
     } else {
       for c in 0..<header.channels {
-        planes[c] = try decodeChannel(&reader, compression: compression, width: w, height: h, depth: header.depth)
+        planes[c] = try decodeChannel(
+          &reader, compression: compression, width: w, height: h, depth: header.depth,
+          srgb: header.depth == 32 && c < header.colourChannels)
       }
     }
     let (r, g, b) = toRGB(mode: header.mode, planes: planes, count: w * h, palette: palette)
@@ -622,12 +672,26 @@ enum PSDCodec {
     return PixelBuffer(width: w, height: h, words: words)
   }
 
-  /// One channel as an 8-bit plane; 16-bit samples keep their high byte.
+  static func bytesPerSample(_ depth: Int) -> Int { depth == 32 ? 4 : (depth == 16 ? 2 : 1) }
+  static func rowBytes(width: Int, depth: Int) -> Int {
+    depth == 1 ? (width + 7) / 8 : width * bytesPerSample(depth)
+  }
+
+  /// A linear 0…1 sample as 8-bit sRGB (32-bit documents are linear light).
+  static func srgb8(_ linear: Float) -> UInt8 {
+    let v = linear.isNaN ? 0 : min(max(linear, 0), 1)
+    let encoded = v <= 0.0031308 ? v * 12.92 : 1.055 * powf(v, 1 / 2.4) - 0.055
+    return UInt8((encoded * 255).rounded())
+  }
+
+  /// One channel as an 8-bit plane; 16-bit samples keep their high byte and
+  /// 32-bit floats are clipped to 0…1 (`srgb` marks a colour channel, which
+  /// is sRGB-encoded on the way; alpha and masks scale linearly).
   private static func decodeChannel(
-    _ reader: inout ByteReader, compression: Int, width: Int, height: Int, depth: Int
+    _ reader: inout ByteReader, compression: Int, width: Int, height: Int, depth: Int, srgb: Bool = false
   ) throws -> [UInt8] {
-    let bytesPerSample = depth == 16 ? 2 : 1
-    let rowBytes = depth == 1 ? (width + 7) / 8 : width * bytesPerSample
+    let bytesPerSample = bytesPerSample(depth)
+    let rowBytes = rowBytes(width: width, depth: depth)
     let expected = rowBytes * height
     var raw: [UInt8]
     switch compression {
@@ -644,7 +708,17 @@ enum PSDCodec {
       let compressed = try reader.take(reader.remaining)
       raw = try inflate(compressed, expected: expected)
       if compression == 3 {
-        if bytesPerSample == 2 {
+        if bytesPerSample == 4 {
+          // A byte delta over the row, whose bytes are stored plane by
+          // plane: all first bytes, then all second bytes, and so on.
+          var row = [UInt8](repeating: 0, count: rowBytes)
+          for y in 0..<height {
+            let base = y * rowBytes
+            for x in 1..<max(1, rowBytes) { raw[base + x] = raw[base + x] &+ raw[base + x - 1] }
+            for x in 0..<width { for k in 0..<4 { row[x * 4 + k] = raw[base + k * width + x] } }
+            raw.replaceSubrange(base..<(base + rowBytes), with: row)
+          }
+        } else if bytesPerSample == 2 {
           for y in 0..<height {
             var acc: UInt16 = 0
             for x in 0..<width {
@@ -676,6 +750,15 @@ enum PSDCodec {
     case 16:
       var out = [UInt8](repeating: 0, count: width * height)
       for i in 0..<(width * height) { out[i] = raw[i * 2] }
+      return out
+    case 32:
+      var out = [UInt8](repeating: 0, count: width * height)
+      for i in 0..<(width * height) {
+        let bits = UInt32(raw[i * 4]) << 24 | UInt32(raw[i * 4 + 1]) << 16
+          | UInt32(raw[i * 4 + 2]) << 8 | UInt32(raw[i * 4 + 3])
+        let value = Float(bitPattern: bits)
+        out[i] = srgb ? srgb8(value) : UInt8((min(max(value.isNaN ? 0 : value, 0), 1) * 255).rounded())
+      }
       return out
     default:
       return raw

@@ -8,10 +8,9 @@ sync — check an item here when its issue closes.
 
 ### File formats
 
-- [ ] PSD interchange follow-ups: bake live effects / smart filters /
-  adjustment layers into exported pixels (or emit `lfx2`); carry blend modes,
-  groups and masks on iPad once its layer model has them; 32-bit float PSDs;
-  open a `.psd` from the iPad document browser
+- [ ] PSD interchange follow-up: carry blend modes, groups and masks on iPad
+  once its layer model has them (baked effects/adjustments on export, 32-bit
+  float open and iPad document-browser open shipped in v2.39.0)
   ([#436](https://github.com/CryptoJones/Photoslop/issues/436))
 
 ### CI

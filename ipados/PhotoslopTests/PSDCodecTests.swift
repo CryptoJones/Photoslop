@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import UIKit
+import UniformTypeIdentifiers
 import XCTest
 
 @testable import PhotoslopIPad
@@ -19,6 +20,35 @@ final class PSDCodecTests: XCTestCase {
     let buffer = PixelBuffer(image: image)!
     let word = buffer.words[y * buffer.width + x]
     return (word >> 16 & 0xFF, word >> 8 & 0xFF, word & 0xFF, word >> 24)
+  }
+
+  /// `tests/test_psd.py::_float_psd(3)` wrote this: a 4×2 32-bit float RGB
+  /// document, linear (0.5, 0, 1) at alpha 1, its one "Float" layer in an
+  /// `Lr32` block with zip-predicted channels and an empty main layer section
+  /// — the shape Photoshop gives every 16/32-bit file.
+  private static let floatFixture = Data(
+    base64Encoded:
+      "OEJQUwABAAAAAAAAAAQAAAACAAAABAAgAAMAAAAAAAAAAAAAALAAAAAAAAAAADhCSU1McjMyAAAAnP//AAAAAAAAAAAAAAACAAAABAAE//8AAAAXAAAAAAAUAAEAAAANAAIAAAAXOEJJTW5vcm3/AAAAAAAAEAAAAAAAAAAABUZsb2F0AAAAA3ics2dgYHAE4gYGCLBH4wMAJhgCAQADeJyzZ2BgOMiAAPZofAAqGAIBAAN4nGNgwA8AACAAAQADeJyzZ2BgcATiBgYIsEfjAwAmGAIBAAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD+AAAA/gAAAP4AAAD+AAAA/gAAAP4AAAD+AAAA/gAAAP4AAAD+AAAA/gAAAP4AAAD+AAAA/gAAAP4AAAD+AAAA="
+  )!
+
+  func testOpens32BitFloatLayersFromTheLr32Block() throws {
+    let state = try PSDCodec.decode(Self.floatFixture)
+    XCTAssertEqual(state.canvasSize, CGSize(width: 4, height: 2))
+    XCTAssertEqual(state.layers.map(\.name), ["Float"])
+    let p = pixel(state.layers[0].image, 1, 1)
+    XCTAssertEqual(Int(p.r), 188, accuracy: 1)  // linear 0.5 is sRGB 188
+    XCTAssertEqual(p.g, 0)
+    XCTAssertEqual(p.b, 255)
+    XCTAssertEqual(p.a, 255)
+  }
+
+  func testStoreAdmitsPhotoshopDocumentsFromTheBrowser() {
+    XCTAssertTrue(EditorStore.readableContentTypes.contains(.photoshopDocument))
+    XCTAssertTrue(EditorStore.writableContentTypes.contains(.photoshopLargeDocument))
+    XCTAssertTrue(UTType.isPhotoshop(.photoshopDocument))
+    XCTAssertTrue(UTType.isPhotoshop(.photoshopLargeDocument))
+    XCTAssertFalse(UTType.isPhotoshop(.photoslopProject))
+    XCTAssertEqual(UTType.photoshopLargeDocument.preferredFilenameExtension, "psb")
   }
 
   func testOpensADesktopSaveAsTheSameLayers() throws {

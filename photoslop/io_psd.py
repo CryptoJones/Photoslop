@@ -10,8 +10,16 @@ which is the subset every other PSD reader (Photoshop, GIMP, Krita,
 Affinity, psd-tools) agrees on.
 
 Photoshop-only constructs — adjustment layers, live effects, smart objects,
-editable text — have no portable encoding, so a layer carrying one is written
-as the pixels it currently shows; ``.ora`` remains the lossless native format.
+editable text — have no portable encoding, so they are baked on export: a
+layer with live effects is written as the pixels it composites to (padded by
+the effects' reach), an adjustment layer as the composite below it with the
+adjustment applied, and a smart object as its filtered pixels. ``.ora``
+remains the lossless native format.
+
+32-bit float documents open too: Photoshop stores them in linear light, so
+colour channels are clipped to 0..1 and sRGB-encoded to 8-bit; alpha and
+masks scale linearly. 16- and 32-bit layers live in a global ``Lr16``/``Lr32``
+block rather than the main layer section, and both are read.
 """
 
 from __future__ import annotations
@@ -21,10 +29,11 @@ import mmap
 import os
 import struct
 import zlib
+from types import SimpleNamespace
 
 import numpy as np
 from PySide6.QtCore import QPoint, QRect, QSize
-from PySide6.QtGui import QImage
+from PySide6.QtGui import QImage, QPainter
 
 from photoslop.atomicio import WriteTicket, atomic_write
 from photoslop.document import Document
@@ -315,10 +324,53 @@ def _layer_record(
     return rec + struct.pack(">I", len(extra)) + extra
 
 
-def _pixel_layer(layer: Layer, psb: bool) -> tuple[bytes, bytes]:
+def _baked(doc: Document, index: int) -> tuple[QImage, QPoint] | None:
+    """(pixels, offset) for a layer whose look is not its pixels, or None when
+    ``layer.image`` is already faithful.
+
+    Live effects are rendered into the layer — padded by how far they reach,
+    clipped to the canvas — with its mask, clipping and fill opacity applied,
+    so the record carries no mask and a fill opacity of 1. An adjustment layer
+    becomes the composite below it with the adjustment applied; a reader draws
+    that over the same composite, which is exact wherever the composite is
+    opaque. Smart filters already live in ``layer.image``."""
+    from photoslop.appearance import effect_margin
+    from photoslop.document import draw_layer, render_region
+    from photoslop.layer import blank_image
+
+    layer = doc.layers[index]
+    canvas = doc.canvas_rect()
+    if layer.adjustment is not None:
+        from photoslop.adjust import apply_luts
+
+        below = SimpleNamespace(layers=doc.layers[:index], group_props=doc.group_props)
+        out = render_region(below, canvas)
+        apply_luts(out, layer.adjustment)
+        return out, canvas.topLeft()
+    if not layer.effects:
+        return None
+    margin = effect_margin(layer.effects)
+    region = layer.bounds().adjusted(-margin, -margin, margin, margin).intersected(canvas)
+    if region.isEmpty():
+        return None
+    out = blank_image(region.size())
+    p = QPainter(out)
+    p.translate(-region.topLeft())
+    draw_layer(p, doc, layer, region)
+    p.end()
+    return out, region.topLeft()
+
+
+def _pixel_layer(doc: Document, index: int, psb: bool) -> tuple[bytes, bytes]:
     """(record, channel data) for one raster layer."""
-    img = layer.image
-    rect = QRect(layer.offset, img.size())
+    layer = doc.layers[index]
+    baked = _baked(doc, index)
+    if baked is None:
+        img, offset, mask = layer.image, layer.offset, layer.mask
+        fill_opacity = float(getattr(layer, "fill_opacity", 1.0))
+    else:
+        (img, offset), mask, fill_opacity = baked, None, 1.0
+    rect = QRect(offset, img.size())
     r, g, b, a = _straight_channels(img)
     channels: list[tuple[int, bytes]] = [
         (-1, _rle_channel(a, psb)),
@@ -327,9 +379,9 @@ def _pixel_layer(layer: Layer, psb: bool) -> tuple[bytes, bytes]:
         (2, _rle_channel(b, psb)),
     ]
     mask_rect = None
-    if layer.mask is not None and not layer.mask.isNull():
-        mask_rect = QRect(layer.offset, layer.mask.size())
-        channels.append((-2, _rle_channel(_mask_plane(layer.mask), psb)))
+    if mask is not None and not mask.isNull():
+        mask_rect = QRect(offset, mask.size())
+        channels.append((-2, _rle_channel(_mask_plane(mask), psb)))
     record = _layer_record(
         rect=rect,
         channels=channels,
@@ -340,7 +392,7 @@ def _pixel_layer(layer: Layer, psb: bool) -> tuple[bytes, bytes]:
         name=layer.name,
         mask_rect=mask_rect,
         section=None,
-        fill_opacity=float(getattr(layer, "fill_opacity", 1.0)),
+        fill_opacity=fill_opacity,
         psb=psb,
     )
     return record, b"".join(payload for _, payload in channels)
@@ -402,7 +454,7 @@ def encode_psd(doc: Document) -> bytes:
         blend = str(props.get("blend_mode", "normal"))
         emit(_section_layer(name, 1, blend, float(props.get("opacity", 1.0)), psb))
 
-    for layer in doc.layers:  # bottom first, which is the file order too
+    for index, layer in enumerate(doc.layers):  # bottom first, which is the file order too
         group = layer.group
         if group != open_group:
             if open_group is not None:
@@ -410,7 +462,7 @@ def encode_psd(doc: Document) -> bytes:
             if group is not None:
                 emit(_section_layer(_DIVIDER_NAME, 3, "normal", 1.0, psb))
             open_group = group
-        emit(_pixel_layer(layer, psb))
+        emit(_pixel_layer(doc, index, psb))
     if open_group is not None:
         close_group(open_group)
 
@@ -471,7 +523,7 @@ class _Header:
         self.width = rd.u32()
         self.depth = rd.u16()
         self.mode = rd.u16()
-        if self.depth not in (1, 8, 16):
+        if self.depth not in (1, 8, 16, 32):
             raise PSDError(f"Photoshop: {self.depth}-bit documents are not supported")
         if self.mode not in _SUPPORTED_MODES:
             raise PSDError(f"Photoshop: colour mode {self.mode} is not supported")
@@ -481,12 +533,36 @@ class _Header:
         return {_MODE_CMYK: 4, _MODE_RGB: 3, _MODE_LAB: 3}.get(self.mode, 1)
 
 
+def _bytes_per_sample(depth: int) -> int:
+    return {16: 2, 32: 4}.get(depth, 1)
+
+
+def _row_bytes(width: int, depth: int) -> int:
+    return (width + 7) // 8 if depth == 1 else width * _bytes_per_sample(depth)
+
+
+def _float_to_u8(plane: np.ndarray, srgb: bool) -> np.ndarray:
+    """A 32-bit float plane as 8-bit: clipped to 0..1 and, for colour,
+    sRGB-encoded (Photoshop keeps 32-bit documents in linear light)."""
+    f = np.clip(np.nan_to_num(plane.astype(np.float32), nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0)
+    if srgb:
+        f = np.where(f <= 0.0031308, f * 12.92, 1.055 * np.power(f, 1.0 / 2.4) - 0.055)
+    return (f * 255.0 + 0.5).astype(np.uint8)
+
+
 def _decode_channel(
-    rd: _Reader, compression: int, width: int, height: int, depth: int, data_len: int
+    rd: _Reader,
+    compression: int,
+    width: int,
+    height: int,
+    depth: int,
+    data_len: int,
+    srgb: bool = False,
 ) -> np.ndarray:
-    """One channel as a (height, width) uint8 plane."""
-    bps = 2 if depth == 16 else 1
-    row_bytes = (width + 7) // 8 if depth == 1 else width * bps
+    """One channel as a (height, width) uint8 plane. ``srgb`` marks a colour
+    channel of a 32-bit document, which is linear and needs encoding."""
+    bps = _bytes_per_sample(depth)
+    row_bytes = _row_bytes(width, depth)
     expected = row_bytes * height
     if compression == 0:
         raw = bytes(rd.take(expected))
@@ -503,7 +579,14 @@ def _decode_channel(
             raise PSDError("Photoshop: short zip channel")
         raw = raw[:expected]
         if compression == 3:
-            if bps == 2:
+            if bps == 4:
+                # Prediction on a float row is a byte delta over the row,
+                # whose bytes are stored plane-by-plane: all first bytes,
+                # then all second bytes, and so on.
+                arr = np.frombuffer(raw, dtype=np.uint8).reshape(height, row_bytes)
+                arr = np.cumsum(arr, axis=1, dtype=np.uint8)
+                raw = arr.reshape(height, 4, width).transpose(0, 2, 1).tobytes()
+            elif bps == 2:
                 arr = np.frombuffer(raw, dtype=">u2").reshape(height, width).astype(np.uint16)
                 raw = np.cumsum(arr, axis=1, dtype=np.uint16).astype(">u2").tobytes()
             else:
@@ -515,6 +598,8 @@ def _decode_channel(
         packed = np.frombuffer(raw, dtype=np.uint8).reshape(height, row_bytes)
         bits = np.unpackbits(packed, axis=1)[:, :width]
         return ((1 - bits) * 255).astype(np.uint8)  # bitmap mode: 1 = black
+    if bps == 4:
+        return _float_to_u8(np.frombuffer(raw, dtype=">f4").reshape(height, width), srgb)
     if bps == 2:
         return (np.frombuffer(raw, dtype=">u2").reshape(height, width) >> 8).astype(np.uint8)
     return np.frombuffer(raw, dtype=np.uint8).reshape(height, width).copy()
@@ -677,13 +762,15 @@ def _merged_image(rd: _Reader, hdr: _Header, has_alpha: bool, palette: bytes | N
     if compression == 1:
         count_fmt = f">{h * hdr.channels}{'I' if rd.psb else 'H'}"
         counts = struct.unpack(count_fmt, rd.take(struct.calcsize(count_fmt)))
-        row_bytes = (w + 7) // 8 if hdr.depth == 1 else w * (2 if hdr.depth == 16 else 1)
+        row_bytes = _row_bytes(w, hdr.depth)
         for c in range(hdr.channels):
             rows = b"".join(_unpackbits(rd.take(counts[c * h + y]), row_bytes) for y in range(h))
-            planes[c] = _decode_channel(_Reader(rows, 0, rd.psb), 0, w, h, hdr.depth, 0)
+            srgb = hdr.depth == 32 and c < hdr.colour_channels
+            planes[c] = _decode_channel(_Reader(rows, 0, rd.psb), 0, w, h, hdr.depth, 0, srgb)
     else:
         for c in range(hdr.channels):
-            planes[c] = _decode_channel(rd, compression, w, h, hdr.depth, 0)
+            srgb = hdr.depth == 32 and c < hdr.colour_channels
+            planes[c] = _decode_channel(rd, compression, w, h, hdr.depth, 0, srgb)
     r, g, b = _to_rgb(hdr.mode, planes, (h, w), palette)
     colour = hdr.colour_channels
     alpha = planes.get(colour) if (has_alpha and hdr.channels > colour) else None
@@ -729,7 +816,8 @@ def _layer_image(
                 validate_dimensions(mw, mh, operation="Photoshop layer mask", allow_large=True)
                 mask_plane = _decode_channel(sub, compression, mw, mh, hdr.depth, length - 2)
         elif cid >= -1 and w and h:
-            planes[cid] = _decode_channel(sub, compression, w, h, hdr.depth, length - 2)
+            srgb = hdr.depth == 32 and cid >= 0
+            planes[cid] = _decode_channel(sub, compression, w, h, hdr.depth, length - 2, srgb)
     if not (w and h):
         return None, None
     r, g, b = _to_rgb(hdr.mode, planes, (h, w), palette)
@@ -809,6 +897,29 @@ def _read_layers(
     return layers, group_props, merged_has_alpha
 
 
+def _deep_layer_block(rd: _Reader, end: int) -> _Reader | None:
+    """A reader over the ``Lr16``/``Lr32`` global block, where Photoshop keeps
+    a 16- or 32-bit document's layers (the main layer section is left
+    empty). ``rd`` sits just past the layer info; ``end`` closes the layer
+    and mask section."""
+    if rd.pos + 4 > end:
+        return None
+    skip = rd.u32()  # global layer mask info
+    rd.pos += skip
+    pad = 4 if rd.psb else 2
+    while rd.pos + 12 <= end:
+        if bytes(rd.take(4)) not in (b"8BIM", b"8B64"):
+            return None
+        key = bytes(rd.take(4))
+        length = rd.u64() if (rd.psb and key in _PSB_WIDE_KEYS) else rd.u32()
+        length = min(length, end - rd.pos)
+        data = rd.take(length)
+        if key in (b"Lr16", b"Lr32"):
+            return _Reader(data, 0, rd.psb)
+        rd.pos += (-length) % pad
+    return None
+
+
 def load_psd(path: str, *, allow_large: bool = False) -> Document:
     with _mapped(path) as mm:
         rd = _Reader(mm)
@@ -825,8 +936,19 @@ def load_psd(path: str, *, allow_large: bool = False) -> Document:
         layers: list[Layer] = []
         group_props: dict[str, dict] = {}
         merged_has_alpha = False
-        if lm_len and rd.length():
-            layers, group_props, merged_has_alpha = _read_layers(rd, hdr, palette, allow_large)
+        if lm_len:
+            li_len = rd.length()
+            li_end = rd.pos + li_len
+            if li_len:
+                layers, group_props, merged_has_alpha = _read_layers(rd, hdr, palette, allow_large)
+            rd.pos = li_end
+            if not layers and hdr.depth in (16, 32):
+                deep = _deep_layer_block(rd, lm_end)
+                if deep is not None:
+                    layers, group_props, merged_has_alpha = _read_layers(
+                        deep, hdr, palette, allow_large
+                    )
+                    deep = None  # drop the view into the map before it closes
         rd.pos = lm_end
         if not layers:
             layers = [Layer("Background", _merged_image(rd, hdr, merged_has_alpha, palette))]

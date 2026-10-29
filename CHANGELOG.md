@@ -15,8 +15,23 @@ follows [SemVer](https://semver.org).
   Duotone and Bitmap with raw, RLE and zip channels. Desktop: Open dialog
   (with composite preview) and Save As ▸ Photoshop; CLI/MCP: `-o out.psd`
   keeps layers; iPad/iPhone: Import Image opens a `.psd` as its layers and
-  Export offers Photoshop. Effects/adjustments/smart objects export as the
-  pixels they show; iOS drops blend modes and folds masks into alpha
+  Export offers Photoshop. iOS drops blend modes and folds masks into alpha
+  ([#436](https://github.com/CryptoJones/Photoslop/issues/436)).
+- **PSD export bakes what Photoshop cannot carry** — a layer with live
+  effects is written as the pixels it composites to (padded by the effects'
+  reach, mask and fill opacity folded in), an adjustment layer as the
+  composite below it with the adjustment applied, a smart object as its
+  filtered pixels; the reloaded file flattens to the same image
+  ([#436](https://github.com/CryptoJones/Photoslop/issues/436)).
+- **32-bit float PSDs open on every platform** — linear colour is clipped
+  and sRGB-encoded to 8-bit, alpha and masks scale linearly, zip-predicted
+  float rows are de-interleaved. The reader now also finds the global
+  `Lr16`/`Lr32` block, where Photoshop keeps every 16- and 32-bit document's
+  layers; those used to open flat
+  ([#436](https://github.com/CryptoJones/Photoslop/issues/436)).
+- **iPad/iPhone opens `.psd`/`.psb` from the document browser and Files** —
+  Photoshop documents are declared document types, open in place with their
+  layers, and save back as Photoshop
   ([#436](https://github.com/CryptoJones/Photoslop/issues/436)).
 
 ## [2.38.3] — Unreleased
