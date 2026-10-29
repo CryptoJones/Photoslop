@@ -13,8 +13,8 @@ settings:
     TARGETED_DEVICE_FAMILY: "1,2"
     SUPPORTS_MACCATALYST: NO
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    CURRENT_PROJECT_VERSION: "23803"
-    MARKETING_VERSION: "2.38.3"
+    CURRENT_PROJECT_VERSION: "23900"
+    MARKETING_VERSION: "2.39.0"
     DEVELOPMENT_TEAM: J6P99Q4479
 
 targets:
@@ -50,6 +50,26 @@ targets:
             LSHandlerRank: Owner
             LSItemContentTypes:
               - io.ronin48.photoslop.project
+          # Photoshop documents open from the document browser and Files and
+          # are edited in place (#436). `.psd` is the system's own type; `.psb`
+          # is imported below.
+          - CFBundleTypeName: Photoshop Document
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.adobe.photoshop-image
+              - io.ronin48.photoslop.psb
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: io.ronin48.photoslop.psb
+            UTTypeDescription: Photoshop Large Document
+            UTTypeConformsTo:
+              - public.data
+              - public.content
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - psb
+              public.mime-type:
+                - image/vnd.adobe.photoshop
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: io.ronin48.photoslop.project
             UTTypeDescription: Photoslop Project

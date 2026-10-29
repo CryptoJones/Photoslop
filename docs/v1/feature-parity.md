@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v2.38.3** against six
+An honest, category-by-category comparison of **Photoslop v2.39.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -34,7 +34,7 @@ client exposes it.
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 2.38.3 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
+| **Photoslop** | 2.39.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
@@ -170,7 +170,7 @@ Photoslop is an editor, not a DAM — these rows are scope notes, not gaps.
 | Feature | Photoslop | Photoshop | GIMP | Paint.NET | LR Classic | darktable | Capture One |
 |---|---|---|---|---|---|---|---|
 | Native layered format | ✅ .ora (open standard) [File Formats](file-formats.md) | ✅ .psd/.psb (proprietary) | ✅ .xcf + .ora | ✅ .pdn | — | — | — |
-| Layered/vector interchange with other apps | 🟡 (ORA raster fallback + SVG safe subset) | 🟡 (PSD is the de-facto standard) | ✅ (ORA + improved PSD/SVG) | ❌ | — | — | — |
+| Layered/vector interchange with other apps | ✅ (.psd/.psb open + export on all three platforms, ORA, SVG safe subset) | 🟡 (PSD is the de-facto standard) | ✅ (ORA + improved PSD/SVG) | ❌ | — | — | — |
 | PNG/JPEG/BMP/WebP | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | AVIF / JPEG XL | ✅ (`[formats]` extra) [File Formats](file-formats.md) | ✅ | ✅ | ❌ | ✅ | 🟡 | ✅ |
 | Named export regions (artboards) | ✅ [Artboards](artboards.md) | ✅ | ❌ | ❌ | — | — | — |

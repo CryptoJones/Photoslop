@@ -1266,7 +1266,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "input",
         nargs="?",
-        help="input image (PNG/JPG/ORA/camera-raw); omit when starting from --new",
+        help="input image (PNG/JPG/ORA/PSD/camera-raw); omit when starting from --new",
     )
     parser.add_argument(
         "--new",
@@ -1283,7 +1283,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="resolution for --new documents and paper presets (default 72)",
     )
     parser.add_argument(
-        "--output", "-o", metavar="PATH", help=".ora keeps layers; raster extensions flatten"
+        "--output", "-o", metavar="PATH", help=".ora/.psd keep layers; raster extensions flatten"
     )
     parser.add_argument(
         "--export-artboards", metavar="DIR", help="write each artboard as <name>.png into DIR"
@@ -1385,6 +1385,11 @@ def _write_output(
         return
     if lower.endswith(".ora"):
         save_ora(doc, path)
+        return
+    if lower.endswith((".psd", ".psb")):
+        from photoslop.io_psd import save_psd
+
+        save_psd(doc, path)
         return
     if lower.endswith(".svg"):
         from photoslop.io_svg import save_svg

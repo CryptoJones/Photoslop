@@ -240,8 +240,15 @@ struct EditorState: @unchecked Sendable {
 final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   typealias Snapshot = ProjectSnapshot
 
-  static var readableContentTypes: [UTType] { [.photoslopProject] }
-  static var writableContentTypes: [UTType] { [.photoslopProject] }
+  /// Photoshop documents open from the document browser and Files, and are
+  /// written back as Photoshop so an in-place edit stays in the file's own
+  /// format (#436).
+  static var readableContentTypes: [UTType] {
+    [.photoslopProject, .photoshopDocument, .photoshopLargeDocument]
+  }
+  static var writableContentTypes: [UTType] {
+    [.photoslopProject, .photoshopDocument, .photoshopLargeDocument]
+  }
 
   @Published private(set) var layers: [RasterLayer] = []
   @Published var activeLayerID: UUID?
@@ -508,7 +515,16 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
 
   required init(configuration: ReadConfiguration) throws {
     defer { observeMemoryPressure() }
-    let state = try ProjectArchive.decode(configuration.file)
+    let state: EditorState
+    if UTType.isPhotoshop(configuration.contentType) {
+      guard let data = configuration.file.regularFileContents else { throw PSDError.notPSD }
+      state = try PSDCodec.decode(data)
+      guard Self.canAffordLayers(state.layers.count, canvas: state.canvasSize) else {
+        throw ImportError.resourceLimit(Self.memoryRefusal)
+      }
+    } else {
+      state = try ProjectArchive.decode(configuration.file)
+    }
     layers = state.layers
     activeLayerID = state.activeLayerID
     canvasSize = state.canvasSize
@@ -544,19 +560,29 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   }
 
   func snapshot(contentType: UTType) throws -> ProjectSnapshot {
-    if Thread.isMainThread {
-      return try ProjectArchive.snapshot(state: currentState())
+    let make: () throws -> ProjectSnapshot = {
+      let state = self.currentState()
+      var snapshot = try ProjectArchive.snapshot(state: state)
+      if UTType.isPhotoshop(contentType) {
+        guard let data = PSDCodec.encode(layers: state.layers, canvasSize: state.canvasSize) else {
+          throw PSDError.unsupported("a canvas larger than Photoshop allows")
+        }
+        snapshot.photoshop = data
+      }
+      return snapshot
     }
-    return try DispatchQueue.main.sync {
-      try ProjectArchive.snapshot(state: currentState())
-    }
+    if Thread.isMainThread { return try make() }
+    return try DispatchQueue.main.sync(execute: make)
   }
 
   func fileWrapper(
     snapshot: ProjectSnapshot,
     configuration: WriteConfiguration
   ) throws -> FileWrapper {
-    try ProjectArchive.encode(snapshot)
+    if let photoshop = snapshot.photoshop {
+      return FileWrapper(regularFileWithContents: photoshop)
+    }
+    return try ProjectArchive.encode(snapshot)
   }
 
   var activeLayer: RasterLayer? {
@@ -1402,6 +1428,23 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   /// Lives here rather than in the Clipboard extension (#374) because the undo
   /// wrapper and the name deduplicator are private to the store, and Paste is
   /// not a good enough reason to open either of them up.
+  /// Replace the document with a Photoshop file's layers, at its canvas size.
+  ///
+  /// The layered counterpart of `importImage`: a `.psd` picked through Import
+  /// Image used to arrive as ImageIO's flattened composite, which threw away
+  /// the one thing the format is for.
+  func importPSD(data: Data) throws {
+    let state = try PSDCodec.decode(data)
+    guard Self.canAffordLayers(state.layers.count, canvas: state.canvasSize) else {
+      throw ImportError.resourceLimit(Self.memoryRefusal)
+    }
+    mutate(actionName: "Import Photoshop Document") {
+      canvasSize = state.canvasSize
+      layers = state.layers
+      activeLayerID = state.activeLayerID
+    }
+  }
+
   func insertLayer(image: UIImage, named base: String, actionName: String) {
     mutate(actionName: actionName) {
       let layer = RasterLayer(name: uniqueName(base: base), image: image)
@@ -1627,6 +1670,13 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   ) async -> Data? {
     let capturedLayers = layers
     let capturedSize = canvasSize
+    if format == .psd {
+      // Layered: every layer goes out as itself, the way the desktop's
+      // Save As ▸ Photoshop and `photoslop-cli -o out.psd` write it.
+      return await Task.detached(priority: .userInitiated) {
+        PSDCodec.encode(layers: capturedLayers, canvasSize: capturedSize, onWhite: onWhite)
+      }.value
+    }
     return await Task.detached(priority: .userInitiated) {
       format.encode(
         Self.render(layers: capturedLayers, size: capturedSize), quality: quality,

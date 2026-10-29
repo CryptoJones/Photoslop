@@ -1727,8 +1727,12 @@ struct EditorView: View {
       guard let url = try result.get().first else { return }
       let access = url.startAccessingSecurityScopedResource()
       defer { if access { url.stopAccessingSecurityScopedResource() } }
-      offerImport(
-        data: try Data(contentsOf: url), name: url.deletingPathExtension().lastPathComponent)
+      let data = try Data(contentsOf: url)
+      if PSDCodec.isPSD(data) {
+        try store.importPSD(data: data)
+        return
+      }
+      offerImport(data: data, name: url.deletingPathExtension().lastPathComponent)
     } catch {
       errorMessage = error.localizedDescription
     }

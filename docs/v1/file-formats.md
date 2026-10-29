@@ -19,6 +19,37 @@ Photoslop extensions as non-namespaced attributes other editors ignore:
 | `photoslop-vector` | Shape/Pen geometry for re-editing (JSON) |
 | `photoslop-icc` | document ICC profile (base64) |
 
+## Adobe Photoshop (`.psd` / `.psb`)
+
+Opens and exports on all three platforms (desktop Open/Save As, `photoslop-cli
+-o out.psd`, iPad Import Image / Export ▸ Photoshop) with no third-party
+dependency; the desktop codec is `photoslop/io_psd.py`, the iPad twin is
+`PSDCodec.swift`, and both write the same bytes.
+
+| Direction | Carries |
+|---|---|
+| Export | 8-bit RGB; per-layer RLE channels with offset, opacity, fill opacity (`iOpa`), blend mode, visibility, clipping, user mask; groups as `lsct` folders with their opacity/blend; merged RGBA composite; DPI; ICC profile. PSB when a side exceeds 30 000 px. |
+| Open | 8-, 16- and 32-bit float RGB, Grayscale, CMYK, Indexed, Duotone, Bitmap and Lab (L only); raw, RLE and zip/zip-predicted channels; layers from the main section or the `Lr16`/`Lr32` block Photoshop uses for 16/32-bit files; nested groups folded to one level; hidden folders hide their members; a file without layers opens as one layer from the composite. |
+
+Photoshop-only constructs — adjustment layers, live effects, smart objects,
+editable text — have no portable encoding, so they are baked on export: a
+layer with live effects is written as the pixels it composites to, padded by
+the effects' reach, with its mask and fill opacity folded in; an adjustment
+layer becomes the composite below it with the adjustment applied (exact
+wherever that composite is opaque); a smart object is its filtered pixels.
+The reloaded file flattens to the same image, but the effects are no longer
+live. `.ora` stays the lossless native format.
+
+32-bit float documents are linear light, so colour is clipped to 0…1 and
+sRGB-encoded to 8-bit on open; alpha and masks scale linearly. There is no
+32-bit export.
+
+On iPad/iPhone a `.psd`/`.psb` also opens from the document browser and Files
+and is edited in place, saving back as Photoshop. The iPad layer model has no
+blend modes, groups or masks, so there a mask is multiplied into alpha and
+blend modes are dropped on open
+([#436](https://github.com/CryptoJones/Photoslop/issues/436)).
+
 ## Scalable Vector Graphics (`.svg`)
 
 SVG opens and saves through the native vector model. The editable subset is
