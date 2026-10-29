@@ -14,6 +14,8 @@ enum ExportFormat: String, CaseIterable, Identifiable {
   case tiff
   case gif
   case bmp
+  /// Layered Photoshop document: every layer, not the flattened picture.
+  case psd
 
   var id: String { rawValue }
 
@@ -25,6 +27,7 @@ enum ExportFormat: String, CaseIterable, Identifiable {
     case .tiff: "TIFF"
     case .gif: "GIF"
     case .bmp: "BMP"
+    case .psd: "Photoshop"
     }
   }
 
@@ -36,6 +39,7 @@ enum ExportFormat: String, CaseIterable, Identifiable {
     case .tiff: .tiff
     case .gif: .gif
     case .bmp: .bmp
+    case .psd: .photoshopDocument
     }
   }
 
@@ -49,7 +53,7 @@ enum ExportFormat: String, CaseIterable, Identifiable {
   /// rather than the black an unflattened alpha channel collapses to.
   var preservesTransparency: Bool {
     switch self {
-    case .png, .heic, .tiff: true
+    case .png, .heic, .tiff, .psd: true
     case .jpeg, .gif, .bmp: false
     }
   }
@@ -64,7 +68,7 @@ enum ExportFormat: String, CaseIterable, Identifiable {
   var canGoToPhotoLibrary: Bool {
     switch self {
     case .png, .jpeg, .heic: true
-    case .tiff, .gif, .bmp: false
+    case .tiff, .gif, .bmp, .psd: false
     }
   }
 
@@ -72,13 +76,16 @@ enum ExportFormat: String, CaseIterable, Identifiable {
   var isLossy: Bool {
     switch self {
     case .jpeg, .heic: true
-    case .png, .tiff, .gif, .bmp: false
+    case .png, .tiff, .gif, .bmp, .psd: false
     }
   }
 
   /// Encode `image`, flattening it first when the format cannot store alpha
   /// or the person exporting asked for an opaque picture.
   func encode(_ image: UIImage, quality: CGFloat = 0.9, flattenToWhite: Bool = false) -> Data? {
+    if self == .psd {
+      return PSDCodec.encode(flat: flattenToWhite ? Self.flattenedOntoWhite(image) : image)
+    }
     let source =
       preservesTransparency && !flattenToWhite ? image : Self.flattenedOntoWhite(image)
     guard let cgImage = source.cgImage else { return nil }

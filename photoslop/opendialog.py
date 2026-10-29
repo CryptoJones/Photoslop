@@ -32,10 +32,10 @@ from photoslop.resources import (
 from photoslop.tasks import TaskService
 
 OPEN_FILTER = (
-    "Images (*.ora *.svg *.png *.jpg *.jpeg *.bmp *.webp *.gif *.tif *.tiff "
+    "Images (*.ora *.psd *.psb *.svg *.png *.jpg *.jpeg *.bmp *.webp *.gif *.tif *.tiff "
     "*.avif *.jxl "
     "*.arw *.cr2 *.cr3 *.dng *.nef *.nrw *.orf *.pef *.raf *.rw2 *.srw);;"
-    "OpenRaster (*.ora);;Scalable Vector Graphics (*.svg);;All files (*)"
+    "OpenRaster (*.ora);;Photoshop (*.psd *.psb);;Scalable Vector Graphics (*.svg);;All files (*)"
 )
 
 _PREVIEW_DIM = 256
@@ -86,6 +86,19 @@ def preview_info(path: str, max_dim: int = _PREVIEW_DIM) -> tuple[QImage | None,
             return img, f"{w}×{h} · {layers} layers · OpenRaster · {human}"
         except Exception:
             return None, f"Unreadable .ora · {human}"
+
+    if path.lower().endswith((".psd", ".psb")):
+        try:
+            from photoslop.io_psd import probe_psd
+
+            img, w, h, layers = probe_psd(path)
+            if layers > DESKTOP_BUDGET.max_layers:
+                raise ValueError("too many layers")
+            if img.width() > max_dim or img.height() > max_dim:
+                img = img.scaled(max_dim, max_dim, Qt.AspectRatioMode.KeepAspectRatio)
+            return img, f"{w}×{h} · {layers} layers · Photoshop · {human}"
+        except Exception:
+            return None, f"Unreadable .psd · {human}"
 
     if io_formats.is_extra_path(path):
         img = io_formats.load_extra(path)

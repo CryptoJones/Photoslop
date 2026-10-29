@@ -174,9 +174,9 @@ def edit_image(
     """Load an image (or start blank), apply an ordered pipeline, write output.
 
     Operations compose left to right, exactly like ``photoslop-cli``. Provide
-    either ``input`` (a PNG/JPG/ORA/camera-raw path) or ``new`` (``"WxH"`` or a
+    either ``input`` (a PNG/JPG/ORA/PSD/camera-raw path) or ``new`` (``"WxH"`` or a
     paper preset like ``"A4"`` at ``dpi``) — not both. Ask for a result with at
-    least one of ``output`` (``.ora`` keeps layers; raster extensions flatten),
+    least one of ``output`` (``.ora``/``.psd`` keep layers; raster extensions flatten),
     ``info`` (document JSON), or ``export_artboards`` (a directory).
 
     ``operations`` is a list of ``{"op": NAME, "value": STR}`` objects; call

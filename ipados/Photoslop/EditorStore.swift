@@ -1402,6 +1402,23 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   /// Lives here rather than in the Clipboard extension (#374) because the undo
   /// wrapper and the name deduplicator are private to the store, and Paste is
   /// not a good enough reason to open either of them up.
+  /// Replace the document with a Photoshop file's layers, at its canvas size.
+  ///
+  /// The layered counterpart of `importImage`: a `.psd` picked through Import
+  /// Image used to arrive as ImageIO's flattened composite, which threw away
+  /// the one thing the format is for.
+  func importPSD(data: Data) throws {
+    let state = try PSDCodec.decode(data)
+    guard Self.canAffordLayers(state.layers.count, canvas: state.canvasSize) else {
+      throw ImportError.resourceLimit(Self.memoryRefusal)
+    }
+    mutate(actionName: "Import Photoshop Document") {
+      canvasSize = state.canvasSize
+      layers = state.layers
+      activeLayerID = state.activeLayerID
+    }
+  }
+
   func insertLayer(image: UIImage, named base: String, actionName: String) {
     mutate(actionName: actionName) {
       let layer = RasterLayer(name: uniqueName(base: base), image: image)
@@ -1627,6 +1644,13 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
   ) async -> Data? {
     let capturedLayers = layers
     let capturedSize = canvasSize
+    if format == .psd {
+      // Layered: every layer goes out as itself, the way the desktop's
+      // Save As ▸ Photoshop and `photoslop-cli -o out.psd` write it.
+      return await Task.detached(priority: .userInitiated) {
+        PSDCodec.encode(layers: capturedLayers, canvasSize: capturedSize, onWhite: onWhite)
+      }.value
+    }
     return await Task.detached(priority: .userInitiated) {
       format.encode(
         Self.render(layers: capturedLayers, size: capturedSize), quality: quality,

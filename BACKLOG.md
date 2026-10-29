@@ -6,6 +6,14 @@ sync — check an item here when its issue closes.
 
 ## Open
 
+### File formats
+
+- [ ] PSD interchange follow-ups: bake live effects / smart filters /
+  adjustment layers into exported pixels (or emit `lfx2`); carry blend modes,
+  groups and masks on iPad once its layer model has them; 32-bit float PSDs;
+  open a `.psd` from the iPad document browser
+  ([#436](https://github.com/CryptoJones/Photoslop/issues/436))
+
 ### CI
 
 - [ ] The iPadOS workflow's iPhone leg has failed intermittently on every

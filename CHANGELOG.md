@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.39.0] — Unreleased
+
+### Added
+- **Photoshop `.psd`/`.psb` open and export on all three platforms** — a
+  dependency-free codec (`photoslop/io_psd.py`, `PSDCodec.swift`) that writes
+  8-bit RGB with per-layer RLE channels, offsets, opacity, fill opacity,
+  blend modes, visibility, clipping, masks, `lsct` groups, a merged RGBA
+  composite, DPI and ICC, and reads 8/16-bit RGB, Grayscale, CMYK, Indexed,
+  Duotone and Bitmap with raw, RLE and zip channels. Desktop: Open dialog
+  (with composite preview) and Save As ▸ Photoshop; CLI/MCP: `-o out.psd`
+  keeps layers; iPad/iPhone: Import Image opens a `.psd` as its layers and
+  Export offers Photoshop. Effects/adjustments/smart objects export as the
+  pixels they show; iOS drops blend modes and folds masks into alpha
+  ([#436](https://github.com/CryptoJones/Photoslop/issues/436)).
+
 ## [2.38.3] — Unreleased
 
 ### Changed

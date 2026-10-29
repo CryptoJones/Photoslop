@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v2.38.3-orange)]()
+[![Version](https://img.shields.io/badge/version-v2.39.0-orange)]()
 
 > **💚 Support Photoslop** — if this app saves you money or RAM, consider tossing a few bucks at the project:
 > **CashApp [`$cryptojones`](https://cash.app/$cryptojones)** · **Venmo [`@CryptoJones`](https://venmo.com/u/CryptoJones)**
@@ -77,8 +77,8 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
   feather. Effects stay editable, support built-in and user presets, survive
   OpenRaster saves, and export through SVG filters.
 - **Files** — opens and saves layered [OpenRaster](https://www.openraster.org/)
-  (`.ora`, interoperable with GIMP and Krita); imports/exports PNG, JPEG, BMP,
-  and WebP. The Open dialog shows a live thumbnail preview with dimensions,
+  (`.ora`, interoperable with GIMP and Krita) and layered Photoshop
+  (`.psd`/`.psb`); imports/exports PNG, JPEG, BMP, and WebP. The Open dialog shows a live thumbnail preview with dimensions,
   format, layer count, and file size — decoded scaled-down, so browsing huge
   folders stays fast. Export As offers format/quality/scale controls with a
   live preview and the real encoded size.
