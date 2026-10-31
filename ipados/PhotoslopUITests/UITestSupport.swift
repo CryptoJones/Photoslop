@@ -367,12 +367,24 @@ extension XCUIApplication {
       }
       return false
     }
+    /// Tap Create Document without asking XCTest to scroll it into view (#430).
+    /// On the runner's iPad leg the browser's button has reported a hit point
+    /// of {-1, -1} with its frame fully on screen (`{{297, 392.5}, {240, 50.5}}`
+    /// in run 40839851703); `tap()` then tries an accessibility
+    /// scroll-to-visible on the browser's remote hierarchy, which fails with
+    /// kAXErrorCannotComplete and fails the test inside the tap — three times
+    /// in a row, since each retry recomputed the same hit point. A coordinate
+    /// tap at the centre of the frame computes no hit point and scrolls
+    /// nothing, and the frame is what was always on screen.
+    func tapCreate() {
+      create.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    }
     func tapUntilItTakes() {
-      create.tap()
+      tapCreate()
       for _ in 1...3 {
         if tapTook() { break }
-        guard create.waitForExistence(timeout: 5), create.isHittable else { break }
-        create.tap()
+        guard create.waitForExistence(timeout: 5) else { break }
+        tapCreate()
       }
     }
     /// True once the browser has sat on its greyed-out cell for a minute with

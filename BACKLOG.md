@@ -21,8 +21,12 @@ sync — check an item here when its issue closes.
   cascades at 180 s per later fresh launch; the runner image is unchanged.
   `createDocument` now relaunches once after 60 s on the hung cell, and the
   other signature — a More Actions submenu row "missing" — is a dropped tap
-  on the submenu row, which `revealAction` now repeats. Still open: whether
-  the full phone leg stays green over several runs
+  on the submenu row, which `revealAction` now repeats. A third signature, on
+  the iPad leg (2026-10-29): the browser's Create Document button reported hit
+  point `{-1, -1}` with its frame on screen, and `tap()`'s scroll-to-visible
+  failed with kAXErrorCannotComplete; `createDocument` now taps the frame's
+  centre as a coordinate (v2.38.6). Still open: whether both legs stay green
+  over several runs
   ([#430](https://github.com/CryptoJones/Photoslop/issues/430))
 
 - [ ] Critical-coverage floors sat 30–50 points under measured coverage, so the

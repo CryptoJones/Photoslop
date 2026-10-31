@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.38.6] — Unreleased
+
+### Fixed
+- **iOS UI tests: Create Document is tapped by coordinate, not by
+  `tap()` ([#430](https://github.com/CryptoJones/Photoslop/issues/430)).**
+  A third signature on the runner, this time on the iPad leg (run
+  40839851703, 2026-10-29): the document browser's Create Document button
+  reported an accessibility hit point of `{-1, -1}` while its frame was fully
+  on screen, so XCTest's `tap()` tried to scroll it into view through the
+  browser's remote accessibility hierarchy, that action failed with
+  `kAXErrorCannotComplete`, and the test failed inside the tap — on all three
+  retries, since each recomputed the same hit point. `createDocument` now taps
+  the centre of the button's frame as a coordinate, which computes no hit
+  point and scrolls nothing. Harness only; the app is unchanged.
+
 ## [2.38.5] — Unreleased
 
 ### Added
