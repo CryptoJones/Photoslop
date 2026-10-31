@@ -45,7 +45,7 @@ file, not the source-only seed, is the artifact compliance inventory.
 Before creating a tag, the release owner records:
 
 - matching package/runtime/iPad/docs/tag version and iPad build number;
-- green Python 3.10/latest, Windows, macOS, Linux, wheel/sdist install, portable
+- green Python 3.11/latest, Windows, macOS, Linux, wheel/sdist install, portable
   package smoke, security, critical coverage, and full-scale performance jobs;
 - SHA-256 manifests, SBOMs, build identities, dependency inventory hashes, and
   GitHub provenance attestations;

@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import Enum
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(str, Enum):  # noqa: UP042 — str(code) must stay "ErrorCode.X", not the value
     INVALID_INPUT = "invalid_input"
     UNSUPPORTED_CAPABILITY = "unsupported_capability"
     UNSAFE_OPERATION = "unsafe_operation"
