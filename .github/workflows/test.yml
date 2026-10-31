@@ -57,13 +57,13 @@ jobs:
         # step below measures against, so the two cannot drift apart. Sized
         # from real run history like the other caps (#322, #323): eleven green
         # runs, 2026-08-22 to 2026-09-02, Ubuntu 3.14 11-18m, macOS 10-19m,
-        # Ubuntu 3.10 13-21m, Windows 20-26m. Each cap leaves the leg's worst
+        # Ubuntu 3.10 (the leg is 3.11 since 2.38.4) 13-21m, Windows 20-26m. Each cap leaves the leg's worst
         # run under 70% of it; the watch warns when a run crosses that line,
         # which is the four-minutes-of-headroom situation #335 describes,
         # caught before it turns main red on a green diff.
         include:
           - os: ubuntu-latest
-            python: "3.10"
+            python: "3.11"
             cap-minutes: 35
           - os: ubuntu-latest
             python: "3.14"

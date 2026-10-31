@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.38.4] — Unreleased
+
+### Security
+- **The `security` workflow is green again: five dependency advisories
+  cleared in `uv.lock`
+  ([#440](https://github.com/CryptoJones/Photoslop/issues/440)).** pillow 12.3.0 → 13.0.0 (37 advisories, CVE-2026-112390
+  through CVE-2026-112906), filelock 3.31.2 → 4.2.5 (CVE-2026-112907/-112913/
+  -112940), certifi 2026.6.17 → 2026.10.23 (PYSEC-2026-4320), setuptools 83.0.0
+  → 84.2.1, opentelemetry-api 1.44.0 → 1.45.2 and msgpack 1.2.1 → 1.2.3
+  (CVE-2026-114613, published after that run). The audit had been failing on
+  `main` since the 2026-10-27 scheduled run.
+
+### Removed
+- **Python 3.10 support** — `requires-python = ">=3.11"`. The fixed pillow and
+  filelock releases need 3.11+, so keeping 3.10 split the lock and left that
+  fork on the vulnerable versions, which the 3.12 audit runner could not see.
+  3.10 reaches end of life this month. The Ubuntu 3.10 CI leg is now 3.11; ruff
+  targets py311; the README badge and distribution notes say 3.11+.
+
 ## [2.38.3] — Unreleased
 
 ### Changed

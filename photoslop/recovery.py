@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import os
 from contextlib import suppress
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from zipfile import BadZipFile
 
 from defusedxml.ElementTree import ParseError
@@ -16,7 +16,7 @@ from photoslop import __version__
 from photoslop.atomicio import WriteTicket, atomic_write
 from photoslop.io_ora import load_ora, save_ora
 
-_UTC = timezone.utc
+_UTC = UTC
 
 
 class RecoveryService:

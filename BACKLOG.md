@@ -49,6 +49,14 @@ more testing. Both issues carry the `on-hold` label.
 
 ## Done
 
+- [x] The `security` workflow failed on `main` from 2026-10-27: 44 advisories in
+  five locked packages (pillow, filelock, certifi, setuptools,
+  opentelemetry-api). Relocked to the fixed releases; the fixed pillow and
+  filelock need Python 3.11+, so 3.10 (end of life this month) is dropped
+  rather than left on a vulnerable fork of the lock
+  ([#440](https://github.com/CryptoJones/Photoslop/issues/440)) — shipped
+  v2.38.4
+
 - [x] Zooming in on a 2048px document drove the app past 1 GB (the PencilKit
   drawing view was the whole canvas magnified by the scroll view, rendered at
   `canvas × zoom × 3` pixels a side) and past ~2.7× the live strokes stopped
