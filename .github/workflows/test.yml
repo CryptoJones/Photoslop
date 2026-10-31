@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 0
       - name: Install Linux Qt runtime libraries
         run: scripts/install-ci-qt-linux.sh
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: "3.12"
       - name: Sync locked development environment
@@ -93,7 +93,7 @@ jobs:
       - name: Install Linux Qt runtime libraries
         if: runner.os == 'Linux'
         run: scripts/install-ci-qt-linux.sh
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: ${{ matrix.python }}
       - name: Sync locked development environment
@@ -127,7 +127,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Publish test report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tests-${{ runner.os }}-py${{ matrix.python }}-${{ github.sha }}
           path: reports/
@@ -186,7 +186,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             xvfb libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
             libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxkbcommon-x11-0
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: "3.12"
       - name: Sync locked development environment
@@ -204,7 +204,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux Qt runtime libraries
         run: scripts/install-ci-qt-linux.sh
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: "3.12"
       - name: Build wheel and source distribution
@@ -224,7 +224,7 @@ jobs:
           uv venv --python 3.12 .artifact-sdist
           uv pip install --python .artifact-sdist/bin/python dist/*.tar.gz
           .artifact-sdist/bin/photoslop-cli --version
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python-distributions-${{ github.sha }}
           path: dist/
@@ -236,7 +236,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux Qt runtime libraries
         run: scripts/install-ci-qt-linux.sh
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: "3.12"
       - run: uv sync --extra dev --locked
@@ -261,7 +261,7 @@ jobs:
             --cov-report=json:reports/critical-coverage.json
           uv run python scripts/check-critical-coverage.py \
             reports/critical-coverage.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: critical-coverage-${{ github.sha }}
           path: reports/critical-coverage.json
@@ -273,7 +273,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux Qt runtime libraries
         run: scripts/install-ci-qt-linux.sh
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: "3.12"
       - run: uv sync --extra dev --locked
@@ -286,7 +286,7 @@ jobs:
             --scale 0.01 --samples 5 --enforce > reports/smoke-4k-50.json
           uv run python -m photoslop.benchmarks 12k-20 \
             --scale 0.01 --samples 5 --enforce > reports/smoke-12k-20.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: smoke-benchmarks-${{ github.sha }}
           path: reports/
@@ -298,7 +298,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux Qt runtime libraries
         run: scripts/install-ci-qt-linux.sh
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: "3.12"
       - run: uv sync --extra dev --extra gmic --locked
