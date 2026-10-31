@@ -6,6 +6,13 @@ sync — check an item here when its issue closes.
 
 ## Open
 
+### Testing
+
+- [ ] iOS: adversarial decoder tests for the Swift ORA and image importers —
+  the iPad/iPhone half of the #425 fuzz suite, which covers the Python engine
+  the desktop GUI and CLI share
+  ([#438](https://github.com/CryptoJones/Photoslop/issues/438))
+
 ### CI
 
 - [ ] The iPadOS workflow's iPhone leg has failed intermittently on every
@@ -48,6 +55,15 @@ more testing. Both issues carry the `on-hold` label.
   ([#257](https://github.com/CryptoJones/Photoslop/issues/257))
 
 ## Done
+
+- [x] Adversarial fuzzing suite: every CLI op, every filter parameter and every
+  format decoder is fed extreme, malformed and boundary inputs and must succeed
+  or refuse with a classified error, never an internal one, a hang or an
+  unbounded allocation; it found and fixed six leaks (JSON ops given a non-object,
+  beam-dither on a plane smaller than its blur radius, SVG `inf` dimensions,
+  non-zip `.ora`, LibRaw errors, and oversized headers reaching the decoder)
+  ([#425](https://github.com/CryptoJones/Photoslop/issues/425)) — shipped
+  v2.38.5
 
 - [x] The `security` workflow failed on `main` from 2026-10-27: 44 advisories in
   five locked packages (pillow, filelock, certifi, setuptools,

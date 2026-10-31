@@ -203,13 +203,27 @@ def _transform(value: str | None) -> list[float]:
     return numbers if len(numbers) == 6 else [1, 0, 0, 1, 0, 0]
 
 
+def _dimension(text: str, attribute: str) -> int:
+    """A canvas dimension from an SVG attribute, as the whole pixels it means.
+    ``inf``/``nan`` parse as floats and then overflow ``int()`` — an
+    OverflowError the CLI reported as an internal error (#425) — so the value
+    must be finite and inside the resource budget's reach before rounding."""
+    try:
+        value = float(text)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"SVG: invalid {attribute} {text!r}") from exc
+    if not abs(value) <= 1e9:  # also false for nan
+        raise ValueError(f"SVG: {attribute} {text!r} is out of range")
+    return int(round(value))
+
+
 def load_svg(path: str, *, allow_large: bool = False) -> Document:
     source = read_limited(path, DESKTOP_BUDGET.max_xml_bytes, operation="SVG")
     root = parse_xml_limited(source, operation="SVG")
     _validate_resource_refs(root)
-    view = [float(value) for value in root.get("viewBox", "").split()]
-    width = int(round(view[2] if len(view) == 4 else float(root.get("width", 800))))
-    height = int(round(view[3] if len(view) == 4 else float(root.get("height", 600))))
+    view = [_dimension(value, "viewBox") for value in root.get("viewBox", "").split()]
+    width = view[2] if len(view) == 4 else _dimension(root.get("width", "800"), "width")
+    height = view[3] if len(view) == 4 else _dimension(root.get("height", "600"), "height")
     validate_dimensions(width, height, operation="SVG canvas", buffers=2, allow_large=allow_large)
     doc = Document(QSize(width, height), 72, path)
     gradients = {

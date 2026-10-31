@@ -4,6 +4,41 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.38.5] — Unreleased
+
+### Added
+- **Adversarial fuzzing suite for the engine
+  ([#425](https://github.com/CryptoJones/Photoslop/issues/425)).**
+  `tests/test_fuzz_engine.py` enumerates every op in `cli.OPS`, every filter in
+  `available_filters()` and every format decoder from the registries, so a new
+  op or filter is fuzzed the day it is registered. Each is fed extreme values
+  (`-1`, `0`, `1e9`, `inf`, `nan`, 40-digit numbers, 5 000-character strings,
+  NUL, JSON of the wrong shape), empty and inverted selections, one-pixel and
+  one-row images, random bytes, truncated and bit-flipped files, a valid magic
+  number followed by garbage, and headers that declare 10-gigapixel canvases.
+  The contract: succeed with clamped parameters, or refuse with a classified
+  error — at the CLI any documented exit code but `1` (`internal_error`), at
+  the engine (`apply_pipeline`, what the MCP server calls) a `ValueError` or
+  `OSError` — never an unhandled exception, a hang (`faulthandler` kills a case
+  past 120 s) or an allocation the resource budget did not approve (oversized
+  headers must be refused in under two seconds). Runs in about 11 s.
+
+### Fixed
+- **Six internal-error leaks the suite found, all now classified refusals
+  ([#425](https://github.com/CryptoJones/Photoslop/issues/425)):**
+  `--vector-op -1`, `--artboard-op -1` and `--effect []` parsed as JSON and
+  then called `.pop` or indexed into a number or an empty list
+  (`AttributeError`/`IndexError`); `_json_value` now pins the top-level type.
+  `beam-dither` on a selection or layer smaller than its conditioning blur
+  radius failed in `_box_blur_plane` with a numpy broadcast error; the radius
+  is now clamped to the plane's extent per axis. An SVG with
+  `width="inf"` or `nan` overflowed `int()`; dimensions must be finite and in
+  range before rounding. A `.ora` that is not a zip archive raised
+  `zipfile.BadZipFile`; it is now a `ValueError`. A corrupt or non-raw file
+  with a camera-raw extension surfaced LibRaw's own exception family; both
+  `load_raw` and `develop_raw` now raise `ValueError`. Each of these reached
+  the desktop app's Open and the MCP tools through the same code paths.
+
 ## [2.38.4] — Unreleased
 
 ### Security

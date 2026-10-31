@@ -356,7 +356,12 @@ def _walk_layers(
 def load_ora(path: str, *, allow_large: bool = False) -> Document:
     if os.path.getsize(path) > DESKTOP_BUDGET.max_file_bytes:
         raise ResourceLimitError("OpenRaster: archive exceeds 1 GiB")
-    with zipfile.ZipFile(path, "r") as zf:
+    try:
+        archive = zipfile.ZipFile(path, "r")
+    except zipfile.BadZipFile as exc:
+        # A file that is not a zip at all is a bad input, not an internal error (#425).
+        raise ValueError(f"OpenRaster: not a zip archive ({exc})") from exc
+    with archive as zf:
         members = validate_archive_members(zf.infolist(), operation="OpenRaster")
         if "stack.xml" not in members:
             raise ValueError("OpenRaster: missing stack.xml")
