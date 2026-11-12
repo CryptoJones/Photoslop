@@ -47,6 +47,20 @@ follows [SemVer](https://semver.org).
   GUI-only by ruling: this changes no operation, no pixel and no file
   format, so there is nothing for the CLI or the desktop to mirror.
 
+### Fixed
+- **A damaged OpenRaster file is refused as bad input instead of leaking
+  `BadZipFile` (#425).**
+  The loader caught `zipfile.BadZipFile` around the archive's *constructor*
+  only, so a file that opened as a zip and then failed on a member's own
+  header — or on a central directory the constructor had not read yet —
+  escaped as an unhandled exception. The fuzz suite has been finding this
+  intermittently since it landed: it flips bits in a file the engine wrote,
+  and where a flipped bit lands depends on the ZIP's timestamps, so the same
+  suite leaked on some runs and passed on others. The member read and the
+  member list are classified now, in both the loader and the desktop's
+  OpenRaster preview, with a regression test that damages an archive the
+  same way every time.
+
 ## [2.38.5] — Unreleased
 
 ### Added

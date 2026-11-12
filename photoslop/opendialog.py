@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from photoslop import io_formats
 from photoslop.resources import (
     DESKTOP_BUDGET,
+    archive_infos,
     parse_xml_limited,
     read_archive_member,
     validate_archive_members,
@@ -57,7 +58,10 @@ def preview_info(path: str, max_dim: int = _PREVIEW_DIM) -> tuple[QImage | None,
             if os.path.getsize(path) > DESKTOP_BUDGET.max_file_bytes:
                 raise ValueError("archive too large")
             with zipfile.ZipFile(path) as zf:
-                members = validate_archive_members(zf.infolist(), operation="OpenRaster preview")
+                members = validate_archive_members(
+                    archive_infos(zf, operation="OpenRaster preview"),
+                    operation="OpenRaster preview",
+                )
                 src = (
                     "Thumbnails/thumbnail.png"
                     if "Thumbnails/thumbnail.png" in members

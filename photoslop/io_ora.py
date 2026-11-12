@@ -20,6 +20,7 @@ from photoslop.layer import FORMAT, ORA_OPS, ORA_OPS_REVERSE, Layer
 from photoslop.resources import (
     DESKTOP_BUDGET,
     ResourceLimitError,
+    archive_infos,
     parse_xml_limited,
     read_archive_member,
     validate_archive_members,
@@ -362,7 +363,9 @@ def load_ora(path: str, *, allow_large: bool = False) -> Document:
         # A file that is not a zip at all is a bad input, not an internal error (#425).
         raise ValueError(f"OpenRaster: not a zip archive ({exc})") from exc
     with archive as zf:
-        members = validate_archive_members(zf.infolist(), operation="OpenRaster")
+        members = validate_archive_members(
+            archive_infos(zf, operation="OpenRaster"), operation="OpenRaster"
+        )
         if "stack.xml" not in members:
             raise ValueError("OpenRaster: missing stack.xml")
         root = parse_xml_limited(
