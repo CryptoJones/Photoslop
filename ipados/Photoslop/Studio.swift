@@ -17,6 +17,9 @@ enum Studio {
   static let backdrop = UIColor(white: 0.11, alpha: 1)
   /// Panels, docks and bars.
   static let chrome = Color(white: 0.15)
+  /// A surface inside the chrome: a pressed button, a raised strip. One step
+  /// lighter than the chrome so it reads as sitting *on* it.
+  static let raised = Color(white: 0.21)
   /// The line between chrome and canvas, and around a thumbnail.
   static let hairline = Color.white.opacity(0.10)
   /// Selected tool, active layer, prominent action.
@@ -25,6 +28,15 @@ enum Studio {
   /// The square a tool or icon button draws itself in; its hit area is the
   /// 44pt around it.
   static let iconSide: CGFloat = 40
+  /// The smallest thing a finger is meant to hit. Apple's guidance, and the
+  /// floor the UI tests measure every control against.
+  static let touchSide: CGFloat = 44
+  /// The height of one strip of the dock.
+  static let stripHeight: CGFloat = 44
+  /// The type used for a control's own name — the tool in hand, a layer's kind.
+  static func label(_ size: CGFloat, _ weight: Font.Weight = .semibold) -> Font {
+    .system(size: size, weight: weight)
+  }
 }
 
 /// A panel floating over the backdrop: material, rounded, a hairline edge and
@@ -70,4 +82,57 @@ struct IconButtonStyle: ButtonStyle {
 
 extension ButtonStyle where Self == IconButtonStyle {
   static var icon: IconButtonStyle { IconButtonStyle() }
+}
+
+/// A vertical rule between two groups of controls in a row.
+///
+/// Drawn as a view rather than a `Divider` so it can stand *between* two
+/// groups — a rule with the groups on either side of it — instead of running
+/// the full width of a stack.
+///
+/// Its height is fixed rather than left to fill the row: a shape that is
+/// greedy in both directions takes the row's whole proposed height, and the
+/// row then takes the height it was offered — which is how a one-point rule
+/// once made a palette 300pt tall and pushed the canvas off the screen.
+struct VerticalRule: View {
+  /// How tall the rule is. Short of the 44pt row it stands in, so it reads
+  /// as a separator rather than a divider down the middle of a control.
+  var height: CGFloat = 28
+
+  var body: some View {
+    Rectangle()
+      .fill(Studio.hairline)
+      .frame(width: 1, height: height)
+  }
+}
+
+/// A horizontal rule between two groups of controls in a column.
+struct HorizontalRule: View {
+  /// How wide the rule is. Short rules read as separators; full-width ones
+  /// read as the edge of a section.
+  var width: CGFloat = 24
+
+  var body: some View {
+    Rectangle()
+      .fill(Studio.hairline)
+      .frame(width: width, height: 1)
+      .padding(.vertical, 6)
+  }
+}
+
+/// A short label above a group of controls, in the chrome's own voice.
+///
+/// Used where a control needs a name the icon cannot carry — "Size", "Tolerance"
+/// — and deliberately quiet: the accent is for state, not for captions.
+struct ChromeCaption: View {
+  let text: String
+
+  var body: some View {
+    Text(text)
+      .font(.system(size: 11, weight: .medium))
+      .foregroundStyle(.secondary)
+      .lineLimit(1)
+      .fixedSize()
+      .accessibilityHidden(true)
+  }
 }

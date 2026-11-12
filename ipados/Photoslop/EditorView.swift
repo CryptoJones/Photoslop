@@ -186,7 +186,7 @@ struct EditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Studio.chrome, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .navigationSplitViewColumnWidth(min: 280, ideal: 300, max: 380)
+            .navigationSplitViewColumnWidth(min: 250, ideal: 268, max: 320)
         } detail: {
           editorSurface
         }
@@ -522,8 +522,12 @@ struct EditorView: View {
       })
   }
 
-  /// The iPad's tool rail: undo and redo, the tools, the ink — a column at
-  /// the canvas's left edge, where a drawing hand is not.
+  /// The iPad's tool rail: undo and redo, then every tool, named.
+  ///
+  /// A column at the canvas's left edge, where a drawing hand is not. The
+  /// tools carry their names under their icons because an iPad has the height
+  /// for it and a palette of nine unlabelled glyphs is a set of nine guesses:
+  /// nothing about `wand.and.rays` says "this one selects".
   private var toolRail: some View {
     // Plain when the window is tall enough for the whole column — every iPad
     // in either orientation — and scrolling when it is not, as a short Stage
@@ -542,21 +546,9 @@ struct EditorView: View {
     VStack(spacing: 2) {
       undoButton.accessibilityIdentifier("Undo")
       redoButton.accessibilityIdentifier("Redo")
-      railDivider
-      ToolButtons(tool: $tool)
-      if tool.usesInk {
-        railDivider
-        inkButton
-          .frame(width: 44, height: 44)
-      }
+      HorizontalRule()
+      ToolButtons(tool: $tool, showsCaption: true, showsGroups: true)
     }
-  }
-
-  private var railDivider: some View {
-    Rectangle()
-      .fill(Studio.hairline)
-      .frame(width: 24, height: 1)
-      .padding(.vertical, 4)
   }
 
   /// What sits under the canvas on an iPad: the mode's bar while a mode is
@@ -568,8 +560,27 @@ struct EditorView: View {
         cropBar
       } else if placement != nil {
         placementBar
+      } else if store.selection != nil {
+        // A selection's actions get a row of their own. Six buttons and the
+        // tool's own settings do not fit on one line of an iPad mini's width,
+        // and a bar that overflows does not merely look wrong: it takes the
+        // layout with it, and the canvas and the rail lose their bounds.
+        VStack(spacing: 8) {
+          HStack(spacing: 10) {
+            selectionActions
+            Spacer(minLength: 0)
+          }
+          HStack(spacing: 14) {
+            stackedToolIdentity
+            Spacer(minLength: 12)
+            toolOptions
+          }
+        }
       } else {
         HStack(spacing: 14) {
+          // The tool in hand, named, and what the finger should do with it.
+          stackedToolIdentity
+          Spacer(minLength: 12)
           toolOptions
         }
       }
@@ -578,33 +589,131 @@ struct EditorView: View {
     .padding(.vertical, 8)
     .frame(minHeight: 56)
     .floatingPanel()
-    .frame(maxWidth: 720)
+    .frame(maxWidth: 780)
   }
 
-  /// The phone's dock: the options row, which scrolls when a selection's
-  /// actions join it, over the tool row, which never does — nine tools share
-  /// the width, so every one is on screen and under a thumb.
+  /// The phone's dock: three strips, stacked, in the order a thumb reaches
+  /// them.
+  ///
+  /// The top strip says what is in hand and what to do with it; the middle
+  /// carries the tool's own controls; the bottom is the palette, all nine
+  /// tools at once.
+  ///
+  /// The options used to be a horizontally scrolling strip with no indicator,
+  /// so the brush width — the control a painting app touches most — sat past
+  /// the end of a phone's screen and simply was not there. Nothing here
+  /// scrolls: every control in it is on screen or it is not in it.
   private var compactDock: some View {
     VStack(spacing: 0) {
-      Divider().overlay(Studio.hairline)
-      ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 10) {
-          undoButton.accessibilityIdentifier("Undo")
-          redoButton.accessibilityIdentifier("Redo")
-          Divider().frame(height: 24)
-          toolOptions
-        }
-        .buttonStyle(.icon)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
-      }
-      HStack(spacing: 0) {
-        ToolButtons(tool: $tool, fills: true)
-      }
-      .padding(.horizontal, 4)
-      .padding(.bottom, 2)
+      historyStrip
+      optionsStrip
+      paletteStrip
     }
     .background(Studio.chrome)
+  }
+
+  /// The top strip of the phone's dock: the tool in hand, or the selection's
+  /// actions while one is up, and the history buttons at the other end.
+  private var historyStrip: some View {
+    HStack(spacing: 4) {
+      if store.selection != nil {
+        selectionActions
+      } else {
+        toolIdentity
+      }
+      Spacer(minLength: 4)
+      undoButton.accessibilityIdentifier("Undo")
+      redoButton.accessibilityIdentifier("Redo")
+    }
+    .buttonStyle(.icon)
+    .padding(.horizontal, 8)
+    .frame(height: Studio.stripHeight)
+    .background(Studio.raised.opacity(0.5))
+  }
+
+  /// The middle strip: the controls the tool in hand actually uses.
+  private var optionsStrip: some View {
+    HStack(spacing: 10) {
+      toolOptions
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, 12)
+    .frame(height: Studio.stripHeight)
+  }
+
+  /// The bottom strip: every tool, at once, sharing the width.
+  private var paletteStrip: some View {
+    VStack(spacing: 0) {
+      // A rule between the settings and the tools, so the dock reads as three
+      // bands rather than one heap of controls.
+      Rectangle()
+        .fill(Studio.hairline)
+        .frame(height: 1)
+      HStack(spacing: 0) {
+        ToolButtons(tool: $tool, fills: true, showsGroups: true)
+      }
+    }
+    .padding(.horizontal, 2)
+    .padding(.top, 2)
+    .padding(.bottom, 4)
+  }
+
+  /// The tool in hand, by name, and what a finger should do with it.
+  ///
+  /// The palette shows which tool is in hand by lighting it; this says what it
+  /// is called and whether it answers a tap or a drag. Three of the nine tools
+  /// answer a tap and the rest answer a stroke, which is the one thing a
+  /// drawing app cannot afford to leave unsaid.
+  private var toolIdentity: some View {
+    HStack(spacing: 6) {
+      toolIdentityIcon
+      Text(tool.displayName)
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(.primary)
+        .lineLimit(1)
+        .fixedSize()
+      Text(tool.usageHint)
+        .font(.system(size: 12))
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .truncationMode(.tail)
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(tool.displayName). \(tool.usageHint)")
+  }
+
+  /// The same identity, on two lines, for the wider bar under an iPad's
+  /// canvas.
+  ///
+  /// The name and the hint do not fit side by side beside the tool's own
+  /// settings on an iPad mini's width, and a bar that overflows takes the
+  /// layout with it. Stacked, the bar is two rows tall and never overflows.
+  private var stackedToolIdentity: some View {
+    VStack(alignment: .leading, spacing: 1) {
+      HStack(spacing: 6) {
+        toolIdentityIcon
+        Text(tool.displayName)
+          .font(.system(size: 13, weight: .semibold))
+          .foregroundStyle(.primary)
+          .lineLimit(1)
+          .fixedSize()
+      }
+      Text(tool.usageHint)
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .truncationMode(.tail)
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(tool.displayName). \(tool.usageHint)")
+  }
+
+  /// The tool in hand, as an icon.
+  private var toolIdentityIcon: some View {
+    Image(systemName: tool.symbolName)
+      .font(.system(size: 12, weight: .bold))
+      .foregroundStyle(Studio.accent)
+      .frame(width: 16, height: 16)
   }
 
   /// A mode's bar on a phone: docked where the tool dock was, full width.
@@ -623,39 +732,29 @@ struct EditorView: View {
   /// and showing both disabled cost ~170pt of a strip that did not have it
   /// to spare.
   ///
-  /// While a selection is up, what to *do* with it leads (#374). Making a
-  /// selection is a modal act: it is the only thing on screen the user is
-  /// thinking about, so its actions earn the bar's leading zone for exactly
-  /// as long as one exists.
+  /// The tool's own name lives in the strip above this one, and its actions —
+  /// what to do with a selection that is up — live in the strip above that.
+  /// This one is for the tool's settings and nothing else.
   @ViewBuilder
   private var toolOptions: some View {
-    if store.selection != nil {
-      selectionActionBar
-      Divider().frame(height: 24)
-    }
-    // The tool's name, with its icon where there is room for one; the phone's
-    // dock already shows the icon lit in the row below.
-    Group {
-      if isCompact {
-        Text(tool.displayName)
-      } else {
-        Label(tool.displayName, systemImage: tool.symbolName)
-      }
-    }
-    .font(.subheadline.weight(.semibold))
-    .lineLimit(1)
-    .fixedSize()
-    .accessibilityHidden(true)
-    // The rail already shows the ink on an iPad; the dock has no rail.
-    if tool.usesInk && isCompact {
+    // The swatch: the colour every stroke, fill and picked colour works in.
+    // It was on the iPad's rail and the phone's strip; it is on the strip's
+    // options now, which is where the rest of the settings are, and which is
+    // the one place the bucket's colour can be seen — the bucket paints with
+    // the ink, and there was nowhere to show it on an iPad.
+    if tool.usesInk {
       inkButton
     }
     if tool.usesWidth {
+      ChromeCaption(text: "Size")
       Slider(
         value: $inkWidth,
         in: BrushMetrics.minimumWidth...BrushMetrics.maximumWidth(for: store.canvasSize),
         step: 1)
-        .frame(width: isCompact ? 130 : 200)
+        // A width the bar can give up: on a narrow iPad the strip beside the
+        // canvas is short, and a fixed 200pt slider would push the rest of
+        // the bar off the screen rather than shrink.
+        .frame(minWidth: 80, maxWidth: isCompact ? 130 : 140)
         .accessibilityLabel("Brush width")
         .accessibilityIdentifier("Brush width")
       Text("\(Int(inkWidth))")
@@ -667,13 +766,9 @@ struct EditorView: View {
       // The tap tools' one slider, in the width slider's slot: how far a
       // pixel may differ from the tapped one, per channel, and still be
       // filled or selected.
-      Text("Tolerance")
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .fixedSize()
-        .accessibilityHidden(true)
+      ChromeCaption(text: "Tolerance")
       Slider(value: $regionTolerance, in: 0...255, step: 1)
-        .frame(width: isCompact ? 130 : 200)
+        .frame(minWidth: 80, maxWidth: isCompact ? 130 : 140)
         .accessibilityLabel("Tolerance")
         .accessibilityIdentifier("Tolerance")
       Text("\(Int(regionTolerance))")
@@ -985,7 +1080,7 @@ struct EditorView: View {
   }
 
   /// Fill, Cut, Copy, Paste and Delete for the selection that is up (#374,
-  /// #393).
+  /// #393), and the one that ends it.
   ///
   /// These exist in the Select menu too, which is where their keyboard
   /// shortcuts live and where an iPad user with a keyboard will look. They are
@@ -995,11 +1090,15 @@ struct EditorView: View {
   /// and never found Delete Selection, which has shipped since 2.22.0. An
   /// action nobody can find is not a shipped action.
   ///
+  /// Deselect joins them for the same reason. Until now the only way to throw
+  /// a selection away was the Select menu, three taps down — so a person who
+  /// selected the wrong thing had no visible way back, and the marching ants
+  /// stayed on the canvas over whatever they drew next.
+  ///
   /// Icon-only, because four labelled buttons was already more than the phone
   /// dock's options row holds, and each carries its label for VoiceOver and
-  /// for the UI tests. That row scrolls, so a fifth costs reach rather than
-  /// presence.
-  @ViewBuilder private var selectionActionBar: some View {
+  /// for the UI tests.
+  @ViewBuilder private var selectionActions: some View {
     // Fill leads the group: it is the one action here that *paints*, and it is
     // the one the shape was made for (#393). Cut, Copy, Paste and Delete move
     // the selected pixels somewhere else; this is what puts something in them.
@@ -1029,6 +1128,12 @@ struct EditorView: View {
       }
       .disabled(store.activeLayer == nil)
       .accessibilityIdentifier("Delete Selection")
+      // Last, and apart: it is not a thing done to the pixels, it is the end
+      // of the mode they are in.
+      Button(action: store.deselect) {
+        Label("Deselect", systemImage: "xmark.circle")
+      }
+      .accessibilityIdentifier("Deselect")
     }
     .buttonStyle(.icon)
   }
@@ -1414,8 +1519,16 @@ struct EditorView: View {
         }
       }
     } label: {
-      Label(wandCombine.displayName, systemImage: wandCombine.symbolName)
-        .labelStyle(.iconOnly)
+      // The name is on the control, not only in the accessibility tree: how a
+      // new region meets the selection already there is a choice somebody
+      // makes deliberately, and an icon-only menu said nothing about which
+      // choice was in force.
+      Label(wandCombine.shortName, systemImage: wandCombine.symbolName)
+        .font(.system(size: 12, weight: .medium))
+        .labelStyle(.titleAndIcon)
+        .padding(.horizontal, 10)
+        .frame(height: 28)
+        .background(Studio.raised, in: Capsule())
     }
     .accessibilityLabel(
       "\(tool.selectsOnTap ? "Wand" : "Selection") options, \(wandCombine.displayName)"

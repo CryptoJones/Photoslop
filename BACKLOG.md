@@ -56,6 +56,21 @@ more testing. Both issues carry the `on-hold` label.
 
 ## Done
 
+- [x] iOS interface redone for iPhone and iPad: the phone's dock is three
+  fixed strips — the tool in hand and what a finger should do with it, the
+  tool's settings, and the palette — so nothing in it scrolls and the brush
+  width can no longer sit off the end of the screen; the nine tools share the
+  width instead of taking a fixed 44pt each, which overflowed a 375pt phone
+  and pushed the Eyedropper off the edge; every tool is named, on the iPad's
+  rail under its icon and in the phone's strip, with a one-line hint saying
+  whether it answers a tap or a drag; a selection's actions get a row of their
+  own and **Deselect** joins them; the ink swatch moved beside the rest of the
+  settings, so the Bucket's colour is visible on an iPad too; and the layers
+  panel is arranged by what a layer can do to it, with a layer's name editable
+  only on the layer already in hand
+  ([#443](https://github.com/CryptoJones/Photoslop/issues/443)) — shipped
+  v2.40.0
+
 - [x] Adversarial fuzzing suite: every CLI op, every filter parameter and every
   format decoder is fed extreme, malformed and boundary inputs and must succeed
   or refuse with a classified error, never an internal one, a hang or an

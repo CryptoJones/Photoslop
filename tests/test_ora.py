@@ -257,3 +257,50 @@ def test_ora_sibling_groups_sharing_a_name_stay_distinct(qapp, tmp_path):
     assert upper.group != lower.group
     assert abs(doc.group_props[upper.group]["opacity"] - 0.25) < 1e-6
     assert abs(doc.group_props[lower.group]["opacity"] - 0.75) < 1e-6
+
+
+def _corrupt_local_header(path):
+    """Break the local header of the second member of a zip, in place.
+
+    ``ZipFile.open`` reads a member's own local header when it opens it, so a
+    damaged one raises ``BadZipFile`` there — not at the archive's
+    constructor, which is the only place the loader used to catch it.
+    """
+    data = bytearray(path.read_bytes())
+    signature = b"PK\x03\x04"
+    first = data.find(signature)
+    second = data.find(signature, first + 1)
+    assert second > 0, "the archive has no second member to damage"
+    data[second] ^= 0xFF
+    path.write_bytes(bytes(data))
+
+
+def test_ora_refuses_a_damaged_member_as_a_bad_input(qapp, tmp_path):
+    """A corrupt OpenRaster file is bad input, not an internal error (#425).
+
+    The fuzz suite found this one by accident: it flips bits in a file the
+    engine wrote, and where the flipped bit lands depends on the ZIP's
+    timestamps, so the same suite leaked ``BadZipFile`` on some runs and not
+    on others. The member read is the leak; the loader caught the archive's
+    constructor and nothing after it.
+    """
+    path = tmp_path / "damaged.ora"
+    _foreign_ora(
+        str(path),
+        """<?xml version='1.0' encoding='UTF-8'?>
+        <image w="20" h="20" xres="72" yres="72" version="0.0.3">
+          <stack>
+            <layer name="only" src="data/a.png" x="0" y="0"/>
+          </stack>
+        </image>""",
+        [("data/a.png", _swatch(QColor(255, 0, 0, 255)))],
+    )
+    _corrupt_local_header(path)
+
+    try:
+        load_ora(str(path))
+    except ValueError:
+        return
+    except Exception as exc:  # noqa: BLE001
+        raise AssertionError(f"a damaged archive leaked {type(exc).__name__}: {exc}") from exc
+    raise AssertionError("a damaged archive loaded as if it were sound")
