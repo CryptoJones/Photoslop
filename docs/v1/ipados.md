@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.38.5 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.40.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -13,8 +13,8 @@ One binary serves both, adapting to the horizontal size class rather than the
 device name, so an iPad in a narrow Split View gets the phone layout too.
 
 - **Regular width** keeps the layer list in a sidebar beside the canvas, a
-  tool rail at the canvas's left edge, and the tool's options in a capsule
-  under it.
+  named tool rail at the canvas's left edge, and the tool's options in a
+  capsule under it.
 - **Compact width** moves the layer list to a sheet reached from **Layers**,
   because `NavigationSplitView` collapses its sidebar into a pushed column
   there, and reaching the layers would otherwise navigate away from the
@@ -23,10 +23,16 @@ device name, so an iPad in a narrow Split View gets the phone layout too.
   the compact layout picks them rather than leaving the choice to UIKit:
   **Layers**, a **More Actions** menu holding New, Canvas Size, Resize Document,
   Crop, Resize Layer, the text actions, Import Image, and About, and
-  **Export**. Undo and redo sit at the leading edge of the dock's options
-  row, which never has to be scrolled to.
-- The dock's options row narrows its sliders at compact width and scrolls
-  horizontally if it still does not fit; the tool row never scrolls.
+  **Export**. Undo and redo sit at the trailing end of the dock's top strip.
+- **Nothing in the dock scrolls.** The options row used to be a horizontal
+  scroll view with no indicator, so a control past the end of the screen was
+  simply not there — the brush width sat at x=415.7 on a 402pt iPhone. The
+  dock is three fixed strips now, and a control is either on screen or not in
+  the dock.
+- The nine tools share the width of the palette rather than each taking a
+  fixed 44pt: 9 × 44 is 396pt, which overflows a 375pt phone and pushes the
+  last tool off the edge. Sharing the width keeps all nine on screen at every
+  phone size, and the smallest of them still clears the 40pt floor.
 
 ## The studio
 
@@ -43,28 +49,37 @@ judgement of a colour made against it.
 - **The tool rail** (iPad) is a floating column at the canvas's left edge, where
   a drawing hand is not: Undo and Redo, then every tool — Pen, Pencil, Marker,
   Eraser, Bucket, Magic Wand, Rectangle Select, Lasso Select, Eyedropper — one
-  button each, then the ink swatch. Every tool is on screen at once and a
-  switch is one tap. The tools used to sit behind one menu button that showed
+  button each, **named under its icon** and grouped by hairline into the four
+  jobs they do (draw, fill, select, pick). Every tool is on screen at once and
+  a switch is one tap. The tools used to sit behind one menu button that showed
   only the current one, so the set on offer was invisible until the menu
-  opened.
+  opened; and even as a row of nine glyphs, nothing about `wand.and.rays` said
+  "this one selects".
 - **The options capsule** (iPad) floats under the canvas and holds only what the
-  tool in hand uses: the tool's name, the brush width for an ink, Tolerance and
-  the combine mode for the Bucket and the selection tools, and — while a
-  selection is up — Fill, Cut, Copy, Paste and Delete Selection at its leading
-  edge. A mode's own bar (Crop, placement) takes the capsule's place for as
-  long as the mode is up.
-- **The dock** (iPhone) is the same two things stacked at the bottom edge:
-  the options row above, with Undo and Redo leading and the ink swatch beside
-  the slider; the nine tools below, sharing the width so each is a finger wide
-  and none is scrolled off. A mode's bar replaces the dock while it is up.
+  tool in hand uses: the tool's name and what a finger should do with it — the
+  hint is the answer to the question a drawing app cannot leave unsaid, which
+  tools answer a tap and which answer a drag — then the ink swatch, the brush
+  width for an ink, or Tolerance and the combine mode for the Bucket and the
+  selection tools. A mode's own bar (Crop, placement) takes the capsule's
+  place for as long as the mode is up.
+- **The dock** (iPhone) is the same three things stacked at the bottom edge: the
+  top strip naming the tool in hand and what to do with it, with Undo and Redo
+  at the other end; the middle strip with the tool's own settings; the nine
+  tools below, sharing the width so each is a finger wide and none is scrolled
+  off. A mode's bar replaces the dock while it is up.
 - **The layers panel** shows a thumbnail per layer — the layer's pixels and
   strokes over a checkerboard, rendered off the main actor at 44pt and re-made
   only when the layer changes — with its name, what it is (Paint or Text, its
   effective opacity when under 100%, Effects when it has any) and its eye. The
   active layer's **Opacity** and **Fill** sliders sit above the list, the way a
-  layer palette keeps them, rather than inside every row. The actions — add,
-  new layer from photo, effects, duplicate, merge down, reorder, delete — are a
-  row of icons under the list.
+  layer palette keeps them, rather than inside every row. The panel is
+  arranged by what a layer can do to it: **Add layer** and **New layer from
+  photo** at the top, where a new layer is made; the actions on the layer in
+  hand — effects, duplicate, merge down, reorder, delete — at the bottom,
+  away from the button that adds another one and next to the button that
+  destroys this one. A layer's name is editable only on the layer already in
+  hand: a text field on every row meant that tapping a layer's name opened the
+  keyboard instead of selecting the layer.
 - **The canvas** opens zoomed to fit the room it actually has, and refits when
   that room changes — a rotation, the sidebar sliding in — until the first
   pinch, after which the zoom is yours. On a phone the only fit used to be
@@ -158,13 +173,15 @@ through `openFreshEditor()`.
   alone, so tilting the Pencil does not change its stroke. Pencil and Marker
   also read the Pencil's altitude and azimuth and broaden as it is laid over,
   which is the tool to reach for when shading. Pen remains the default.
-- Set ink colour, stroke opacity and brush width from the tool rail and the
-  options capsule (iPad) or the dock (iPhone). Colour and opacity share one
+- Set ink colour, stroke opacity and brush width from the options capsule (iPad)
+  or the dock (iPhone). Colour and opacity share one
   control — a swatch showing the ink as it will actually paint, opening a
-  popover with both. They share a slot deliberately: the phone's options row
+  popover with both. They share a slot deliberately: the phone's options strip
   is budgeted for the narrowest device, where the old strip overflowed and put
   the ink controls off the edge of the screen (#246), so its item count may
-  not grow.
+  not grow. The swatch sits with the rest of the settings on both idioms,
+  which is also where the **Bucket**'s colour could be seen on an iPad at
+  all.
 - **Add Text** puts text on its own layer, on top of the stack, centred on the
   canvas and ready to move. The anchor is the text's top-left, the same
   convention as `photoslop-cli --text "X,Y,SIZE[,R,G,B]:TEXT"`.
@@ -507,9 +524,14 @@ tools take no ink and, like the wand, work on a text layer.
 ### Fill, Cut, Copy and Paste
 
 While a selection is up, **Fill Selection**, **Cut**, **Copy**, **Paste** and
-**Delete Selection** appear together at the leading edge of the tool options —
-the capsule under the canvas on an iPad, the dock's options row on a phone —
-and go away when the selection does (#374, #393). That is the
+**Delete Selection** appear together in a row of their own — the capsule under
+the canvas on an iPad, the dock's top strip on a phone — and go away when the
+selection does (#374, #393). **Deselect** is there with them: until now the
+only way to throw a selection away was the Select menu, three taps down, so a
+person who selected the wrong thing had no visible way back and the marching
+ants stayed on the canvas over whatever they drew next.
+
+That is the
 one-tap route, and it is where these belong: making a selection is a modal act, and on a phone the
 Select menu is inside **More**, which is a system menu that cannot show what
 is under it — Delete Selection shipped there in 2.22.0 and went unfound. The

@@ -10,6 +10,12 @@ import UIKit
 /// the panel so a picker asked for from inside a sheet can be deferred until
 /// the sheet is down (the flag flips and nothing appears otherwise, the way
 /// #229's canvas sheet was lost).
+///
+/// The panel is arranged by what a layer can do to it. Making one is at the
+/// top, where a new layer is added and a picture is brought in; the layer's
+/// own settings sit above the stack they belong to; and the actions that act
+/// on the layer in hand are at the bottom, away from the button that adds
+/// another one and next to the button that destroys this one.
 struct LayerPanel: View {
   @ObservedObject var store: EditorStore
   let isAddingPhotos: Bool
@@ -18,6 +24,9 @@ struct LayerPanel: View {
 
   var body: some View {
     VStack(spacing: 0) {
+      creationBar
+      Divider().overlay(Studio.hairline)
+
       if let active = store.activeLayer {
         LayerProperties(
           layer: active,
@@ -26,12 +35,11 @@ struct LayerPanel: View {
         Divider().overlay(Studio.hairline)
       }
 
-      List(
-        selection: Binding(
-          get: { store.activeLayerID },
-          set: { if let id = $0 { store.select(id) } }
-        )
-      ) {
+      // No `selection:` binding on the list. One draws the system's own
+      // selection ring on the row in hand — a bright white outline in a dark
+      // panel, on top of the accent that already says which layer is active —
+      // and the row is told which layer it is by its own tap handler.
+      List {
         ForEach(Array(store.layers.enumerated()).reversed(), id: \.element.id) { _, layer in
           LayerRow(
             layer: layer,
@@ -63,12 +71,18 @@ struct LayerPanel: View {
     .background(Studio.chrome)
   }
 
-  /// Add, add from a photo, effects, duplicate, merge down; then reorder and
-  /// delete at the far end, away from the thumb that adds.
-  private var actions: some View {
-    HStack(spacing: 2) {
-      Button(action: store.addLayer) { Label("Add layer", systemImage: "plus") }
-        .accessibilityLabel("Add layer")
+  /// Making a layer: a blank one, or one built from a picture.
+  ///
+  /// At the top of the panel, where "add" belongs, and apart from the
+  /// actions that change the layer already there. They used to share one row
+  /// of seven icons, which made the button that adds a layer one gesture away
+  /// from the button that deletes one.
+  private var creationBar: some View {
+    HStack(spacing: 8) {
+      Button(action: store.addLayer) {
+        Label("Add layer", systemImage: "plus")
+      }
+      .accessibilityLabel("Add layer")
       Button(action: onNewLayerFromPhoto) {
         if isAddingPhotos {
           ProgressView()
@@ -79,6 +93,18 @@ struct LayerPanel: View {
       }
       .disabled(isAddingPhotos)
       .accessibilityLabel("New layer from photo")
+      Spacer(minLength: 0)
+    }
+    .buttonStyle(.icon)
+    .padding(.horizontal, 8)
+    .padding(.vertical, 6)
+  }
+
+  /// What can be done to the layer in hand: its effects, a copy of it, a
+  /// merge into the one below, and its end. Reorder and delete sit at the far
+  /// end, away from the thumb that adds.
+  private var actions: some View {
+    HStack(spacing: 2) {
       Button(action: onEffects) { Label("Layer effects", systemImage: "sparkles") }
         .disabled(store.activeLayer == nil)
         .accessibilityLabel("Layer effects")
@@ -180,22 +206,33 @@ private struct LayerRow: View {
       LayerThumbnail(layer: layer, canvasSize: canvasSize, isActive: isActive)
 
       VStack(alignment: .leading, spacing: 2) {
-        TextField(
-          "Layer name",
-          text: Binding(
-            get: { name.isEmpty ? layer.name : name },
-            set: { name = $0 }
+        // The name is editable only on the layer already in hand. A field on
+        // every row meant that tapping a layer's name opened the keyboard
+        // instead of selecting the layer — the one thing a tap on a layer is
+        // for — and the layer a person had just tapped was not the one that
+        // got the paint.
+        if isActive {
+          TextField(
+            "Layer name",
+            text: Binding(
+              get: { name.isEmpty ? layer.name : name },
+              set: { name = $0 }
+            )
           )
-        )
-        .focused($isEditingName)
-        .onSubmit(commitRename)
-        // Return is not the only way out of a field: a tap on another row or
-        // the sheet's Done leaves it too, and a name typed and then left that
-        // way was shown and never kept.
-        .onChange(of: isEditingName) { _, editing in
-          if !editing { commitRename() }
+          .focused($isEditingName)
+          .onSubmit(commitRename)
+          // Return is not the only way out of a field: a tap on another row or
+          // the sheet's Done leaves it too, and a name typed and then left that
+          // way was shown and never kept.
+          .onChange(of: isEditingName) { _, editing in
+            if !editing { commitRename() }
+          }
+          .font(.subheadline.weight(.semibold))
+        } else {
+          Text(layer.name)
+            .font(.subheadline)
+            .lineLimit(1)
         }
-        .font(.subheadline.weight(isActive ? .semibold : .regular))
         Text(detail)
           .font(.caption2)
           .foregroundStyle(.secondary)

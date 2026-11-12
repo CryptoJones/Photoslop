@@ -4,6 +4,49 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.40.0] — Unreleased
+
+### Changed
+- **The iPhone and iPad editor is redone around what the screen can actually
+  show.**
+  The phone's dock was two strips, and the upper one was a horizontally
+  scrolling row with no indicator: the brush width — the control a painting
+  app touches most — sat past the end of a 402pt screen and simply was not
+  there. Nine fixed 44pt tool buttons were 396pt, which overflows a 375pt
+  phone and pushed the eyedropper off the edge. And nothing on screen said
+  what any tool was called, or what a finger was supposed to do with it: nine
+  glyphs, of which three answer a tap and six answer a drag.
+
+  The phone's dock is now three strips, in the order a thumb reaches them.
+  The top names the tool in hand and says whether it wants a tap or a drag,
+  and carries Undo and Redo at the other end; the middle carries that tool's
+  own settings — the ink swatch, the size, the tolerance, the selection's
+  combine mode; the bottom is the palette, all nine tools at once, sharing
+  the width so each is still a finger wide on a 375pt phone. **Nothing in the
+  dock scrolls**: a control is on screen or it is not in the dock.
+
+  The iPad's tool rail names every tool under its icon, so the palette reads
+  as a toolbox rather than nine guesses, and the bar under the canvas says
+  what the tool in hand does with a finger. The ink swatch moved from the
+  rail to that bar, which is where the rest of the settings are — and is the
+  first place the **Bucket**'s colour could be seen on an iPad at all.
+
+  A selection's actions (**Fill**, **Cut**, **Copy**, **Paste**, **Delete**)
+  have a row of their own rather than being appended to a strip, and
+  **Deselect** joins them: until now the only way to throw a selection away
+  was the Select menu, three taps down, so a person who selected the wrong
+  thing had no visible way back and the marching ants stayed over whatever
+  they drew next.
+
+  The layers panel is arranged by what a layer can do to it — making one at
+  the top, its settings above the stack they belong to, the actions on the
+  layer in hand at the bottom — and a layer's name is editable only on the
+  layer already in hand, because a text field on every row meant that tapping
+  a layer's name opened the keyboard instead of selecting the layer.
+
+  GUI-only by ruling: this changes no operation, no pixel and no file
+  format, so there is nothing for the CLI or the desktop to mirror.
+
 ## [2.38.5] — Unreleased
 
 ### Added

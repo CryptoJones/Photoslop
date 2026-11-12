@@ -57,6 +57,69 @@ enum BrushTool: String, CaseIterable, Identifiable {
     }
   }
 
+  /// The tool's name as a caption, for the places that have room for one.
+  ///
+  /// Shorter than `displayName`, which stays the name the accessibility tree
+  /// and the tests use. "Magic Wand" and "Rectangle Select" are the two that
+  /// do not fit under an icon without shrinking to nothing, and the caption is
+  /// decoration: the button still announces and identifies itself by the full
+  /// name.
+  var caption: String {
+    switch self {
+    case .pen: "Pen"
+    case .pencil: "Pencil"
+    case .marker: "Marker"
+    case .eraser: "Eraser"
+    case .bucket: "Bucket"
+    case .wand: "Wand"
+    case .rectSelect: "Rect"
+    case .lasso: "Lasso"
+    case .eyedropper: "Eyedropper"
+    }
+  }
+
+  /// What the tool does with a finger, in one line.
+  ///
+  /// The hardest thing to learn in a drawing app on a touch screen is which
+  /// tools answer a tap and which answer a drag: the bucket, the wand and the
+  /// eyedropper all take a tap, everything else takes a stroke, and the icons
+  /// say nothing about it. So the strip that names the tool in hand also says
+  /// what the finger should do.
+  var usageHint: String {
+    switch self {
+    case .pen: "Drag to draw a line"
+    case .pencil: "Drag to draw; tilt for width"
+    case .marker: "Drag to draw a wide stroke"
+    case .eraser: "Drag to erase"
+    case .bucket: "Tap to fill this colour"
+    case .wand: "Tap to select this colour"
+    case .rectSelect: "Drag a box to select"
+    case .lasso: "Draw a loop to select"
+    case .eyedropper: "Tap to pick up a colour"
+    }
+  }
+
+  /// The job a tool does, so the palette can be grouped.
+  ///
+  /// Nine glyphs in a row read as nine unrelated things. Draw, fill, select and
+  /// pick are four jobs, and a hairline between them says which is which
+  /// without adding a single control.
+  enum Family {
+    case draw
+    case fill
+    case select
+    case pick
+  }
+
+  var family: Family {
+    switch self {
+    case .pen, .pencil, .marker, .eraser: .draw
+    case .bucket: .fill
+    case .wand, .rectSelect, .lasso: .select
+    case .eyedropper: .pick
+    }
+  }
+
   /// Whether the ink colour and opacity controls apply to this tool.
   ///
   /// The eyedropper paints nothing, but it is the tool that *sets* the ink,
