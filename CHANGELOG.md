@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.40.0] — Unreleased
+## [2.40.0] — 2026-11-12
 
 ### Changed
 - **The iPhone and iPad editor is redone around what the screen can actually
