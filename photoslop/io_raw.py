@@ -54,8 +54,13 @@ def load_raw(path: str) -> QImage:
         import rawpy
     except ImportError as exc:
         raise RawSupportError() from exc
-    with rawpy.imread(path) as raw:
-        rgb = raw.postprocess(use_camera_wb=True, output_bps=8)
+    try:
+        with rawpy.imread(path) as raw:
+            rgb = raw.postprocess(use_camera_wb=True, output_bps=8)
+    except rawpy.LibRawError as exc:
+        # LibRaw's own exception family is not a ValueError; left as it was it
+        # surfaced as an internal error for any corrupt or non-raw file (#425).
+        raise ValueError(f"RAW decode failed: {exc}") from exc
     rgb = np.ascontiguousarray(rgb)
     h, w, _ = rgb.shape
     img = QImage(rgb.data, w, h, w * 3, QImage.Format.Format_RGB888)
@@ -127,8 +132,11 @@ def develop_raw(
         kwargs["user_wb"] = wb_multipliers(temp, tint)
     else:
         kwargs["use_camera_wb"] = True
-    with rawpy.imread(path) as raw:
-        rgb16 = raw.postprocess(**kwargs)  # transient 16-bit (DD-007)
+    try:
+        with rawpy.imread(path) as raw:
+            rgb16 = raw.postprocess(**kwargs)  # transient 16-bit (DD-007)
+    except rawpy.LibRawError as exc:
+        raise ValueError(f"RAW decode failed: {exc}") from exc
     f = rgb16.astype(np.float32) / 65535.0
     f = tone_map(f, highlights, shadows)
     rgb8 = np.ascontiguousarray((f * 255.0 + 0.5).astype(np.uint8))

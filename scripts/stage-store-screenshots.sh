@@ -14,6 +14,13 @@
 #
 #     scripts/stage-store-screenshots.sh
 #
+# PHOTOSLOP_SIM_RUNTIME picks the simulator runtime, and defaults to the one CI
+# pins. Xcode 26 and newer cannot download an 18.5 runtime any more, so a
+# machine on a current Xcode has nothing for the default to find; point it at
+# the runtime that is installed:
+#
+#     PHOTOSLOP_SIM_RUNTIME=27.2 scripts/stage-store-screenshots.sh
+#
 # Simulators are shut down on any exit, including an interrupt: this machine is
 # shared, and two stranded devices have cost 5.88 GB before (see AGENTS.md).
 
@@ -22,7 +29,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-RUNTIME="18.5"
+RUNTIME="${PHOTOSLOP_SIM_RUNTIME:-18.5}"
 ARTWORK="docs/appstore/artwork/staging-artwork.png"
 OUT="docs/appstore/screenshots"
 WORK="$(mktemp -d)"

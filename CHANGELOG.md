@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.39.0] — Unreleased
+## [2.41.0] — Unreleased
 
 ### Added
 - **Photoshop `.psd`/`.psb` open and export on all three platforms** — a
@@ -33,7 +33,116 @@ follows [SemVer](https://semver.org).
   Photoshop documents are declared document types, open in place with their
   layers, and save back as Photoshop
   ([#436](https://github.com/CryptoJones/Photoslop/issues/436)).
+## [2.40.0] — 2026-11-12
 
+### Changed
+- **The iPhone and iPad editor is redone around what the screen can actually
+  show.**
+  The phone's dock was two strips, and the upper one was a horizontally
+  scrolling row with no indicator: the brush width — the control a painting
+  app touches most — sat past the end of a 402pt screen and simply was not
+  there. Nine fixed 44pt tool buttons were 396pt, which overflows a 375pt
+  phone and pushed the eyedropper off the edge. And nothing on screen said
+  what any tool was called, or what a finger was supposed to do with it: nine
+  glyphs, of which three answer a tap and six answer a drag.
+
+  The phone's dock is now three strips, in the order a thumb reaches them.
+  The top names the tool in hand and says whether it wants a tap or a drag,
+  and carries Undo and Redo at the other end; the middle carries that tool's
+  own settings — the ink swatch, the size, the tolerance, the selection's
+  combine mode; the bottom is the palette, all nine tools at once, sharing
+  the width so each is still a finger wide on a 375pt phone. **Nothing in the
+  dock scrolls**: a control is on screen or it is not in the dock.
+
+  The iPad's tool rail names every tool under its icon, so the palette reads
+  as a toolbox rather than nine guesses, and the bar under the canvas says
+  what the tool in hand does with a finger. The ink swatch moved from the
+  rail to that bar, which is where the rest of the settings are — and is the
+  first place the **Bucket**'s colour could be seen on an iPad at all.
+
+  A selection's actions (**Fill**, **Cut**, **Copy**, **Paste**, **Delete**)
+  have a row of their own rather than being appended to a strip, and
+  **Deselect** joins them: until now the only way to throw a selection away
+  was the Select menu, three taps down, so a person who selected the wrong
+  thing had no visible way back and the marching ants stayed over whatever
+  they drew next.
+
+  The layers panel is arranged by what a layer can do to it — making one at
+  the top, its settings above the stack they belong to, the actions on the
+  layer in hand at the bottom — and a layer's name is editable only on the
+  layer already in hand, because a text field on every row meant that tapping
+  a layer's name opened the keyboard instead of selecting the layer.
+
+  GUI-only by ruling: this changes no operation, no pixel and no file
+  format, so there is nothing for the CLI or the desktop to mirror.
+
+### Fixed
+- **A damaged OpenRaster file is refused as bad input instead of leaking
+  `BadZipFile` (#425).**
+  The loader caught `zipfile.BadZipFile` around the archive's *constructor*
+  only, so a file that opened as a zip and then failed on a member's own
+  header — or on a central directory the constructor had not read yet —
+  escaped as an unhandled exception. The fuzz suite has been finding this
+  intermittently since it landed: it flips bits in a file the engine wrote,
+  and where a flipped bit lands depends on the ZIP's timestamps, so the same
+  suite leaked on some runs and passed on others. The member read and the
+  member list are classified now, in both the loader and the desktop's
+  OpenRaster preview, with a regression test that damages an archive the
+  same way every time.
+
+## [2.38.5] — Unreleased
+
+### Added
+- **Adversarial fuzzing suite for the engine
+  ([#425](https://github.com/CryptoJones/Photoslop/issues/425)).**
+  `tests/test_fuzz_engine.py` enumerates every op in `cli.OPS`, every filter in
+  `available_filters()` and every format decoder from the registries, so a new
+  op or filter is fuzzed the day it is registered. Each is fed extreme values
+  (`-1`, `0`, `1e9`, `inf`, `nan`, 40-digit numbers, 5 000-character strings,
+  NUL, JSON of the wrong shape), empty and inverted selections, one-pixel and
+  one-row images, random bytes, truncated and bit-flipped files, a valid magic
+  number followed by garbage, and headers that declare 10-gigapixel canvases.
+  The contract: succeed with clamped parameters, or refuse with a classified
+  error — at the CLI any documented exit code but `1` (`internal_error`), at
+  the engine (`apply_pipeline`, what the MCP server calls) a `ValueError` or
+  `OSError` — never an unhandled exception, a hang (`faulthandler` kills a case
+  past 120 s) or an allocation the resource budget did not approve (oversized
+  headers must be refused in under two seconds). Runs in about 11 s.
+
+### Fixed
+- **Six internal-error leaks the suite found, all now classified refusals
+  ([#425](https://github.com/CryptoJones/Photoslop/issues/425)):**
+  `--vector-op -1`, `--artboard-op -1` and `--effect []` parsed as JSON and
+  then called `.pop` or indexed into a number or an empty list
+  (`AttributeError`/`IndexError`); `_json_value` now pins the top-level type.
+  `beam-dither` on a selection or layer smaller than its conditioning blur
+  radius failed in `_box_blur_plane` with a numpy broadcast error; the radius
+  is now clamped to the plane's extent per axis. An SVG with
+  `width="inf"` or `nan` overflowed `int()`; dimensions must be finite and in
+  range before rounding. A `.ora` that is not a zip archive raised
+  `zipfile.BadZipFile`; it is now a `ValueError`. A corrupt or non-raw file
+  with a camera-raw extension surfaced LibRaw's own exception family; both
+  `load_raw` and `develop_raw` now raise `ValueError`. Each of these reached
+  the desktop app's Open and the MCP tools through the same code paths.
+
+## [2.38.4] — Unreleased
+
+### Security
+- **The `security` workflow is green again: five dependency advisories
+  cleared in `uv.lock`
+  ([#440](https://github.com/CryptoJones/Photoslop/issues/440)).** pillow 12.3.0 → 13.0.0 (37 advisories, CVE-2026-112390
+  through CVE-2026-112906), filelock 3.31.2 → 4.2.5 (CVE-2026-112907/-112913/
+  -112940), certifi 2026.6.17 → 2026.10.23 (PYSEC-2026-4320), setuptools 83.0.0
+  → 84.2.1, opentelemetry-api 1.44.0 → 1.45.2 and msgpack 1.2.1 → 1.2.3
+  (CVE-2026-114613, published after that run). The audit had been failing on
+  `main` since the 2026-10-27 scheduled run.
+
+### Removed
+- **Python 3.10 support** — `requires-python = ">=3.11"`. The fixed pillow and
+  filelock releases need 3.11+, so keeping 3.10 split the lock and left that
+  fork on the vulnerable versions, which the 3.12 audit runner could not see.
+  3.10 reaches end of life this month. The Ubuntu 3.10 CI leg is now 3.11; ruff
+  targets py311; the README badge and distribution notes say 3.11+.
 ## [2.38.3] — Unreleased
 
 ### Changed

@@ -729,7 +729,8 @@ def _mapped(path: str):
         try:
             yield mm
         finally:
-            mm.close()
+            with contextlib.suppress(BufferError):
+                mm.close()
 
 
 def _read_resources(rd: _Reader) -> tuple[float, bytes | None]:

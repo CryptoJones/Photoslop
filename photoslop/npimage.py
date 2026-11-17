@@ -350,17 +350,26 @@ def puppet_warp(img: QImage, pins: list) -> QImage:
 
 
 def _box_blur_plane(c: np.ndarray, r: int) -> np.ndarray:
-    k = 2 * r + 1
-    csum = np.cumsum(c, axis=0)
-    c = (
-        np.vstack((csum[r:], np.repeat(csum[-1:], r, axis=0)))
-        - np.vstack((np.zeros((r + 1, c.shape[1]), np.float32), csum[: -r - 1]))
-    ) / k
-    csum = np.cumsum(c, axis=1)
-    c = (
-        np.hstack((csum[:, r:], np.repeat(csum[:, -1:], r, axis=1)))
-        - np.hstack((np.zeros((c.shape[0], r + 1), np.float32), csum[:, : -r - 1]))
-    ) / k
+    # The cumsum/vstack trick needs r < the extent along the axis it blurs: with
+    # r >= n the zero pad has more rows than the plane and the two stacks no
+    # longer line up (a 1x1 plane under beam-dither's conditioning blur, #425).
+    # A plane narrower than the radius is blurred by as much as it has.
+    ry = max(0, min(r, c.shape[0] - 1))
+    rx = max(0, min(r, c.shape[1] - 1))
+    if ry:
+        k = 2 * ry + 1
+        csum = np.cumsum(c, axis=0)
+        c = (
+            np.vstack((csum[ry:], np.repeat(csum[-1:], ry, axis=0)))
+            - np.vstack((np.zeros((ry + 1, c.shape[1]), np.float32), csum[: -ry - 1]))
+        ) / k
+    if rx:
+        k = 2 * rx + 1
+        csum = np.cumsum(c, axis=1)
+        c = (
+            np.hstack((csum[:, rx:], np.repeat(csum[:, -1:], rx, axis=1)))
+            - np.hstack((np.zeros((c.shape[0], rx + 1), np.float32), csum[:, : -rx - 1]))
+        ) / k
     return c
 
 

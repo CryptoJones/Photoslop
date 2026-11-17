@@ -10,8 +10,15 @@ sync — check an item here when its issue closes.
 
 - [ ] PSD interchange follow-up: carry blend modes, groups and masks on iPad
   once its layer model has them (baked effects/adjustments on export, 32-bit
-  float open and iPad document-browser open shipped in v2.39.0)
+  float open and iPad document-browser open shipped in v2.41.0)
   ([#436](https://github.com/CryptoJones/Photoslop/issues/436))
+
+### Testing
+
+- [ ] iOS: adversarial decoder tests for the Swift ORA and image importers —
+  the iPad/iPhone half of the #425 fuzz suite, which covers the Python engine
+  the desktop GUI and CLI share
+  ([#438](https://github.com/CryptoJones/Photoslop/issues/438))
 
 ### CI
 
@@ -55,6 +62,38 @@ more testing. Both issues carry the `on-hold` label.
   ([#257](https://github.com/CryptoJones/Photoslop/issues/257))
 
 ## Done
+
+- [x] iOS interface redone for iPhone and iPad: the phone's dock is three
+  fixed strips — the tool in hand and what a finger should do with it, the
+  tool's settings, and the palette — so nothing in it scrolls and the brush
+  width can no longer sit off the end of the screen; the nine tools share the
+  width instead of taking a fixed 44pt each, which overflowed a 375pt phone
+  and pushed the Eyedropper off the edge; every tool is named, on the iPad's
+  rail under its icon and in the phone's strip, with a one-line hint saying
+  whether it answers a tap or a drag; a selection's actions get a row of their
+  own and **Deselect** joins them; the ink swatch moved beside the rest of the
+  settings, so the Bucket's colour is visible on an iPad too; and the layers
+  panel is arranged by what a layer can do to it, with a layer's name editable
+  only on the layer already in hand
+  ([#443](https://github.com/CryptoJones/Photoslop/issues/443)) — shipped
+  v2.40.0
+
+- [x] Adversarial fuzzing suite: every CLI op, every filter parameter and every
+  format decoder is fed extreme, malformed and boundary inputs and must succeed
+  or refuse with a classified error, never an internal one, a hang or an
+  unbounded allocation; it found and fixed six leaks (JSON ops given a non-object,
+  beam-dither on a plane smaller than its blur radius, SVG `inf` dimensions,
+  non-zip `.ora`, LibRaw errors, and oversized headers reaching the decoder)
+  ([#425](https://github.com/CryptoJones/Photoslop/issues/425)) — shipped
+  v2.38.5
+
+- [x] The `security` workflow failed on `main` from 2026-10-27: 44 advisories in
+  five locked packages (pillow, filelock, certifi, setuptools,
+  opentelemetry-api). Relocked to the fixed releases; the fixed pillow and
+  filelock need Python 3.11+, so 3.10 (end of life this month) is dropped
+  rather than left on a vulnerable fork of the lock
+  ([#440](https://github.com/CryptoJones/Photoslop/issues/440)) — shipped
+  v2.38.4
 
 - [x] Zooming in on a 2048px document drove the app past 1 GB (the PencilKit
   drawing view was the whole canvas magnified by the scroll view, rendered at

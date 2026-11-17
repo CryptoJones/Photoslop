@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 import os
+import zipfile
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
@@ -159,12 +160,31 @@ def validate_archive_members(
     return by_name
 
 
+def archive_infos(zf, *, operation: str = "archive") -> list:
+    """The archive's member list, or a classified refusal.
+
+    ``ZipFile.infolist`` reads the central directory, and a damaged one
+    raises ``BadZipFile`` — an exception that looks internal for what is
+    simply a corrupt file. Every decoder that reads an archive has to turn
+    it into a ``ValueError`` (#425).
+    """
+    try:
+        return zf.infolist()
+    except zipfile.BadZipFile as exc:
+        raise ValueError(f"{operation}: corrupt archive ({exc})") from exc
+
+
 def read_archive_member(
     zf, info, *, operation: str, budget: ResourceBudget = DESKTOP_BUDGET
 ) -> bytes:
     maximum = min(info.file_size, budget.max_entry_bytes)
-    with zf.open(info, "r") as handle:
-        data = handle.read(maximum + 1)
+    try:
+        with zf.open(info, "r") as handle:
+            data = handle.read(maximum + 1)
+    except zipfile.BadZipFile as exc:
+        # A member whose own local header is damaged raises here, not at the
+        # archive's constructor (#425).
+        raise ValueError(f"{operation}: corrupt archive member ({exc})") from exc
     if len(data) != info.file_size or len(data) > budget.max_entry_bytes:
         raise ResourceLimitError(f"{operation}: member size changed while reading")
     return data

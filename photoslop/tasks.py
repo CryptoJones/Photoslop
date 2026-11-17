@@ -8,16 +8,16 @@ import traceback
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum, IntEnum
 from typing import Any
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
-_UTC = timezone.utc
+_UTC = UTC
 
 
-class TaskState(str, Enum):
+class TaskState(str, Enum):  # noqa: UP042 — keep str(state) as it was; StrEnum would change it
     QUEUED = "queued"
     RUNNING = "running"
     SUCCEEDED = "succeeded"

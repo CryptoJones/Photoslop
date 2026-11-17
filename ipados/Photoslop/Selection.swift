@@ -431,6 +431,15 @@ enum SelectionCombine: String, CaseIterable, Identifiable {
     }
   }
 
+  /// The name that fits on a strip, where the full one does not.
+  var shortName: String {
+    switch self {
+    case .replace: "Replace"
+    case .add: "Add"
+    case .subtract: "Subtract"
+    }
+  }
+
   var symbolName: String {
     switch self {
     case .replace: "square.dashed"

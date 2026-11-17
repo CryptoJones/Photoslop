@@ -577,6 +577,55 @@ where the keyboard shortcuts live.
 
 ---
 
+## DD-017 — The chrome is arranged in fixed bands, and nothing in it scrolls
+
+**Status: Accepted (2026-11-12).**
+
+Refines DD-016's placement of the selection's actions, and the two strips the
+dock used to be, in the light of what was measured on a real phone
+([#443](https://github.com/CryptoJones/Photoslop/issues/443)).
+
+**A control is on screen or it is not in the interface.** The phone's options
+strip was a horizontal `ScrollView` with no indicator, so a control past the
+end of the screen was not merely off-screen — it was absent, with nothing to
+say so. The brush width, the control a painting app touches most, was measured
+at x=415.7 on a 402pt iPhone. An indicator-free scroll view is a strip whose
+overflow does not look like overflow, which is the same defect as UIKit's own
+overflow menu behind an unlabelled chevron (#227) one layer down. So the dock
+is three fixed bands — the tool in hand and what a finger should do with it,
+the tool's settings, and the palette — and nothing in it scrolls. The
+selection's actions, which used to be appended to the settings band, now have
+a band of their own (DD-016's group, kept), so adding them no longer costs
+the brush width its place.
+
+**The palette shares the width; it does not take a fixed slot.** Nine tools at
+a fixed 44pt are 396pt, which overflows a 375pt phone and pushed the last tool
+off the edge. Sharing the width keeps all nine on screen at every size, and
+the smallest of them still clears the 40pt floor the UI tests measure against.
+
+**A control that can widen the layout is a defect.** The first version of this
+put the selection's actions and the tool's settings on one line of the iPad's
+capsule. Six buttons plus a slider is wider than an iPad mini's bar, and the
+overflow did not merely look wrong: it took the layout with it, and the canvas
+and the tool rail lost their bounds. So the capsule gives the selection's
+actions a row of their own, the sliders are given a width they can give up,
+and the rule that a vertical rule between two groups must have a height — a
+one-point shape is greedy in both directions, and one such rule once made a
+palette 300pt tall.
+
+**A palette of glyphs is a set of guesses.** The iPad's rail names every tool
+under its icon, and the strip that names the tool in hand says whether it
+answers a tap or a drag — three of the nine answer a tap and six answer a
+stroke, and no icon says which. The names are decoration for the eye; the
+accessibility identifiers the UI tests drive stay exactly what they were.
+
+**A layer's name is editable only on the layer in hand.** A text field on
+every row meant that tapping a layer's name opened the keyboard instead of
+selecting the layer — the one thing a tap on a layer is for — and the layer
+just tapped was not the one that got the paint.
+
+---
+
 *New decisions get the next DD number. Reversing one requires a new entry
 that names the entry it supersedes — history is append-only.*
 

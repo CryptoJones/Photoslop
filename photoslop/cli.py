@@ -392,19 +392,30 @@ def _op_stroke(ctx: Context, value: str) -> None:
         layer.fx_cache = None
 
 
-def _json_value(value: str, option: str):
+def _json_value(value: str, option: str, expect: type | tuple[type, ...] | None = None):
+    """Parsed JSON, or a usage error. ``expect`` pins the top-level type: a JSON
+    document is also ``-1``, ``null`` or ``[]``, and an op that then calls
+    ``.pop`` or indexes into it leaked an AttributeError/IndexError as an
+    internal error (#425)."""
     try:
-        return json.loads(value)
+        parsed = json.loads(value)
     except json.JSONDecodeError as exc:
         raise _ValueError(f"{option}: invalid JSON: {exc.msg}") from exc
+    if expect is not None and not isinstance(parsed, expect):
+        names = {dict: "object", list: "array"}
+        kinds = expect if isinstance(expect, tuple) else (expect,)
+        wanted = " or ".join(names.get(kind, kind.__name__) for kind in kinds)
+        raise _ValueError(f"{option}: expected a JSON {wanted}")
+    return parsed
 
 
 def _op_effect(ctx: Context, value: str) -> None:
     from photoslop.appearance import normalize_effect
 
     try:
-        effect = normalize_effect(_json_value(value, "--effect"))
-    except ValueError as exc:
+        # An object, or the historical tuple form normalize_effect still migrates.
+        effect = normalize_effect(_json_value(value, "--effect", expect=(dict, list)))
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError) as exc:
         raise _ValueError(f"--effect: {exc}") from exc
     for layer in _target_layers(ctx):
         layer.effects = [*layer.effects, effect]
@@ -414,10 +425,11 @@ def _op_effect(ctx: Context, value: str) -> None:
 def _op_set_effects(ctx: Context, value: str) -> None:
     from photoslop.appearance import normalize_effects
 
-    parsed = _json_value(value, "--set-effects")
-    if not isinstance(parsed, list):
-        raise _ValueError("--set-effects: expected a JSON array")
-    effects = normalize_effects(parsed)
+    parsed = _json_value(value, "--set-effects", expect=list)
+    try:
+        effects = normalize_effects(parsed)
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError) as exc:
+        raise _ValueError(f"--set-effects: {exc}") from exc
     if len(effects) != len(parsed):
         raise _ValueError("--set-effects: contains an invalid effect")
     for layer in _target_layers(ctx):
@@ -942,12 +954,11 @@ def _op_shape(ctx: Context, value: str) -> None:
 
 
 def _op_vector_op(ctx: Context, value: str) -> None:
-    import json
 
     from photoslop import vectorops
 
+    spec = _json_value(value, "--vector-op", expect=dict)
     try:
-        spec = json.loads(value)
         operation = spec.pop("op")
         ids = spec.pop("ids", list(ctx.doc.vector_selection))
         if operation == "select":
@@ -968,7 +979,7 @@ def _op_vector_op(ctx: Context, value: str) -> None:
             vectorops.boolean_path(ctx.doc, ids, spec.pop("operation"))
         else:
             raise ValueError(f"unknown operation {operation!r}")
-    except (IndexError, KeyError, TypeError, ValueError) as exc:
+    except (IndexError, KeyError, TypeError, ValueError, AttributeError) as exc:
         raise _ValueError(f"--vector-op: {exc}") from exc
 
 
@@ -1093,15 +1104,14 @@ def _op_add_artboard(ctx: Context, value: str) -> None:
 
 
 def _op_artboard_op(ctx: Context, value: str) -> None:
-    import json
 
     from photoslop import artboards
 
+    spec = _json_value(value, "--artboard-op", expect=dict)
     try:
-        spec = json.loads(value)
         operation = spec.pop("op")
         artboards.edit(ctx.doc, operation, **spec)
-    except (IndexError, KeyError, TypeError, ValueError) as exc:
+    except (IndexError, KeyError, TypeError, ValueError, AttributeError) as exc:
         raise _ValueError(f"--artboard-op: {exc}") from exc
 
 

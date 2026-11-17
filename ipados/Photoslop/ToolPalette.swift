@@ -17,25 +17,50 @@ import SwiftUI
 struct ToolButton: View {
   let tool: BrushTool
   let isSelected: Bool
+  /// Put the tool's name under its icon, for the places with room for one.
+  var showsCaption = false
+  /// Share the width of the slot the palette gives it, rather than taking a
+  /// fixed one. Nine fixed 44pt buttons are 396pt, which overflows a 375pt
+  /// phone and pushes the last tool off the edge; sharing the width keeps all
+  /// nine on screen at any phone size, and the smallest of them still clears
+  /// the 40pt floor a finger needs.
+  var fillsWidth = false
   let action: () -> Void
 
   var body: some View {
     Button(action: action) {
-      Image(systemName: tool.symbolName)
-        .font(.system(size: 18, weight: .medium))
-        .frame(width: Studio.iconSide, height: Studio.iconSide)
-        .foregroundStyle(isSelected ? Color.black : Color.primary)
-        .background(
-          isSelected ? Studio.accent : Color.clear,
-          in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-        )
-        .contentShape(Rectangle())
+      VStack(spacing: 2) {
+        Image(systemName: tool.symbolName)
+          .font(.system(size: 18, weight: .medium))
+          .foregroundStyle(isSelected ? Color.black : Color.primary)
+          .frame(width: Studio.iconSide, height: Studio.iconSide)
+          .frame(maxWidth: fillsWidth ? .infinity : nil)
+          .background(
+            isSelected ? Studio.accent : Color.clear,
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+          )
+        if showsCaption {
+          Text(tool.caption)
+            .font(.system(size: 9, weight: .medium))
+            .foregroundStyle(isSelected ? Studio.accent : Color.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .accessibilityHidden(true)
+        }
+      }
+      .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .frame(minWidth: 44, minHeight: 44)
+    .frame(
+      minWidth: fillsWidth ? nil : Studio.touchSide,
+      minHeight: Studio.touchSide
+    )
     .accessibilityIdentifier(tool.displayName)
     .accessibilityLabel(isSelected ? "Tool, \(tool.displayName)" : tool.displayName)
     .accessibilityAddTraits(isSelected ? .isSelected : [])
+    // What the finger should do with this tool. Three of the nine answer a tap
+    // and the rest answer a drag, and an icon does not say which.
+    .accessibilityHint(tool.usageHint)
   }
 }
 
@@ -45,11 +70,37 @@ struct ToolButtons: View {
   /// Stretch each button to share the width — the phone dock's layout, where
   /// nine tools divide the row rather than scrolling off it.
   var fills = false
+  /// Name each tool under its icon. The rail on an iPad has the height for it;
+  /// the phone's dock has the width but not the height.
+  var showsCaption = false
+  /// Hairlines between the families of tool — draw, fill, select, pick.
+  var showsGroups = false
+
+  /// The tools with a rule in front of each new family.
+  private var entries: [(tool: BrushTool, startsFamily: Bool)] {
+    var result: [(tool: BrushTool, startsFamily: Bool)] = []
+    var previous: BrushTool.Family?
+    for candidate in BrushTool.allCases {
+      result.append((candidate, previous != nil && candidate.family != previous))
+      previous = candidate.family
+    }
+    return result
+  }
 
   var body: some View {
-    ForEach(BrushTool.allCases) { candidate in
-      ToolButton(tool: candidate, isSelected: candidate == tool) { tool = candidate }
-        .frame(maxWidth: fills ? .infinity : nil)
+    ForEach(entries, id: \.tool.id) { entry in
+      if showsGroups, entry.startsFamily {
+        VerticalRule()
+      }
+      ToolButton(
+        tool: entry.tool,
+        isSelected: entry.tool == tool,
+        showsCaption: showsCaption,
+        fillsWidth: fills
+      ) {
+        tool = entry.tool
+      }
+      .frame(maxWidth: fills ? .infinity : nil)
     }
   }
 }
