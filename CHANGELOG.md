@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.41.0] — Unreleased
+## [2.42.0] — Unreleased
 
 ### Added
 - **Make Work Path from Selection on all three platforms** — converts raster
@@ -17,6 +17,10 @@ follows [SemVer](https://semver.org).
   with SVG path data in document info and vector layer creation; iPad/iPhone:
   `Make Vector Path` action on active selections in the selection strip and
   Select menu ([#424](https://github.com/CryptoJones/Photoslop/issues/424)).
+
+## [2.41.0] — Unreleased
+
+### Added
 - **Photoshop `.psd`/`.psb` open and export on all three platforms** — a
   dependency-free codec (`photoslop/io_psd.py`, `PSDCodec.swift`) that writes
   8-bit RGB with per-layer RLE channels, offsets, opacity, fill opacity,
