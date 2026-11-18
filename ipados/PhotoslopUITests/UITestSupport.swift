@@ -74,7 +74,7 @@ class UITestCase: XCTestCase {
 
     let create = app.buttons["Create Document"].firstMatch
     if create.waitForExistence(timeout: 180) {
-      create.tap()
+      create.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
       let useThisSize = app.buttons["Use This Size"].firstMatch
       if useThisSize.waitForExistence(timeout: 120) {
         useThisSize.tap()
@@ -367,12 +367,19 @@ extension XCUIApplication {
       }
       return false
     }
+    func tapCreate() {
+      if create.isHittable {
+        create.tap()
+      } else {
+        create.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+      }
+    }
     func tapUntilItTakes() {
-      create.tap()
+      tapCreate()
       for _ in 1...3 {
         if tapTook() { break }
-        guard create.waitForExistence(timeout: 5), create.isHittable else { break }
-        create.tap()
+        guard create.waitForExistence(timeout: 5) else { break }
+        tapCreate()
       }
     }
     /// True once the browser has sat on its greyed-out cell for a minute with

@@ -11,12 +11,7 @@ import XCTest
 /// `FFFFE8B1` on every platform — the desktop wrote that value.
 final class FilterUITests: UITestCase {
   func testSepiaFromTheFiltersMenuChangesTheLayerAndUndoRestoresIt() {
-    let app = openEditor()
-    // A fresh document, so the active layer is the white Background rather
-    // than a text layer an earlier test may have left active.
-    app.terminate()
-    _ = app.wait(for: .notRunning, timeout: 30)
-    app.openNewDocument()
+    let app = openFreshEditor()
 
     let probe = app.staticTexts["Pixel probe"].firstMatch
     XCTAssertTrue(probe.waitForExistence(timeout: 10), "the pixel probe is not exposed")
@@ -49,10 +44,7 @@ final class FilterUITests: UITestCase {
   }
 
   func testCancelLeavesTheLayerAlone() {
-    let app = openEditor()
-    app.terminate()
-    _ = app.wait(for: .notRunning, timeout: 30)
-    app.openNewDocument()
+    let app = openFreshEditor()
     let probe = app.staticTexts["Pixel probe"].firstMatch
     XCTAssertTrue(probe.waitForExistence(timeout: 10))
 
@@ -68,10 +60,7 @@ final class FilterUITests: UITestCase {
   /// no Apply step — the way the desktop's Ctrl+I works (#389). An opaque white
   /// background inverts to opaque black, and Undo restores it.
   func testInvertFromTheFiltersMenuInvertsAndUndoRestoresIt() {
-    let app = openEditor()
-    app.terminate()
-    _ = app.wait(for: .notRunning, timeout: 30)
-    app.openNewDocument()
+    let app = openFreshEditor()
 
     let probe = app.staticTexts["Pixel probe"].firstMatch
     XCTAssertTrue(probe.waitForExistence(timeout: 10), "the pixel probe is not exposed")
