@@ -298,6 +298,41 @@ CASES = [
         {},
         "the same alpha traps on a 22x18 canvas, exercising a band boundary",
     ),
+    (
+        "color-lookup",
+        "warmFilm",
+        "gradient16",
+        {"preset": "Warm Film", "intensity": 100},
+        "Warm Film preset at 100% intensity: amber warmth and film contrast",
+    ),
+    (
+        "color-lookup",
+        "tealOrange50",
+        "gradient16",
+        {"preset": "Teal & Orange", "intensity": 50},
+        "Teal & Orange preset at 50% intensity: blended half-strength",
+    ),
+    (
+        "color-lookup",
+        "fadedMono",
+        "gradient22",
+        {"preset": "Faded Monochrome", "intensity": 100},
+        "Faded Monochrome vintage matte film on larger 22x18 canvas",
+    ),
+    (
+        "color-lookup",
+        "coolCrisp",
+        "gradient16",
+        {"preset": "Cool Crisp", "intensity": 100},
+        "Cool Crisp preset at 100% intensity: high contrast cool grade",
+    ),
+    (
+        "color-lookup",
+        "bleachBypass",
+        "gradient16",
+        {"preset": "Bleach Bypass", "intensity": 100},
+        "Bleach Bypass preset at 100% intensity: desaturated high contrast",
+    ),
 ]
 
 
@@ -370,6 +405,13 @@ def main() -> int:
             # reconstruction of them (#389).
             cls = None
             adjust.apply_luts(img, adjust.invert_luts())
+        elif filter_name == "color-lookup":
+            cls = None
+            from photoslop.lut3d import apply_lut3d, get_preset_lut
+
+            lut = get_preset_lut(params["preset"])
+            intensity = params.get("intensity", 100) / 100.0
+            apply_lut3d(img, lut, intensity=intensity)
         else:
             cls = registry[filter_name]
             cls().apply(img, dict(params))

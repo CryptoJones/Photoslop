@@ -92,6 +92,8 @@ enum FilterKind: String, CaseIterable, Identifiable {
   /// adjustment ported so far (#389). It takes no parameters, so a filter row
   /// with no `ParamSpec`s applies it directly instead of opening a sheet.
   case invert
+  /// `Image ▸ Adjustments ▸ Color Lookup` / `photoslop-cli --color-lookup` (#422).
+  case colorLookup = "color-lookup"
 
   var id: String { rawValue }
 
@@ -107,6 +109,7 @@ enum FilterKind: String, CaseIterable, Identifiable {
     case .filmNegative: return "Film Negative → Positive"
     case .beamDither: return "Beam Dither"
     case .invert: return "Invert"
+    case .colorLookup: return "Color Lookup"
     }
   }
 
@@ -189,6 +192,26 @@ enum FilterKind: String, CaseIterable, Identifiable {
       ]
     case .invert:
       return []
+    case .colorLookup:
+      return [
+        FilterParamSpec(
+          name: "preset", label: "Preset",
+          kind: .choice(
+            options: [
+              "Warm Film",
+              "Cool Crisp",
+              "Bleach Bypass",
+              "Teal & Orange",
+              "Faded Monochrome",
+            ],
+            default: "Warm Film"
+          )
+        ),
+        FilterParamSpec(
+          name: "intensity", label: "Intensity",
+          kind: .int(min: 0, max: 100, default: 100)
+        ),
+      ]
     }
   }
 
@@ -205,7 +228,7 @@ enum FilterKind: String, CaseIterable, Identifiable {
     case .denoise: return 2
     case .datamosh: return 2
     case .retroConsole: return 1
-    case .sepia, .pixelate, .pixelSort, .filmNegative, .invert: return 0
+    case .sepia, .pixelate, .pixelSort, .filmNegative, .invert, .colorLookup: return 0
     // The luminance plane, the downscaled working plane, and the rendered
     // tone plane, all Double and all alive together.
     case .beamDither: return 3
@@ -245,6 +268,11 @@ enum FilterKind: String, CaseIterable, Identifiable {
       FilterAlgorithms.filmNegative(&buffer, mode: mode, clip: params.float("clip", default: 0.5))
     case .invert:
       FilterAlgorithms.invert(&buffer)
+    case .colorLookup:
+      FilterAlgorithms.colorLookup(
+        &buffer,
+        preset: params.choice("preset", default: "Warm Film"),
+        intensity: params.int("intensity", default: 100))
     }
   }
 }

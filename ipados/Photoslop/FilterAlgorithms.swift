@@ -841,4 +841,210 @@ extension FilterAlgorithms {
       }
     }
   }
+
+  // MARK: - Color Lookup (3D LUT)
+
+  static func presetWarmFilm(r: Float, g: Float, b: Float) -> (Float, Float, Float) {
+    let cr = Float(0.75) * r + Float(0.25) * (r * r * (Float(3.0) - Float(2.0) * r))
+    let cg = Float(0.75) * g + Float(0.25) * (g * g * (Float(3.0) - Float(2.0) * g))
+    let cb = Float(0.75) * b + Float(0.25) * (b * b * (Float(3.0) - Float(2.0) * b))
+    let ro = cr * Float(1.06) + Float(0.03) * (Float(1.0) - cr)
+    let go = cg * Float(1.01) + Float(0.01) * (Float(1.0) - cg)
+    let bo = cb * (Float(0.88) + Float(0.12) * cb) + Float(0.01) * (Float(1.0) - cb)
+    return (min(max(ro, 0), 1), min(max(go, 0), 1), min(max(bo, 0), 1))
+  }
+
+  static func presetCoolCrisp(r: Float, g: Float, b: Float) -> (Float, Float, Float) {
+    let sr = r * r * (Float(3.0) - Float(2.0) * r)
+    let sg = g * g * (Float(3.0) - Float(2.0) * g)
+    let sb = b * b * (Float(3.0) - Float(2.0) * b)
+    let cr = Float(0.6) * r + Float(0.4) * sr
+    let cg = Float(0.6) * g + Float(0.4) * sg
+    let cb = Float(0.6) * b + Float(0.4) * sb
+    let ro = cr * (Float(0.92) + Float(0.08) * cr)
+    let go = cg * Float(1.01)
+    let bo = cb * Float(1.08) + Float(0.02) * (Float(1.0) - cb)
+    return (min(max(ro, 0), 1), min(max(go, 0), 1), min(max(bo, 0), 1))
+  }
+
+  static func presetBleachBypass(r: Float, g: Float, b: Float) -> (Float, Float, Float) {
+    let y = Float(0.299) * r + Float(0.587) * g + Float(0.114) * b
+    let dr = Float(0.35) * r + Float(0.65) * y
+    let dg = Float(0.35) * g + Float(0.65) * y
+    let db = Float(0.35) * b + Float(0.65) * y
+    let yCurve = y * y * (Float(3.0) - Float(2.0) * y)
+    let ro = (Float(1.0) - Float(2.0) * yCurve) * (dr * dr) + Float(2.0) * yCurve * dr
+    let go = (Float(1.0) - Float(2.0) * yCurve) * (dg * dg) + Float(2.0) * yCurve * dg
+    let bo = (Float(1.0) - Float(2.0) * yCurve) * (db * db) + Float(2.0) * yCurve * db
+    return (min(max(ro, 0), 1), min(max(go, 0), 1), min(max(bo, 0), 1))
+  }
+
+  static func presetTealOrange(r: Float, g: Float, b: Float) -> (Float, Float, Float) {
+    let y = Float(0.299) * r + Float(0.587) * g + Float(0.114) * b
+    let wo = min(max((y - Float(0.35)) / Float(0.65), 0), 1)
+    var ro = r + Float(0.18) * wo * (Float(1.0) - r)
+    var go = g + Float(0.05) * wo * (Float(1.0) - g)
+    var bo = b - Float(0.14) * wo * b
+
+    let wt = min(max((Float(0.65) - y) / Float(0.65), 0), 1)
+    ro = ro - Float(0.12) * wt * ro
+    go = go + Float(0.05) * wt * (Float(1.0) - go)
+    bo = bo + Float(0.20) * wt * (Float(1.0) - bo)
+
+    ro = Float(0.8) * ro + Float(0.2) * (ro * ro * (Float(3.0) - Float(2.0) * ro))
+    go = Float(0.8) * go + Float(0.2) * (go * go * (Float(3.0) - Float(2.0) * go))
+    bo = Float(0.8) * bo + Float(0.2) * (bo * bo * (Float(3.0) - Float(2.0) * bo))
+    return (min(max(ro, 0), 1), min(max(go, 0), 1), min(max(bo, 0), 1))
+  }
+
+  static func presetFadedMonochrome(r: Float, g: Float, b: Float) -> (Float, Float, Float) {
+    let y = Float(0.299) * r + Float(0.587) * g + Float(0.114) * b
+    let yFade = Float(0.08) + Float(0.84) * y
+    let ro = yFade * Float(1.02) + Float(0.01)
+    let go = yFade * Float(1.00)
+    let bo = yFade * Float(0.96)
+    return (min(max(ro, 0), 1), min(max(go, 0), 1), min(max(bo, 0), 1))
+  }
+
+  static func makePresetLUT(_ preset: String, size: Int = 17) -> [Float] {
+    let norm = preset.lowercased().replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ")
+    let transform: (Float, Float, Float) -> (Float, Float, Float)
+    if norm.contains("warm") {
+      transform = presetWarmFilm
+    } else if norm.contains("cool") {
+      transform = presetCoolCrisp
+    } else if norm.contains("bleach") {
+      transform = presetBleachBypass
+    } else if norm.contains("teal") {
+      transform = presetTealOrange
+    } else if norm.contains("mono") || norm.contains("fade") {
+      transform = presetFadedMonochrome
+    } else {
+      transform = { ($0, $1, $2) }
+    }
+
+    var table = [Float](repeating: 0, count: size * size * size * 3)
+    let invMax = Float(1.0) / Float(size - 1)
+    var idx = 0
+    for r in 0..<size {
+      let rf = Float(r) * invMax
+      for g in 0..<size {
+        let gf = Float(g) * invMax
+        for b in 0..<size {
+          let bf = Float(b) * invMax
+          let (outR, outG, outB) = transform(rf, gf, bf)
+          table[idx] = outR
+          table[idx + 1] = outG
+          table[idx + 2] = outB
+          idx += 3
+        }
+      }
+    }
+    return table
+  }
+
+  static func colorLookup(_ buffer: inout PixelBuffer, preset: String, intensity: Int = 100) {
+    let intensityWeight = Float(max(0, min(100, intensity))) / Float(100.0)
+    guard intensityWeight > 0 else { return }
+
+    let size = 17
+    let lutTable = makePresetLUT(preset, size: size)
+    let maxCoord = Float(size - 1)
+
+    let width = buffer.width, height = buffer.height
+    buffer.withMutableWords { words in
+      PixelBuffer.forEachBand(height: height) { rows in
+        for index in (rows.lowerBound * width)..<(rows.upperBound * width) {
+          let word = words[index]
+          let a = alpha(word)
+          if a == 0 { continue }
+          let safeA = max(a, 1)
+          let origR = min(255, red(word) * 255 / safeA)
+          let origG = min(255, green(word) * 255 / safeA)
+          let origB = min(255, blue(word) * 255 / safeA)
+
+          let rf = Float(origR) / Float(255.0) * maxCoord
+          let gf = Float(origG) / Float(255.0) * maxCoord
+          let bf = Float(origB) / Float(255.0) * maxCoord
+
+          let r0 = Int(rf)
+          let r1 = min(r0 + 1, size - 1)
+          let dr = rf - Float(r0)
+
+          let g0 = Int(gf)
+          let g1 = min(g0 + 1, size - 1)
+          let dg = gf - Float(g0)
+
+          let b0 = Int(bf)
+          let b1 = min(b0 + 1, size - 1)
+          let db = bf - Float(b0)
+
+          @inline(__always) func sampleRGB(_ r: Int, _ g: Int, _ b: Int) -> (Float, Float, Float) {
+            let offset = ((r * size + g) * size + b) * 3
+            return (lutTable[offset], lutTable[offset + 1], lutTable[offset + 2])
+          }
+
+          let (c000_r, c000_g, c000_b) = sampleRGB(r0, g0, b0)
+          let (c100_r, c100_g, c100_b) = sampleRGB(r1, g0, b0)
+          let (c010_r, c010_g, c010_b) = sampleRGB(r0, g1, b0)
+          let (c110_r, c110_g, c110_b) = sampleRGB(r1, g1, b0)
+          let (c001_r, c001_g, c001_b) = sampleRGB(r0, g0, b1)
+          let (c101_r, c101_g, c101_b) = sampleRGB(r1, g0, b1)
+          let (c011_r, c011_g, c011_b) = sampleRGB(r0, g1, b1)
+          let (c111_r, c111_g, c111_b) = sampleRGB(r1, g1, b1)
+
+          let c00_r = c000_r + (c100_r - c000_r) * dr
+          let c00_g = c000_g + (c100_g - c000_g) * dr
+          let c00_b = c000_b + (c100_b - c000_b) * dr
+
+          let c10_r = c010_r + (c110_r - c010_r) * dr
+          let c10_g = c010_g + (c110_g - c010_g) * dr
+          let c10_b = c010_b + (c110_b - c010_b) * dr
+
+          let c01_r = c001_r + (c101_r - c001_r) * dr
+          let c01_g = c001_g + (c101_g - c001_g) * dr
+          let c01_b = c001_b + (c101_b - c001_b) * dr
+
+          let c11_r = c011_r + (c111_r - c011_r) * dr
+          let c11_g = c011_g + (c111_g - c011_g) * dr
+          let c11_b = c011_b + (c111_b - c011_b) * dr
+
+          let c0_r = c00_r + (c10_r - c00_r) * dg
+          let c0_g = c00_g + (c10_g - c00_g) * dg
+          let c0_b = c00_b + (c10_b - c00_b) * dg
+
+          let c1_r = c01_r + (c11_r - c01_r) * dg
+          let c1_g = c01_g + (c11_g - c01_g) * dg
+          let c1_b = c01_b + (c11_b - c01_b) * dg
+
+          let lut_r = c0_r + (c1_r - c0_r) * db
+          let lut_g = c0_g + (c1_g - c0_g) * db
+          let lut_b = c0_b + (c1_b - c0_b) * db
+
+          let origRf = Float(origR)
+          let origGf = Float(origG)
+          let origBf = Float(origB)
+
+          let mappedRf = min(max(lut_r * Float(255.0), 0), Float(255.0))
+          let mappedGf = min(max(lut_g * Float(255.0), 0), Float(255.0))
+          let mappedBf = min(max(lut_b * Float(255.0), 0), Float(255.0))
+
+          let outR = origRf * (Float(1.0) - intensityWeight) + mappedRf * intensityWeight
+          let outG = origGf * (Float(1.0) - intensityWeight) + mappedGf * intensityWeight
+          let outB = origBf * (Float(1.0) - intensityWeight) + mappedBf * intensityWeight
+
+          let rFinal = UInt32(min(max(outR.rounded(.toNearestOrEven), 0), 255))
+          let gFinal = UInt32(min(max(outG.rounded(.toNearestOrEven), 0), 255))
+          let bFinal = UInt32(min(max(outB.rounded(.toNearestOrEven), 0), 255))
+
+          words[index] = pack(
+            a: a,
+            r: rFinal * a / 255,
+            g: gFinal * a / 255,
+            b: bFinal * a / 255
+          )
+        }
+      }
+    }
+  }
 }

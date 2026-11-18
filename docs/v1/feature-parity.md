@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v2.43.0** against six
+An honest, category-by-category comparison of **Photoslop v2.44.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -34,7 +34,7 @@ client exposes it.
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 2.43.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
+| **Photoslop** | 2.44.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
@@ -102,6 +102,7 @@ for the versioned platform screen-reader and visual smoke procedures.
 | Curves (monotone spline, per-channel) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Hue / Saturation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Color balance | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ (color balance rgb) | ✅ |
+| Color Lookup (3D LUT .cube/.3dl, trilinear interp) | ✅ (Desktop, CLI, iOS presets) | ✅ | 🟡 (via GEGL) | 🟡 (plugin) | 🟡 (profiles) | ✅ (lut 3d) | ❌ |
 | Lightroom-style Basic panel (temp/tint/exposure/…10 sliders) | ✅ (Adjust tab + `--adjust`) | 🟡 (Camera Raw) | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Layer↔document adjustment scope | ✅ | ✅ | ✅ | — | — | — | — |
 | Scene-referred / HDR pipeline | ❌ (8-bit display-referred) | ✅ (32-bit) | ✅ (32-bit float) | 🟡 (HDR display support) | ✅ (HDR edit/export) | ✅ (filmic/sigmoid/AgX) | ✅ |
@@ -151,7 +152,7 @@ for the versioned platform screen-reader and visual smoke procedures.
 |---|---|---|---|---|---|---|---|
 | Action/macro recording | ✅ [Actions](actions.md) | ✅ | 🟡 (script instead) | ❌ | 🟡 (presets/batch) | ✅ (styles) | ✅ (styles) |
 | Scripting language | ❌ (CLI instead) | ✅ (JS/AppleScript/VBS) | ✅ (Script-Fu, Python 3) | ❌ | ✅ (Lua SDK) | ✅ (Lua + AI API) | 🟡 (AppleScript, Mac) |
-| Headless CLI | ✅ **65 shared engine ops** [CLI](cli.md) | ❌ | ✅ (`gimp -i -b`, script-driven) | ❌ | ❌ | ✅ (`darktable-cli`, export-focused) | ❌ |
+| Headless CLI | ✅ **66 shared engine ops** [CLI](cli.md) | ❌ | ✅ (`gimp -i -b`, script-driven) | ❌ | ❌ | ✅ (`darktable-cli`, export-focused) | ❌ |
 | Start pipelines from blank docs | ✅ (`--new A4 --dpi 300`) | — | ✅ (script) | ❌ | — | — | — |
 | Batch export | ✅ (shell loops + CLI) | ✅ (Actions batch) | ✅ | ❌ | ✅ | ✅ | ✅ (process recipes) |
 
@@ -186,7 +187,7 @@ Photoslop is an editor, not a DAM — these rows are scope notes, not gaps.
 
 ## Where Photoslop stands out
 
-- **Headless automation through a shared engine.** All 65 operations are shared
+- **Headless automation through a shared engine.** All 66 operations are shared
   by CLI and MCP; GUI presentation-only interactions have explicit parity
   rulings. Pipelines compose as ordered operations (`--new A4 --dpi 300 --adjust
   "exposure=1" --select-poly … --clear --output out.png`). None of the six has

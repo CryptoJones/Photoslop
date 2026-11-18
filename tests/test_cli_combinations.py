@@ -68,6 +68,7 @@ PAIR_ARGS = {
     "deselect": ["--deselect"],
     "clear": ["--select", "3,3,6,6", "--clear", "--deselect"],
     "adjust": ["--adjust", "exposure=0.4,contrast=5"],
+    "color-lookup": ["--color-lookup", "Warm Film"],
     "point-color": ["--point-color", "hue=20,range=40,ds=25"],
     "assign-profile": ["--assign-profile", "display-p3"],
     "convert-profile": ["--convert-profile", "adobe-rgb"],

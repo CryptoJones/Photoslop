@@ -27,6 +27,13 @@ OK lands one undo step.
   classic band (`hue=20`, `range=28`). CLI mirror: `--point-color`.
 - **Color Balance** (`Ctrl+B`): shadows/midtones/highlights bands, each with
   cyan–red / magenta–green / yellow–blue axes.
+- **Color Lookup** (`Ctrl+Alt+L` / `Cmd+Alt+L`): 3D and 1D Lookup Table (LUT)
+  support with vectorized trilinear interpolation. Load industry-standard Adobe
+  `.cube` or Autodesk Lustre `.3dl` files, or choose from five built-in cinematic
+  presets (**Warm Film**, **Cool Crisp**, **Bleach Bypass**, **Teal & Orange**,
+  **Faded Monochrome**) with adjustable intensity/opacity (0–100%). Processed in
+  streamed row chunks (DD-001) for bounded memory usage. CLI mirror:
+  `--color-lookup`.
 
 ## Scope: layer or whole image
 Every dialog has **"Apply to all layers (full image)"** — live preview across

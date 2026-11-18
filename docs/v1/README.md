@@ -1,7 +1,7 @@
 # Photoslop v1 Documentation
 
 The authoritative reference for every Photoslop feature — desktop app and
-command line — as of **v2.43.0**.
+command line — as of **v2.44.0**.
 
 | Guide | Covers |
 |---|---|
@@ -11,7 +11,7 @@ command line — as of **v2.43.0**.
 | [Vector Model](vector-model.md) | schema v1, cubic geometry, appearance, migration, ORA fallbacks |
 | [Keyboard Shortcuts](keyboard-shortcuts.md) | the complete keymap |
 | [Layers](layers.md) | layers, masks, clipping, groups, blend modes, smart objects, smart filters, live effects, fill opacity |
-| [Adjustments](adjustments.md) | Levels, Curves, Hue/Saturation, Color Balance, the Adjust panel, adjustment layers, scope |
+| [Adjustments](adjustments.md) | Levels, Curves, Hue/Saturation, Color Balance, Color Lookup (3D LUT), the Adjust panel, adjustment layers, scope |
 | [Selections](selections.md) | every selection tool, refine, feather, content-aware fill |
 | [Transforms](transforms.md) | free transform, warp, perspective/puppet warp, rotate, content-aware scale |
 | [Filters](filters.md) | Gaussian Blur, Unsharp Mask, Tilt-Shift |
