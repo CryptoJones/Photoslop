@@ -177,7 +177,7 @@ final class AppearanceParityTests: XCTestCase {
     XCTAssertEqual(shadow.id.count, 32)
     XCTAssertNil(shadow.extensions)
     XCTAssertEqual(Set(LayerEffect.defaults.keys), Set(LayerEffect.labels.keys))
-    XCTAssertEqual(LayerEffect.defaults.count, 10)
+    XCTAssertEqual(LayerEffect.defaults.count, 11)
     XCTAssertNil(LayerEffect(kind: "lens-flare"))
   }
 

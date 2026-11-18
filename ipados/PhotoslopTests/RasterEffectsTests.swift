@@ -26,8 +26,10 @@ final class RasterEffectsTests: XCTestCase {
     XCTAssertEqual(AppearanceRenderer.transientLayers(for: []), 0)
     // A kind the renderer does not draw is carried in the document but costs
     // no buffers, so it must not inflate the budget either.
-    let unknown = LayerEffect(kind: "satin", parameters: [:])
-    XCTAssertEqual(AppearanceRenderer.transientLayers(for: unknown.map { [$0] } ?? []), 0)
+    let unknown = LayerEffect(
+      schemaVersion: LayerEffect.schemaVersion, id: "test", kind: "undrawn-effect", enabled: true,
+      blendMode: "normal", opacity: 1, parameters: [:], extensions: nil)
+    XCTAssertEqual(AppearanceRenderer.transientLayers(for: [unknown]), 0)
   }
 
   func testDisabledEffectsAreNotCharged() {
