@@ -227,9 +227,9 @@ class CanvasView(QWidget):
 
     def _transform_session(self):
         tool = self.editor.active_tool()
-        if tool is not None and tool.name == "transform":
-            session = tool.session
-            if session is not None and session.doc is self.doc:
+        if tool is not None and tool.name in ("transform", "puppet", "puppet_warp"):
+            session = getattr(tool, "session", None)
+            if session is not None and getattr(session, "doc", None) is self.doc:
                 return session
         return None
 
@@ -555,7 +555,7 @@ class CanvasView(QWidget):
         if key == Qt.Key.Key_Escape:
             if tool is not None and tool.has_active_interaction():
                 tool.cancel(self.doc)
-                if tool.name == "transform":
+                if tool.name in ("transform", "puppet", "puppet_warp"):
                     self.editor.host.end_transform()
                 self.editor.host.statusBar().showMessage(
                     f"Cancelled {tool.name.replace('-', ' ')} interaction", 3000
@@ -563,6 +563,21 @@ class CanvasView(QWidget):
             elif self.doc.selection is not None:
                 self.editor.host.action_deselect()
             return
+        if tool is not None and tool.name in ("puppet", "puppet_warp"):
+            session = getattr(tool, "session", None)
+            if session is not None and session.selected_pin_idx is not None:
+                if key in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+                    session.remove_pin(session.selected_pin_idx)
+                    self.update()
+                    return
+                elif key == Qt.Key.Key_BracketRight:
+                    session.change_pin_depth(session.selected_pin_idx, +1)
+                    self.update()
+                    return
+                elif key == Qt.Key.Key_BracketLeft:
+                    session.change_pin_depth(session.selected_pin_idx, -1)
+                    self.update()
+                    return
         nudges = {
             Qt.Key.Key_Left: (-1, 0),
             Qt.Key.Key_Right: (1, 0),

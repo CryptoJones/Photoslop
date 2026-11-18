@@ -67,6 +67,8 @@ more testing. Both issues carry the `on-hold` label.
 
 ## Done
 
+- [x] **Edit: Puppet Warp — mesh pin deformation via As-Rigid-As-Possible (ARAP) solver** across Desktop Qt, CLI, and iPadOS/iOS. Delaunay/regular grid alpha-masked triangulation, iterative ARAP solver with 2D polar decomposition, modes (rigid, normal, distort), pin rotation, depth pinning, bounded memory affine triangle rasterization (DD-001). Desktop: `Edit ▸ Puppet Warp` (`Ctrl+Shift+P`), options bar with mode/density/depth controls; CLI: `--puppet-warp` and `--puppet-mode`; iPadOS/iOS: `PuppetWarp.swift` and multi-touch canvas overlay ([#420](https://github.com/CryptoJones/Photoslop/issues/420)) — shipped v2.46.0
+
 - [x] **Color Swatches: import and export Adobe .aco and .ase swatch palettes** across Desktop Qt, CLI, and iPadOS / Swift. Binary specification parsing and generation for ACO v1/v2 (RGB, HSB, CMYK, Lab, Grayscale) and ASEF blocks (RGB, CMYK, LAB, GRAY, global/spot/process types) with robust bounds checks, Desktop Swatches dock panel and dialog, CLI `--palette <file.aco|file.ase>` query and pipeline integration, and mobile swatch palette import ([#421](https://github.com/CryptoJones/Photoslop/issues/421)) — shipped v2.45.0
 
 - [x] **Adjustment: Color Lookup — 3D LUT support (.cube and .3dl) with trilinear interpolation** ([#422](https://github.com/CryptoJones/Photoslop/issues/422)) — shipped v2.44.0

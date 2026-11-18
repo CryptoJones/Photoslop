@@ -23,6 +23,7 @@ CASES = {
     "crop-layer": ("5,5,20,15", "5,5"),
     "rotate": ("15", "sideways"),
     "rotate-layer": ("90", "sideways"),
+    "puppet-warp": ("10,10->10,10;30,20->35,25", "not-a-pin-spec"),
     "content-aware-scale": ("40x30", "40"),
     "levels": ("10,240,1.2", "10,240"),
     "auto-levels": (None, None),
@@ -971,3 +972,44 @@ def test_palette_malformed_file_usage_error(qapp, tmp_path):
     with pytest.raises(SystemExit) as exc:
         run([src, "--palette", str(bad_file), "--output", tmp_path / "out.png"])
     assert exc.value.code == 2
+
+
+def test_puppet_warp_cli(qapp, tmp_path):
+    src = make_input(tmp_path, size=(60, 40))
+    out = tmp_path / "out.png"
+    assert (
+        run(
+            [
+                src,
+                "--puppet-warp",
+                "5,5->5,5;55,35->55,35;30,20->40,25",
+                "--output",
+                str(out),
+            ]
+        )
+        == 0
+    )
+    assert out.exists()
+    img = QImage(str(out))
+    assert img.width() > 0 and img.height() > 0
+
+
+def test_puppet_mode_cli(qapp, tmp_path):
+    src = make_input(tmp_path, size=(60, 40))
+    for mode in ("rigid", "normal", "distort"):
+        out = tmp_path / f"out_{mode}.png"
+        assert (
+            run(
+                [
+                    src,
+                    "--puppet-mode",
+                    mode,
+                    "--puppet-warp",
+                    "10,10->10,10;50,30->55,35",
+                    "--output",
+                    str(out),
+                ]
+            )
+            == 0
+        )
+        assert out.exists()

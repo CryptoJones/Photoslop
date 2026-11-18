@@ -98,6 +98,7 @@ class Context:
     allow_unsafe_plugins: bool = False
     allow_insecure_model_http: bool = False
     palette: object = None
+    puppet_mode: str = "normal"
 
 
 def _target_layers(ctx: Context) -> list:
@@ -219,6 +220,64 @@ def _op_rotate_layer(ctx: Context, value: str) -> None:
             round(cx - layer.image.width() / 2.0), round(cy - layer.image.height() / 2.0)
         )
         layer.fx_cache = None
+
+
+def _op_puppet_warp(ctx: Context, value: str) -> None:
+    import numpy as np
+
+    from photoslop.puppet import PuppetPin, generate_mesh, rasterize_mesh, solve_arap
+
+    if not value or not value.strip():
+        raise _ValueError("--puppet-warp expects pin pairs: 'x1,y1->new_x1,new_y1;...'")
+
+    raw_pairs = [p.strip() for p in value.split(";") if p.strip()]
+    if not raw_pairs:
+        raise _ValueError("--puppet-warp: at least one pin pair is required")
+
+    parsed_pins: list[tuple[float, float, float, float]] = []
+    for pair_str in raw_pairs:
+        if "->" not in pair_str:
+            raise _ValueError(
+                f"--puppet-warp: each pin pair must be 'x,y->new_x,new_y' (got {pair_str!r})"
+            )
+        left, right = pair_str.split("->", 1)
+        left_parts = left.strip().split(",")
+        right_parts = right.strip().split(",")
+        if len(left_parts) != 2 or len(right_parts) != 2:
+            raise _ValueError(
+                f"--puppet-warp: pin coordinates must be 'x,y->new_x,new_y' (got {pair_str!r})"
+            )
+        try:
+            rx, ry = float(left_parts[0]), float(left_parts[1])
+            tx, ty = float(right_parts[0]), float(right_parts[1])
+        except ValueError as exc:
+            raise _ValueError(
+                f"--puppet-warp: non-numeric coordinate in {pair_str!r}: {exc}"
+            ) from exc
+        parsed_pins.append((rx, ry, tx, ty))
+
+    mode = getattr(ctx, "puppet_mode", "normal")
+    if mode not in ("rigid", "normal", "distort"):
+        raise _ValueError(f"--puppet-mode: unknown mode {mode!r} (expected rigid, normal, distort)")
+
+    for layer in _target_layers(ctx):
+        ox, oy = layer.offset.x(), layer.offset.y()
+        pins = [
+            PuppetPin(
+                rest_pos=np.array([rx - ox, ry - oy], dtype=np.float64),
+                target_pos=np.array([tx - ox, ty - oy], dtype=np.float64),
+            )
+            for rx, ry, tx, ty in parsed_pins
+        ]
+        mesh = generate_mesh(layer.image, mask=layer.mask)
+        solve_arap(mesh, pins, mode=mode)
+        warped, local_offset, new_mask = rasterize_mesh(layer.image, mesh, pins, mask=layer.mask)
+        dirty = layer.bounds()
+        layer.image = warped
+        layer.offset = layer.offset + local_offset
+        layer.mask = new_mask
+        layer.fx_cache = None
+        ctx.doc.notify_pixels(dirty.united(layer.bounds()))
 
 
 def _op_cas(ctx: Context, value: str) -> None:
@@ -1230,6 +1289,11 @@ OPS: dict = {
     ),
     "rotate": ("DEG", "rotate the whole image by any angle", _op_rotate),
     "rotate-layer": ("DEG", "rotate the target layer(s) about their centre", _op_rotate_layer),
+    "puppet-warp": (
+        '"x1,y1->new_x1,new_y1;..."',
+        "deform target layer(s) via As-Rigid-As-Possible (ARAP) mesh pin solver",
+        _op_puppet_warp,
+    ),
     "content-aware-scale": ("WxH", "seam-carve the target layer(s)", _op_cas),
     "levels": ("B,W,GAMMA", "levels adjustment", _op_levels),
     "auto-levels": (None, "0.1%%-percentile auto levels", _op_auto_levels),
@@ -1437,6 +1501,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="allow unencrypted HTTP to a non-loopback model server",
     )
+    parser.add_argument(
+        "--puppet-mode",
+        choices=["rigid", "normal", "distort"],
+        default="normal",
+        metavar="MODE",
+        help="stiffness mode for --puppet-warp (rigid, normal, distort; default normal)",
+    )
     from photoslop import __version__
 
     parser.add_argument("--version", action="version", version=f"photoslop-cli {__version__}")
@@ -1638,6 +1709,7 @@ def apply_pipeline(
     allow_large_document: bool = False,
     allow_unsafe_plugins: bool = False,
     allow_insecure_model_http: bool = False,
+    puppet_mode: str = "normal",
 ) -> dict:
     """Run the same load → op-pipeline → write flow as ``main``, but driven by
     Python values and returning a structured result instead of printing.
@@ -1669,6 +1741,7 @@ def apply_pipeline(
         allow_large_document=allow_large_document,
         allow_unsafe_plugins=allow_unsafe_plugins,
         allow_insecure_model_http=allow_insecure_model_http,
+        puppet_mode=puppet_mode,
     )
     for op, value in operations or []:
         if op not in OPS:
@@ -1744,6 +1817,7 @@ def main(argv: list[str] | None = None) -> int:
             allow_large_document=args.allow_large_document,
             allow_unsafe_plugins=args.allow_unsafe_plugins,
             allow_insecure_model_http=args.allow_insecure_model_http,
+            puppet_mode=getattr(args, "puppet_mode", "normal"),
         )
         for op, value in pipeline:
             OPS[op][2](ctx, value)

@@ -764,97 +764,74 @@ class PerspectiveTool(Tool):
 
 
 class PuppetTool(Tool):
-    """Puppet Warp (Shift+Y): click to drop pins, drag a pin and the image
-    bends around the others. Enter commits, Escape cancels."""
+    """Puppet Warp: click to drop pins, drag a pin and the image
+    bends around the others via ARAP solver. Enter commits, Escape cancels."""
 
     name = "puppet"
 
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
-        self._layer = None
-        self._doc = None
-        self._base: QImage | None = None
-        self.pins: list[list[QPointF]] = []  # [source, target] in layer coords
-        self._drag: int | None = None
+        self.options = options
+        self._delegate = None
+
+    def _ensure_delegate(self):
+        if self._delegate is None:
+            from photoslop.puppet import PuppetWarpTool
+
+            self._delegate = PuppetWarpTool(self.opts)
+        return self._delegate
+
+    @property
+    def session(self):
+        return self._ensure_delegate().session
+
+    @session.setter
+    def session(self, val):
+        self._ensure_delegate().session = val
+
+    @property
+    def _drag(self):
+        return self._ensure_delegate()._drag
+
+    @_drag.setter
+    def _drag(self, val):
+        self._ensure_delegate()._drag = val
+
+    @property
+    def pins(self):
+        return self._ensure_delegate().pins
+
+    def begin(self, doc, layer):
+        self._ensure_delegate().begin(doc, layer)
+
+    def commit(self, canvas=None):
+        if self._delegate:
+            self._delegate.commit(canvas)
+
+    def cancel(self, doc=None):
+        if self._delegate:
+            self._delegate.cancel(doc)
+
+    def has_active_interaction(self):
+        return self._delegate is not None and self._delegate.has_active_interaction()
+
+    def cursor_intent(
+        self, doc, canvas, pos, modifiers=Qt.KeyboardModifier.NoModifier, dragging=False
+    ):
+        return self._ensure_delegate().cursor_intent(doc, canvas, pos, modifiers, dragging)
 
     def press(self, doc, canvas, pos, ev):
-        layer = doc.active_layer
-        if layer is None:
-            return
-        if self._base is None:
-            self._layer = layer
-            self._doc = doc
-            self._base = QImage(layer.image)
-            self.pins = []
-        local = pos - QPointF(layer.offset)
-        tol = 8.0 / max(canvas.zoom, 0.01)
-        for i, (_src, tgt) in enumerate(self.pins):
-            if (tgt - local).manhattanLength() <= tol:
-                self._drag = i
-                return
-        self.pins.append([QPointF(local), QPointF(local)])
-        self._drag = None
-        canvas.update()
+        self._ensure_delegate().press(doc, canvas, pos, ev)
 
     def move(self, doc, canvas, pos, ev):
-        if self._drag is None or self._layer is None:
-            return
-        local = pos - QPointF(self._layer.offset)
-        self.pins[self._drag][1] = QPointF(local)
-        self._rewarp(doc)
-        canvas.update()
+        self._ensure_delegate().move(doc, canvas, pos, ev)
 
     def release(self, doc, canvas, pos, ev):
-        self._drag = None
-
-    def _rewarp(self, doc) -> None:
-        layer = self._layer
-        pin_pairs = [((p[0].x(), p[0].y()), (p[1].x(), p[1].y())) for p in self.pins]
-        layer.image = npimage.puppet_warp(self._base, pin_pairs)
-        doc.notify_pixels(layer.bounds())
-
-    def commit(self, canvas) -> None:
-        if self._base is None or self._layer is None:
-            return
-        from photoslop.transform import TransformLayerCommand
-
-        layer, doc = self._layer, self._doc
-        if layer.image != self._base:
-            doc.undo_stack.push(
-                TransformLayerCommand(
-                    doc, layer, self._base, layer.offset, QImage(layer.image), layer.offset
-                )
-            )
-            doc.undo_stack.command(doc.undo_stack.count() - 1).setText("Puppet Warp")
-        self._reset()
-        if canvas is not None:
-            canvas.update()
-
-    def cancel(self, doc=None) -> None:
-        if self._base is not None and self._layer is not None:
-            self._layer.image = QImage(self._base)
-            self._doc.notify_pixels(self._layer.bounds())
-        self._reset()
-
-    def _reset(self) -> None:
-        self._layer = None
-        self._doc = None
-        self._base = None
-        self.pins = []
-        self._drag = None
+        self._ensure_delegate().release(doc, canvas, pos, ev)
 
     def overlay(self, doc, painter, canvas):
-        if self._layer is None:
-            return
-        z = canvas.zoom
-        off = QPointF(self._layer.offset)
-        painter.setPen(QPen(QColor(0, 0, 0, 220), 1))
-        for i, (_src, tgt) in enumerate(self.pins):
-            centre = QPointF((tgt.x() + off.x()) * z, (tgt.y() + off.y()) * z)
-            painter.setBrush(
-                QColor(255, 210, 60, 230) if i != self._drag else QColor(255, 80, 80, 230)
-            )
-            painter.drawEllipse(centre, 5, 5)
+        if self._delegate:
+            self._delegate.overlay(doc, painter, canvas)
 
 
 class PenTool(Tool):

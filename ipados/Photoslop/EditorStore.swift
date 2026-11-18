@@ -1127,6 +1127,17 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }
   }
 
+  /// Apply a puppet warp outcome (deformed image and origin) to a layer, as one undo step (#420).
+  func applyPuppetWarp(_ id: UUID, image: UIImage, origin: CGPoint) {
+    guard layers.contains(where: { $0.id == id }) else { return }
+    mutate(actionName: "Puppet Warp") {
+      update(id) {
+        $0.image = image
+        $0.origin = origin
+      }
+    }
+  }
+
   /// A layer's source drawn into `rect`, and the source to keep with it.
   ///
   /// The source is decoded for the duration of the draw and released with the

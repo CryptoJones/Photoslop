@@ -70,6 +70,7 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--crop-layer` `X,Y,W,H` | trim the target layer(s) to a rectangle, canvas untouched |
 | `--rotate` `DEG` | rotate the whole image by any angle |
 | `--rotate-layer` `DEG` | rotate the target layer(s) about their centre |
+| `--puppet-warp` `"x1,y1->new_x1,new_y1;..."` | deform target layer(s) via As-Rigid-As-Possible (ARAP) mesh pin solver (mode via `--puppet-mode <rigid\|normal\|distort>`, default `normal`) |
 | `--content-aware-scale` `WxH` | seam-carve the target layer(s) |
 | `--levels` `B,W,GAMMA` | levels adjustment |
 | `--auto-levels` | 0.1%-percentile auto levels |
@@ -138,6 +139,12 @@ Notes:
   what comes after.
 - `--content-aware-scale` retargets the canvas; in multi-layer documents each
   targeted layer carves by the canvas ratio.
+- `--puppet-warp` takes semicolon-separated pin pairs (`"x1,y1->new_x1,new_y1;..."`)
+  and deforms the mesh via the As-Rigid-As-Possible (ARAP) solver. The solver's
+  stiffness mode is controlled by `--puppet-mode <rigid|normal|distort>` (default
+  `normal`). `rigid` penalizes local area change strictly, `normal` provides a
+  balanced stiffness and moderate stretch, and `distort` allows similarity/affine
+  scaling. Pins are mapped to the layer content's 2D triangle mesh.
 - `--crop` and `--crop-layer` are opposites: `--crop` resizes the canvas and
   keeps every pixel (offsets shift), `--crop-layer` keeps the canvas and
   discards the target layer's pixels outside the rectangle. Both take the

@@ -538,6 +538,51 @@ class MainWindow(QMainWindow):
         crop_layer.toggled.connect(lambda v: setattr(self.options, "crop_layer_only", v))
         crop_layer_act = bar.addWidget(crop_layer)
 
+        puppet_mode = QComboBox()
+        puppet_mode.addItems(["Normal", "Rigid", "Distort"])
+        puppet_mode.setToolTip("Puppet Warp mode: Normal, Rigid, Distort")
+        puppet_mode.currentTextChanged.connect(self._on_puppet_mode_changed)
+        puppet_mode_act = bar.addWidget(puppet_mode)
+
+        puppet_density = QComboBox()
+        puppet_density.addItems(["Normal", "Low", "High"])
+        puppet_density.setToolTip("Puppet Warp mesh density")
+        puppet_density.currentTextChanged.connect(self._on_puppet_density_changed)
+        puppet_density_act = bar.addWidget(puppet_density)
+
+        puppet_fwd_btn = QToolButton()
+        puppet_fwd_btn.setText("Bring Fwd")
+        puppet_fwd_btn.setToolTip("Bring Pin Forward (])")
+        puppet_fwd_btn.clicked.connect(lambda: self._on_puppet_depth_changed(+1))
+        puppet_fwd_act = bar.addWidget(puppet_fwd_btn)
+
+        puppet_back_btn = QToolButton()
+        puppet_back_btn.setText("Send Back")
+        puppet_back_btn.setToolTip("Send Pin Backward ([)")
+        puppet_back_btn.clicked.connect(lambda: self._on_puppet_depth_changed(-1))
+        puppet_back_act = bar.addWidget(puppet_back_btn)
+
+        puppet_commit_btn = QToolButton()
+        puppet_commit_btn.setText("✓ Apply")
+        puppet_commit_btn.setToolTip("Apply Puppet Warp (Enter)")
+        puppet_commit_btn.clicked.connect(self._on_puppet_commit)
+        puppet_commit_act = bar.addWidget(puppet_commit_btn)
+
+        puppet_cancel_btn = QToolButton()
+        puppet_cancel_btn.setText("✕ Cancel")
+        puppet_cancel_btn.setToolTip("Cancel Puppet Warp (Esc)")
+        puppet_cancel_btn.clicked.connect(self._on_puppet_cancel)
+        puppet_cancel_act = bar.addWidget(puppet_cancel_btn)
+
+        puppet_acts = [
+            puppet_mode_act,
+            puppet_density_act,
+            puppet_fwd_act,
+            puppet_back_act,
+            puppet_commit_act,
+            puppet_cancel_act,
+        ]
+
         self._option_actions = {
             "brush": [
                 color_act,
@@ -568,7 +613,8 @@ class MainWindow(QMainWindow):
             "heal": [size_act, opacity_act, spacing_act],
             "patch": [],
             "liquify": [size_act, opacity_act],
-            "puppet": [],
+            "puppet": puppet_acts,
+            "puppet_warp": puppet_acts,
             "perspective": [],
             "text": [color_act],
             "shape": [color_act, size_act],
@@ -596,6 +642,7 @@ class MainWindow(QMainWindow):
             spacing_act,
             scatter_act,
             crop_layer_act,
+            *puppet_acts,
         ]
         self._option_widgets = {
             "size": size,
@@ -649,6 +696,43 @@ class MainWindow(QMainWindow):
             else:
                 widget.setChecked(value)
         self.statusBar().showMessage(f"{self._tool_name_label.text()} options reset", 3000)
+
+    def _on_puppet_mode_changed(self, text: str) -> None:
+        tool = self.tools.get("puppet_warp") or self.tools.get("puppet")
+        if tool and getattr(tool, "session", None):
+            tool.session.set_mode(text.lower())
+            editor = self.current_editor()
+            if editor:
+                editor.canvas.update()
+
+    def _on_puppet_density_changed(self, text: str) -> None:
+        tool = self.tools.get("puppet_warp") or self.tools.get("puppet")
+        if tool and getattr(tool, "session", None):
+            tool.session.set_density(text.lower())
+            editor = self.current_editor()
+            if editor:
+                editor.canvas.update()
+
+    def _on_puppet_depth_changed(self, delta: int) -> None:
+        tool = self.tools.get("puppet_warp") or self.tools.get("puppet")
+        if tool and getattr(tool, "session", None) and tool.session.selected_pin_idx is not None:
+            tool.session.change_pin_depth(tool.session.selected_pin_idx, delta)
+            editor = self.current_editor()
+            if editor:
+                editor.canvas.update()
+
+    def _on_puppet_commit(self) -> None:
+        tool = self.tools.get("puppet_warp") or self.tools.get("puppet")
+        if tool and getattr(tool, "session", None):
+            editor = self.current_editor()
+            tool.commit(editor.canvas if editor else None)
+
+    def _on_puppet_cancel(self) -> None:
+        tool = self.tools.get("puppet_warp") or self.tools.get("puppet")
+        if tool and getattr(tool, "session", None):
+            doc = self.current_doc()
+            tool.cancel(doc)
+            self.end_transform()
 
     def _sync_option_visibility(self) -> None:
         spec = TOOL_SPEC_BY_ID.get(self._active_tool_name)
@@ -780,6 +864,7 @@ class MainWindow(QMainWindow):
         m_edit.addSeparator()
         m_edit.addAction(self._act("Free &Transform", "Ctrl+T", self.action_free_transform))
         m_edit.addAction(self._act("&Warp…", "Ctrl+Shift+T", self.action_warp))
+        m_edit.addAction(self._act("Puppet &Warp", None, self.action_puppet_warp))
         m_edit.addAction(
             self._act("Rotate &90° CW", None, lambda: self._layer_cmd(RotateLayerCommand, 90))
         )
@@ -2314,9 +2399,29 @@ class MainWindow(QMainWindow):
             "Warp: drag the 3\u00d73 grid points — Enter commits, Esc cancels", 6000
         )
 
+    def action_puppet_warp(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        tool = self.tools.get("puppet")
+        if tool is None:
+            return
+        if getattr(tool, "session", None) is not None:
+            editor = self.current_editor()
+            tool.commit(editor.canvas if editor else None)
+            return
+        self._pre_transform_tool = self._active_tool_name
+        tool.begin(doc, doc.active_layer)
+        self._set_tool("puppet")
+        self.statusBar().showMessage(
+            "Puppet Warp: click to place pins, drag to deform, Alt+drag to rotate, "
+            "[ / ] depth — Enter commits, Esc cancels",
+            6000,
+        )
+
     def end_transform(self) -> None:
-        """Called after a transform commit/cancel: restore the prior tool."""
-        if self._active_tool_name == "transform":
+        """Called after a transform or puppet warp commit/cancel: restore the prior tool."""
+        if self._active_tool_name in ("transform", "puppet", "puppet_warp"):
             self._set_tool(self._pre_transform_tool)
             action = self._tool_actions.get(self._pre_transform_tool)
             if action is not None:
