@@ -1128,6 +1128,10 @@ struct EditorView: View {
       }
       .disabled(store.activeLayer == nil)
       .accessibilityIdentifier("Delete Selection")
+      Button(action: makeVectorPath) {
+        Label("Make Vector Path", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+      }
+      .accessibilityIdentifier("Make Vector Path")
       // Last, and apart: it is not a thing done to the pixels, it is the end
       // of the mode they are in.
       Button(action: store.deselect) {
@@ -1402,6 +1406,10 @@ struct EditorView: View {
       }
       .disabled(store.selection == nil)
       .keyboardShortcut("d", modifiers: [.command, .option])
+      Button(action: makeVectorPath) {
+        Label("Make Vector Path", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+      }
+      .disabled(store.selection == nil)
       Divider()
       // The clipboard trio keeps its shortcuts here, where a keyboard user
       // looks for them; the one-tap route is `selectionActionBar` (#374).
@@ -2419,6 +2427,11 @@ struct EditorView: View {
   /// the picture the words render to, which is what the desktop copies.
   private func copySelection() {
     _ = store.copySelection()
+  }
+
+  /// Make Vector Path (#424): convert active selection into a vector path layer.
+  private func makeVectorPath() {
+    store.makeVectorPath()
   }
 
   /// Paste (#374): the pasteboard's image as a new layer above the active one.

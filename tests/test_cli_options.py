@@ -63,6 +63,7 @@ CASES = {
     "text": ("5,5,10:hello", "5,5,10"),
     "text-rich": ('5,5:<span style="color:#ff0000">Hi</span>', "5:oops"),
     "shape": ("rect,5,5,20,15,255,0,0", "blob,1,1,5,5,0,0,0"),
+    "selection-to-path": ("2.0", "sideways"),
     "vector-op": ('{"op":"select","ids":[]}', "not-json"),
     "blend-mode": ("multiply", "extra-spicy"),
     "layer-opacity": ("50", "150"),
@@ -630,6 +631,18 @@ def test_text_and_shape_add_layers(qapp, tmp_path):
         loaded.flatten().pixelColor(x, y).red() < 200 for x in range(5, 30) for y in range(5, 25)
     )
     assert flat_has_ink  # the text drew something
+
+
+def test_selection_to_path(qapp, tmp_path):
+    src = make_input(tmp_path)
+    out = str(tmp_path / "out.ora")
+    assert run([src, "--select", "5,5,10,10", "--selection-to-path", "1.5", "--output", out]) == 0
+    from photoslop.io_ora import load_ora
+
+    loaded = load_ora(out)
+    assert len(loaded.layers) == 2
+    assert loaded.layers[-1].vector_data is not None
+    assert loaded.layers[-1].vector_data["geometry"]["kind"] == "path"
 
 
 def test_text_color(qapp, tmp_path):

@@ -78,6 +78,7 @@ PAIR_ARGS = {
     "text": ["--text", "2,2,8,0,120,255:Hi"],
     "text-rich": ["--text-rich", '2,2:<span style="color:#0078ff;font-size:8pt">Hi</span>'],
     "shape": ["--shape", "rect,2,2,10,8,255,0,0"],
+    "selection-to-path": ["--select", "3,3,6,6", "--selection-to-path", "2.0"],
     "vector-op": ["--vector-op", '{"op":"select","ids":[]}'],
     "blend-mode": ["--blend-mode", "multiply"],
     "layer-opacity": ["--layer-opacity", "70"],

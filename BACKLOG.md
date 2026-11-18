@@ -6,6 +6,10 @@ sync — check an item here when its issue closes.
 
 ## Open
 
+### Vectors
+
+- [x] Make Work Path from Selection using contour tracing: Potrace-style 8-connected contour extraction, sub-pixel polygon simplification, and cubic Bézier curve fitting subject to tolerance (0.5–10.0 px). Desktop: `Select ▸ Make Work Path…`; CLI/MCP: `--selection-to-path [TOLERANCE]` outputting SVG path data and creating vector layer; iPad/iPhone: "Make Vector Path" action on active selection ([#424](https://github.com/CryptoJones/Photoslop/issues/424))
+
 ### File formats
 
 - [ ] PSD interchange follow-up: carry blend modes, groups and masks on iPad

@@ -793,6 +793,8 @@ class MainWindow(QMainWindow):
         m_select.addSeparator()
         m_select.addAction(self._act("Feat&her…", "Ctrl+Alt+D", self.action_feather_selection))
         m_select.addAction(self._act("&Refine…", "Ctrl+Alt+R", self.action_refine_selection))
+        m_select.addSeparator()
+        m_select.addAction(self._act("&Make Work Path…", None, self.action_make_work_path))
 
         m_image = menu.addMenu("&Image")
         m_image.addAction(self._act("&Image Size…", "Ctrl+Alt+I", self.action_image_size))
@@ -2311,6 +2313,40 @@ class MainWindow(QMainWindow):
         from photoslop.refinedialog import RefineSelectionDialog
 
         run_modal(RefineSelectionDialog(doc, self))
+
+    def action_make_work_path(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.selection is None:
+            if doc is not None:
+                self.statusBar().showMessage("Make Work Path needs a selection", 4000)
+            return
+        from PySide6.QtWidgets import QInputDialog
+
+        from photoslop import contour, npimage, vector
+        from photoslop.commands import InsertLayerCommand
+
+        tolerance, ok = QInputDialog.getDouble(
+            self,
+            "Make Work Path",
+            "Tolerance (0.5–10.0 px):",
+            2.0,
+            0.5,
+            10.0,
+            1,
+        )
+        if not ok:
+            return
+        mask = npimage.selection_mask(doc.selection, doc.size, QPoint(0, 0))
+        name = f"Work Path {len(doc.layers)}"
+        data = contour.selection_to_vector_data(mask, tolerance=tolerance, name=name)
+        layer = vector.render_vector(data, name, doc.canvas_rect())
+        if layer is None:
+            self.statusBar().showMessage("Selection produced no vector contours", 4000)
+            return
+        doc.undo_stack.push(InsertLayerCommand(doc, len(doc.layers), layer, "Make Work Path"))
+        doc.active_index = len(doc.layers) - 1
+        doc.vector_selection = [data["id"]]
+        self.statusBar().showMessage(f"Work path created (tolerance {tolerance:.1f} px)", 5000)
 
     def action_select_all(self) -> None:
         doc = self.current_doc()
