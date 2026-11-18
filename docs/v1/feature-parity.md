@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v2.42.0** against six
+An honest, category-by-category comparison of **Photoslop v2.43.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -24,7 +24,7 @@ client exposes it.
 | Colour sampling (eyedropper) | ✅ `I`, composite-aware, Shift → background | ✅ composite-aware, into the single ink swatch | ✅ `--sample X,Y`, composite-aware, repeatable | — |
 | Selections/filters/vectors/text | ✅ | 🟡 wand, marquee and lasso selections with feathering; brushes, bucket, Delete Selection and Cut/Copy/Paste honour them; editable text layers; the seven built-in filters, pixel-identical to the desktop; no vectors yet | ✅ shared safe engine operations | ✅ safe subset |
 | One-bit dither / beam modulation | ✅ Beam Dither, 11 algorithms | ✅ ported, fixture-proven word for word | ✅ `--filter beam-dither:…` | — |
-| Live appearance effects (shadow, glow, outline, overlay, bevel) | ✅ 10 kinds on any layer | ✅ 10 kinds on any layer, ported from the desktop renderer, fixture-proven identical, Gaussian blur and feather included | ✅ `--drop-shadow`, `--glow`, `--stroke`, `--effect`, `--set-effects` | ✅ safe subset |
+| Live appearance effects (shadow, glow, outline, overlay, bevel, satin) | ✅ 11 kinds on any layer | ✅ 11 kinds on any layer, ported from the desktop renderer, fixture-proven identical, Gaussian blur and feather included | ✅ `--drop-shadow`, `--glow`, `--stroke`, `--satin`, `--effect`, `--set-effects` | ✅ safe subset |
 | Native/third-party plugins | local opt-in | — | local opt-in | denied |
 | Network model operations | local configured endpoint | — | local configured endpoint | denied |
 | Accessibility automation | automated semantics + manual matrix required | native labels + manual matrix required | structured errors | structured tool errors |
@@ -34,7 +34,7 @@ client exposes it.
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 2.42.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
+| **Photoslop** | 2.43.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
@@ -138,7 +138,7 @@ for the versioned platform screen-reader and visual smoke procedures.
 | Text tool with font/size/colour | ✅ [Tools](tools.md) | ✅ | ✅ | ✅ | — | 🟡 (watermark) | 🟡 (watermark) |
 | Rich text — per-letter colour, bold/italic, WYSIWYG preview | ✅ (GUI editor + `--text-rich` HTML) | ✅ | ✅ | 🟡 (single style) | — | — | — |
 | Re-editable text layers | 🟡 (ORA parameters; SVG safe text subset) | ✅ | ✅ | ❌ | — | — | — |
-| Ordered text/layer appearance effects and presets | ✅ (10 live effects; ORA + SVG filters; 8 live on iOS text layers with the same presets) | ✅ | 🟡 | 🟡 | — | — | — |
+| Ordered text/layer appearance effects and presets | ✅ (11 live effects; ORA + SVG filters; 9 live on iOS text layers with the same presets) | ✅ | 🟡 | 🟡 | — | — | — |
 | Shape tool (rect/ellipse/line) | ✅ (parametric, re-editable) | ✅ (vector) | ✅ (vector layers, 3.2) | ✅ (raster) | — | — | — |
 | Pen / path tool | 🟡 (native cubic model; narrower direct editing) | ✅ (full vector) | ✅ | ❌ | — | — | — |
 | Parametric (re-editable) vectors | 🟡 [Vector Model](vector-model.md) | ✅ | ✅ (3.2 vector layers) | ❌ | — | — | — |
@@ -151,7 +151,7 @@ for the versioned platform screen-reader and visual smoke procedures.
 |---|---|---|---|---|---|---|---|
 | Action/macro recording | ✅ [Actions](actions.md) | ✅ | 🟡 (script instead) | ❌ | 🟡 (presets/batch) | ✅ (styles) | ✅ (styles) |
 | Scripting language | ❌ (CLI instead) | ✅ (JS/AppleScript/VBS) | ✅ (Script-Fu, Python 3) | ❌ | ✅ (Lua SDK) | ✅ (Lua + AI API) | 🟡 (AppleScript, Mac) |
-| Headless CLI | ✅ **64 shared engine ops** [CLI](cli.md) | ❌ | ✅ (`gimp -i -b`, script-driven) | ❌ | ❌ | ✅ (`darktable-cli`, export-focused) | ❌ |
+| Headless CLI | ✅ **65 shared engine ops** [CLI](cli.md) | ❌ | ✅ (`gimp -i -b`, script-driven) | ❌ | ❌ | ✅ (`darktable-cli`, export-focused) | ❌ |
 | Start pipelines from blank docs | ✅ (`--new A4 --dpi 300`) | — | ✅ (script) | ❌ | — | — | — |
 | Batch export | ✅ (shell loops + CLI) | ✅ (Actions batch) | ✅ | ❌ | ✅ | ✅ | ✅ (process recipes) |
 
@@ -186,7 +186,7 @@ Photoslop is an editor, not a DAM — these rows are scope notes, not gaps.
 
 ## Where Photoslop stands out
 
-- **Headless automation through a shared engine.** All 64 operations are shared
+- **Headless automation through a shared engine.** All 65 operations are shared
   by CLI and MCP; GUI presentation-only interactions have explicit parity
   rulings. Pipelines compose as ordered operations (`--new A4 --dpi 300 --adjust
   "exposure=1" --select-poly … --clear --output out.png`). None of the six has

@@ -537,8 +537,18 @@ extension XCUIApplication {
     let onBar = navigationBars.buttons[label].firstMatch
     if onBar.waitForExistence(timeout: 2), onBar.isHittable {
       onBar.tap()
-    } else {
-      revealAction(label, file: file, line: line).tap()
+      return
+    }
+    for _ in 1...3 {
+      let action = revealAction(label, file: file, line: line)
+      if action.isHittable {
+        action.tap()
+      } else {
+        action.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+      }
+      if !buttons["Import Image…"].firstMatch.exists {
+        return
+      }
     }
   }
 

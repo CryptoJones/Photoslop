@@ -163,6 +163,12 @@ struct EffectEditor: View {
           number("Soften", key: "soften", in: 0...20)
           number("Light Angle", key: "angle", in: 0...360, unit: "°")
           number("Altitude", key: "altitude", in: 0...90, unit: "°")
+        case "satin":
+          color("Color", key: "color")
+          number("Angle", key: "angle", in: 0...360, unit: "°")
+          number("Distance", key: "distance", in: 0...200)
+          number("Size", key: "size", in: 0...100)
+          Toggle("Invert", isOn: bool("invert"))
         case "gaussian-blur", "feather":
           // The two fill-replacing kinds (#372): they blur the layer's own
           // pixels rather than adding a plane, so radius is all there is.

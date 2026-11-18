@@ -353,35 +353,144 @@ enum AppearanceRenderer {
     return out
   }
 
-  /// `appearance._morph`: threshold at 1, then dilate or erode `amount`
-  /// times with a 3x3 structuring element, back to a 0/255 plane.
+  /// `appearance._morph`: Sub-pixel 5x5 chamfer distance transform for stroke
+  /// width, choke, and spread calculations to prevent aliasing and staircasing
+  /// on sharp corners.
   static func morph(_ plane: AlphaPlane, amount: Int, grow: Bool) -> AlphaPlane {
+    let amt = max(0, amount)
+    guard amt > 0 else { return plane }
     let width = plane.width, height = plane.height
-    var mask = plane.values.map { $0 > 1 }
-    for _ in 0..<max(0, amount) {
-      var next = mask
-      for y in 0..<height {
-        for x in 0..<width {
-          var hit = !grow
-          for dy in -1...1 {
-            let ny = y + dy
-            for dx in -1...1 {
-              let nx = x + dx
-              let inside = nx >= 0 && nx < width && ny >= 0 && ny < height
-              let value = inside ? mask[ny * width + nx] : false
-              if grow {
-                if value { hit = true }
-              } else if !value {
-                hit = false
-              }
-            }
+    guard width > 0, height > 0 else { return plane }
+
+    let inf: Float = 1e6
+    let pad = grow ? 0 : 1
+    let pw = width + pad * 2
+    let ph = height + pad * 2
+
+    var d = [Float](repeating: inf, count: pw * ph)
+    for py in 0..<ph {
+      let y = py - pad
+      for px in 0..<pw {
+        let x = px - pad
+        let val: Float
+        if x >= 0 && x < width && y >= 0 && y < height {
+          val = plane[x, y]
+        } else {
+          val = 0.0
+        }
+        let dVal: Float
+        if grow {
+          if val >= 255.0 {
+            dVal = 0.0
+          } else if val > 0.0 {
+            dVal = (Float(1.0) - val / Float(255.0)) * Float(5.0)
+          } else {
+            dVal = inf
           }
-          next[y * width + x] = hit
+        } else {
+          if val <= 0.0 {
+            dVal = 0.0
+          } else if val < 255.0 {
+            dVal = (val / Float(255.0)) * Float(5.0)
+          } else {
+            dVal = inf
+          }
+        }
+        d[py * pw + px] = dVal
+      }
+    }
+
+    // Forward pass
+    for y in 0..<ph {
+      let row = y * pw
+      if y >= 2 {
+        let r2 = (y - 2) * pw
+        for x in 0..<pw {
+          if x > 0 {
+            d[row + x] = min(d[row + x], d[r2 + x - 1] + 11)
+          }
+          if x < pw - 1 {
+            d[row + x] = min(d[row + x], d[r2 + x + 1] + 11)
+          }
         }
       }
-      mask = next
+      if y >= 1 {
+        let r1 = (y - 1) * pw
+        for x in 0..<pw {
+          d[row + x] = min(d[row + x], d[r1 + x] + 5)
+          if x > 0 {
+            d[row + x] = min(d[row + x], d[r1 + x - 1] + 7)
+          }
+          if x < pw - 1 {
+            d[row + x] = min(d[row + x], d[r1 + x + 1] + 7)
+          }
+          if x >= 2 {
+            d[row + x] = min(d[row + x], d[r1 + x - 2] + 11)
+          }
+          if x <= pw - 3 {
+            d[row + x] = min(d[row + x], d[r1 + x + 2] + 11)
+          }
+        }
+      }
+      for x in 1..<pw {
+        d[row + x] = min(d[row + x], d[row + x - 1] + 5)
+      }
     }
-    return AlphaPlane(width: width, height: height, values: mask.map { $0 ? 255 : 0 })
+
+    // Backward pass
+    for y in stride(from: ph - 1, through: 0, by: -1) {
+      let row = y * pw
+      if y <= ph - 3 {
+        let r2 = (y + 2) * pw
+        for x in 0..<pw {
+          if x > 0 {
+            d[row + x] = min(d[row + x], d[r2 + x - 1] + 11)
+          }
+          if x < pw - 1 {
+            d[row + x] = min(d[row + x], d[r2 + x + 1] + 11)
+          }
+        }
+      }
+      if y <= ph - 2 {
+        let r1 = (y + 1) * pw
+        for x in 0..<pw {
+          d[row + x] = min(d[row + x], d[r1 + x] + 5)
+          if x > 0 {
+            d[row + x] = min(d[row + x], d[r1 + x - 1] + 7)
+          }
+          if x < pw - 1 {
+            d[row + x] = min(d[row + x], d[r1 + x + 1] + 7)
+          }
+          if x >= 2 {
+            d[row + x] = min(d[row + x], d[r1 + x - 2] + 11)
+          }
+          if x <= pw - 3 {
+            d[row + x] = min(d[row + x], d[r1 + x + 2] + 11)
+          }
+        }
+      }
+      for x in stride(from: pw - 2, through: 0, by: -1) {
+        d[row + x] = min(d[row + x], d[row + x + 1] + 5)
+      }
+    }
+
+    var out = AlphaPlane(width: width, height: height)
+    let fAmt = Float(amt)
+    for y in 0..<height {
+      let dRow = (y + pad) * pw + pad
+      for x in 0..<width {
+        let dPx = d[dRow + x] / Float(5.0)
+        let m = plane[x, y]
+        if grow {
+          let cov = max(Float(0.0), min(Float(1.0), fAmt - dPx + Float(1.0))) * Float(255.0)
+          out[x, y] = max(m, cov)
+        } else {
+          let cov = max(Float(0.0), min(Float(1.0), dPx - fAmt + Float(1.0))) * Float(255.0)
+          out[x, y] = min(m, cov)
+        }
+      }
+    }
+    return out
   }
 
   /// `appearance._color_image`: a plane as a premultiplied bitmap of one
@@ -652,6 +761,34 @@ enum AppearanceRenderer {
           EffectPlane(
             buffer: colorImage(shadow, rgba: effect.rgba("shadow_color")),
             offsetX: 0, offsetY: 0, under: false, blendMode: "multiply", opacity: opacity))
+      case "satin":
+        let angle = effect.number("angle") * Double.pi / 180
+        let distance = effect.number("distance")
+        let dx = pyRound(distance * cos(angle))
+        let dy = pyRound(-distance * sin(angle))
+        let a1 = shift(alpha, dx: dx, dy: dy)
+        let a2 = shift(alpha, dx: -dx, dy: -dy)
+        var diff = AlphaPlane(width: alpha.width, height: alpha.height)
+        let invert = effect.bool("invert")
+        for index in 0..<diff.values.count {
+          var d = abs(a1.values[index] - a2.values[index])
+          if invert {
+            d = Float(255) - d
+          }
+          diff.values[index] = d
+        }
+        let size = pyRound(effect.number("size"))
+        if size > 0 {
+          diff = Self.blur(diff, radius: size)
+        }
+        var plane = diff
+        for index in 0..<plane.values.count {
+          plane.values[index] = max(0, min(255, plane.values[index] * (alpha.values[index] / Float(255.0))))
+        }
+        planes.append(
+          EffectPlane(
+            buffer: colorImage(plane, rgba: effect.rgba("color")),
+            offsetX: 0, offsetY: 0, under: false, blendMode: blend, opacity: opacity))
       default:
         // gaussian-blur and feather replace the fill on the desktop; see
         // `LayerEffect.renderableKinds`.

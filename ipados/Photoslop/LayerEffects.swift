@@ -77,6 +77,13 @@ struct LayerEffect: Codable, Equatable, Identifiable {
       "highlight_color": .rgba(255, 255, 255, 190),
       "shadow_color": .rgba(0, 0, 0, 160),
     ],
+    "satin": [
+      "color": .rgba(0, 0, 0, 128),
+      "angle": 19,
+      "distance": 11,
+      "size": 14,
+      "invert": true,
+    ],
     "gaussian-blur": ["radius": 5],
     "feather": ["radius": 5],
   ]
@@ -91,6 +98,7 @@ struct LayerEffect: Codable, Equatable, Identifiable {
     "color-overlay": "Color Overlay",
     "gradient-overlay": "Gradient Overlay",
     "bevel-emboss": "Bevel / Emboss",
+    "satin": "Satin",
     "gaussian-blur": "Gaussian Blur",
     "feather": "Feather",
   ]
@@ -99,7 +107,7 @@ struct LayerEffect: Codable, Equatable, Identifiable {
   /// offers them. The two that replace the fill instead are below.
   static let renderableKinds = [
     "drop-shadow", "inner-shadow", "outer-glow", "inner-glow", "outline",
-    "color-overlay", "gradient-overlay", "bevel-emboss",
+    "color-overlay", "gradient-overlay", "bevel-emboss", "satin",
   ]
 
   /// The two kinds that replace the fill instead of adding a plane beside it
@@ -128,8 +136,8 @@ struct LayerEffect: Codable, Equatable, Identifiable {
     self.init(
       schemaVersion: Self.schemaVersion,
       id: UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(),
-      kind: kind, enabled: true, blendMode: "normal", opacity: 1, parameters: merged,
-      extensions: nil)
+      kind: kind, enabled: true, blendMode: kind == "satin" ? "multiply" : "normal", opacity: 1,
+      parameters: merged, extensions: nil)
     self = normalized()
   }
 
@@ -161,7 +169,8 @@ struct LayerEffect: Codable, Equatable, Identifiable {
       ?? Self.schemaVersion
     id = try container.decodeIfPresent(String.self, forKey: .id) ?? ""
     enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
-    blendMode = try container.decodeIfPresent(String.self, forKey: .blendMode) ?? "normal"
+    blendMode = try container.decodeIfPresent(String.self, forKey: .blendMode)
+      ?? (kind == "satin" ? "multiply" : "normal")
     opacity = try container.decodeIfPresent(Double.self, forKey: .opacity) ?? 1
     parameters = try container.decodeIfPresent([String: JSONValue].self, forKey: .parameters)
       ?? [:]
@@ -205,7 +214,7 @@ struct LayerEffect: Codable, Equatable, Identifiable {
       let value = params[key] ?? fallback
       if key.hasSuffix("color") || key == "color1" || key == "color2" {
         params[key] = .rgba(value.rgba ?? fallback.rgba ?? [0, 0, 0, 255])
-      } else if key == "reverse" {
+      } else if key == "reverse" || key == "invert" {
         params[key] = .bool(value.truthy)
       } else if key == "source" || key == "position" || key == "style" {
         params[key] = .string(value.stringValue)
@@ -224,7 +233,8 @@ struct LayerEffect: Codable, Equatable, Identifiable {
     if result.id.isEmpty {
       result.id = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
     }
-    result.blendMode = Self.blendModes.contains(blendMode) ? blendMode : "normal"
+    result.blendMode = Self.blendModes.contains(blendMode)
+      ? blendMode : (kind == "satin" ? "multiply" : "normal")
     result.opacity = Self.number(.number(opacity), 0, 1, 1)
     result.parameters = params
     if let extensions, extensions.isEmpty { result.extensions = nil }

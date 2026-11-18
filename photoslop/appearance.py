@@ -44,6 +44,13 @@ EFFECT_DEFAULTS: dict[str, dict] = {
         "highlight_color": [255, 255, 255, 190],
         "shadow_color": [0, 0, 0, 160],
     },
+    "satin": {
+        "color": [0, 0, 0, 128],
+        "angle": 19,
+        "distance": 11,
+        "size": 14,
+        "invert": True,
+    },
     "gaussian-blur": {"radius": 5},
     "feather": {"radius": 5},
 }
@@ -57,6 +64,7 @@ EFFECT_LABELS = {
     "color-overlay": "Color Overlay",
     "gradient-overlay": "Gradient Overlay",
     "bevel-emboss": "Bevel / Emboss",
+    "satin": "Satin",
     "gaussian-blur": "Gaussian Blur",
     "feather": "Feather",
 }
@@ -65,12 +73,13 @@ EFFECT_LABELS = {
 def new_effect(kind: str, **parameters) -> dict:
     if kind not in EFFECT_DEFAULTS:
         raise ValueError(f"Unknown appearance effect: {kind}")
+    blend_default = "multiply" if kind == "satin" else "normal"
     effect = {
         "schema_version": SCHEMA_VERSION,
         "id": uuid.uuid4().hex,
         "type": kind,
         "enabled": True,
-        "blend_mode": "normal",
+        "blend_mode": parameters.pop("blend_mode", blend_default),
         "opacity": 1.0,
         "parameters": copy.deepcopy(EFFECT_DEFAULTS[kind]),
     }
@@ -129,7 +138,7 @@ def normalize_effect(value) -> dict:
             continue  # preserve future parameters without interpreting them
         if key.endswith("color") or key in {"color", "color1", "color2"}:
             params[key] = _rgba(params[key], defaults[key])
-        elif key in {"reverse"}:
+        elif key in {"reverse", "invert"}:
             params[key] = bool(params[key])
         elif key in {"source", "position", "style"}:
             params[key] = str(params[key])
@@ -141,7 +150,8 @@ def normalize_effect(value) -> dict:
             params[key] = _number(params[key], 1, 1000, defaults[key])
         else:
             params[key] = _number(params[key], 0, 1000, defaults[key])
-    blend = str(value.get("blend_mode", "normal"))
+    blend_default = "multiply" if kind == "satin" else "normal"
+    blend = str(value.get("blend_mode", blend_default))
     known = {
         "schema_version",
         "id",
@@ -214,24 +224,84 @@ def _blur_plane(plane: np.ndarray, radius: int) -> np.ndarray:
 
 
 def _morph(mask: np.ndarray, amount: int, grow: bool) -> np.ndarray:
-    result = mask > 1
-    for _ in range(max(0, int(amount))):
-        if grow:
-            result = npimage._dilate(result)
-        else:
-            padded = np.pad(result, 1, constant_values=False)
-            result = (
-                padded[:-2, :-2]
-                & padded[:-2, 1:-1]
-                & padded[:-2, 2:]
-                & padded[1:-1, :-2]
-                & padded[1:-1, 1:-1]
-                & padded[1:-1, 2:]
-                & padded[2:, :-2]
-                & padded[2:, 1:-1]
-                & padded[2:, 2:]
-            )
-    return result.astype(np.float32) * 255
+    """Sub-pixel 5x5 chamfer distance transform for stroke width, choke, and
+    spread calculations to prevent aliasing and staircasing on sharp corners."""
+    amt = max(0, int(amount))
+    if amt == 0:
+        return (
+            (mask > 1).astype(np.float32) * 255 if mask.dtype == bool else mask.astype(np.float32)
+        )
+
+    inf = 1e6
+    m = mask.astype(np.float32)
+    # Pixels outside the layer boundary are background (distance 0)
+    m_pad = np.pad(m, 1, constant_values=0.0) if not grow else m
+
+    h, w = m_pad.shape
+    if h == 0 or w == 0:
+        return mask.astype(np.float32)
+
+    if grow:
+        d = np.where(
+            m_pad >= 255.0,
+            0.0,
+            np.where(m_pad > 0.0, (1.0 - m_pad / 255.0) * 5.0, inf),
+        ).astype(np.float32)
+    else:
+        d = np.where(
+            m_pad <= 0.0,
+            0.0,
+            np.where(m_pad < 255.0, (m_pad / 255.0) * 5.0, inf),
+        ).astype(np.float32)
+
+    # 5x5 Chamfer metric forward pass (weights: 5 orthogonal, 7 diagonal, 11 knight)
+    for y in range(h):
+        if y >= 2:
+            r2 = d[y - 2]
+            d[y] = np.minimum(d[y], np.pad(r2[:-1], (1, 0), constant_values=inf) + 11)
+            d[y] = np.minimum(d[y], np.pad(r2[1:], (0, 1), constant_values=inf) + 11)
+        if y >= 1:
+            r1 = d[y - 1]
+            d[y] = np.minimum(d[y], r1 + 5)
+            d[y] = np.minimum(d[y], np.pad(r1[:-1], (1, 0), constant_values=inf) + 7)
+            d[y] = np.minimum(d[y], np.pad(r1[1:], (0, 1), constant_values=inf) + 7)
+            d[y] = np.minimum(d[y], np.pad(r1[:-2], (2, 0), constant_values=inf) + 11)
+            d[y] = np.minimum(d[y], np.pad(r1[2:], (0, 2), constant_values=inf) + 11)
+        row = d[y]
+        for x in range(1, w):
+            v = row[x - 1] + 5
+            if v < row[x]:
+                row[x] = v
+
+    # 5x5 Chamfer metric backward pass
+    for y in range(h - 1, -1, -1):
+        if y + 2 < h:
+            r2 = d[y + 2]
+            d[y] = np.minimum(d[y], np.pad(r2[:-1], (1, 0), constant_values=inf) + 11)
+            d[y] = np.minimum(d[y], np.pad(r2[1:], (0, 1), constant_values=inf) + 11)
+        if y + 1 < h:
+            r1 = d[y + 1]
+            d[y] = np.minimum(d[y], r1 + 5)
+            d[y] = np.minimum(d[y], np.pad(r1[:-1], (1, 0), constant_values=inf) + 7)
+            d[y] = np.minimum(d[y], np.pad(r1[1:], (0, 1), constant_values=inf) + 7)
+            d[y] = np.minimum(d[y], np.pad(r1[:-2], (2, 0), constant_values=inf) + 11)
+            d[y] = np.minimum(d[y], np.pad(r1[2:], (0, 2), constant_values=inf) + 11)
+        row = d[y]
+        for x in range(w - 2, -1, -1):
+            v = row[x + 1] + 5
+            if v < row[x]:
+                row[x] = v
+
+    if not grow:
+        d = d[1:-1, 1:-1]
+
+    d_px = d / 5.0
+    if grow:
+        cov = np.clip(float(amt) - d_px + 1.0, 0.0, 1.0) * 255.0
+        return np.maximum(m, cov).astype(np.float32)
+    else:
+        cov = np.clip(d_px - float(amt) + 1.0, 0.0, 1.0) * 255.0
+        return np.minimum(m, cov).astype(np.float32)
 
 
 def _color_image(alpha: np.ndarray, color) -> QImage:
@@ -423,6 +493,23 @@ def render(layer) -> RenderedAppearance:
                     "multiply",
                     opacity,
                 )
+            )
+        elif kind == "satin":
+            angle = math.radians(float(p["angle"]))
+            distance = float(p["distance"])
+            dx = round(distance * math.cos(angle))
+            dy = round(-distance * math.sin(angle))
+            a1 = _shift(alpha, dx, dy)
+            a2 = _shift(alpha, -dx, -dy)
+            diff = np.abs(a1 - a2)
+            if p["invert"]:
+                diff = 255.0 - diff
+            size = round(p["size"])
+            if size > 0:
+                diff = _blur_plane(diff, size)
+            plane = np.clip(diff * (alpha / 255.0), 0, 255)
+            planes.append(
+                Plane(_color_image(plane, p["color"]), source_offset, False, blend, opacity)
             )
         elif kind in {"gaussian-blur", "feather"}:
             radius = round(p["radius"])

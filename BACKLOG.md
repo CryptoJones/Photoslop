@@ -67,6 +67,15 @@ more testing. Both issues carry the `on-hold` label.
 
 ## Done
 
+- [x] Layer styles: separate Fill Opacity from Layer Opacity, add Satin effect,
+  and chamfer metric contours across desktop Qt, CLI, and iPadOS/iOS.
+  Fill Opacity dims only layer pixels while preserving drop shadows, strokes,
+  glows, and bevels at 100% visibility; Satin provides inverted dual-offset
+  contour shadows clipped to layer alpha; and a continuous sub-pixel 5×5
+  chamfer distance transform replaces discrete 3×3 erosion/dilation to eliminate
+  corner aliasing and staircasing
+  ([#423](https://github.com/CryptoJones/Photoslop/issues/423)) — shipped v2.43.0
+
 - [x] iOS interface redone for iPhone and iPad: the phone's dock is three
   fixed strips — the tool in hand and what a finger should do with it, the
   tool's settings, and the palette — so nothing in it scrolls and the brush

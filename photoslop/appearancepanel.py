@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QSlider,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -100,12 +101,21 @@ class AppearancePanel(QWidget):
         self.form = QFormLayout(self.form_widget)
         root.addWidget(self.form_widget)
 
+        self.fill_slider = QSlider(Qt.Orientation.Horizontal)
+        self.fill_slider.setRange(0, 100)
+        self.fill_slider.setValue(100)
+        self.fill_slider.setAccessibleName("Fill opacity slider")
+
         self.fill_opacity = QDoubleSpinBox()
         self.fill_opacity.setRange(0, 100)
         self.fill_opacity.setSuffix(" %")
         self.fill_opacity.setAccessibleName("Fill opacity")
-        root.addWidget(QLabel("Fill Opacity"))
-        root.addWidget(self.fill_opacity)
+
+        fill_layout = QHBoxLayout()
+        fill_layout.addWidget(QLabel("Fill Opacity"))
+        fill_layout.addWidget(self.fill_slider, 1)
+        fill_layout.addWidget(self.fill_opacity)
+        root.addLayout(fill_layout)
 
         self.add_btn.clicked.connect(self.add_effect)
         self.effects.currentItemChanged.connect(self._selection_changed)
@@ -115,6 +125,7 @@ class AppearancePanel(QWidget):
         self.delete_btn.clicked.connect(self.delete_effect)
         self.up_btn.clicked.connect(lambda: self.move_effect(-1))
         self.down_btn.clicked.connect(lambda: self.move_effect(1))
+        self.fill_slider.valueChanged.connect(self._slider_changed)
         self.fill_opacity.valueChanged.connect(self._fill_changed)
         self.apply_preset_btn.clicked.connect(self.apply_preset)
         self.save_preset_btn.clicked.connect(self.save_preset)
@@ -167,6 +178,7 @@ class AppearancePanel(QWidget):
             self.effects,
             self.add_btn,
             self.effect_kind,
+            self.fill_slider,
             self.fill_opacity,
             self.apply_preset_btn,
             self.save_preset_btn,
@@ -174,6 +186,7 @@ class AppearancePanel(QWidget):
             widget.setEnabled(enabled)
         if layer is None:
             self.status.setText("No active layer")
+            self.fill_slider.setValue(100)
             self.fill_opacity.setValue(100)
         else:
             layer.effects = normalize_effects(layer.effects)
@@ -188,6 +201,9 @@ class AppearancePanel(QWidget):
                     Qt.CheckState.Checked if effect["enabled"] else Qt.CheckState.Unchecked
                 )
                 self.effects.addItem(item)
+            self.fill_slider.blockSignals(True)
+            self.fill_slider.setValue(round(layer.fill_opacity * 100))
+            self.fill_slider.blockSignals(False)
             self.fill_opacity.setValue(layer.fill_opacity * 100)
         self._updating = False
         wanted = selected_id or self._selected_id
@@ -397,7 +413,16 @@ class AppearancePanel(QWidget):
                 effect_id, key, [color.red(), color.green(), color.blue(), color.alpha()]
             )
 
+    def _slider_changed(self, value: int) -> None:
+        self.fill_opacity.blockSignals(True)
+        self.fill_opacity.setValue(float(value))
+        self.fill_opacity.blockSignals(False)
+        self._fill_changed(float(value))
+
     def _fill_changed(self, value: float) -> None:
+        self.fill_slider.blockSignals(True)
+        self.fill_slider.setValue(round(value))
+        self.fill_slider.blockSignals(False)
         if not self._updating and self._layer() is not None:
             self._commit(
                 self._stack(),

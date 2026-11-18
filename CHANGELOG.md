@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.43.0] — Unreleased
+
+### Added
+- **Separate Fill Opacity from Layer Opacity** — Fill Opacity dims layer content
+  pixels while leaving drop shadows, strokes, glows, satin, and bevels at 100%
+  visibility for translucent glass, badges, and embossed effects. Supported on
+  desktop Qt (slider in Layers and Appearance panels, Layer Style menu), CLI/MCP
+  (`--fill-opacity <0-100>`), and iPadOS/iOS (slider in Layer panel and Effects
+  sheet) ([#423](https://github.com/CryptoJones/Photoslop/issues/423)).
+- **Satin Layer Style Effect** — produces inverted dual-offset contour shadows
+  clipped to layer alpha with configurable blend mode, color, opacity, angle,
+  distance, size/blur, and inversion toggle. Available across desktop Qt
+  (`Layer Style: Satin…`), CLI/MCP (`--satin ANGLE,DIST,SIZE[,OPAC]`), and
+  iPadOS/iOS (`EffectsSheet` and `AppearanceRenderer`)
+  ([#423](https://github.com/CryptoJones/Photoslop/issues/423)).
+- **Sub-pixel 5×5 Chamfer Metric Contours** — replaced discrete 3×3 binary
+  structuring elements with a continuous sub-pixel 5×5 chamfer distance
+  transform for stroke width, choke, and spread calculations across Python and
+  Swift appearance engines, eliminating aliasing and staircasing artifacts on
+  sharp corners ([#423](https://github.com/CryptoJones/Photoslop/issues/423)).
+
 ## [2.42.0] — Unreleased
 
 ### Added
