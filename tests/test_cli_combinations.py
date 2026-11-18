@@ -55,6 +55,7 @@ PAIR_ARGS = {
     "rotate": ["--rotate", "10"],
     "rotate-layer": ["--rotate-layer", "90"],
     "content-aware-scale": ["--content-aware-scale", "36x26"],
+    "puppet-warp": ["--puppet-warp", "10,10->10,10;30,20->32,22"],
     "levels": ["--levels", "10,240,1.2"],
     "auto-levels": ["--auto-levels"],
     "invert": ["--invert"],

@@ -47,6 +47,14 @@ struct EditorView: View {
   /// The glyphs of the text layer being fitted, cropped from its rendering
   /// when the box opened, so the live preview can scale them into the box.
   @State private var textPlacementPreview: UIImage?
+  @State private var isPuppetWarping = false
+  @State private var puppetMesh: PuppetMesh?
+  @State private var puppetPins: [PuppetPin] = []
+  @State private var selectedPuppetPinID: UUID?
+  @State private var puppetMode = PuppetMode.normal
+  @State private var puppetDensity = "Normal"
+  @State private var puppetPreview: UIImage?
+  @State private var puppetPreviewOffset = CGPoint.zero
   /// A one-shot ask for the canvas to bring a freshly opened box on screen —
   /// or, after a drag, back on screen without touching the zoom.
   @State private var boxReveal: (id: Int, rect: CGRect, zooms: Bool)?
@@ -414,6 +422,8 @@ struct EditorView: View {
             dockedMode { cropBar }
           } else if placement != nil {
             dockedMode { placementBar }
+          } else if isPuppetWarping {
+            dockedMode { puppetBar }
           } else {
             compactDock
           }
@@ -568,6 +578,8 @@ struct EditorView: View {
         cropBar
       } else if placement != nil {
         placementBar
+      } else if isPuppetWarping {
+        puppetBar
       } else if store.selection != nil {
         // A selection's actions get a row of their own. Six buttons and the
         // tool's own settings do not fit on one line of an iPad mini's width,
@@ -981,6 +993,8 @@ struct EditorView: View {
           identifier: "Transform",
           readoutLabel: "Layer size")
       }
+    } else if isPuppetWarping {
+      puppetOverlay
     }
   }
 
@@ -1117,6 +1131,130 @@ struct EditorView: View {
         .foregroundStyle(.black)
         .accessibilityIdentifier("Apply Crop")
     }
+  }
+
+  /// The Puppet Warp mode's bottom bar (#420).
+  private var puppetBar: some View {
+    HStack(spacing: 12) {
+      Button("Cancel", role: .cancel, action: cancelPuppetWarp)
+        .foregroundStyle(.secondary)
+        .accessibilityIdentifier("Cancel Puppet Warp")
+
+      Spacer(minLength: 0)
+
+      Picker("Mode", selection: $puppetMode) {
+        ForEach(PuppetMode.allCases) { mode in
+          Text(mode.label).tag(mode)
+        }
+      }
+      .pickerStyle(.segmented)
+      .frame(maxWidth: 220)
+      .onChange(of: puppetMode) { _, newMode in
+        if var mesh = puppetMesh, !puppetPins.isEmpty {
+          ARAPSolver.solve(mesh: &mesh, pins: &puppetPins, mode: newMode)
+          puppetMesh = mesh
+          updatePuppetPreview()
+        }
+      }
+      .accessibilityIdentifier("Puppet Warp Mode")
+
+      Button {
+        changeSelectedPinDepth(-1)
+      } label: {
+        Image(systemName: "square.2.layers.3d.bottom.filled")
+      }
+      .disabled(selectedPuppetPinID == nil)
+      .accessibilityLabel("Send Pin Backward")
+
+      Button {
+        changeSelectedPinDepth(+1)
+      } label: {
+        Image(systemName: "square.2.layers.3d.top.filled")
+      }
+      .disabled(selectedPuppetPinID == nil)
+      .accessibilityLabel("Bring Pin Forward")
+
+      Button {
+        deleteSelectedPin()
+      } label: {
+        Image(systemName: "trash")
+      }
+      .disabled(selectedPuppetPinID == nil)
+      .accessibilityLabel("Delete Pin")
+
+      Spacer(minLength: 0)
+
+      Button("Done", action: applyPuppetWarp)
+        .buttonStyle(.borderedProminent)
+        .tint(Studio.accent)
+        .foregroundStyle(.black)
+        .accessibilityIdentifier("Apply Puppet Warp")
+    }
+  }
+
+  /// The interactive canvas overlay for Puppet Warp (#420).
+  private var puppetOverlay: some View {
+    GeometryReader { _ in
+      ZStack(alignment: .topLeading) {
+        if let preview = puppetPreview {
+          Image(uiImage: preview)
+            .resizable()
+            .interpolation(.high)
+            .frame(width: preview.size.width, height: preview.size.height)
+            .offset(x: puppetPreviewOffset.x, y: puppetPreviewOffset.y)
+            .allowsHitTesting(false)
+        }
+
+        if let mesh = puppetMesh {
+          Path { path in
+            let v = mesh.deformedVertices
+            for (i0, i1, i2) in mesh.triangles {
+              path.move(to: v[i0])
+              path.addLine(to: v[i1])
+              path.addLine(to: v[i2])
+              path.closeSubpath()
+            }
+          }
+          .stroke(Color.cyan.opacity(0.35), lineWidth: 1)
+          .allowsHitTesting(false)
+        }
+
+        ForEach(puppetPins) { pin in
+          let isSelected = pin.id == selectedPuppetPinID
+          ZStack {
+            Circle()
+              .fill(isSelected ? Color.yellow : Color.white)
+              .frame(width: 16, height: 16)
+              .shadow(color: .black.opacity(0.4), radius: 2)
+            Circle()
+              .fill(Color.black)
+              .frame(width: 5, height: 5)
+            if pin.depth != 0 {
+              Text("\(pin.depth > 0 ? "+" : "")\(pin.depth)")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(.black)
+                .offset(x: 14, y: -10)
+            }
+          }
+          .position(pin.target)
+          .gesture(
+            DragGesture(minimumDistance: 0)
+              .onChanged { value in
+                selectedPuppetPinID = pin.id
+                updatePinTarget(pin.id, to: value.location)
+              }
+          )
+        }
+      }
+      .contentShape(Rectangle())
+      .simultaneousGesture(
+        SpatialTapGesture()
+          .onEnded { value in
+            handlePuppetCanvasTap(at: value.location)
+          }
+      )
+    }
+    .accessibilityIdentifier("Puppet Warp Overlay")
   }
 
   /// Fill, Cut, Copy, Paste and Delete for the selection that is up (#374,
@@ -1263,6 +1401,7 @@ struct EditorView: View {
           resizeDocumentButton
           Divider()
           resizeLayerButton
+          puppetWarpButton
           flattenImageButton
           selectMenu
           filtersMenu
@@ -1299,6 +1438,7 @@ struct EditorView: View {
       cropButton
       Divider()
       resizeLayerButton
+      puppetWarpButton
       flattenImageButton
     } label: {
       Label("Image", systemImage: "photo")
@@ -1383,6 +1523,16 @@ struct EditorView: View {
       Label("Resize Layer…", systemImage: "arrow.up.backward.and.arrow.down.forward")
     }
     .disabled(store.activeLayerID == nil || activeTextLayer != nil)
+  }
+
+  private var puppetWarpButton: some View {
+    Button {
+      beginPuppetWarp()
+    } label: {
+      Label("Puppet Warp…", systemImage: "figure.walk")
+    }
+    .disabled(store.activeLayerID == nil || activeTextLayer != nil)
+    .keyboardShortcut("p", modifiers: [.command, .shift])
   }
 
   /// The desktop's Select menu (#326): everything that acts on the selection
@@ -2785,6 +2935,95 @@ struct EditorView: View {
     if current.isNew { store.deleteLayer(current.layerID) }
     placement = nil
     textPlacementPreview = nil
+  }
+
+  private func beginPuppetWarp() {
+    guard let layer = store.activeLayer else { return }
+    let spacing: Int = (puppetDensity == "Low") ? 35 : ((puppetDensity == "High") ? 12 : 20)
+    let mesh = PuppetMesh.generate(from: layer.image, spacing: spacing)
+    puppetMesh = mesh
+    puppetPins = []
+    selectedPuppetPinID = nil
+    puppetPreview = nil
+    puppetPreviewOffset = layer.origin
+    store.previewSuppressedLayerID = layer.id
+    isPuppetWarping = true
+  }
+
+  private func applyPuppetWarp() {
+    guard isPuppetWarping, let layer = store.activeLayer, let mesh = puppetMesh, !puppetPins.isEmpty else {
+      cancelPuppetWarp()
+      return
+    }
+    let outcome = PuppetRasterizer.rasterize(image: layer.image, mesh: mesh, pins: puppetPins)
+    let newOrigin = CGPoint(x: layer.origin.x + outcome.offset.x, y: layer.origin.y + outcome.offset.y)
+    store.applyPuppetWarp(layer.id, image: outcome.image, origin: newOrigin)
+    cancelPuppetWarp()
+  }
+
+  private func cancelPuppetWarp() {
+    store.previewSuppressedLayerID = nil
+    isPuppetWarping = false
+    puppetMesh = nil
+    puppetPins = []
+    selectedPuppetPinID = nil
+    puppetPreview = nil
+  }
+
+  private func handlePuppetCanvasTap(at point: CGPoint) {
+    let hitDistance: CGFloat = 20.0
+    for pin in puppetPins {
+      let dx = pin.target.x - point.x
+      let dy = pin.target.y - point.y
+      if sqrt(dx * dx + dy * dy) <= hitDistance {
+        selectedPuppetPinID = pin.id
+        return
+      }
+    }
+    guard isPuppetWarping, var mesh = puppetMesh else { return }
+    let newPin = PuppetPin(rest: point, target: point)
+    puppetPins.append(newPin)
+    selectedPuppetPinID = newPin.id
+    ARAPSolver.solve(mesh: &mesh, pins: &puppetPins, mode: puppetMode)
+    puppetMesh = mesh
+    updatePuppetPreview()
+  }
+
+  private func updatePinTarget(_ id: UUID, to point: CGPoint) {
+    guard let idx = puppetPins.firstIndex(where: { $0.id == id }), var mesh = puppetMesh else { return }
+    puppetPins[idx].target = point
+    ARAPSolver.solve(mesh: &mesh, pins: &puppetPins, mode: puppetMode)
+    puppetMesh = mesh
+    updatePuppetPreview()
+  }
+
+  private func updatePuppetPreview() {
+    guard let layer = store.activeLayer, let mesh = puppetMesh, !puppetPins.isEmpty else {
+      puppetPreview = nil
+      return
+    }
+    let outcome = PuppetRasterizer.rasterize(image: layer.image, mesh: mesh, pins: puppetPins)
+    puppetPreview = outcome.image
+    puppetPreviewOffset = CGPoint(x: layer.origin.x + outcome.offset.x, y: layer.origin.y + outcome.offset.y)
+  }
+
+  private func changeSelectedPinDepth(_ delta: Int) {
+    guard let id = selectedPuppetPinID, let idx = puppetPins.firstIndex(where: { $0.id == id }) else { return }
+    puppetPins[idx].depth += delta
+    updatePuppetPreview()
+  }
+
+  private func deleteSelectedPin() {
+    guard let id = selectedPuppetPinID, let idx = puppetPins.firstIndex(where: { $0.id == id }), var mesh = puppetMesh else { return }
+    puppetPins.remove(at: idx)
+    selectedPuppetPinID = nil
+    if !puppetPins.isEmpty {
+      ARAPSolver.solve(mesh: &mesh, pins: &puppetPins, mode: puppetMode)
+      puppetMesh = mesh
+      updatePuppetPreview()
+    } else {
+      puppetPreview = nil
+    }
   }
 
   private func applyCrop(_ rect: CGRect) {

@@ -11,13 +11,7 @@ import XCTest
 /// it before and after.
 final class PaintBucketUITests: UITestCase {
   func testBucketTapFillsTheActiveLayer() {
-    let app = openEditor()
-    // A fresh document, so the active layer is the white Background rather
-    // than whatever an earlier test left selected — a text layer, say, which
-    // the bucket refuses by design.
-    app.terminate()
-    _ = app.wait(for: .notRunning, timeout: 30)
-    app.openNewDocument()
+    let app = openFreshEditor()
     app.selectTool("Bucket")
 
     // The tolerance slider takes the width slider's slot for the bucket.

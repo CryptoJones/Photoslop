@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.46.0] — Unreleased
+
+### Added
+- **Edit: Puppet Warp — mesh pin deformation via As-Rigid-As-Possible (ARAP) solver** —
+  full cross-platform mesh pin deformation across Desktop Qt, CLI, and iPadOS/iOS.
+  Alpha-silhouette triangle mesh generation with dilation and connected component
+  partitioning. Iterative ARAP surface modeling alternating between closed-form 2D polar
+  decomposition rotation estimation and linear system solves satisfying pin constraints.
+  Supports `rigid` (high rotation stiffness), `normal` (balanced), and `distort`
+  (similarity/affine) modes, pin rotation with Alt+drag or angle control, pin depth ordering
+  (bring forward / send backward), and memory-frugal affine triangle rasterization directly
+  into the layer buffer (DD-001). Desktop: `Edit ▸ Puppet Warp` (`Ctrl+Shift+P` /
+  `Cmd+Shift+P`), tool options bar with mode, mesh density, depth ordering, apply, and
+  cancel buttons; CLI: `--puppet-warp "x1,y1->new_x1,new_y1;..."` and `--puppet-mode <rigid|normal|distort>`;
+  iPadOS/iOS: native Swift `PuppetWarp.swift` engine, interactive touch canvas overlay,
+  pin depth ordering, and undoable rasterized mutation
+  ([#420](https://github.com/CryptoJones/Photoslop/issues/420)).
+
 ## [2.45.0] — Unreleased
 
 ### Added
