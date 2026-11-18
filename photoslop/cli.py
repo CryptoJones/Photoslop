@@ -315,6 +315,34 @@ def _op_curves(ctx: Context, value: str) -> None:
         _filter_region(ctx, layer, lambda img, m, luts=luts: adjust.apply_luts(img, luts))
 
 
+def _op_color_lookup(ctx: Context, value: str) -> None:
+    from photoslop.lut3d import apply_lut3d, load_lut
+
+    intensity = 1.0
+    lut_target = value.strip()
+    if "," in value:
+        parts = value.rsplit(",", 1)
+        try:
+            val = float(parts[1])
+            intensity = val / 100.0 if val > 1.0 else val
+            lut_target = parts[0].strip()
+        except ValueError:
+            lut_target = value.strip()
+            intensity = 1.0
+
+    try:
+        lut = load_lut(lut_target)
+    except Exception as exc:
+        raise _ValueError(f"--color-lookup: {exc}") from exc
+
+    for layer in _target_layers(ctx):
+        _filter_region(
+            ctx,
+            layer,
+            lambda img, m, lut=lut, intensity=intensity: apply_lut3d(img, lut, intensity, m),
+        )
+
+
 def _op_gaussian_blur(ctx: Context, value: str) -> None:
     from photoslop import npimage
 
@@ -1198,6 +1226,12 @@ OPS: dict = {
         "contrast, highlights, shadows, whites, blacks, vibrance, "
         "saturation)",
         _op_adjust,
+    ),
+    "color-lookup": (
+        "LUT_FILE_OR_PRESET[,INTENSITY]",
+        "apply a 3D LUT (.cube, .3dl) or built-in preset (Warm Film, "
+        "Cool Crisp, Bleach Bypass, Teal & Orange, Faded Monochrome)",
+        _op_color_lookup,
     ),
     "raw-develop": (
         '"KEY=VAL,..."',

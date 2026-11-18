@@ -67,6 +67,8 @@ more testing. Both issues carry the `on-hold` label.
 
 ## Done
 
+- [x] **Adjustment: Color Lookup — 3D LUT support (.cube and .3dl) with trilinear interpolation** ([#422](https://github.com/CryptoJones/Photoslop/issues/422)) — shipped v2.44.0
+
 - [x] Layer styles: separate Fill Opacity from Layer Opacity, add Satin effect,
   and chamfer metric contours across desktop Qt, CLI, and iPadOS/iOS.
   Fill Opacity dims only layer pixels while preserving drop shadows, strokes,

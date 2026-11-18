@@ -36,7 +36,7 @@ final class FilterParityTests: XCTestCase {
 
   /// Every fixture case, every filter, word for word.
   func testEveryFixtureCaseMatchesTheDesktop() throws {
-    XCTAssertEqual(FilterFixture.cases.count, 32)
+    XCTAssertEqual(FilterFixture.cases.count, 37)
     var covered = Set<FilterKind>()
     for testCase in FilterFixture.cases {
       let kind = try XCTUnwrap(FilterKind(rawValue: testCase.filter), "filter \(testCase.filter)")
@@ -294,6 +294,49 @@ final class FilterParityTests: XCTestCase {
       }
     }
     XCTAssertGreaterThan(changedInside, 0, "the selection contained something to invert")
+
+    undoManager.undo()
+    XCTAssertEqual(try layerWords(store), before)
+  }
+
+  /// Color Lookup at 0 intensity is the identity: leaves every pixel unchanged.
+  func testColorLookupZeroIntensityIsIdentity() throws {
+    var pixels = try buffer("gradient16")
+    let before = pixels.words
+    FilterAlgorithms.colorLookup(&pixels, preset: "Warm Film", intensity: 0)
+    XCTAssertEqual(pixels.words, before)
+  }
+
+  /// Color Lookup is one undo step, and the selection confines it.
+  func testColorLookupIsOneUndoStepAndSelectionAware() throws {
+    let (store, undoManager, before) = try makeStore(with: "gradient16")
+    var bits = [Bool](repeating: false, count: 16 * 12)
+    for y in 3..<9 {
+      for x in 2..<10 { bits[y * 16 + x] = true }
+    }
+    store.setSelection(SelectionMask(width: 16, height: 12, bits: bits))
+    var whole = PixelBuffer(width: 16, height: 12, words: before)
+    FilterAlgorithms.colorLookup(&whole, preset: "Warm Film", intensity: 100)
+
+    undoManager.beginUndoGrouping()
+    XCTAssertEqual(
+      store.applyFilter(.colorLookup, params: ["preset": .choice("Warm Film"), "intensity": .int(100)]),
+      .applied)
+    undoManager.endUndoGrouping()
+    XCTAssertTrue(undoManager.canUndo)
+    XCTAssertEqual(undoManager.undoActionName, "Color Lookup")
+
+    let after = try layerWords(store)
+    var changedInside = 0
+    for i in 0..<after.count {
+      if bits[i] {
+        XCTAssertEqual(after[i], whole.words[i], "selected pixel \(i) is LUT-mapped")
+        if after[i] != before[i] { changedInside += 1 }
+      } else {
+        XCTAssertEqual(after[i], before[i], "pixel \(i) outside the selection is untouched")
+      }
+    }
+    XCTAssertGreaterThan(changedInside, 0, "the selection contained something to change")
 
     undoManager.undo()
     XCTAssertEqual(try layerWords(store), before)

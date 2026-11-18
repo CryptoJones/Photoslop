@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.44.0] — Unreleased
+
+### Added
+- **Adjustment: Color Lookup — 3D LUT Support with Trilinear Interpolation** —
+  full 3D LUT support across desktop Qt, headless CLI, and iPadOS/iOS.
+  Parses Adobe `.cube` (both 1D and 3D tables, domain min/max, comments `#`,
+  titles) and Autodesk Lustre `.3dl` (mesh size headers, bit-depth ranges, integer
+  and float data). Fast vectorized trilinear interpolation streams across 256-row
+  chunks (DD-001) for strictly bounded transient memory. Includes five built-in
+  cinematic film presets ("Warm Film", "Cool Crisp", "Bleach Bypass", "Teal &
+  Orange", "Faded Monochrome") and intensity/opacity blending. Desktop:
+  `Image ▸ Adjustments ▸ Color Lookup…` (`Ctrl+Alt+L` / `Cmd+Alt+L`) with live
+  preview and custom LUT file loading, plus preset selection in the Adjust panel;
+  CLI: `--color-lookup <file_or_preset>[,intensity]`; iPadOS/iOS: `Color Lookup`
+  filter with preset choices, intensity slider, and hard selection confinement
+  ([#422](https://github.com/CryptoJones/Photoslop/issues/422)).
+
 ## [2.43.0] — Unreleased
 
 ### Added

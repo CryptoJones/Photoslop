@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v2.43.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v2.44.0-orange)]()
 
 > **💚 Support Photoslop** — if this app saves you money or RAM, consider tossing a few bucks at the project:
 > **CashApp [`$cryptojones`](https://cash.app/$cryptojones)** · **Venmo [`@CryptoJones`](https://venmo.com/u/CryptoJones)**
@@ -69,7 +69,7 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
 - **Adjust panel** — Lightroom-style Basic sliders (Temp, Tint, Exposure,
   Contrast, Highlights, Shadows, Whites, Blacks, Vibrance, Saturation) in a
   tab next to Layers; live preview, one undo step per Apply. Levels
-  (`Ctrl+L`) with auto black/white points; Hue/Saturation (`Ctrl+U`); Color Balance (`Ctrl+B`); Curves (`Ctrl+M`).
+  (`Ctrl+L`) with auto black/white points; Hue/Saturation (`Ctrl+U`); Color Balance (`Ctrl+B`); Curves (`Ctrl+M`); Color Lookup (`Ctrl+Alt+L` 3D LUT .cube/.3dl).
 - **Undo/redo** — region-based undo that stores only the pixels a stroke
   touched, with a History panel to click back to any earlier state.
 - **Appearance effects** — an ordered, non-destructive stack for every layer:

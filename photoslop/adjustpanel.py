@@ -18,6 +18,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -30,6 +31,7 @@ from PySide6.QtWidgets import (
 from photoslop.adjust import AdjustSettings, apply_settings
 from photoslop.commands import LayerRegionCommand
 from photoslop.document import Document
+from photoslop.lut3d import PRESET_NAMES, apply_lut3d, get_preset_lut
 
 # key, label, slider range, display divisor (exposure slider is in 1/100 stop)
 _SLIDERS = (
@@ -92,6 +94,15 @@ class AdjustPanel(QWidget):
         buttons.addStretch(1)
 
         box = QVBoxLayout(self)
+        lut_row = QHBoxLayout()
+        lut_row.addWidget(QLabel("3D LUT:"))
+        self.lut_combo = QComboBox()
+        self.lut_combo.addItem("(None)")
+        for name in PRESET_NAMES:
+            self.lut_combo.addItem(name)
+        self.lut_combo.currentIndexChanged.connect(self._on_lut_changed)
+        lut_row.addWidget(self.lut_combo)
+        box.addLayout(lut_row)
         box.addLayout(grid)
         box.addWidget(self.scope_all)
         box.addLayout(buttons)
@@ -142,6 +153,19 @@ class AdjustPanel(QWidget):
             self._pristines[layer] = QImage(layer.image)  # COW reference
         return self._pristines[layer]
 
+    def _on_lut_changed(self) -> None:
+        if self._updating or self.doc is None:
+            return
+        layer = self.doc.active_layer
+        if layer is None:
+            return
+        if self._layer is None:
+            self._layer = layer
+            self._pristine_for(layer)
+        self.apply_btn.setEnabled(True)
+        self.reset_btn.setEnabled(True)
+        self._debounce.start()
+
     def _on_slider(self) -> None:
         if self._updating or self.doc is None:
             return
@@ -164,6 +188,9 @@ class AdjustPanel(QWidget):
         for layer in self._targets():
             img = QImage(self._pristine_for(layer))
             apply_settings(img, self.settings())  # first write detaches
+            if self.lut_combo.currentIndex() > 0:
+                lut = get_preset_lut(self.lut_combo.currentText())
+                apply_lut3d(img, lut)
             layer.image = img
             self.doc.notify_pixels(layer.bounds())
 
@@ -191,7 +218,7 @@ class AdjustPanel(QWidget):
             for layer, pristine in self._pristines.items()
             if layer.image != pristine
         ]
-        if changed and not self.settings().is_identity():
+        if changed and (not self.settings().is_identity() or self.lut_combo.currentIndex() > 0):
             self._committing = True
             try:
                 self.doc.undo_stack.beginMacro("Adjust")
@@ -222,6 +249,9 @@ class AdjustPanel(QWidget):
         self._pristines = {}
         self._layer = None
         self._updating = True
+        self.lut_combo.blockSignals(True)
+        self.lut_combo.setCurrentIndex(0)
+        self.lut_combo.blockSignals(False)
         for key, _label, _extent, _div in _SLIDERS:
             self._sliders[key].setValue(0)
             self._values[key].setText("0")

@@ -30,6 +30,7 @@ CASES = {
     "color-balance": ("10,0,0,0,0,0,0,0,-10", "1,2,3"),
     "curves": ("0:20,255:235", "0:20:40"),
     "adjust": ("exposure=1,contrast=10", "sharpness=5"),
+    "color-lookup": ("Warm Film", "unknown-preset-xyz"),
     "point-color": ("hue=20,range=28,dh=15,uniform=40", "hue=400"),
     "raw-develop": (None, "exposure=nan-ish"),
     "lens-correct": (None, None),

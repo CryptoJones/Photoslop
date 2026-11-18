@@ -815,6 +815,7 @@ class MainWindow(QMainWindow):
         m_adjustments.addAction(self._act("&Point Color…", "Ctrl+Shift+U", self.action_point_color))
         m_adjustments.addAction(self._act("Color &Balance…", "Ctrl+B", self.action_color_balance))
         m_adjustments.addAction(self._act("Cur&ves…", "Ctrl+M", self.action_curves))
+        m_adjustments.addAction(self._act("Color &Lookup…", "Ctrl+Alt+L", self.action_color_lookup))
         m_adjustments.addSeparator()
         m_adjustments.addAction(self._act("&Invert", "Ctrl+I", self.action_invert))
         m_image.addSeparator()
@@ -3178,6 +3179,14 @@ class MainWindow(QMainWindow):
         from photoslop.colorbalancedialog import ColorBalanceDialog
 
         run_modal(ColorBalanceDialog(doc, self))
+
+    def action_color_lookup(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        from photoslop.colorlookupdialog import ColorLookupDialog
+
+        run_modal(ColorLookupDialog(doc, self))
 
     def action_content_aware_scale(self) -> None:
         doc = self.current_doc()
