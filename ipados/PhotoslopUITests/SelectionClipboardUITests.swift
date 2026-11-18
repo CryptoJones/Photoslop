@@ -21,10 +21,7 @@ final class SelectionClipboardUITests: UITestCase {
   }
 
   func testTheStripGrowsClipboardActionsOnlyWhileASelectionIsUp() {
-    let app = openEditor()
-    app.terminate()
-    _ = app.wait(for: .notRunning, timeout: 30)
-    app.openNewDocument()
+    let app = openFreshEditor()
 
     XCTAssertFalse(
       app.buttons["Cut"].firstMatch.exists,
@@ -40,10 +37,7 @@ final class SelectionClipboardUITests: UITestCase {
   }
 
   func testCutFromTheStripClearsTheSelectedPixels() {
-    let app = openEditor()
-    app.terminate()
-    _ = app.wait(for: .notRunning, timeout: 30)
-    app.openNewDocument()
+    let app = openFreshEditor()
 
     let probe = app.staticTexts["Pixel probe"].firstMatch
     XCTAssertTrue(probe.waitForExistence(timeout: 10), "the pixel probe is not exposed")
@@ -78,10 +72,7 @@ final class SelectionClipboardUITests: UITestCase {
   /// shape is a colour. The default ink is opaque black, so the probed pixel
   /// goes from white to black.
   func testFillFromTheStripPaintsTheSelectedPixels() {
-    let app = openEditor()
-    app.terminate()
-    _ = app.wait(for: .notRunning, timeout: 30)
-    app.openNewDocument()
+    let app = openFreshEditor()
 
     let probe = app.staticTexts["Pixel probe"].firstMatch
     XCTAssertTrue(probe.waitForExistence(timeout: 10), "the pixel probe is not exposed")
@@ -110,10 +101,7 @@ final class SelectionClipboardUITests: UITestCase {
   }
 
   func testPasteBecomesAvailableAfterACopyAndAddsALayer() {
-    let app = openEditor()
-    app.terminate()
-    _ = app.wait(for: .notRunning, timeout: 30)
-    app.openNewDocument()
+    let app = openFreshEditor()
 
     selectWithWand(app)
     let copy = app.buttons["Copy"].firstMatch

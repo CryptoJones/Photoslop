@@ -12,10 +12,7 @@ import XCTest
 /// would still be black and the same fill would turn it black.
 final class EyedropperUITests: UITestCase {
   func testSampledColourBecomesTheInk() {
-    let app = openEditor()
-    app.terminate()
-    _ = app.wait(for: .notRunning, timeout: 30)
-    app.openNewDocument()
+    let app = openFreshEditor()
 
     let probe = app.staticTexts["Pixel probe"].firstMatch
     XCTAssertTrue(probe.waitForExistence(timeout: 10), "the pixel probe is not exposed")

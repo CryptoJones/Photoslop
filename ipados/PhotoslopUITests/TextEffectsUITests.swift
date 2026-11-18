@@ -15,7 +15,7 @@ final class TextEffectsUITests: UITestCase {
     // Adding text leaves Move Text mode running; leave it the way a person
     // would, or the editor is not in its resting state for the menu.
     let doneMoving = app.buttons["Done"].firstMatch
-    if doneMoving.exists, doneMoving.isHittable { doneMoving.tap() }
+    if doneMoving.waitForExistence(timeout: 5), doneMoving.isHittable { doneMoving.tap() }
 
     app.chooseAction("Effects…")
     XCTAssertTrue(
