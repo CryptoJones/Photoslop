@@ -4,6 +4,35 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.41.0] — Unreleased
+
+### Added
+- **Photoshop `.psd`/`.psb` open and export on all three platforms** — a
+  dependency-free codec (`photoslop/io_psd.py`, `PSDCodec.swift`) that writes
+  8-bit RGB with per-layer RLE channels, offsets, opacity, fill opacity,
+  blend modes, visibility, clipping, masks, `lsct` groups, a merged RGBA
+  composite, DPI and ICC, and reads 8/16-bit RGB, Grayscale, CMYK, Indexed,
+  Duotone and Bitmap with raw, RLE and zip channels. Desktop: Open dialog
+  (with composite preview) and Save As ▸ Photoshop; CLI/MCP: `-o out.psd`
+  keeps layers; iPad/iPhone: Import Image opens a `.psd` as its layers and
+  Export offers Photoshop. iOS drops blend modes and folds masks into alpha
+  ([#436](https://github.com/CryptoJones/Photoslop/issues/436)).
+- **PSD export bakes what Photoshop cannot carry** — a layer with live
+  effects is written as the pixels it composites to (padded by the effects'
+  reach, mask and fill opacity folded in), an adjustment layer as the
+  composite below it with the adjustment applied, a smart object as its
+  filtered pixels; the reloaded file flattens to the same image
+  ([#436](https://github.com/CryptoJones/Photoslop/issues/436)).
+- **32-bit float PSDs open on every platform** — linear colour is clipped
+  and sRGB-encoded to 8-bit, alpha and masks scale linearly, zip-predicted
+  float rows are de-interleaved. The reader now also finds the global
+  `Lr16`/`Lr32` block, where Photoshop keeps every 16- and 32-bit document's
+  layers; those used to open flat
+  ([#436](https://github.com/CryptoJones/Photoslop/issues/436)).
+- **iPad/iPhone opens `.psd`/`.psb` from the document browser and Files** —
+  Photoshop documents are declared document types, open in place with their
+  layers, and save back as Photoshop
+  ([#436](https://github.com/CryptoJones/Photoslop/issues/436)).
 ## [2.40.0] — 2026-11-12
 
 ### Changed
@@ -114,7 +143,6 @@ follows [SemVer](https://semver.org).
   fork on the vulnerable versions, which the 3.12 audit runner could not see.
   3.10 reaches end of life this month. The Ubuntu 3.10 CI leg is now 3.11; ruff
   targets py311; the README badge and distribution notes say 3.11+.
-
 ## [2.38.3] — Unreleased
 
 ### Changed

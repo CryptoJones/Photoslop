@@ -13,10 +13,14 @@ from photoslop import color, io_formats, npimage
 from photoslop.atomicio import WriteTicket, atomic_write
 from photoslop.document import Document
 from photoslop.io_ora import load_ora, save_ora
+from photoslop.io_psd import load_psd, save_psd
 from photoslop.io_raw import develop_raw, is_raw_path, load_raw
 from photoslop.io_svg import load_svg, save_svg
 from photoslop.layer import Layer
 from photoslop.resources import validate_dimensions
+
+# Extensions Save writes without flattening; anything else goes through Export.
+LAYERED_EXTS = (".ora", ".svg", ".psd", ".psb")
 
 
 class FileService:
@@ -26,6 +30,8 @@ class FileService:
             return load_ora(path, allow_large=allow_large)
         if path.lower().endswith(".svg"):
             return load_svg(path, allow_large=allow_large)
+        if path.lower().endswith((".psd", ".psb")):
+            return load_psd(path, allow_large=allow_large)
         if is_raw_path(path):
             image = develop_raw(path, **raw_params) if raw_params is not None else load_raw(path)
             validate_dimensions(
@@ -90,9 +96,14 @@ class FileService:
     def save(
         document: Document, path: str, *, ticket: WriteTicket | None = None, before_commit=None
     ) -> str:
-        (save_svg if path.lower().endswith(".svg") else save_ora)(
-            document, path, ticket=ticket, before_commit=before_commit
-        )
+        lower = path.lower()
+        if lower.endswith(".svg"):
+            writer = save_svg
+        elif lower.endswith((".psd", ".psb")):
+            writer = save_psd
+        else:
+            writer = save_ora
+        writer(document, path, ticket=ticket, before_commit=before_commit)
         return path
 
 

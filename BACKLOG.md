@@ -6,6 +6,13 @@ sync — check an item here when its issue closes.
 
 ## Open
 
+### File formats
+
+- [ ] PSD interchange follow-up: carry blend modes, groups and masks on iPad
+  once its layer model has them (baked effects/adjustments on export, 32-bit
+  float open and iPad document-browser open shipped in v2.41.0)
+  ([#436](https://github.com/CryptoJones/Photoslop/issues/436))
+
 ### Testing
 
 - [ ] iOS: adversarial decoder tests for the Swift ORA and image importers —

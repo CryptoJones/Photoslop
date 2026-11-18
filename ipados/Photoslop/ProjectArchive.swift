@@ -135,6 +135,9 @@ struct ProjectLayerPayload: @unchecked Sendable {
 struct ProjectSnapshot: @unchecked Sendable {
   var manifest: ProjectManifest
   var layers: [UUID: ProjectLayerPayload]
+  /// Set instead of the archive when the document on disk is a Photoshop
+  /// file: the encoded `.psd` bytes to write back.
+  var photoshop: Data? = nil
 }
 
 enum ProjectArchiveError: LocalizedError {

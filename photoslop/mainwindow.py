@@ -65,6 +65,7 @@ from photoslop.opendialog import OpenImageDialog
 from photoslop.propertiespanel import PropertiesPanel
 from photoslop.recovery import RecoveryService
 from photoslop.services import (
+    LAYERED_EXTS,
     ExportRequest,
     ExportService,
     FileService,
@@ -1556,7 +1557,9 @@ class MainWindow(QMainWindow):
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
         dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
         dialog.setFileMode(QFileDialog.FileMode.AnyFile)
-        dialog.setNameFilters(["OpenRaster (*.ora)", "Scalable Vector Graphics (*.svg)"])
+        dialog.setNameFilters(
+            ["OpenRaster (*.ora)", "Photoshop (*.psd)", "Scalable Vector Graphics (*.svg)"]
+        )
         dialog.setDirectory(self._last_directory())
         dialog.selectFile(suggested_name)
         if not run_modal(dialog):
@@ -1567,7 +1570,7 @@ class MainWindow(QMainWindow):
     def open_path(self, path: str) -> bool:
         allow_large = self._allow_large_documents()
         try:
-            if path.lower().endswith((".ora", ".svg")):
+            if path.lower().endswith((".ora", ".svg", ".psd", ".psb")):
                 doc = FileService.load(path, allow_large=allow_large)
             elif is_raw_path(path):
                 from photoslop.io_raw import probe_raw
@@ -1607,13 +1610,18 @@ class MainWindow(QMainWindow):
 
     def _save_doc(self, doc: Document, background: bool = False) -> bool:
         path = doc.path
-        if path is None or not path.lower().endswith((".ora", ".svg")):
+        if path is None or not path.lower().endswith(LAYERED_EXTS):
             suggested = os.path.splitext(doc.name)[0] + ".ora"
             path, selected_filter = self._save_document_path(suggested)
             if not path:
                 return False
-            if not path.lower().endswith((".ora", ".svg")):
-                path += ".svg" if "SVG" in selected_filter else ".ora"
+            if not path.lower().endswith(LAYERED_EXTS):
+                if "SVG" in selected_filter:
+                    path += ".svg"
+                elif "Photoshop" in selected_filter:
+                    path += ".psd"
+                else:
+                    path += ".ora"
         if background:
             snapshot = snapshot_document(doc)
             undo_index = doc.undo_stack.index()
