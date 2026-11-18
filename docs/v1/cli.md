@@ -71,6 +71,7 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--rotate` `DEG` | rotate the whole image by any angle |
 | `--rotate-layer` `DEG` | rotate the target layer(s) about their centre |
 | `--puppet-warp` `"x1,y1->new_x1,new_y1;..."` | deform target layer(s) via As-Rigid-As-Possible (ARAP) mesh pin solver (mode via `--puppet-mode <rigid\|normal\|distort>`, default `normal`) |
+| `--liquify` `STROKES` | mesh displacement deformation with forward warp, twirl, pucker, bloat, and freeze masks (JSON file path or inline JSON string) |
 | `--content-aware-scale` `WxH` | seam-carve the target layer(s) |
 | `--levels` `B,W,GAMMA` | levels adjustment |
 | `--auto-levels` | 0.1%-percentile auto levels |
@@ -145,6 +146,11 @@ Notes:
   `normal`). `rigid` penalizes local area change strictly, `normal` provides a
   balanced stiffness and moderate stretch, and `distort` allows similarity/affine
   scaling. Pins are mapped to the layer content's 2D triangle mesh.
+- `--liquify` applies mesh displacement deformation via a regular coarse grid and
+  backward inverse mapping. Accepts a path to a JSON file or an inline JSON array
+  of stroke records (`[{"tool": "warp", "points": [[x0,y0], ...], "size": 80, "pressure": 0.5, "density": 0.5}]`).
+  Supported tools: `forward_warp` (`warp`), `reconstruct`, `smooth`, `twirl_cw`,
+  `twirl_ccw`, `pucker`, `bloat`, `push_left`, `freeze_mask` (`freeze`), and `thaw_mask` (`thaw`).
 - `--crop` and `--crop-layer` are opposites: `--crop` resizes the canvas and
   keeps every pixel (offsets shift), `--crop-layer` keeps the canvas and
   discards the target layer's pixels outside the rectangle. Both take the

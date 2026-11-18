@@ -513,7 +513,7 @@ extension XCUIApplication {
     _ label: String, file: StaticString = #filePath, line: UInt = #line
   ) -> XCUIElement {
     openMoreActions(file: file, line: line)
-    let action = buttons[label].firstMatch
+    var action = buttons[label].firstMatch
     if !action.exists, let submenu = Self.submenuHolding[label] {
       let row = buttons[submenu].firstMatch
       XCTAssertTrue(
@@ -527,6 +527,9 @@ extension XCUIApplication {
         }
         guard row.waitForExistence(timeout: 10), row.isHittable else { break }
       }
+    }
+    if !action.exists {
+      action = staticTexts[label].firstMatch
     }
     XCTAssertTrue(
       action.waitForExistence(timeout: 10), "\(label) is missing from More Actions",
@@ -548,11 +551,7 @@ extension XCUIApplication {
     }
     for _ in 1...3 {
       let action = revealAction(label, file: file, line: line)
-      if action.isHittable {
-        action.tap()
-      } else {
-        action.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-      }
+      action.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
       if !buttons["Import Image…"].firstMatch.exists {
         return
       }
