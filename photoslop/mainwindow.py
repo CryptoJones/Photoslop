@@ -1125,6 +1125,10 @@ class MainWindow(QMainWindow):
         m_workspace.addAction(self._act("Reset to &Default", None, self.reset_workspace))
 
         m_filter = menu.addMenu("Fi&lter")
+        m_filter.addAction(
+            self._act("Liquify…", "Ctrl+Shift+X", self.action_liquify, prerequisite="layer")
+        )
+        m_filter.addSeparator()
         m_filter.addAction(self._act("Gaussian &Blur…", None, self.action_gaussian_blur))
         m_filter.addAction(self._act("&Unsharp Mask…", None, self.action_unsharp_mask))
         m_filter.addAction(self._act("&Tilt-Shift…", None, self.action_tilt_shift))
@@ -2213,6 +2217,17 @@ class MainWindow(QMainWindow):
             )
 
         handle.succeeded.connect(install)
+
+    def action_liquify(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        layer = doc.active_layer
+        if getattr(layer, "locked", False):
+            return
+        from photoslop.liquifydialog import LiquifyDialog
+
+        run_modal(LiquifyDialog(doc, layer, self))
 
     def action_gaussian_blur(self) -> None:
         from PySide6.QtWidgets import QInputDialog

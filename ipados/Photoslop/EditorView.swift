@@ -55,6 +55,15 @@ struct EditorView: View {
   @State private var puppetDensity = "Normal"
   @State private var puppetPreview: UIImage?
   @State private var puppetPreviewOffset = CGPoint.zero
+  @State private var isLiquifying = false
+  @State private var liquifyGrid: LiquifyGrid?
+  @State private var liquifyTool = LiquifyTool.forwardWarp
+  @State private var liquifyBrushSize: CGFloat = 80
+  @State private var liquifyBrushPressure: CGFloat = 0.5
+  @State private var liquifyBrushDensity: CGFloat = 0.5
+  @State private var liquifyPreview: UIImage?
+  @State private var isShowingLiquifyOriginal = false
+  @State private var liquifyLastDragPoint: CGPoint?
   /// A one-shot ask for the canvas to bring a freshly opened box on screen —
   /// or, after a drag, back on screen without touching the zoom.
   @State private var boxReveal: (id: Int, rect: CGRect, zooms: Bool)?
@@ -424,6 +433,8 @@ struct EditorView: View {
             dockedMode { placementBar }
           } else if isPuppetWarping {
             dockedMode { puppetBar }
+          } else if isLiquifying {
+            dockedMode { liquifyBar }
           } else {
             compactDock
           }
@@ -580,6 +591,8 @@ struct EditorView: View {
         placementBar
       } else if isPuppetWarping {
         puppetBar
+      } else if isLiquifying {
+        liquifyBar
       } else if store.selection != nil {
         // A selection's actions get a row of their own. Six buttons and the
         // tool's own settings do not fit on one line of an iPad mini's width,
@@ -995,6 +1008,8 @@ struct EditorView: View {
       }
     } else if isPuppetWarping {
       puppetOverlay
+    } else if isLiquifying {
+      liquifyOverlay
     }
   }
 
@@ -1257,6 +1272,103 @@ struct EditorView: View {
     .accessibilityIdentifier("Puppet Warp Overlay")
   }
 
+  /// The Liquify mode's bottom bar (#419).
+  private var liquifyBar: some View {
+    HStack(spacing: 12) {
+      Button("Cancel", role: .cancel, action: cancelLiquify)
+        .foregroundStyle(.secondary)
+        .accessibilityIdentifier("Cancel Liquify")
+
+      Spacer(minLength: 0)
+
+      Picker("Tool", selection: $liquifyTool) {
+        ForEach(LiquifyTool.allCases) { tool in
+          Label(tool.label, systemImage: tool.iconName).tag(tool)
+        }
+      }
+      .pickerStyle(.menu)
+      .accessibilityIdentifier("Liquify Tool")
+
+      HStack(spacing: 4) {
+        Image(systemName: "circle")
+          .font(.system(size: 8))
+        Slider(value: $liquifyBrushSize, in: 10...300)
+          .frame(width: 80)
+        Image(systemName: "circle")
+          .font(.system(size: 16))
+      }
+      .accessibilityLabel("Brush Size")
+
+      Button {
+        isShowingLiquifyOriginal.toggle()
+      } label: {
+        Image(systemName: isShowingLiquifyOriginal ? "eye.slash" : "eye")
+      }
+      .accessibilityLabel("Toggle Preview")
+
+      Button {
+        if var grid = liquifyGrid, let layer = store.activeLayer {
+          grid.reset()
+          liquifyGrid = grid
+          liquifyPreview = layer.image
+        }
+      } label: {
+        Image(systemName: "arrow.counterclockwise")
+      }
+      .accessibilityLabel("Reconstruct All")
+
+      Spacer(minLength: 0)
+
+      Button("Done", action: applyLiquify)
+        .buttonStyle(.borderedProminent)
+        .tint(Studio.accent)
+        .foregroundStyle(.black)
+        .accessibilityIdentifier("Apply Liquify")
+    }
+  }
+
+  /// The interactive canvas overlay for Liquify (#419).
+  private var liquifyOverlay: some View {
+    GeometryReader { _ in
+      ZStack(alignment: .topLeading) {
+        if let preview = (isShowingLiquifyOriginal ? store.activeLayer?.image : liquifyPreview),
+           let layer = store.activeLayer {
+          Image(uiImage: preview)
+            .resizable()
+            .interpolation(.high)
+            .frame(width: preview.size.width, height: preview.size.height)
+            .offset(x: layer.origin.x, y: layer.origin.y)
+            .allowsHitTesting(false)
+        }
+      }
+      .contentShape(Rectangle())
+      .gesture(
+        DragGesture(minimumDistance: 0)
+          .onChanged { value in
+            guard isLiquifying, let layer = store.activeLayer, var grid = liquifyGrid else { return }
+            let pt = CGPoint(x: value.location.x - layer.origin.x, y: value.location.y - layer.origin.y)
+            let prev = liquifyLastDragPoint ?? pt
+            grid.applyStroke(
+              tool: liquifyTool,
+              points: [prev, pt],
+              size: liquifyBrushSize,
+              pressure: liquifyBrushPressure,
+              density: liquifyBrushDensity
+            )
+            liquifyGrid = grid
+            liquifyLastDragPoint = pt
+            if let warped = LiquifyRasterizer.rasterize(image: layer.image, grid: grid) {
+              liquifyPreview = warped
+            }
+          }
+          .onEnded { _ in
+            liquifyLastDragPoint = nil
+          }
+      )
+    }
+    .accessibilityIdentifier("Liquify Overlay")
+  }
+
   /// Fill, Cut, Copy, Paste and Delete for the selection that is up (#374,
   /// #393), and the one that ends it.
   ///
@@ -1402,6 +1514,7 @@ struct EditorView: View {
           Divider()
           resizeLayerButton
           puppetWarpButton
+          liquifyButton
           flattenImageButton
           selectMenu
           filtersMenu
@@ -1439,6 +1552,7 @@ struct EditorView: View {
       Divider()
       resizeLayerButton
       puppetWarpButton
+      liquifyButton
       flattenImageButton
     } label: {
       Label("Image", systemImage: "photo")
@@ -1535,6 +1649,16 @@ struct EditorView: View {
     .keyboardShortcut("p", modifiers: [.command, .shift])
   }
 
+  private var liquifyButton: some View {
+    Button {
+      beginLiquify()
+    } label: {
+      Label("Liquify…", systemImage: "wand.and.stars")
+    }
+    .disabled(store.activeLayerID == nil || activeTextLayer != nil)
+    .keyboardShortcut("x", modifiers: [.command, .shift])
+  }
+
   /// The desktop's Select menu (#326): everything that acts on the selection
   /// rather than on pixels, plus the one thing that acts on pixels *through*
   /// it. Deselect, Invert and Delete are inert with nothing selected, and say
@@ -1545,6 +1669,8 @@ struct EditorView: View {
   /// row opens a parameter sheet; nothing changes until Apply.
   private var filtersMenu: some View {
     Menu {
+      liquifyButton
+      Divider()
       ForEach(FilterKind.allCases) { kind in
         if kind.params.isEmpty {
           // A parameterless adjustment has no sheet to show — Invert (#389),
@@ -3024,6 +3150,33 @@ struct EditorView: View {
     } else {
       puppetPreview = nil
     }
+  }
+
+  private func beginLiquify() {
+    guard let layer = store.activeLayer else { return }
+    let w = Int((layer.image.size.width * layer.image.scale).rounded())
+    let h = Int((layer.image.size.height * layer.image.scale).rounded())
+    liquifyGrid = LiquifyGrid(width: max(1, w), height: max(1, h), spacing: 8)
+    liquifyPreview = layer.image
+    store.previewSuppressedLayerID = layer.id
+    isLiquifying = true
+  }
+
+  private func applyLiquify() {
+    guard isLiquifying, let layer = store.activeLayer, let preview = liquifyPreview else {
+      cancelLiquify()
+      return
+    }
+    store.applyLiquify(layer.id, image: preview)
+    cancelLiquify()
+  }
+
+  private func cancelLiquify() {
+    store.previewSuppressedLayerID = nil
+    isLiquifying = false
+    liquifyGrid = nil
+    liquifyPreview = nil
+    liquifyLastDragPoint = nil
   }
 
   private func applyCrop(_ rect: CGRect) {

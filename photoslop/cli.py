@@ -280,6 +280,44 @@ def _op_puppet_warp(ctx: Context, value: str) -> None:
         ctx.doc.notify_pixels(dirty.united(layer.bounds()))
 
 
+def _op_liquify(ctx: Context, value: str) -> None:
+    from photoslop.liquify import LiquifyGrid, LiquifyStroke, load_strokes
+
+    if not value or not value.strip():
+        raise _ValueError("--liquify expects a JSON strokes specification or path to strokes.json")
+
+    try:
+        strokes = load_strokes(value)
+    except Exception as exc:
+        raise _ValueError(f"--liquify: {exc}") from exc
+
+    if not strokes:
+        raise _ValueError("--liquify: at least one stroke is required")
+
+    for layer in _target_layers(ctx):
+        grid = LiquifyGrid(layer.image.width(), layer.image.height(), spacing=8)
+        ox, oy = layer.offset.x(), layer.offset.y()
+        if ox != 0 or oy != 0:
+            adjusted_strokes = [
+                LiquifyStroke(
+                    tool=s.tool,
+                    points=[(px - ox, py - oy) for px, py in s.points],
+                    size=s.size,
+                    pressure=s.pressure,
+                    density=s.density,
+                )
+                for s in strokes
+            ]
+            grid.apply_strokes(adjusted_strokes)
+        else:
+            grid.apply_strokes(strokes)
+
+        dirty = layer.bounds()
+        layer.image = grid.warp_image(layer.image, interpolation="catmull-rom")
+        layer.fx_cache = None
+        ctx.doc.notify_pixels(dirty)
+
+
 def _op_cas(ctx: Context, value: str) -> None:
     from PySide6.QtCore import QPoint, QSize
 
@@ -1293,6 +1331,11 @@ OPS: dict = {
         '"x1,y1->new_x1,new_y1;..."',
         "deform target layer(s) via As-Rigid-As-Possible (ARAP) mesh pin solver",
         _op_puppet_warp,
+    ),
+    "liquify": (
+        "STROKES",
+        "mesh displacement deformation with forward warp, twirl, pucker, bloat, and freeze masks",
+        _op_liquify,
     ),
     "content-aware-scale": ("WxH", "seam-carve the target layer(s)", _op_cas),
     "levels": ("B,W,GAMMA", "levels adjustment", _op_levels),

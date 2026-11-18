@@ -24,6 +24,7 @@ CASES = {
     "rotate": ("15", "sideways"),
     "rotate-layer": ("90", "sideways"),
     "puppet-warp": ("10,10->10,10;30,20->35,25", "not-a-pin-spec"),
+    "liquify": ('[{"tool":"warp","points":[[10,10],[15,15]],"size":20}]', "not-a-json-spec"),
     "content-aware-scale": ("40x30", "40"),
     "levels": ("10,240,1.2", "10,240"),
     "auto-levels": (None, None),
@@ -1013,3 +1014,45 @@ def test_puppet_mode_cli(qapp, tmp_path):
             == 0
         )
         assert out.exists()
+
+
+def test_liquify_cli(qapp, tmp_path):
+    src = make_input(tmp_path, size=(60, 40))
+    out = tmp_path / "out_liquify.png"
+    strokes_json = tmp_path / "strokes.json"
+    strokes_json.write_text(
+        '[{"tool": "warp", "points": [[20, 20], [30, 20]], "size": 30, "pressure": 0.8}]',
+        encoding="utf-8",
+    )
+    # Test file path input
+    assert (
+        run(
+            [
+                src,
+                "--liquify",
+                str(strokes_json),
+                "--output",
+                str(out),
+            ]
+        )
+        == 0
+    )
+    assert out.exists()
+    img = QImage(str(out))
+    assert img.width() == 60 and img.height() == 40
+
+    # Test inline JSON input
+    out2 = tmp_path / "out_liquify2.png"
+    assert (
+        run(
+            [
+                src,
+                "--liquify",
+                '[{"tool": "pucker", "center": [30, 20], "size": 25, "pressure": 0.5}]',
+                "--output",
+                str(out2),
+            ]
+        )
+        == 0
+    )
+    assert out2.exists()

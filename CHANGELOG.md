@@ -4,6 +4,28 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.47.0] — Unreleased
+
+### Added
+- **Filter: Liquify — mesh displacement deformation with forward warp, twirl, pucker, bloat, and freeze masks** —
+  full cross-platform mesh displacement deformation across Desktop Qt, CLI, and iPadOS/iOS.
+  Represents deformation as a 2D displacement field on a regular coarse grid ($d(p)$ offset map,
+  e.g. 1 node per 8 or 16 px) evaluated via Catmull-Rom cubic spline or bilinear backward mapping,
+  guaranteeing no unmapped pixel holes. Interactive tools include Forward Warp (pushes pixels
+  along stroke trajectory), Reconstruct (relaxes displacements toward identity), Smooth (relaxes
+  displacements toward local neighborhood mean), Twirl Clockwise & Counter-Clockwise (rotates about
+  brush center), Pucker & Bloat (scales inward or outward about brush center), Push Left
+  (perpendicular displacement along stroke), and Freeze & Thaw Masks (paints a protection mask
+  array [0.0..1.0] to isolate areas from distortion). Memory frugality (DD-001): stores displacement
+  grid only for the layer bounds at grid resolution, computing fine full-resolution interpolation in
+  row bands during baking or viewport rendering. Desktop: `Filter ▸ Liquify` (`Ctrl+Shift+X` /
+  `Cmd+Shift+X`), dedicated modal Liquify dialog with a left tool palette, brush size / pressure /
+  density sliders, side-by-side and toggle preview, mesh and mask overlays, and OK/Cancel;
+  CLI: `--liquify <strokes.json>` (JSON file path or inline JSON string) registered as the 69th
+  shared engine operation; iPadOS/iOS: native Swift `Liquify.swift` coarse grid and inverse
+  rasterizer, interactive multi-touch canvas overlay, brush sliders, and undoable layer mutation
+  ([#419](https://github.com/CryptoJones/Photoslop/issues/419)).
+
 ## [2.46.0] — Unreleased
 
 ### Added
