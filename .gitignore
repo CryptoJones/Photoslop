@@ -20,4 +20,5 @@ htmlcov/
 Thumbs.db
 .claude/
 .agent-yes/
+.playwright-mcp/
 ipados/*.xcodeproj/

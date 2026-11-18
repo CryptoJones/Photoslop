@@ -30,11 +30,24 @@ def _import_fixture() -> str:
     return str(path)
 
 
+def _palette_fixture() -> str:
+    from photoslop.swatches import Swatch, SwatchPalette
+
+    path = Path(tempfile.mkdtemp(prefix="photoslop-palette-")) / "pair_palette.aco"
+    pal = SwatchPalette(name="PairPalette")
+    pal.add_swatch(Swatch.from_rgb(200, 40, 40, name="Red"))
+    pal.add_swatch(Swatch.from_rgb(40, 200, 40, name="Green"))
+    pal.save(str(path))
+    return str(path)
+
+
 IMPORT_FIXTURE = _import_fixture()
+PALETTE_FIXTURE = _palette_fixture()
 
 # canned pipeline fragments, chosen to be valid on the 60x40 grey fixture
 # regardless of what ran before them (sizes stay >= 12px in every pair)
 PAIR_ARGS = {
+    "palette": ["--palette", PALETTE_FIXTURE],
     "resize": ["--resize", "48x32"],
     "canvas-size": ["--canvas-size", "64x44"],
     "crop": ["--crop", "2,2,40,28"],

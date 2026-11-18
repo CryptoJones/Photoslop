@@ -16,6 +16,7 @@ from photoslop.layer import Layer
 
 # op name -> (canned good argv fragment, malformed value or None if flag)
 CASES = {
+    "palette": ("palette.aco", "no-such-palette.aco"),
     "resize": ("30x20", "banana"),
     "canvas-size": ("80x60", "80"),
     "crop": ("5,5,20,15", "5,5"),
@@ -917,3 +918,56 @@ def test_expand_canvas_reveals_an_oversized_import(qapp, tmp_path):
     assert run([src, "--expand-canvas", "--output", out]) == 0
     doc = load_ora(str(out))
     assert (doc.size.width(), doc.size.height()) == (60, 40)
+
+
+def test_palette_standalone_inspection(qapp, tmp_path, capsys):
+    from photoslop.swatches import Swatch, SwatchPalette
+
+    pal = SwatchPalette(name="Brand")
+    pal.add_swatch(Swatch.from_rgb(255, 64, 32, name="Vermilion"))
+    pal.add_swatch(Swatch.from_rgb(32, 128, 255, name="Sky"))
+
+    aco_path = tmp_path / "brand.aco"
+    ase_path = tmp_path / "brand.ase"
+    pal.save(aco_path)
+    pal.save(ase_path)
+
+    # ACO inspection
+    assert run(["--palette", str(aco_path)]) == 0
+    data_aco = json.loads(capsys.readouterr().out)
+    assert data_aco["count"] == 2
+    assert data_aco["swatches"][0]["name"] == "Vermilion"
+    assert data_aco["swatches"][0]["hex"] == "#FF4020"
+
+    # ASE inspection
+    assert run(["--palette", str(ase_path)]) == 0
+    data_ase = json.loads(capsys.readouterr().out)
+    assert data_ase["count"] == 2
+    assert data_ase["swatches"][1]["name"] == "Sky"
+    assert data_ase["swatches"][1]["hex"] == "#2080FF"
+
+
+def test_palette_pipeline_with_info_and_output(qapp, tmp_path, capsys):
+    from photoslop.swatches import Swatch, SwatchPalette
+
+    pal = SwatchPalette(name="Summer")
+    pal.add_swatch(Swatch.from_rgb(255, 200, 0, name="Sun"))
+    aco_path = tmp_path / "summer.aco"
+    pal.save(aco_path)
+
+    src = make_input(tmp_path)
+    out = tmp_path / "out.png"
+    assert run([src, "--palette", str(aco_path), "--info", "--output", str(out)]) == 0
+    info = json.loads(capsys.readouterr().out)
+    assert "palette" in info
+    assert info["palette"]["swatches"][0]["name"] == "Sun"
+    assert out.exists()
+
+
+def test_palette_malformed_file_usage_error(qapp, tmp_path):
+    bad_file = tmp_path / "corrupt.aco"
+    bad_file.write_bytes(b"\x00\x01\x00\x05broken")
+    src = make_input(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--palette", str(bad_file), "--output", tmp_path / "out.png"])
+    assert exc.value.code == 2

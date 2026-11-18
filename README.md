@@ -8,7 +8,7 @@ A memory-frugal, multiplatform, layered raster image editor — Photoshop-shaped
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-CryptoJones%2FPhotoslop-181717?logo=github&logoColor=white)](https://github.com/CryptoJones/Photoslop)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v2.44.0-orange)]()
+[![Version](https://img.shields.io/badge/version-v2.45.0-orange)]()
 
 > **💚 Support Photoslop** — if this app saves you money or RAM, consider tossing a few bucks at the project:
 > **CashApp [`$cryptojones`](https://cash.app/$cryptojones)** · **Venmo [`@CryptoJones`](https://venmo.com/u/CryptoJones)**
@@ -36,7 +36,8 @@ Photoslop is a small, fast, layered image editor that runs anywhere Qt runs
   aliased pencil for pixel work; paint
   bucket with adjustable tolerance; linear/radial gradients (`Shift+G`,
   foreground→background); eyedropper (`I`) sampling the merged
-  composite; foreground/background colour pair with `X` swap and `D` reset.
+  composite; foreground/background colour pair with `X` swap and `D` reset;
+  Adobe `.aco` and `.ase` swatch palettes import and export.
 - **Selections** — rectangle marquee, freehand lasso, polygonal lasso, and
   magic wand (tolerance-based, Shift adds / Alt subtracts, contiguous
   toggle for colour-range selection), and quick selection (`Shift+W`,

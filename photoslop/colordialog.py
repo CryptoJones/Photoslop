@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Color management dialogs (#108): a profile picker (presets + .icc
-browse) and the session Color Settings (display profile, proof profile)."""
+browse), session Color Settings, and Color Swatch palette dialogs (#421)."""
 
 from __future__ import annotations
 
-from PySide6.QtGui import QColorSpace
+from PySide6.QtGui import QColor, QColorSpace
 from PySide6.QtWidgets import (
+    QColorDialog,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -19,6 +20,9 @@ from PySide6.QtWidgets import (
 )
 
 from photoslop import color
+from photoslop.swatches import (
+    SwatchesWidget,
+)
 
 
 class _ProfileRow(QHBoxLayout):
@@ -118,3 +122,58 @@ class ColorSettingsDialog(QDialog):
     def _apply(self) -> None:
         self.panel.apply()
         self.accept()
+
+
+class ColorWithSwatchesDialog(QDialog):
+    """Color picker dialog with tabbed palette swatches (#421)."""
+
+    def __init__(
+        self,
+        initial_color: QColor | None = None,
+        parent=None,
+        title: str = "Color Picker",
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.resize(380, 440)
+        self._color = initial_color or QColor(0, 0, 0)
+
+        layout = QVBoxLayout(self)
+        self.swatches_widget = SwatchesWidget(parent=self)
+        self.swatches_widget.colorSelected.connect(self._on_swatch_selected)
+        layout.addWidget(self.swatches_widget)
+
+        # Custom color button
+        btn_row = QHBoxLayout()
+        self.custom_btn = QPushButton("Custom Color…")
+        self.custom_btn.clicked.connect(self._pick_custom)
+        btn_row.addWidget(self.custom_btn)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _on_swatch_selected(self, color: QColor, is_foreground: bool) -> None:
+        self._color = color
+
+    def _pick_custom(self) -> None:
+        chosen = QColorDialog.getColor(self._color, self, "Custom Color")
+        if chosen.isValid():
+            self._color = chosen
+
+    def color(self) -> QColor:
+        return self._color
+
+
+def get_color_with_swatches(
+    initial: QColor | None = None, parent=None, title: str = "Choose Color"
+) -> QColor | None:
+    dlg = ColorWithSwatchesDialog(initial, parent=parent, title=title)
+    if dlg.exec() == QDialog.DialogCode.Accepted:
+        return dlg.color()
+    return None

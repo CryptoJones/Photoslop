@@ -16,6 +16,8 @@ struct EditorView: View {
   @State private var isAddingLayerPhotos = false
   @State private var showFileImporter = false
   @State private var showLayerFileImporter = false
+  @State private var showSwatchImporter = false
+  @StateObject private var swatchPalette = SwatchPalette.defaultPalette
   @State private var showExporter = false
   @State private var showImportOptions = false
   @State private var showLayerImportOptions = false
@@ -211,6 +213,12 @@ struct EditorView: View {
       allowedContentTypes: [.image],
       allowsMultipleSelection: false,
       onCompletion: importLayerFile
+    )
+    .fileImporter(
+      isPresented: $showSwatchImporter,
+      allowedContentTypes: [.data],
+      allowsMultipleSelection: false,
+      onCompletion: importSwatchFile
     )
     .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhoto, matching: .images)
     .photosPicker(
@@ -818,7 +826,7 @@ struct EditorView: View {
     // popover holds ordinary views, and its anchor stays a plain Button, which
     // is also hittable in the way a Menu's wrapper never is (L-001).
     .popover(isPresented: $showInkOptions) {
-      VStack(alignment: .leading, spacing: 14) {
+      VStack(alignment: .leading, spacing: 12) {
         ColorPicker("Colour", selection: $inkColor, supportsOpacity: false)
 
         VStack(alignment: .leading, spacing: 4) {
@@ -828,8 +836,40 @@ struct EditorView: View {
             .accessibilityLabel("Ink opacity")
             .accessibilityIdentifier("Ink opacity")
         }
+
+        Divider()
+
+        VStack(alignment: .leading, spacing: 6) {
+          HStack {
+            Text("Swatches (\(swatchPalette.allSwatches().count))")
+              .font(.caption)
+              .foregroundColor(.secondary)
+            Spacer()
+            Button("Import…") {
+              showSwatchImporter = true
+            }
+            .font(.caption)
+            .accessibilityLabel("Import Swatches")
+          }
+
+          let allSwatches = swatchPalette.allSwatches()
+          LazyVGrid(columns: Array(repeating: GridItem(.fixed(26), spacing: 6), count: 8), spacing: 6) {
+            ForEach(allSwatches) { swatch in
+              Button {
+                inkColor = Color(swatch.color)
+              } label: {
+                RoundedRectangle(cornerRadius: 3)
+                  .fill(Color(swatch.color))
+                  .frame(width: 26, height: 26)
+                  .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.gray.opacity(0.5), lineWidth: 1))
+              }
+              .buttonStyle(.plain)
+              .accessibilityLabel(swatch.name)
+            }
+          }
+        }
       }
-      .padding(20)
+      .padding(16)
       .frame(width: 280)
       // Without this a popover becomes a sheet on a phone, which is a lot of
       // screen for two controls and covers the canvas they are being judged
@@ -1179,6 +1219,7 @@ struct EditorView: View {
           textMenu
           Divider()
           importImageButton
+          importSwatchesButton
           Divider()
           canvasModeButtons
           Divider()
@@ -1228,6 +1269,7 @@ struct EditorView: View {
           textButtons
           Divider()
           importImageButton
+          importSwatchesButton
           Divider()
           canvasModeButtons
         } label: {
@@ -1640,6 +1682,14 @@ struct EditorView: View {
     }
   }
 
+  private var importSwatchesButton: some View {
+    Button {
+      showSwatchImporter = true
+    } label: {
+      Label("Import Swatches…", systemImage: "paintpalette")
+    }
+  }
+
   /// The source sheet, mirroring the export sheet's destination control.
   ///
   /// A plain button drives `.photosPicker` rather than a `PhotosPicker` view:
@@ -1854,6 +1904,21 @@ struct EditorView: View {
         return
       }
       offerImport(data: data, name: url.deletingPathExtension().lastPathComponent)
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  private func importSwatchFile(_ result: Result<[URL], Error>) {
+    do {
+      guard let url = try result.get().first else { return }
+      let access = url.startAccessingSecurityScopedResource()
+      defer { if access { url.stopAccessingSecurityScopedResource() } }
+      let data = try Data(contentsOf: url)
+      let palette = try SwatchPalette.decode(data: data, filename: url.lastPathComponent)
+      swatchPalette.swatches = palette.swatches
+      swatchPalette.groups = palette.groups
+      swatchPalette.name = palette.name
     } catch {
       errorMessage = error.localizedDescription
     }

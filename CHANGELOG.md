@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.45.0] — Unreleased
+
+### Added
+- **Color Swatches: import and export Adobe .aco and .ase swatch palettes** —
+  full cross-platform color swatch palette support across Desktop Qt, CLI, and iPadOS/iOS.
+  Parses and writes Adobe Color Swatches (`.aco`) Version 1 and Version 2 (with
+  16-bit RGB, HSB, CMYK, Lab, Grayscale components and UTF-16 swatch names),
+  and Adobe Swatch Exchange (`.ase`) `ASEF` blocks (color entries, groups, RGB,
+  CMYK, LAB, GRAY models, and global/spot/process color types). Strict bounds
+  checking guards against malformed chunks, truncated streams, and unbounded
+  allocations. Desktop: new Swatches dock panel, dialog with "Import Swatches…"
+  and "Export Swatches…", and `Window ▸ Swatches`; CLI: `--palette <file.aco|file.ase>`
+  for palette inspection and pipeline session integration; iPadOS/iOS: document-picker
+  swatch import into mobile palette and Swift decoder
+  ([#421](https://github.com/CryptoJones/Photoslop/issues/421)).
+
 ## [2.44.0] — Unreleased
 
 ### Added

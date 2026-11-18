@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v2.44.0** against six
+An honest, category-by-category comparison of **Photoslop v2.45.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -25,6 +25,7 @@ client exposes it.
 | Selections/filters/vectors/text | ✅ | 🟡 wand, marquee and lasso selections with feathering; brushes, bucket, Delete Selection and Cut/Copy/Paste honour them; editable text layers; the seven built-in filters, pixel-identical to the desktop; no vectors yet | ✅ shared safe engine operations | ✅ safe subset |
 | One-bit dither / beam modulation | ✅ Beam Dither, 11 algorithms | ✅ ported, fixture-proven word for word | ✅ `--filter beam-dither:…` | — |
 | Live appearance effects (shadow, glow, outline, overlay, bevel, satin) | ✅ 11 kinds on any layer | ✅ 11 kinds on any layer, ported from the desktop renderer, fixture-proven identical, Gaussian blur and feather included | ✅ `--drop-shadow`, `--glow`, `--stroke`, `--satin`, `--effect`, `--set-effects` | ✅ safe subset |
+| Color swatches (.aco / .ase) | ✅ Swatches dock & dialog, import/export | ✅ document-picker import into mobile swatches | ✅ `--palette <file.aco\|file.ase>` inspection & session | — |
 | Native/third-party plugins | local opt-in | — | local opt-in | denied |
 | Network model operations | local configured endpoint | — | local configured endpoint | denied |
 | Accessibility automation | automated semantics + manual matrix required | native labels + manual matrix required | structured errors | structured tool errors |
@@ -34,7 +35,7 @@ client exposes it.
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 2.44.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
+| **Photoslop** | 2.45.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
