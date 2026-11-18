@@ -107,3 +107,15 @@ denoiser through the model-backend contract (`POST {base}/denoise`) —
 the heavy lifting and its memory stay on the backend (DD-009).
 
 *Proudly Made in Nebraska. Go Big Red! 🌽 <https://xkcd.com/2347/>*
+
+## Adobe Color Swatches (`.aco`) and Swatch Exchange (`.ase`)
+
+Photoslop imports and exports swatch palettes across desktop Qt, CLI, and iPadOS/iOS:
+
+| Format | Specification & Features |
+|---|---|
+| `.aco` (Adobe Color Swatches) | Version 1 (raw 16-bit color components) and Version 2 (16-bit components with UTF-16 swatch names). Supports RGB, HSB, CMYK, CIE L*a*b*, and Grayscale color models. Combined v1+v2 streams written on export for full legacy and modern interoperability. |
+| `.ase` (Adobe Swatch Exchange) | Binary `ASEF` blocks (v1.0). Supports Color Entry (`0x0001`), Group Start (`0xC001`), and Group End (`0xC002`). Supports `'RGB '`, `'CMYK'`, `'LAB '`, and `'GRAY'` models, alongside global, spot, and process color types. |
+
+Both codecs enforce strict bounds checking, refusing truncated chunks, malformed headers, and unreasonable swatch counts safely with `ValueError` without crashes or memory spikes.
+

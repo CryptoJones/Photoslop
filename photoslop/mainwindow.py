@@ -238,6 +238,17 @@ class MainWindow(QMainWindow):
         self.layer_panel.appearanceRequested.connect(self._appearance_dock.raise_)
         self.layer_panel.importRequested.connect(self.action_import_layer)
 
+        from photoslop.swatches import SwatchesPanel
+
+        self.swatches_panel = SwatchesPanel()
+        self._swatches_dock = QDockWidget("Swatches")
+        self._swatches_dock.setObjectName("swatches-dock")
+        self._swatches_dock.setWidget(self.swatches_panel)
+        self._swatches_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._swatches_dock)
+        self.tabifyDockWidget(self._layers_dock, self._swatches_dock)
+        self.swatches_panel.colorSelected.connect(self._on_swatch_color_selected)
+
         self.history_view = QUndoView(self.undo_group)
         self.history_view.setEmptyLabel("Document opened")
         self._history_dock = QDockWidget("History")
@@ -659,6 +670,19 @@ class MainWindow(QMainWindow):
             self.options.background = color
             self.refresh_swatches()
 
+    def _on_swatch_color_selected(self, color: QColor, is_foreground: bool) -> None:
+        if is_foreground:
+            self.options.foreground = color
+        else:
+            self.options.background = color
+        self.refresh_swatches()
+
+    def action_import_swatches(self) -> None:
+        self.swatches_panel.widget._on_import()
+
+    def action_export_swatches(self) -> None:
+        self.swatches_panel.widget._on_export()
+
     @staticmethod
     def _swatch_icon(color: QColor) -> QIcon:
         pm = QPixmap(20, 20)
@@ -941,6 +965,7 @@ class MainWindow(QMainWindow):
         self.action_soft_proof.setCheckable(True)
         m_view.addAction(self.action_soft_proof)
         m_view.addAction(self._appearance_dock.toggleViewAction())
+        m_view.addAction(self._swatches_dock.toggleViewAction())
         m_view.addAction(
             self._act("Background &Tasks…", None, self.action_task_monitor, prerequisite="always")
         )
@@ -1037,6 +1062,21 @@ class MainWindow(QMainWindow):
                         lambda checked=False, c=cls: self.action_plugin_filter(c),
                     )
                 )
+
+        m_window = menu.addMenu("&Window")
+        m_window.addAction(self._swatches_dock.toggleViewAction())
+        m_window.addAction(self._layers_dock.toggleViewAction())
+        m_window.addAction(self._properties_dock.toggleViewAction())
+        m_window.addAction(self._appearance_dock.toggleViewAction())
+        m_window.addAction(self._adjust_dock.toggleViewAction())
+        m_window.addAction(self._history_dock.toggleViewAction())
+        m_window.addSeparator()
+        m_window.addAction(
+            self._act("Import Swatches…", None, self.action_import_swatches, prerequisite="always")
+        )
+        m_window.addAction(
+            self._act("Export Swatches…", None, self.action_export_swatches, prerequisite="always")
+        )
 
         m_help = menu.addMenu("&Help")
         m_help.addAction(

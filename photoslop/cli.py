@@ -97,6 +97,7 @@ class Context:
     allow_large_document: bool = False
     allow_unsafe_plugins: bool = False
     allow_insecure_model_http: bool = False
+    palette: object = None
 
 
 def _target_layers(ctx: Context) -> list:
@@ -1201,8 +1202,24 @@ def _op_artboard_op(ctx: Context, value: str) -> None:
         raise _ValueError(f"--artboard-op: {exc}") from exc
 
 
+def _op_palette(ctx: Context, value: str) -> None:
+    from photoslop.swatches import load_palette
+
+    try:
+        pal = load_palette(value)
+    except Exception as exc:
+        raise _ValueError(f"--palette: cannot load {value!r}: {exc}") from exc
+    ctx.palette = pal
+    ctx.doc.palette = pal
+
+
 # name -> (metavar, help, apply_fn). Drives argparse AND the test catalog.
 OPS: dict = {
+    "palette": (
+        "FILE.aco|FILE.ase",
+        "import swatch palette (.aco/.ase) for active tool colours and document info",
+        _op_palette,
+    ),
     "resize": ("WxH", "rescale the whole image", _op_resize),
     "canvas-size": ("WxH", "grow/shrink the canvas (content centred)", _op_canvas_size),
     "crop": ("X,Y,W,H", "crop the canvas to a rectangle", _op_crop_real),
@@ -1566,7 +1583,7 @@ def _sample_points(doc, specs: list[str]) -> list[dict]:
 def _doc_info(doc) -> dict:
     from photoslop.appearance import normalize_effects
 
-    return {
+    info = {
         "size": [doc.size.width(), doc.size.height()],
         "dpi": doc.dpi,
         "layers": [
@@ -1588,6 +1605,10 @@ def _doc_info(doc) -> dict:
         ],
         "artboards": [[n, r.x(), r.y(), r.width(), r.height()] for n, r in doc.artboards],
     }
+    pal = getattr(doc, "palette", None)
+    if pal is not None:
+        info["palette"] = pal.to_dict()
+    return info
 
 
 _QT_APP = None
@@ -1657,6 +1678,8 @@ def apply_pipeline(
     result: dict = {}
     if info:
         result["info"] = _doc_info(doc)
+    if ctx.palette is not None:
+        result["palette"] = ctx.palette.to_dict()
     if sample:
         result["samples"] = _sample_points(doc, sample)
     if export_artboards:
@@ -1664,7 +1687,7 @@ def apply_pipeline(
     if output:
         _write_output(doc, output, ctx.proof_space, ctx.cmyk_icc or None)
         result["output"] = output
-    if not (info or sample or export_artboards or output):
+    if not (info or sample or export_artboards or output or ctx.palette is not None):
         raise _ValueError("nothing to do: request output, info, sample, or export_artboards")
     return result
 
@@ -1692,9 +1715,19 @@ def main(argv: list[str] | None = None) -> int:
     pipeline = getattr(args, "pipeline", None) or []
     if args.input and args.new:
         parser.error("give an input file or --new, not both")
+    palette_ops = [val for op, val in pipeline if op == "palette"]
     if not args.input and not args.new:
+        if palette_ops and not (args.output or args.sample or args.export_artboards):
+            from photoslop.swatches import load_palette
+
+            try:
+                pal = load_palette(palette_ops[-1])
+                print(json.dumps(pal.to_dict(), indent=2))
+                return 0
+            except Exception as exc:
+                return _die(exc)
         parser.error("give an input file, or start blank with --new")
-    if not (args.info or args.sample or args.export_artboards or args.output):
+    if not (args.info or args.sample or args.export_artboards or args.output or palette_ops):
         parser.error("nothing to do: give --output, --info, --sample, or --export-artboards")
     # Only now: --help, --version and usage errors have already exited, and
     # none of them needs even a headless Qt application (#409).
@@ -1714,6 +1747,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         for op, value in pipeline:
             OPS[op][2](ctx, value)
+        if palette_ops and not (args.info or args.sample or args.export_artboards or args.output):
+            print(json.dumps(ctx.palette.to_dict(), indent=2))
+            return 0
         if args.info:
             print(json.dumps(_doc_info(doc), indent=2))
         if args.sample:

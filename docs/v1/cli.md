@@ -37,6 +37,11 @@ photoslop-cli shot.cr2 --resize 1600x1067 --auto-levels \
   part and sampling a point is not. The result is always a list, so a script
   need not branch on how many points it asked for. A point outside the canvas
   is a usage error (exit 2). Like `--info`, it needs no `--output`.
+- `--palette FILE.aco|FILE.ase` — inspect swatch palette or load it into the
+  active pipeline session. When invoked as a query without an input image, it
+  outputs JSON listing the palette name, count, and swatches (with name, hex,
+  color model, and RGBA). In a pipeline, it attaches swatches to the active
+  session, reported in `--info`.
 - `--version`.
 - `--allow-large-document` relaxes only the adaptive working-memory estimate
   for trusted local files; hard geometry/archive/parser limits remain.
@@ -82,6 +87,7 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--curves` `X:Y,...` | master curve points in 0..255 |
 | `--adjust` `"KEY=VAL,..."` | Lightroom Basic sliders (temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation) |
 | `--color-lookup` `LUT_OR_PRESET[,INTENSITY]` | apply a 3D LUT (.cube or .3dl) or built-in preset (`Warm Film`, `Cool Crisp`, `Bleach Bypass`, `Teal & Orange`, `Faded Monochrome`) with optional intensity (0.0–1.0 or 0–100%) |
+| `--palette` `FILE.aco|FILE.ase` | import swatch palette (.aco/.ase) for active tool colours and document info |
 | `--gaussian-blur` `RADIUS` | gaussian blur (selection-aware) |
 | `--filter` `"NAME:KEY=VAL,..."` | run a filter plugin — built-ins `sepia`, `pixelate`, `denoise`, `retro-console`, `pixel-sort`, `datamosh`, `film-negative`, and the six `node-machine*` circuit-trace presets ([Filters](filters.md)); the G'MIC pack (`gmic-cartoon`, raw `gmic:command=...`, …) with `photoslop[gmic]`; the GEGL pack (`gegl-vignette`, raw `gegl:operation=...`, …) with system python3-gi + gir1.2-gegl; the GIMP bridge (`gimp-oilify`, raw `gimp-script:script=...`, spawn-per-call) with a gimp binary; more via [Filter Plugins](filter-plugins.md) |
 | `--unsharp` `AMOUNT` | unsharp mask, percent |

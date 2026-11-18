@@ -67,6 +67,8 @@ more testing. Both issues carry the `on-hold` label.
 
 ## Done
 
+- [x] **Color Swatches: import and export Adobe .aco and .ase swatch palettes** across Desktop Qt, CLI, and iPadOS / Swift. Binary specification parsing and generation for ACO v1/v2 (RGB, HSB, CMYK, Lab, Grayscale) and ASEF blocks (RGB, CMYK, LAB, GRAY, global/spot/process types) with robust bounds checks, Desktop Swatches dock panel and dialog, CLI `--palette <file.aco|file.ase>` query and pipeline integration, and mobile swatch palette import ([#421](https://github.com/CryptoJones/Photoslop/issues/421)) — shipped v2.45.0
+
 - [x] **Adjustment: Color Lookup — 3D LUT support (.cube and .3dl) with trilinear interpolation** ([#422](https://github.com/CryptoJones/Photoslop/issues/422)) — shipped v2.44.0
 
 - [x] Layer styles: separate Fill Opacity from Layer Opacity, add Satin effect,
