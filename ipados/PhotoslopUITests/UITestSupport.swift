@@ -513,19 +513,24 @@ extension XCUIApplication {
     _ label: String, file: StaticString = #filePath, line: UInt = #line
   ) -> XCUIElement {
     openMoreActions(file: file, line: line)
-    let action = buttons[label].firstMatch
+    var action = menuRow(label)
     if !action.exists, let submenu = Self.submenuHolding[label] {
-      let row = buttons[submenu].firstMatch
+      let row = menuRow(submenu)
       XCTAssertTrue(
         row.waitForExistence(timeout: 10),
         "neither \(label) nor the \(submenu) submenu is in More Actions", file: file, line: line)
       for _ in 1...3 {
-        row.tap()
+        if row.isHittable {
+          row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        } else {
+          row.tap()
+        }
+        action = menuRow(label)
         if action.waitForExistence(timeout: 10) { break }
         if !buttons["Import Image…"].firstMatch.exists, !row.exists {
           openMoreActions(file: file, line: line)
         }
-        guard row.waitForExistence(timeout: 10), row.isHittable else { break }
+        guard row.waitForExistence(timeout: 10) else { break }
       }
     }
     XCTAssertTrue(
@@ -548,11 +553,7 @@ extension XCUIApplication {
     }
     for _ in 1...3 {
       let action = revealAction(label, file: file, line: line)
-      if action.isHittable {
-        action.tap()
-      } else {
-        action.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-      }
+      action.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
       if !buttons["Import Image…"].firstMatch.exists {
         return
       }
@@ -564,13 +565,21 @@ extension XCUIApplication {
   /// An action is a button. A `Toggle` in a `Menu` becomes a `UIMenu` row with
   /// a checkmark, and whether XCTest calls that a button or a switch has
   /// varied between runtimes, so a query that accepts either is the one that
-  /// keeps working.
+  /// keeps working. On compact menus with SF Symbols, iOS can also report the
+  /// item as a staticText label.
   func menuRow(_ label: String) -> XCUIElement {
-    descendants(matching: .any).matching(
+    let typed = descendants(matching: .any).matching(
       NSPredicate(
-        format: "label == %@ AND (elementType == %d OR elementType == %d)", label,
-        XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.switch.rawValue)
+        format: "(label == %@ OR identifier == %@) AND (elementType == %d OR elementType == %d OR elementType == %d)",
+        label, label,
+        XCUIElement.ElementType.button.rawValue,
+        XCUIElement.ElementType.switch.rawValue,
+        XCUIElement.ElementType.staticText.rawValue)
     ).firstMatch
+    if typed.exists {
+      return typed
+    }
+    return buttons[label].firstMatch
   }
 
   /// The Finger toggle as More Actions shows it, with the menu left open.
