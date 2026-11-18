@@ -1445,6 +1445,30 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     }
   }
 
+  /// Convert the active selection into a vector path layer (#424).
+  func makeVectorPath(tolerance: Double = 2.0) {
+    guard let selection = self.selection, !selection.isEmpty else { return }
+    guard Self.canAffordLayer(canvas: canvasSize) else {
+      memoryPressureNotice = Self.memoryRefusal
+      return
+    }
+    let commands = selection.makeVectorPath(tolerance: tolerance)
+    guard !commands.isEmpty else { return }
+    let cgPath = selection.vectorCGPath(tolerance: tolerance)
+
+    let renderer = UIGraphicsImageRenderer(size: canvasSize)
+    let image = renderer.image { ctx in
+      let cg = ctx.cgContext
+      cg.addPath(cgPath)
+      cg.setStrokeColor(UIColor.black.cgColor)
+      cg.setLineWidth(1.5)
+      cg.setLineCap(.round)
+      cg.setLineJoin(.round)
+      cg.strokePath()
+    }
+    insertLayer(image: image, named: "Vector Path", actionName: "Make Vector Path")
+  }
+
   func insertLayer(image: UIImage, named base: String, actionName: String) {
     mutate(actionName: actionName) {
       let layer = RasterLayer(name: uniqueName(base: base), image: image)

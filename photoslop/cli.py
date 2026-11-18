@@ -983,6 +983,36 @@ def _op_vector_op(ctx: Context, value: str) -> None:
         raise _ValueError(f"--vector-op: {exc}") from exc
 
 
+def _op_selection_to_path(ctx: Context, value: str) -> None:
+    from PySide6.QtCore import QPoint
+
+    from photoslop import contour, npimage, vector
+
+    tolerance = 2.0
+    if value:
+        try:
+            tolerance = float(value)
+        except ValueError as exc:
+            raise _ValueError(
+                "--selection-to-path: tolerance must be a number between 0.5 and 10.0"
+            ) from exc
+        if not 0.5 <= tolerance <= 10.0:
+            raise _ValueError("--selection-to-path: tolerance must be between 0.5 and 10.0")
+
+    if ctx.doc.selection is None:
+        raise _ValueError("--selection-to-path needs a selection earlier in the pipeline")
+
+    mask = npimage.selection_mask(ctx.doc.selection, ctx.doc.size, QPoint(0, 0))
+    name = f"Work Path {len(ctx.doc.layers)}"
+    data = contour.selection_to_vector_data(mask, tolerance=tolerance, name=name)
+    layer = vector.render_vector(data, name, ctx.doc.canvas_rect())
+    if layer is None:
+        raise _ValueError("--selection-to-path: selection produced no vector contours")
+    ctx.doc.layers.append(layer)
+    ctx.doc.active_index = len(ctx.doc.layers) - 1
+    ctx.doc.vector_selection = [data["id"]]
+
+
 def _op_blend_mode(ctx: Context, value: str) -> None:
     from photoslop.layer import BLEND_MODES
 
@@ -1229,6 +1259,11 @@ OPS: dict = {
         _op_text_rich,
     ),
     "shape": ("KIND,X,Y,W,H,R,G,B", "rect/ellipse/line onto a new layer", _op_shape),
+    "selection-to-path": (
+        "[TOLERANCE]",
+        "trace selection into a vector work path layer (tolerance 0.5-10.0 px, default 2.0)",
+        _op_selection_to_path,
+    ),
     "vector-op": ("JSON", "structured native-vector selection/edit operation", _op_vector_op),
     "blend-mode": ("NAME", "set the target layer's blend mode", _op_blend_mode),
     "layer-opacity": ("PCT", "set the target layer's opacity", _op_layer_opacity),
@@ -1329,6 +1364,10 @@ def build_parser() -> argparse.ArgumentParser:
         kwargs: dict = {"action": _PipelineAction, "help": help_text}
         if metavar is None:
             kwargs["nargs"] = 0
+        elif metavar.startswith("[") and metavar.endswith("]"):
+            kwargs["nargs"] = "?"
+            kwargs["const"] = ""
+            kwargs["metavar"] = metavar
         else:
             kwargs["metavar"] = metavar
         parser.add_argument(f"--{name}", **kwargs)
@@ -1480,6 +1519,7 @@ def _doc_info(doc) -> dict:
                 "smart_object": layer.source is not None,
                 "vector_id": (layer.vector_data or {}).get("id"),
                 "vector_type": (layer.vector_data or {}).get("type"),
+                "svg_path": ((layer.vector_data or {}).get("extensions") or {}).get("svg_path"),
             }
             for layer in doc.layers
         ],

@@ -106,6 +106,7 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--text` `"X,Y,SIZE[,R,G,B][,FAMILY]:TEXT"` | rasterise text onto a new layer (default colour black, system font) |
 | `--text-rich` `"X,Y:<html>"` | rasterise **rich HTML** text onto a new layer — per-letter colour, font-family, bold/italic (the headless mirror of the GUI Text tool's styled editor) |
 | `--shape` `KIND,X,Y,W,H,R,G,B` | rect/ellipse/line onto a schema-v1 native vector layer (direct crisp rendering, ORA fallback, re-renders on --resize) |
+| `--selection-to-path` `[TOLERANCE]` | trace selection into a vector work path layer (tolerance 0.5-10.0 px, default 2.0) |
 | `--vector-op` `JSON` | native-vector `select`, `transform`, `appearance`, `group`, `align`, `distribute`, `node`, or `boolean` operation; object IDs come from `--info` |
 | `--blend-mode` `NAME` | set the target layer's blend mode |
 | `--layer-opacity` `PCT` | set the target layer's opacity |

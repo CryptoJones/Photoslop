@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.42.0] — Unreleased
+
+### Added
+- **Make Work Path from Selection on all three platforms** — converts raster
+  selections to smooth, resolution-independent vector paths via Potrace-style
+  contour decomposition: 8-connected polygon contour extraction from selection
+  masks, sub-pixel polygon simplification, and cubic Bézier fitting with
+  smooth control points subject to a user-selectable tolerance (0.5–10.0 px,
+  default 2.0 px). Desktop: `Select ▸ Make Work Path…` with tolerance dialog,
+  creating an editable vector path layer; CLI/MCP: `--selection-to-path [TOLERANCE]`
+  with SVG path data in document info and vector layer creation; iPad/iPhone:
+  `Make Vector Path` action on active selections in the selection strip and
+  Select menu ([#424](https://github.com/CryptoJones/Photoslop/issues/424)).
+
 ## [2.41.0] — Unreleased
 
 ### Added
