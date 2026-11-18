@@ -187,9 +187,12 @@ final class FilterParityTests: XCTestCase {
       FilterKind.allCases.map(\.rawValue),
       [
         "sepia", "pixelate", "denoise", "retro-console", "pixel-sort", "datamosh",
-        "film-negative", "beam-dither", "invert",
+        "film-negative", "beam-dither", "invert", "color-lookup",
       ])
     XCTAssertEqual(FilterKind.invert.defaults, [:])
+    XCTAssertEqual(
+      FilterKind.colorLookup.defaults,
+      ["preset": .choice("Warm Film"), "intensity": .int(100)])
   }
 
   // MARK: - Through the store
