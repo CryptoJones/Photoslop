@@ -34,7 +34,7 @@ client exposes it.
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 2.41.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
+| **Photoslop** | 2.42.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
