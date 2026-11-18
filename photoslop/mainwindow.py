@@ -889,6 +889,7 @@ class MainWindow(QMainWindow):
         m_layer.addAction(self._act("Layer Style: Drop &Shadow…", None, self.action_drop_shadow))
         m_layer.addAction(self._act("Layer Style: Outer G&low…", None, self.action_outer_glow))
         m_layer.addAction(self._act("Layer Style: Strok&e…", None, self.action_stroke_style))
+        m_layer.addAction(self._act("Layer Style: Sati&n…", None, self.action_satin_style))
         m_layer.addAction(self._act("Layer Style: &Fill Opacity…", None, self.action_fill_opacity))
         m_layer.addAction(self._act("Layer Style: Clea&r", None, self.action_clear_style))
         m_layer.addSeparator()
@@ -2580,6 +2581,19 @@ class MainWindow(QMainWindow):
         )
         doc.undo_stack.push(
             SetLayerStyleCommand(doc, layer, [*layer.effects, effect], layer.fill_opacity, "Stroke")
+        )
+
+    def action_satin_style(self) -> None:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
+            return
+        layer = doc.active_layer
+        from photoslop.appearance import new_effect
+        from photoslop.commands import SetLayerStyleCommand
+
+        effect = new_effect("satin")
+        doc.undo_stack.push(
+            SetLayerStyleCommand(doc, layer, [*layer.effects, effect], layer.fill_opacity, "Satin")
         )
 
     def apply_stroke_style(self, doc, layer, width: int, color) -> None:

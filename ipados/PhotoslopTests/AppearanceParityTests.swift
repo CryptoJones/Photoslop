@@ -50,7 +50,7 @@ final class AppearanceParityTests: XCTestCase {
   // MARK: Every effect kind
 
   func testEveryFixtureScenarioRendersTheDesktopPlanes() throws {
-    XCTAssertEqual(AppearanceFixture.scenarios.count, 14, "the fixture lost a scenario")
+    XCTAssertEqual(AppearanceFixture.scenarios.count, 15, "the fixture lost a scenario")
     for scenario in AppearanceFixture.scenarios {
       let planes = AppearanceRenderer.render(
         alpha: sourceAlpha, effects: [try effect(scenario)])

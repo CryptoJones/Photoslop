@@ -392,6 +392,34 @@ def _op_stroke(ctx: Context, value: str) -> None:
         layer.fx_cache = None
 
 
+def _op_satin(ctx: Context, value: str) -> None:
+    from photoslop.appearance import new_effect
+
+    kwargs = {}
+    trimmed = value.strip()
+    if trimmed.startswith("{"):
+        kwargs = _json_value(trimmed, "--satin", expect=dict)
+    elif trimmed:
+        parts = [p.strip() for p in trimmed.split(",")]
+        if len(parts) >= 3:
+            try:
+                kwargs["angle"] = float(parts[0])
+                kwargs["distance"] = float(parts[1])
+                kwargs["size"] = float(parts[2])
+                if len(parts) >= 4:
+                    opac = float(parts[3])
+                    kwargs["opacity"] = opac / 100.0 if opac > 1.0 else opac
+            except ValueError as exc:
+                raise _ValueError(f"--satin: {exc}") from exc
+        else:
+            raise _ValueError("--satin: expected 'ANGLE,DISTANCE,SIZE[,OPACITY]' or JSON object")
+
+    effect = new_effect("satin", **kwargs)
+    for layer in _target_layers(ctx):
+        layer.effects = [*layer.effects, effect]
+        layer.fx_cache = None
+
+
 def _json_value(value: str, option: str, expect: type | tuple[type, ...] | None = None):
     """Parsed JSON, or a usage error. ``expect`` pins the top-level type: a JSON
     document is also ``-1``, ``null`` or ``[]``, and an op that then calls
@@ -1223,6 +1251,7 @@ OPS: dict = {
     "drop-shadow": ("DX,DY,BLUR,ALPHA", "live drop-shadow effect", _op_drop_shadow),
     "glow": ("SIZE", "live outer-glow effect", _op_glow),
     "stroke": ("W,R,G,B", "live stroke effect", _op_stroke),
+    "satin": ("ANGLE,DIST,SIZE[,OPAC]", "live satin effect", _op_satin),
     "effect": ("JSON", "append a structured live appearance effect", _op_effect),
     "set-effects": ("JSON", "replace the target appearance stack", _op_set_effects),
     "clear-effects": (None, "remove all target appearance effects", _op_clear_effects),

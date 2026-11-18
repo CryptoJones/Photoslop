@@ -144,6 +144,13 @@ SCENARIOS = [
         "a diagonal gradient through the alpha, over the fill",
     ),
     (
+        "satin",
+        appearance.new_effect(
+            "satin", angle=19, distance=11, size=14, color=[0, 0, 0, 128], invert=True
+        ),
+        "the satin inverted dual-offset contour shadows clipped to layer alpha",
+    ),
+    (
         "disabled",
         {**appearance.new_effect("drop-shadow"), "enabled": False},
         "a disabled effect renders no plane at all",

@@ -45,6 +45,7 @@ CASES = {
     "drop-shadow": ("3,3,2,160", "3,3"),
     "glow": ("4", "big"),
     "stroke": ("2,0,0,255", "2"),
+    "satin": ("19,11,14", "19,11"),
     "effect": ('{"type":"inner-shadow"}', "not-json"),
     "set-effects": ('[{"type":"outline"}]', "{}"),
     "clear-effects": (None, None),

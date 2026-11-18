@@ -54,6 +54,7 @@ PAIR_ARGS = {
     "drop-shadow": ["--drop-shadow", "3,3,2,160"],
     "glow": ["--glow", "3"],
     "stroke": ["--stroke", "2,0,0,255"],
+    "satin": ["--satin", "19,11,14"],
     "effect": ["--effect", '{"type":"inner-shadow"}'],
     "set-effects": ["--set-effects", '[{"type":"outline"}]'],
     "clear-effects": ["--clear-effects"],

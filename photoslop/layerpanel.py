@@ -68,6 +68,13 @@ class LayerPanel(QWidget):
         self.opacity.valueChanged.connect(self._on_opacity)
         self.opacity_label = QLabel("100%")
 
+        self.fill = QSlider(Qt.Orientation.Horizontal)
+        self.fill.setAccessibleName("Active layer fill opacity")
+        self.fill.setRange(0, 100)
+        self.fill.setValue(100)
+        self.fill.valueChanged.connect(self._on_fill)
+        self.fill_label = QLabel("100%")
+
         buttons = QHBoxLayout()
         self._buttons: dict[str, QPushButton] = {}
         for key, icon_name, tip in (
@@ -103,10 +110,16 @@ class LayerPanel(QWidget):
         opacity_row.addWidget(self.opacity, 1)
         opacity_row.addWidget(self.opacity_label)
 
+        fill_row = QHBoxLayout()
+        fill_row.addWidget(QLabel("Fill"))
+        fill_row.addWidget(self.fill, 1)
+        fill_row.addWidget(self.fill_label)
+
         box = QVBoxLayout(self)
         box.setContentsMargins(4, 4, 4, 4)
         box.addLayout(blend_row)
         box.addLayout(opacity_row)
+        box.addLayout(fill_row)
         box.addWidget(self.list, 1)
         box.addLayout(buttons)
 
@@ -259,6 +272,10 @@ class LayerPanel(QWidget):
         self.opacity.setValue(round(active.opacity * 100))
         self.opacity.blockSignals(False)
         self.opacity_label.setText(f"{round(active.opacity * 100)}%")
+        self.fill.blockSignals(True)
+        self.fill.setValue(round(active.fill_opacity * 100))
+        self.fill.blockSignals(False)
+        self.fill_label.setText(f"{round(active.fill_opacity * 100)}%")
         self.blend.blockSignals(True)
         self.blend.setCurrentText(active.blend_mode)
         self.blend.blockSignals(False)
@@ -311,6 +328,27 @@ class LayerPanel(QWidget):
             if opacity != layer.opacity:
                 self.doc.undo_stack.push(
                     SetLayerPropertyCommand(self.doc, layer, "opacity", opacity)
+                )
+
+    def _on_fill(self, value: int) -> None:
+        if self.doc is None or self._updating:
+            return
+        layer = self.doc.active_layer
+        if layer is not None:
+            self.fill_label.setText(f"{value}%")
+            fill_opacity = value / 100.0
+            if fill_opacity != layer.fill_opacity:
+                from photoslop.commands import SetLayerStyleCommand
+
+                self.doc.undo_stack.push(
+                    SetLayerStyleCommand(
+                        self.doc,
+                        layer,
+                        layer.effects,
+                        fill_opacity,
+                        "Fill Opacity",
+                        merge_key="layer-fill-opacity",
+                    )
                 )
 
     # -- stack ops --

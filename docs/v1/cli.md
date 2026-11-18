@@ -88,7 +88,8 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--drop-shadow` `DX,DY,BLUR,ALPHA` | live drop-shadow effect |
 | `--glow` `SIZE` | live outer-glow effect |
 | `--stroke` `W,R,G,B` | live stroke effect |
-| `--effect` `JSON` | append any structured Appearance effect; supports all ten effect types and may repeat to build an ordered stack |
+| `--satin` `ANGLE,DIST,SIZE[,OPAC]` | live satin effect (inverted dual-offset contour shadows clipped to alpha) |
+| `--effect` `JSON` | append any structured Appearance effect; supports all eleven effect types and may repeat to build an ordered stack |
 | `--set-effects` `JSON_ARRAY` | replace the target layer's ordered Appearance stack |
 | `--clear-effects` | remove every Appearance effect from the target layer |
 | `--appearance-preset` `NAME` | apply a built-in or locally saved Appearance preset |
