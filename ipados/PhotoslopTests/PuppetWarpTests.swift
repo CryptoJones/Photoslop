@@ -12,7 +12,10 @@ import XCTest
 final class PuppetWarpTests: XCTestCase {
 
   private func makeStripeImage(width: Int = 100, height: Int = 100) -> UIImage {
-    let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = false
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
     return renderer.image { ctx in
       UIColor.white.setFill()
       ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
@@ -22,7 +25,10 @@ final class PuppetWarpTests: XCTestCase {
   }
 
   private func makeCenteredAlphaSquare(width: Int = 100, height: Int = 100) -> UIImage {
-    let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = false
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
     return renderer.image { ctx in
       UIColor.blue.setFill()
       ctx.fill(CGRect(x: 30, y: 30, width: 40, height: 40))
