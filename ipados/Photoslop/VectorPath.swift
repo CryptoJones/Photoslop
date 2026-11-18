@@ -128,17 +128,17 @@ enum VectorPathTracer {
       let dir: Int
     }
 
-    var allEdges = Set<Edge>()
+    var allEdges: [Edge] = []
     for y in 0...height {
       for x in 0...width {
         let tl = getBit(x - 1, y - 1)
         let tr = getBit(x, y - 1)
         let bl = getBit(x - 1, y)
         let br = getBit(x, y)
-        if !tl && tr { allEdges.insert(Edge(x: x, y: y, dir: 0)) }
-        if !tr && br { allEdges.insert(Edge(x: x, y: y, dir: 1)) }
-        if bl && !br { allEdges.insert(Edge(x: x, y: y, dir: 2)) }
-        if tl && !bl { allEdges.insert(Edge(x: x, y: y, dir: 3)) }
+        if !tl && tr { allEdges.append(Edge(x: x, y: y, dir: 0)) }
+        if !tr && br { allEdges.append(Edge(x: x, y: y, dir: 1)) }
+        if bl && !br { allEdges.append(Edge(x: x, y: y, dir: 2)) }
+        if tl && !bl { allEdges.append(Edge(x: x, y: y, dir: 3)) }
       }
     }
 

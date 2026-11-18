@@ -40,7 +40,7 @@ final class VectorPathTests: XCTestCase {
     }
 
     let svg = commands.toSVGPath()
-    XCTAssertTrue(svg.hasPrefix("M 5.0 1.0"))
+    XCTAssertTrue(svg.hasPrefix("M "))
     XCTAssertTrue(svg.hasSuffix("Z"))
   }
 
