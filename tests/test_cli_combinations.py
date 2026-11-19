@@ -102,6 +102,8 @@ PAIR_ARGS = {
     "blend-mode": ["--blend-mode", "multiply"],
     "layer-opacity": ["--layer-opacity", "70"],
     "content-aware-fill": ["--select", "3,3,6,6", "--content-aware-fill", "--deselect"],
+    "spot-heal": ["--spot-heal", "10,10,5"],
+    "heal": ["--heal", "5,5,15,15,5"],
     "feather": ["--select", "2,2,10,10", "--feather", "2"],
     "refine-selection": ["--select", "2,2,10,10", "--refine-selection", "2,1,0,0,0"],
     "select-and-mask": ["--select", "2,2,10,10", "--select-and-mask", "2,1,0,0,0"],

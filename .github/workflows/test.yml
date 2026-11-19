@@ -108,6 +108,12 @@ jobs:
         shell: bash
         env:
           QT_QPA_PLATFORM: offscreen
+          # Dump a Python traceback on a segfault instead of a bare exit 139.
+          # pytest's own faulthandler plugin is disabled by sessionfinish, so a
+          # crash in interpreter finalization (the ubuntu-3.14 Qt teardown flake)
+          # otherwise leaves no evidence; this interpreter-level handler stays
+          # active through finalization and names the faulting frame.
+          PYTHONFAULTHANDLER: "1"
         run: |
           mkdir -p reports
           uv run pytest -q --junitxml=reports/tests.xml \

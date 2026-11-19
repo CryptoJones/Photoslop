@@ -1222,7 +1222,7 @@ class SpotHealTool(Tool):
             int(ys.max() - ys.min()) + 1 + 2 * pad,
         )
         recorder.will_change(rect)
-        dirty = npimage.inpaint_diffuse(layer.image, mask)
+        dirty = npimage.inpaint_poisson(layer.image, mask)
         cmd = recorder.finish("Spot Heal")
         if cmd is not None:
             doc.undo_stack.push(cmd)

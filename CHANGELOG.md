@@ -4,7 +4,45 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.50.0] — Unreleased
+## [2.51.0] — Unreleased
+
+### Added
+- **Retouch: Poisson multigrid gradient-domain solver for Healing Brush and Spot Healing** —
+  cascadic multigrid Poisson solver with Successive Over-Relaxation (SOR) for seamless cloning,
+  patch healing, and spot inpainting across Desktop Qt GUI, headless CLI/MCP, and iPadOS/iOS ([#415](https://github.com/CryptoJones/Photoslop/issues/415)).
+  - **Algorithm (Cascadic Multigrid Poisson SOR)**: Solves the Poisson equation $\Delta f = \operatorname{div} v$
+    over masked domains $\Omega$ with Dirichlet boundary conditions matching surrounding pixels. Seamless cloning
+    solves Laplace equation $\Delta u = 0$ for harmonic offset fields $u = f - g$ with boundary matching
+    $f_{\text{dest}} - g_{\text{source}}$, or mixed gradients $v = \operatorname{argmax-mag}(\nabla g, \nabla f_{\text{dest}})$.
+    Spot healing / inpainting solves Laplace $\Delta f = 0$ with reflective Neumann boundaries at canvas edges.
+  - **Cascadic Multigrid**: Dynamic-depth injection pyramid (coarse cell `i` samples fine `2i`, so grids stay
+    aligned; even-sized levels are extended by one linearly-extrapolated cell to keep spacing uniform), coarse-level
+    Red-Black SOR (omega ≈ 1.7) with residual-based stopping (tol 0.02), bilinear upsampling to warm-start finer
+    levels, and smoothing passes at the finest level. Low-frequency error is carried by the coarse solve rather than
+    a fixed sweep count, so large holes converge exactly (ramp reconstruction error ≤ 0.002 at 1200px) in milliseconds.
+    Clone/mixed texture planes use aligned full-weighting restriction (a 3×3 `[1 2 1; 2 4 2; 1 2 1]/16` kernel centred
+    on fine `2i`) so a near-Nyquist source keeps its true mean instead of aliasing to one phase — large-hole clones
+    tone-match exactly — while the Laplace inpainting path keeps injection + extrapolation for ramp exactness.
+  - **Memory Frugality (DD-001)**: Computes strictly on the bounding box of the mask or dab plus padding (2-4px),
+    never allocating canvas-wide floating point matrices.
+  - **Desktop Qt GUI**: Integrated into `SpotHealTool` (`J`) and `HealBrushTool` (`Shift+J`), `heal_patch`,
+    `patch_heal`, and `inpaint_poisson` / `inpaint_diffuse`.
+  - **Headless CLI & MCP**: Added `--spot-heal [X,Y[,RADIUS]]` and `--heal DX,DY|SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS]`
+    pipeline options with full validation and pair-combination test coverage. A dab whose disk covers no canvas
+    pixel is rejected (exit 2) by nearest-pixel distance, not just a bounding-square intersect, so a corner dab
+    that overlaps the canvas box but misses every pixel is refused; an on-canvas heal with missing layer geometry
+    is a graceful no-op so pair sweeps compose.
+  - **iPadOS / iOS**: Native Swift implementation in `MultigridPoisson.swift` mirroring the Python solver
+    (injection pyramid, aligned full-weighting restriction for clone/mixed texture, residual stopping, Neumann
+    canvas-edge boundaries, off-canvas source-footprint refusal), with `EditorStore` methods for `spotHealSelection`,
+    `healSelection`, and point dabs, covered by unit tests in `MultigridPoissonTests.swift`. Selection-based routes
+    (`Select ▸ Spot Heal Selection`, `Select ▸ Heal Selection…` with an offset sheet) are wired in `EditorView.swift`;
+    a refused heal surfaces a recoverable alert instead of silently doing nothing, and the offset sheet's X/Y fields
+    accept numeric entry and are bounded to the canvas-derived range that keeps the source footprint on-canvas. The
+    interactive canvas Healing Brush / Spot Healing stroke tools (desktop `J` / `Shift+J` parity) are deferred to
+    [#456](https://github.com/CryptoJones/Photoslop/issues/456) to respect the iPhone nine-button palette budget.
+
+## [2.50.0]
 
 ### Added
 - **Select: Magnetic Lasso edge-snapping selection tool with live-wire tracing** —

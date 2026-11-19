@@ -5,8 +5,8 @@ A completeness test pins the op catalog to this file so they cannot drift."""
 import json
 
 import pytest
-from PySide6.QtCore import QPoint, QSize
-from PySide6.QtGui import QColor, QImage
+from PySide6.QtCore import QPoint, QRect, QSize
+from PySide6.QtGui import QColor, QImage, QPainter
 
 from photoslop import cli
 from photoslop.appearance import EFFECT_DEFAULTS
@@ -75,6 +75,8 @@ CASES = {
     "blend-mode": ("multiply", "extra-spicy"),
     "layer-opacity": ("50", "150"),
     "content-aware-fill": (None, None),
+    "spot-heal": ("10,10,5", "bad,args"),
+    "heal": ("5,5,15,15,5", "bad,args"),
     "feather": ("3", "-1"),
     "refine-selection": ("5,2,1,10,0", "not,enough"),
     "select-and-mask": ("5,2,1,10,0", "not,enough"),
@@ -842,6 +844,127 @@ def test_content_aware_fill_and_feather(qapp, tmp_path):
         )
         == 0
     )
+
+
+def test_spot_heal_cli(qapp, tmp_path):
+    img = QImage(60, 40, QImage.Format.Format_ARGB32_Premultiplied)
+    img.fill(QColor(180, 180, 180))
+    p = QPainter(img)
+    p.fillRect(QRect(18, 18, 5, 5), QColor(0, 0, 0))  # black blemish
+    p.end()
+    src = str(tmp_path / "blemish.png")
+    img.save(src)
+
+    # Spot heal with coordinates and radius
+    assert run([src, "--spot-heal", "20,20,8", "--output", tmp_path / "out_coord.png"]) == 0
+    px = QImage(str(tmp_path / "out_coord.png")).pixelColor(20, 20)
+    assert px.red() > 150  # blemish replaced by surrounding gray
+
+    # Spot heal with active selection
+    assert (
+        run([src, "--select", "15,15,10,10", "--spot-heal", "--output", tmp_path / "out_sel.png"])
+        == 0
+    )
+    px_sel = QImage(str(tmp_path / "out_sel.png")).pixelColor(20, 20)
+    assert px_sel.red() > 150
+
+    # Spot heal with no selection and no coords fails with exit code 2
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--spot-heal", "--output", tmp_path / "fail.png"])
+    assert exc.value.code == 2
+
+
+def test_heal_cli(qapp, tmp_path):
+    img = QImage(80, 40, QImage.Format.Format_ARGB32_Premultiplied)
+    img.fill(QColor(60, 60, 60))  # dark field
+    p = QPainter(img)
+    # A distinct checker texture (mean 190) in the sampled source block. A flat
+    # source would tone-match to the dark field and look like a no-op; texture
+    # makes both assertions fail if no edit actually occurs.
+    for y in range(40):
+        for x in range(30):
+            c = 220 if ((x // 2) + (y // 2)) % 2 == 0 else 160
+            p.fillRect(QRect(x, y, 1, 1), QColor(c, c, c))
+    p.end()
+    src = str(tmp_path / "texture.png")
+    img.save(src)
+
+    def assert_healed(path):
+        out = QImage(str(path))
+        # Probe a region common to both the dab and the selection below.
+        reds = [out.pixelColor(x, y).red() for y in range(18, 23) for x in range(58, 63)]
+        assert max(reds) - min(reds) > 20, "source texture must transfer"
+        assert sum(reds) / len(reds) < 120, "tone must match the dark destination"
+        assert out.pixelColor(75, 35).red() == 60, "unmasked destination pixel unchanged"
+
+    # Heal circular dab at (60, 20) from (15, 20) with radius 8
+    assert run([src, "--heal", "15,20,60,20,8", "--output", tmp_path / "healed_pt.png"]) == 0
+    assert_healed(tmp_path / "healed_pt.png")
+
+    # Heal with selection and source offset DX,DY (attached form for the
+    # leading negative — see docs/v1/cli.md).
+    assert (
+        run(
+            [
+                src,
+                "--select",
+                "55,15,10,10",
+                "--heal=-45,0",
+                "--output",
+                tmp_path / "healed_sel.png",
+            ]
+        )
+        == 0
+    )
+    assert_healed(tmp_path / "healed_sel.png")
+
+    # Heal with DX,DY but no selection fails with exit code 2
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--heal", "10,10", "--output", tmp_path / "fail.png"])
+    assert exc.value.code == 2
+
+
+def test_heal_cli_rejects_out_of_bounds_source(qapp, tmp_path):
+    """A heal whose source footprint is off-canvas for every target layer must
+    exit 2, not write an unchanged image as success (CodeRabbit cli.py:1353)."""
+    src = make_input(tmp_path, QColor(60, 60, 60), size=(60, 40))
+
+    # Selection form: source offset +100 pushes every sampled pixel off-canvas.
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--select", "15,15,10,10", "--heal=100,0", "--output", tmp_path / "f1.png"])
+    assert exc.value.code == 2
+
+    # Dab form: source far off-canvas relative to the destination dab.
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--heal", "200,20,40,20,5", "--output", tmp_path / "f2.png"])
+    assert exc.value.code == 2
+
+
+def test_spot_heal_cli_rejects_empty_dab(qapp, tmp_path):
+    """A spot-heal dab that covers no pixel of any layer must exit 2."""
+    src = make_input(tmp_path, QColor(180, 180, 180), size=(60, 40))
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--spot-heal", "-50,-50,5", "--output", tmp_path / "f.png"])
+    assert exc.value.code == 2
+
+
+def test_spot_heal_cli_rejects_disk_that_misses_canvas(qapp, tmp_path):
+    """A dab whose bounding square intersects the canvas but whose circular
+    footprint does not must exit 2, not silently no-op (CodeRabbit cli.py:1314).
+    A slightly larger disk that does cross the edge is accepted."""
+    src = make_input(tmp_path, QColor(180, 180, 180), size=(60, 40))
+    # Square (-9,-9)..(1,1) touches the canvas, but the r5 disk misses it: the
+    # nearest canvas pixel (0,0) is sqrt(32) > 5 from the centre (-4,-4).
+    # Attached form (=) so the leading negative is not parsed as a flag.
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--spot-heal=-4,-4,5", "--output", tmp_path / "f.png"])
+    assert exc.value.code == 2
+    # r6 reaches (0,0) (sqrt(32) <= 6): a valid edge-crossing dab heals.
+    assert run([src, "--spot-heal=-4,-4,6", "--output", tmp_path / "ok.png"]) == 0
+    # The heal source disk gets the same treatment.
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--heal=-4,-4,10,10,5", "--output", tmp_path / "f2.png"])
+    assert exc.value.code == 2
 
 
 def test_import_layer_joins_the_open_document(qapp, tmp_path):

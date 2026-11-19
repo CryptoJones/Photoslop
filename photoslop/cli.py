@@ -1261,6 +1261,186 @@ def _op_content_aware_fill(ctx: Context, value: str) -> None:
         npimage.inpaint_diffuse(layer.image, mask)
 
 
+def _op_spot_heal(ctx: Context, value: str) -> None:
+    """Spot heal: inpaint active selection using Poisson multigrid solver,
+    or inpaint a circular dab at X,Y with RADIUS (default 10)."""
+    from PySide6.QtGui import QImage
+
+    from photoslop import npimage
+
+    doc = ctx.doc
+    val = value.strip() if value else ""
+    if not val:
+        if doc.selection is None:
+            raise _ValueError("--spot-heal needs a selection or coordinates (X,Y[,RADIUS])")
+        healed_any = False
+        for layer in _target_layers(ctx):
+            mask = npimage.selection_mask(doc.selection, layer.image.size(), layer.offset)
+            if not mask.any():
+                continue
+            layer.image = QImage(layer.image)
+            if not npimage.inpaint_poisson(layer.image, mask).isEmpty():
+                healed_any = True
+                layer.fx_cache = None
+        if not healed_any:
+            raise _ValueError("--spot-heal: the selection misses every target layer")
+        return
+
+    parts = [p.strip() for p in val.split(",")]
+    if len(parts) == 2:
+        try:
+            cx, cy = int(parts[0]), int(parts[1])
+            radius = 10
+        except ValueError as exc:
+            raise _ValueError(f"--spot-heal: {exc}") from exc
+    elif len(parts) == 3:
+        try:
+            cx, cy, radius = int(parts[0]), int(parts[1]), int(parts[2])
+        except ValueError as exc:
+            raise _ValueError(f"--spot-heal: {exc}") from exc
+    else:
+        raise _ValueError("--spot-heal expects X,Y or X,Y,RADIUS")
+
+    if radius <= 0:
+        raise _ValueError("--spot-heal: radius must be positive")
+
+    from PySide6.QtCore import QRect
+
+    # Reject a dab that covers no canvas pixel at all (genuine user error). A
+    # dab that is on-canvas but misses the active layer's geometry — e.g. after
+    # a prior pipeline op moved or replaced the layer — is a graceful no-op, so
+    # heal/spot-heal compose with every other op (tests/test_cli_combinations.py).
+    canvas = doc.canvas_rect()
+    if not canvas.intersects(QRect(cx - radius, cy - radius, 2 * radius + 1, 2 * radius + 1)):
+        raise _ValueError("--spot-heal: the dab covers no pixel of the canvas")
+    # The bounding square can intersect the canvas while the circular dab does
+    # not (e.g. -4,-4,5 on a 60x40 canvas). Reject when the nearest canvas pixel
+    # to the centre is farther than the radius, so an empty disk is a usage error
+    # rather than a silent no-op; a disk that crosses an edge (-4,-4,6) is kept.
+    nearest_x = min(max(cx, canvas.left()), canvas.right())
+    nearest_y = min(max(cy, canvas.top()), canvas.bottom())
+    if (cx - nearest_x) ** 2 + (cy - nearest_y) ** 2 > radius * radius:
+        raise _ValueError("--spot-heal: the dab covers no pixel of the canvas")
+
+    for layer in _target_layers(ctx):
+        lx = cx - layer.offset.x()
+        ly = cy - layer.offset.y()
+        h, w = layer.image.height(), layer.image.width()
+        y0, y1 = max(0, ly - radius), min(h, ly + radius + 1)
+        x0, x1 = max(0, lx - radius), min(w, lx + radius + 1)
+        if y0 >= y1 or x0 >= x1:
+            continue
+        import numpy as np
+
+        mask = np.zeros((h, w), dtype=bool)
+        yy, xx = np.ogrid[y0:y1, x0:x1]
+        mask[y0:y1, x0:x1] = (yy - ly) ** 2 + (xx - lx) ** 2 <= radius * radius
+        if not mask.any():
+            continue
+        layer.image = QImage(layer.image)
+        if not npimage.inpaint_poisson(layer.image, mask).isEmpty():
+            layer.fx_cache = None
+
+
+def _op_heal(ctx: Context, value: str) -> None:
+    """Heal: seamless gradient-domain cloning using Poisson multigrid solver.
+    Accepts:
+    - DX,DY with active selection: heals selection using texture at offset (DX,DY).
+    - SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS]: heals dab at (DST_X,DST_Y) sampled from (SRC_X,SRC_Y).
+    """
+    from PySide6.QtGui import QImage
+
+    from photoslop import npimage
+
+    doc = ctx.doc
+    val = value.strip() if value else ""
+    if not val:
+        raise _ValueError(
+            "--heal requires DX,DY with a selection, or SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS]"
+        )
+
+    parts = [p.strip() for p in val.split(",")]
+    if len(parts) == 2:
+        try:
+            dx, dy = int(parts[0]), int(parts[1])
+        except ValueError as exc:
+            raise _ValueError(f"--heal: {exc}") from exc
+        if doc.selection is None:
+            raise _ValueError("--heal with DX,DY requires an active selection")
+        from PySide6.QtCore import QRect
+
+        # Reject only a source region that lies entirely off-canvas (genuine
+        # user error). An on-canvas source that no target layer can apply — the
+        # layer moved under a prior pipeline op, or a partial off-layer footprint
+        # the solver refuses — is a graceful no-op so heal composes with every op.
+        canvas = doc.canvas_rect()
+        src_rect = doc.selection.boundingRect().toRect().translated(dx, dy)
+        if not canvas.intersects(src_rect):
+            raise _ValueError(
+                "--heal: the source offset is out of bounds — the sampled region "
+                "lies entirely off-canvas"
+            )
+        for layer in _target_layers(ctx):
+            mask = npimage.selection_mask(doc.selection, layer.image.size(), layer.offset)
+            if not mask.any():
+                continue
+            layer.image = QImage(layer.image)
+            if not npimage.patch_heal(layer.image, mask, dx, dy).isEmpty():
+                layer.fx_cache = None
+    elif len(parts) in (4, 5):
+        try:
+            sx, sy = int(parts[0]), int(parts[1])
+            dx_pt, dy_pt = int(parts[2]), int(parts[3])
+            radius = int(parts[4]) if len(parts) == 5 else 10
+        except ValueError as exc:
+            raise _ValueError(f"--heal: {exc}") from exc
+        if radius <= 0:
+            raise _ValueError("--heal: radius must be positive")
+        from PySide6.QtCore import QRect
+
+        # Reject only a source footprint entirely off-canvas. An on-canvas source
+        # whose dab misses the active layer (a prior op moved/replaced it) or whose
+        # partial off-layer footprint the solver refuses is a graceful no-op, so
+        # heal composes with every other op (tests/test_cli_combinations.py).
+        canvas = doc.canvas_rect()
+        if not canvas.intersects(QRect(sx - radius, sy - radius, 2 * radius + 1, 2 * radius + 1)):
+            raise _ValueError(
+                "--heal: the source is out of bounds — the sampled region lies entirely off-canvas"
+            )
+        # As with --spot-heal, the bounding square may intersect while the disk
+        # does not; reject a source disk that covers no canvas pixel.
+        nearest_x = min(max(sx, canvas.left()), canvas.right())
+        nearest_y = min(max(sy, canvas.top()), canvas.bottom())
+        if (sx - nearest_x) ** 2 + (sy - nearest_y) ** 2 > radius * radius:
+            raise _ValueError(
+                "--heal: the source is out of bounds — the sampled region lies entirely off-canvas"
+            )
+        offset_x = sx - dx_pt
+        offset_y = sy - dy_pt
+        for layer in _target_layers(ctx):
+            lx = dx_pt - layer.offset.x()
+            ly = dy_pt - layer.offset.y()
+            h, w = layer.image.height(), layer.image.width()
+            y0, y1 = max(0, ly - radius), min(h, ly + radius + 1)
+            x0, x1 = max(0, lx - radius), min(w, lx + radius + 1)
+            if y0 >= y1 or x0 >= x1:
+                continue
+            import numpy as np
+
+            mask = np.zeros((h, w), dtype=bool)
+            yy, xx = np.ogrid[y0:y1, x0:x1]
+            mask[y0:y1, x0:x1] = (yy - ly) ** 2 + (xx - lx) ** 2 <= radius * radius
+            if not mask.any():
+                continue
+            layer.image = QImage(layer.image)
+            if not npimage.patch_heal(layer.image, mask, offset_x, offset_y).isEmpty():
+                layer.fx_cache = None
+    else:
+        raise _ValueError(
+            "--heal expects DX,DY (with selection) or SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS]"
+        )
+
+
 def _op_feather(ctx: Context, value: str) -> None:
     try:
         radius = float(value)
@@ -1626,6 +1806,18 @@ OPS: dict = {
     "blend-mode": ("NAME", "set the target layer's blend mode", _op_blend_mode),
     "layer-opacity": ("PCT", "set the target layer's opacity", _op_layer_opacity),
     "content-aware-fill": (None, "diffusion-fill the selection", _op_content_aware_fill),
+    "spot-heal": (
+        "[X,Y[,RADIUS]]",
+        "Poisson/Laplace inpainting on active selection, or a circular spot at X,Y "
+        "with RADIUS (default 10)",
+        _op_spot_heal,
+    ),
+    "heal": (
+        "DX,DY|SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS]",
+        "Poisson seamless clone on selection via offset DX,DY, or spot at DST_X,DST_Y "
+        "from SRC_X,SRC_Y (SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS])",
+        _op_heal,
+    ),
     "feather": ("RADIUS", "feather the current selection's edge", _op_feather),
     "refine-selection": (
         "RADIUS,SMOOTH,FEATHER,CONTRAST,SHIFT[,DECONTAM]",

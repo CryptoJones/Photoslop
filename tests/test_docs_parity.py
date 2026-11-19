@@ -37,7 +37,7 @@ def test_cli_reference_documents_every_operation_and_no_ghosts():
     "pattern",
     [
         r"\*\*(\d+) shared engine ops\*\*",
-        r"All (\d+) operations are shared",
+        r"The CLI exposes all (\d+)",
     ],
 )
 def test_feature_parity_operation_counts_match_the_engine(pattern):
@@ -47,6 +47,22 @@ def test_feature_parity_operation_counts_match_the_engine(pattern):
     for value in claimed:
         assert int(value) == len(cli.OPS), (
             f"feature-parity.md claims {value} operations; the engine has {len(cli.OPS)}"
+        )
+
+
+def test_feature_parity_mcp_count_matches_engine_minus_blocked():
+    """MCP exposes the engine minus the model-backed ops it blocks; the doc's
+    'MCP shares N' claim must track that, not the full CLI total."""
+    from photoslop.server import _BLOCKED_OPS
+
+    text = (DOCS / "feature-parity.md").read_text(encoding="utf-8")
+    claimed = re.findall(r"MCP shares (\d+)", text)
+    assert claimed, "the 'MCP shares N' claim disappeared from feature-parity.md"
+    expected = len(cli.OPS) - len(_BLOCKED_OPS)
+    for value in claimed:
+        assert int(value) == expected, (
+            f"feature-parity.md claims MCP shares {value} operations; the engine "
+            f"has {len(cli.OPS)} minus {len(_BLOCKED_OPS)} blocked = {expected}"
         )
 
 

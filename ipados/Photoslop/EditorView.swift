@@ -155,6 +155,14 @@ struct EditorView: View {
   @State private var showRefineEdge = false
   /// The radius the feather sheet proposes, in pixels.
   @State private var featherRadius = Double(EditorStore.defaultFeather)
+  /// The Select ▸ Heal Selection… source-offset sheet (#415).
+  @State private var showHealOffset = false
+  /// Source offset (pixels) the heal sheet proposes; negative samples left/up.
+  @State private var healDX = 0
+  @State private var healDY = 0
+  /// Refusal explanation shown inside the heal sheet; the sheet stays open and
+  /// keeps the entered offsets so a refused heal is recoverable (#455 review).
+  @State private var healRefusal: String?
   @State private var drawsWithFinger = EditorView.defaultDrawsWithFinger(
     idiom: UIDevice.current.userInterfaceIdiom)
   @State private var showLayers = false
@@ -315,6 +323,7 @@ struct EditorView: View {
     }
     .sheet(isPresented: $showFeatherOptions) { featherSheet }
     .sheet(isPresented: $showRefineEdge) { refineEdgeSheet }
+    .sheet(isPresented: $showHealOffset) { healOffsetSheet }
     .onChange(of: selectedPhoto) { _, item in
       guard let item else { return }
       Task {
@@ -1805,6 +1814,31 @@ struct EditorView: View {
       }
       .disabled(store.selection == nil)
       Divider()
+      // Poisson retouching on the selection (#415). The stroke/dab tools (the
+      // desktop's J / Shift+J) are deferred — see the tracking issue; the
+      // iPhone palette is already at its nine-button budget.
+      Button {
+        if !store.spotHealSelection() {
+          errorMessage =
+            "Spot Heal needs a selection with surrounding pixels to sample from. "
+            + "A full-image selection has no boundary to heal from."
+        }
+      } label: {
+        Label("Spot Heal Selection", systemImage: "bandage")
+      }
+      .disabled(store.selection == nil || store.activeLayer == nil)
+      .accessibilityIdentifier("Spot Heal Selection")
+      Button {
+        healDX = 0
+        healDY = 0
+        healRefusal = nil
+        showHealOffset = true
+      } label: {
+        Label("Heal Selection…", systemImage: "cross.case")
+      }
+      .disabled(store.selection == nil || store.activeLayer == nil)
+      .accessibilityIdentifier("Heal Selection")
+      Divider()
       // The clipboard trio keeps its shortcuts here, where a keyboard user
       // looks for them; the one-tap route is `selectionActionBar` (#374).
       Button(action: cutSelection) {
@@ -1896,6 +1930,110 @@ struct EditorView: View {
           }
           .accessibilityIdentifier("Apply feather")
         }
+      }
+    }
+    .presentationDetents([.fraction(0.3), .medium])
+  }
+
+  /// Valid source-offset ranges (#455 review): any (DX, DY) whose sampled
+  /// footprint stays on the canvas, derived from the selection bounds and the
+  /// canvas size. A fixed ±500 clipped valid reaches on large images — a 2048 px
+  /// canvas with a selection at x=1500 can sample from x=0, i.e. DX=-1500.
+  private var healDXRange: ClosedRange<Int> {
+    let canvasW = Int(store.canvasSize.width)
+    guard let b = store.selection?.bounds else { return -canvasW...canvasW }
+    let lo = -b.x
+    let hi = canvasW - b.x - b.width
+    return lo...max(lo, hi)
+  }
+
+  private var healDYRange: ClosedRange<Int> {
+    let canvasH = Int(store.canvasSize.height)
+    guard let b = store.selection?.bounds else { return -canvasH...canvasH }
+    let lo = -b.y
+    let hi = canvasH - b.y - b.height
+    return lo...max(lo, hi)
+  }
+
+  /// Select ▸ Heal Selection… (#415): the desktop's `--heal DX,DY` source
+  /// offset as steppers with direct numeric entry. Apply seamless-clones texture
+  /// sampled (DX, DY) away into the selection, tone-matched to its surroundings.
+  /// Negative DX samples to the left, negative DY upward. A refused heal keeps
+  /// the sheet open with the entered offsets so it can be corrected (#455).
+  private var healOffsetSheet: some View {
+    NavigationStack {
+      Form {
+        Section {
+          HStack {
+            Text("Offset X")
+            Spacer()
+            TextField("X", value: $healDX, format: .number)
+              .keyboardType(.numbersAndPunctuation)
+              .textFieldStyle(.roundedBorder)
+              .frame(width: 80)
+              .multilineTextAlignment(.trailing)
+              .onSubmit {
+                healDX = min(max(healDX, healDXRange.lowerBound), healDXRange.upperBound)
+              }
+              .accessibilityIdentifier("Heal offset X field")
+            Stepper(value: $healDX, in: healDXRange, step: 1) { EmptyView() }
+              .labelsHidden()
+              .accessibilityIdentifier("Heal offset X")
+          }
+          HStack {
+            Text("Offset Y")
+            Spacer()
+            TextField("Y", value: $healDY, format: .number)
+              .keyboardType(.numbersAndPunctuation)
+              .textFieldStyle(.roundedBorder)
+              .frame(width: 80)
+              .multilineTextAlignment(.trailing)
+              .onSubmit {
+                healDY = min(max(healDY, healDYRange.lowerBound), healDYRange.upperBound)
+              }
+              .accessibilityIdentifier("Heal offset Y field")
+            Stepper(value: $healDY, in: healDYRange, step: 1) { EmptyView() }
+              .labelsHidden()
+              .accessibilityIdentifier("Heal offset Y")
+          }
+        } footer: {
+          Text(
+            "Samples texture this far from the selection and blends it in, matching the "
+              + "surrounding tone. Negative X samples left; negative Y samples up. Type a "
+              + "value or use the steppers; the range keeps the source on the canvas.")
+        }
+      }
+      .navigationTitle("Heal Selection")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") { showHealOffset = false }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Apply") {
+            healDX = min(max(healDX, healDXRange.lowerBound), healDXRange.upperBound)
+            healDY = min(max(healDY, healDYRange.lowerBound), healDYRange.upperBound)
+            if store.healSelection(dx: healDX, dy: healDY) {
+              showHealOffset = false
+            } else {
+              healRefusal =
+                "Heal could not sample texture at that offset. Keep the source footprint "
+                + "on the canvas and try a different offset."
+            }
+          }
+          .accessibilityIdentifier("Apply heal")
+        }
+      }
+      .alert(
+        "Heal Selection",
+        isPresented: Binding(
+          get: { healRefusal != nil },
+          set: { if !$0 { healRefusal = nil } }
+        )
+      ) {
+        Button("OK", role: .cancel) { healRefusal = nil }
+      } message: {
+        Text(healRefusal ?? "")
       }
     }
     .presentationDetents([.fraction(0.3), .medium])
