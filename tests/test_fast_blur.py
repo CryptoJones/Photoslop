@@ -243,22 +243,6 @@ def test_cli_gaussian_blur_accelerated(tmp_path):
     assert ctx.doc.active_layer.image is not None
 
 
-def test_filter_plugin_fast_blur():
-    """Test fast-blur plugin registered in available_filters."""
-    from photoslop.filters import available_filters
-
-    filters = available_filters()
-    assert "fast-blur" in filters
-    cls = filters["fast-blur"]
-    assert cls.name == "fast-blur"
-    assert cls.label == "Fast Blur"
-
-    img = make_test_image(80, 80, 0xFF123456)
-    inst = cls()
-    inst.apply(img, {"radius": 12})
-    assert img != make_test_image(80, 80, 0xFF123456)
-
-
 # MARK: - 7. GUI GaussianBlurDialog
 
 

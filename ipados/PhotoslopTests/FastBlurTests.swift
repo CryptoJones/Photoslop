@@ -131,24 +131,18 @@ final class FastBlurTests: XCTestCase {
     }
   }
 
-  // MARK: - 5. FilterKind Integration
+  // MARK: - 5. Direct Algorithm Application
 
-  func testFilterKindApplication() {
+  func testDirectAlgorithmApplication() {
     var buffer = makeBuffer(width: 50, height: 50, color: 0xFF12_3456)
     let initial = buffer.words
 
-    let kindFast = FilterKind.fastBlur
-    XCTAssertEqual(kindFast.label, "Fast Blur")
-    XCTAssertEqual(kindFast.params.first?.name, "radius")
-
-    kindFast.apply(to: &buffer, params: ["radius": .int(15)])
-    XCTAssertNotEqual(buffer.words, initial, "FilterKind.fastBlur did not mutate buffer")
+    FilterAlgorithms.fastBlur(&buffer, radius: 15)
+    XCTAssertNotEqual(buffer.words, initial, "FilterAlgorithms.fastBlur did not mutate buffer")
 
     var bufferGauss = makeBuffer(width: 50, height: 50, color: 0xFF12_3456)
-    let kindGauss = FilterKind.gaussianBlur
-    XCTAssertEqual(kindGauss.label, "Gaussian Blur")
-    kindGauss.apply(to: &bufferGauss, params: ["radius": .int(15)])
-    XCTAssertEqual(buffer.words, bufferGauss.words, "fastBlur and gaussianBlur FilterKind results must match")
+    FilterAlgorithms.gaussianBlur(&bufferGauss, radius: 15)
+    XCTAssertEqual(buffer.words, bufferGauss.words, "fastBlur and gaussianBlur results must match")
   }
 
   // MARK: - 6. UIGraphicsImageRenderer Hygiene

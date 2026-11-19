@@ -949,16 +949,4 @@ def _negative_lut(lo: int, hi: int) -> np.ndarray:
     return np.clip(np.rint(scaled * 255.0), 0, 255).astype(np.int32)
 
 
-class FastBlurFilter(Filter):
-    name = "fast-blur"
-    label = "Fast Blur"
-    params = (ParamSpec("radius", "Radius", "int", 1, 250, 8),)
-
-    def apply(self, image: QImage, params: dict) -> None:
-        from photoslop import npimage
-
-        radius = int(params.get("radius", 8))
-        npimage.fast_blur(image, max(1, radius))
-
-
-_BUILT_INS = (*_BUILT_INS, FilmNegativeFilter, BeamDitherFilter, FastBlurFilter)
+_BUILT_INS = (*_BUILT_INS, FilmNegativeFilter, BeamDitherFilter)
