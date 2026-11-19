@@ -100,6 +100,14 @@ ignore = ["N802", "N815"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The unraisableexception plugin runs gc.collect() at pytest_unconfigure to
+# surface unraisable exceptions. On ubuntu-latest + Python 3.14 that final GC
+# sweeps a lingering PySide6/shiboken wrapper whose C++ deletion segfaults
+# (exit 139 right after [100%], before the summary). faulthandler named the
+# frame: _pytest/unraisableexception.py gc_collect_harder <- pytest_unconfigure.
+# Disable the plugin so the session does not end on that Qt-hostile GC pass;
+# unraisable exceptions still print to stderr via Python's default hook.
+addopts = "-p no:unraisableexception"
 
 [tool.coverage.run]
 branch = true
