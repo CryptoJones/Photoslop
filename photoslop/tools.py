@@ -51,6 +51,9 @@ class ToolOptions:
         self.scatter = 0  # random stamp offset, % of brush size
         self.pattern = None  # QImage tile from Edit > Define Pattern
         self.crop_layer_only = False  # crop trims the active layer, not the canvas
+        self.detection_width = 20  # px (1..100)
+        self.edge_contrast = 10  # percent (1..100)
+        self.frequency = 50  # anchor density (0..100)
 
     def swap_colors(self) -> None:
         self.foreground, self.background = self.background, self.foreground
@@ -1979,23 +1982,87 @@ class MagneticLassoTool(PolyLassoTool):
     def __init__(self, options: ToolOptions) -> None:
         super().__init__(options)
         self._doc = None
+        self._wire_cache: dict[tuple[int, int, int, int], list[QPointF]] = {}
 
     def press(self, doc, canvas, pos, ev):
         self._doc = doc
-        super().press(doc, canvas, pos, ev)
+        if not self._points:
+            self._wire_cache.clear()
+            self._base_selection = (
+                QPainterPath(doc.selection) if doc.selection is not None else None
+            )
+            doc.set_selection(None)
+            self._points = [pos]
+            return
+        close_tol = 8.0 / max(canvas.zoom, 0.01)
+        if len(self._points) >= 3 and (pos - self._points[0]).manhattanLength() <= close_tol:
+            self._close(doc)
+            return
+        self._points.append(pos)
+        self._preview(doc)
+
+    def hover(self, doc, canvas, pos):
+        if self._points:
+            self._doc = doc
+            self._hover = pos
+            self._check_auto_drop(doc, pos)
+            self._preview(doc)
+
+    def move(self, doc, canvas, pos, ev):
+        if self._points:
+            self._doc = doc
+            self._hover = pos
+            self._check_auto_drop(doc, pos)
+            self._preview(doc)
+
+    def cancel(self, doc=None) -> None:
+        super().cancel(doc)
+        self._wire_cache.clear()
+
+    def _close(self, doc) -> None:
+        self._hover = None
+        doc.set_selection(self._path())
+        self._points = []
+        self._wire_cache.clear()
+
+    def _check_auto_drop(self, doc, pos: QPointF) -> None:
+        if not self._points:
+            return
+        last = self._points[-1]
+        dist = math.hypot(pos.x() - last.x(), pos.y() - last.y())
+        freq = getattr(self.opts, "frequency", 50)
+        thresh = max(10, int(150 - freq * 1.2))
+        if dist >= thresh:
+            wire = self._wire(last, pos)
+            new_pt = wire[-1] if wire else pos
+            self._points.append(new_pt)
 
     def _wire(self, a: QPointF, b: QPointF) -> list[QPointF]:
+        key = (round(a.x()), round(a.y()), round(b.x()), round(b.y()))
+        cached = self._wire_cache.get(key)
+        if cached is not None:
+            return cached
         doc = self._doc
         layer = doc.active_layer if doc is not None else None
         if layer is None:
             return [b]
         off = layer.offset
+        width = getattr(self.opts, "detection_width", 20)
+        contrast = getattr(self.opts, "edge_contrast", 10)
         points = npimage.livewire_path(
-            layer.image, (a.x() - off.x(), a.y() - off.y()), (b.x() - off.x(), b.y() - off.y())
+            layer.image,
+            (a.x() - off.x(), a.y() - off.y()),
+            (b.x() - off.x(), b.y() - off.y()),
+            width=width,
+            contrast=contrast,
         )
-        return [QPointF(x + off.x() + 0.5, y + off.y() + 0.5) for x, y in points[1:]]
+        res = [QPointF(x + off.x() + 0.5, y + off.y() + 0.5) for x, y in points[1:]]
+        self._wire_cache[key] = res
+        return res
 
     def _path(self) -> QPainterPath:
+        if not self._points:
+            return QPainterPath()
         path = QPainterPath(self._points[0])
         prev = self._points[0]
         for pt in self._points[1:]:
@@ -2005,8 +2072,32 @@ class MagneticLassoTool(PolyLassoTool):
         if self._hover is not None:
             for wp in self._wire(prev, self._hover):
                 path.lineTo(wp)
+        elif len(self._points) >= 3:
+            for wp in self._wire(prev, self._points[0]):
+                path.lineTo(wp)
         path.closeSubpath()
         return path
+
+    def overlay(self, doc, painter, canvas):
+        if not self._points:
+            return
+        z = canvas.zoom
+        painter.setPen(QPen(QColor(0, 0, 0, 200), 1))
+        painter.setBrush(QBrush(QColor(255, 255, 255, 220)))
+        for pt in self._points:
+            painter.drawRect(QRectF(pt.x() * z - 2, pt.y() * z - 2, 4, 4))
+
+        if self._hover is not None and self._points:
+            wire = self._wire(self._points[-1], self._hover)
+            if wire:
+                painter.setPen(QPen(QColor(0, 120, 215, 220), 1.5, Qt.PenStyle.DashLine))
+                for i in range(len(wire) - 1):
+                    p1 = wire[i]
+                    p2 = wire[i + 1]
+                    painter.drawLine(
+                        QPointF(p1.x() * z, p1.y() * z),
+                        QPointF(p2.x() * z, p2.y() * z),
+                    )
 
 
 class MoveTool(Tool):

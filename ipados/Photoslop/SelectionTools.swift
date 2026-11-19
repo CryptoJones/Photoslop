@@ -29,6 +29,13 @@ extension EditorStore {
     combineShape(SelectionMask.polygon(points, width: width, height: height), combine)
   }
 
+  /// Magnetic Lasso Select: the closed polygon through livewire points.
+  func selectMagneticLasso(_ points: [CGPoint], combine: SelectionCombine) {
+    let width = Int(canvasSize.width), height = Int(canvasSize.height)
+    guard points.count >= 3 else { return combineShape(nil, combine) }
+    combineShape(SelectionMask.polygon(points, width: width, height: height), combine)
+  }
+
   /// The wand's New / Add / Subtract, for a shape. A shape that selects
   /// nothing — off the canvas, degenerate — is a click for this purpose.
   private func combineShape(_ region: SelectionMask?, _ combine: SelectionCombine) {

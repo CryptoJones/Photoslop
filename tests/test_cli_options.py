@@ -61,6 +61,7 @@ CASES = {
     "select": ("5,5,10,10", "5,5"),
     "select-ellipse": ("5,5,20,16", "5,5"),
     "select-poly": ("5,5 25,5 25,15", "5,5 25,5"),
+    "magnetic-select": ("5,5:25,5:25,15", "5,5:25,5"),
     "deselect": (None, None),
     "clear": (None, None),
     "flip": ("h", "diagonal"),
@@ -424,6 +425,32 @@ def test_select_poly_confines_to_triangle(qapp, tmp_path):
                 src,
                 "--select-poly",
                 "5,5 25,5 25,15",
+                "--hue-sat",
+                "0,0,50",
+                "--output",
+                tmp_path / "out.png",
+            ]
+        )
+        == 0
+    )
+    out = out_image(tmp_path)
+    assert out.pixelColor(20, 8).red() > 140  # inside the triangle
+    assert out.pixelColor(7, 13).red() == 100  # inside bbox, outside triangle
+    assert out.pixelColor(40, 30).red() == 100  # far outside
+
+
+def test_magnetic_select_traces_edges_and_confines(qapp, tmp_path):
+    src = make_input(tmp_path, QColor(100, 100, 100))
+    assert (
+        run(
+            [
+                src,
+                "--magnetic-select",
+                "5,5:25,5:25,15",
+                "--magnetic-width",
+                "25",
+                "--magnetic-contrast",
+                "15",
                 "--hue-sat",
                 "0,0,50",
                 "--output",

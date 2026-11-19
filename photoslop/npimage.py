@@ -489,12 +489,31 @@ def unsharp_mask(img: QImage, radius: int, amount: float, mask: np.ndarray | Non
             band[m] = out[m]
 
 
-def livewire_path(img: QImage, a, b, margin: int = 16, max_area: int = 60000) -> list:
-    """Minimum-cost 8-connected path from a to b (layer coords) where cost is
-    low along strong edges — the magnetic-lasso livewire. Runs Dijkstra in a
-    corridor around the endpoints; falls back to a straight segment when the
-    corridor would be too large. Returns [(x, y), ...] including endpoints."""
+def livewire_path(
+    img: QImage,
+    a,
+    b,
+    margin: int = 20,
+    max_area: int = 60000,
+    width: int | None = None,
+    contrast: float = 10.0,
+    pull: float = 0.1,
+) -> list:
+    """Intelligent Scissors / live-wire minimum-cost 8-connected path from a to b
+    (layer coords) where link costs combine:
+      1) Gradient magnitude (Sobel/central differences, high gradient -> low cost,
+         gated by edge contrast threshold).
+      2) Edge direction (cost penalized when step deviates from the edge tangent unit vector).
+      3) Non-maximum suppression (edge centering: local maximum along gradient normal).
+      4) Gentle pull toward pointer guide line (penalty for deviating from line segment ab).
+
+    Respects Memory Frugality (DD-001) by reading pixels lazily in 128px cached blocks
+    along the pointer corridor.
+    Falls back to straight segment [(ax, ay), (bx, by)] when corridor area exceeds max_area.
+    """
     import heapq
+
+    margin = int(width) if width is not None else int(margin)
 
     h, w = img.height(), img.width()
     ax, ay = int(a[0]), int(a[1])
@@ -509,54 +528,163 @@ def livewire_path(img: QImage, a, b, margin: int = 16, max_area: int = 60000) ->
     if cw * ch > max_area or cw < 2 or ch < 2:
         return [(ax, ay), (bx, by)]
 
-    arr = view_u32(img)[y0:y1, x0:x1]
-    r = ((arr >> np.uint32(16)) & 0xFF).astype(np.float32)
-    g = ((arr >> np.uint32(8)) & 0xFF).astype(np.float32)
-    bl = (arr & 0xFF).astype(np.float32)
-    gray = 0.299 * r + 0.587 * g + 0.114 * bl
-    dx = np.abs(np.diff(gray, axis=1, prepend=gray[:, :1]))
-    dy = np.abs(np.diff(gray, axis=0, prepend=gray[:1, :]))
-    grad = dx + dy
-    top = max(1.0, float(grad.max()))
-    cost = 1.0 - grad / top + 0.02  # strong edges are nearly free
+    # Lazy 128px cached block reading (DD-001)
+    block_size = 128
+    view = view_u32(img)
+    gray = np.empty((ch, cw), dtype=np.float32)
+    bx0, bx1 = x0 // block_size, (x1 - 1) // block_size
+    by0, by1 = y0 // block_size, (y1 - 1) // block_size
+    for by_idx in range(by0, by1 + 1):
+        for bx_idx in range(bx0, bx1 + 1):
+            tx0 = bx_idx * block_size
+            tx1 = min(w, tx0 + block_size)
+            ty0 = by_idx * block_size
+            ty1 = min(h, ty0 + block_size)
+            ox0, ox1 = max(x0, tx0), min(x1, tx1)
+            oy0, oy1 = max(y0, ty0), min(y1, ty1)
+            if ox0 >= ox1 or oy0 >= oy1:
+                continue
+            blk = view[ty0:ty1, tx0:tx1]
+            r = ((blk >> np.uint32(16)) & 0xFF).astype(np.float32)
+            g = ((blk >> np.uint32(8)) & 0xFF).astype(np.float32)
+            bl = (blk & 0xFF).astype(np.float32)
+            t_gray = 0.299 * r + 0.587 * g + 0.114 * bl
+            gray[oy0 - y0 : oy1 - y0, ox0 - x0 : ox1 - x0] = t_gray[
+                oy0 - ty0 : oy1 - ty0, ox0 - tx0 : ox1 - tx0
+            ]
 
+    # Central difference gradients
+    gx = np.zeros((ch, cw), dtype=np.float32)
+    gy = np.zeros((ch, cw), dtype=np.float32)
+    if cw > 1:
+        gx[:, 1:-1] = (gray[:, 2:] - gray[:, :-2]) * 0.5
+        gx[:, 0] = gray[:, 1] - gray[:, 0]
+        gx[:, -1] = gray[:, -1] - gray[:, -2]
+    if ch > 1:
+        gy[1:-1, :] = (gray[2:, :] - gray[:-2, :]) * 0.5
+        gy[0, :] = gray[1, :] - gray[0, :]
+        gy[-1, :] = gray[-1, :] - gray[-2, :]
+
+    grad = np.sqrt(gx * gx + gy * gy)
+    top = max(1.0, float(grad.max()))
+    t_contrast = (float(contrast) / 100.0) * max(top, 25.5)
+
+    # 1) Gradient magnitude cost: high gradient -> low cost
+    eff_grad = np.maximum(0.0, grad - t_contrast)
+    denom = max(1e-5, top - t_contrast)
+    f_g = 1.0 - (eff_grad / denom)
+
+    # 2) Edge direction: unit normal vectors (normal is perpendicular to edge tangent)
+    grad_safe = np.maximum(grad, 1e-5)
+    nx = gx / grad_safe
+    ny = gy / grad_safe
+
+    # 3) Non-maximum suppression along gradient direction (edge centering)
+    f_z = np.ones((ch, cw), dtype=np.float32)
+    if ch > 2 and cw > 2:
+        g_inner = grad[1:-1, 1:-1]
+        gx_inner = gx[1:-1, 1:-1]
+        gy_inner = gy[1:-1, 1:-1]
+        ax_val = np.abs(gx_inner)
+        ay_val = np.abs(gy_inner)
+
+        m_horiz = ax_val > 2.414 * ay_val
+        m_vert = ay_val > 2.414 * ax_val
+        m_diag = (~m_horiz) & (~m_vert) & (gx_inner * gy_inner > 0)
+        m_anti = (~m_horiz) & (~m_vert) & (~m_diag)
+
+        is_max = np.zeros_like(g_inner, dtype=bool)
+        is_max |= m_horiz & (g_inner >= grad[1:-1, :-2]) & (g_inner >= grad[1:-1, 2:])
+        is_max |= m_vert & (g_inner >= grad[:-2, 1:-1]) & (g_inner >= grad[2:, 1:-1])
+        is_max |= m_diag & (g_inner >= grad[2:, 2:]) & (g_inner >= grad[:-2, :-2])
+        is_max |= m_anti & (g_inner >= grad[:-2, 2:]) & (g_inner >= grad[2:, :-2])
+        is_max &= g_inner >= t_contrast
+        f_z[1:-1, 1:-1][is_max] = 0.0
+
+    # 4) Gentle pull toward pointer guide line (distance to segment ab)
+    ax_rel, ay_rel = ax - x0, ay - y0
+    bx_rel, by_rel = bx - x0, by - y0
+    vx, vy = bx_rel - ax_rel, by_rel - ay_rel
+    len_sq = vx * vx + vy * vy
+    ys, xs = np.indices((ch, cw))
+    wx = xs - ax_rel
+    wy = ys - ay_rel
+    if len_sq > 0:
+        t = np.clip((wx * vx + wy * vy) / len_sq, 0.0, 1.0)
+        proj_x = ax_rel + t * vx
+        proj_y = ay_rel + t * vy
+        dist_line = np.sqrt((xs - proj_x) ** 2 + (ys - proj_y) ** 2)
+    else:
+        dist_line = np.sqrt(wx * wx + wy * wy)
+    f_p = np.clip(dist_line / max(1.0, float(margin)), 0.0, 1.0)
+
+    # Static node cost (G, Z, P)
+    node_cost = 0.45 * f_g + 0.20 * f_z + float(pull) * f_p + 0.02
+
+    # Graph search
     start = (ay - y0) * cw + (ax - x0)
     goal = (by - y0) * cw + (bx - x0)
     dist = np.full(cw * ch, np.inf, dtype=np.float64)
     parent = np.full(cw * ch, -1, dtype=np.int64)
     dist[start] = 0.0
-    flat_cost = cost.ravel()
     heap = [(0.0, start)]
-    neighbours = (-cw - 1, -cw, -cw + 1, -1, 1, cw - 1, cw, cw + 1)
-    diag = {-cw - 1, -cw + 1, cw - 1, cw + 1}
+
+    # 8-connected steps: (dx, dy, step_length, unit_dx, unit_dy)
+    sqrt2 = 1.41421356237
+    inv_sqrt2 = 0.70710678118
+    steps = (
+        (-1, -1, sqrt2, -inv_sqrt2, -inv_sqrt2),
+        (0, -1, 1.0, 0.0, -1.0),
+        (1, -1, sqrt2, inv_sqrt2, -inv_sqrt2),
+        (-1, 0, 1.0, -1.0, 0.0),
+        (1, 0, 1.0, 1.0, 0.0),
+        (-1, 1, sqrt2, -inv_sqrt2, inv_sqrt2),
+        (0, 1, 1.0, 0.0, 1.0),
+        (1, 1, sqrt2, inv_sqrt2, inv_sqrt2),
+    )
+
+    flat_node_cost = node_cost.ravel()
+    flat_nx = nx.ravel()
+    flat_ny = ny.ravel()
+    flat_grad = grad.ravel()
+
     while heap:
-        d, node = heapq.heappop(heap)
-        if node == goal:
+        d, u = heapq.heappop(heap)
+        if u == goal:
             break
-        if d > dist[node]:
+        if d > dist[u]:
             continue
-        nx = node % cw
-        for step in neighbours:
-            other = node + step
-            ox = other % cw
-            if other < 0 or other >= cw * ch or abs(ox - nx) > 1:
+        ux = u % cw
+        uy = u // cw
+        u_nx = flat_nx[u]
+        u_ny = flat_ny[u]
+        has_edge_dir = flat_grad[u] >= t_contrast
+
+        for dx, dy, step_len, udx, udy in steps:
+            vx_coord = ux + dx
+            vy_coord = uy + dy
+            if vx_coord < 0 or vx_coord >= cw or vy_coord < 0 or vy_coord >= ch:
                 continue
-            weight = flat_cost[other] * (1.4142 if step in diag else 1.0)
-            nd = d + weight
-            if nd < dist[other]:
-                dist[other] = nd
-                parent[other] = node
-                heapq.heappush(heap, (nd, other))
+            v = vy_coord * cw + vx_coord
+
+            # Edge direction deviation
+            f_d = abs(udx * u_nx + udy * u_ny) if has_edge_dir else 0.5
+            w_edge = step_len * (flat_node_cost[v] + 0.30 * f_d)
+            nd = d + w_edge
+            if nd < dist[v]:
+                dist[v] = nd
+                parent[v] = u
+                heapq.heappush(heap, (nd, v))
 
     if parent[goal] < 0 and goal != start:
         return [(ax, ay), (bx, by)]
     path = []
-    node = goal
-    while node >= 0:
-        path.append((node % cw + x0, node // cw + y0))
-        if node == start:
+    curr = goal
+    while curr >= 0:
+        path.append((curr % cw + x0, curr // cw + y0))
+        if curr == start:
             break
-        node = parent[node]
+        curr = parent[curr]
     path.reverse()
     return path
 

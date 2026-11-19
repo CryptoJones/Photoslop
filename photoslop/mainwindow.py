@@ -352,6 +352,8 @@ class MainWindow(QMainWindow):
         cycle.activated.connect(self._cycle_fill_tool)
         shape_cycle = QShortcut(QKeySequence("Shift+U"), self)
         shape_cycle.activated.connect(self._cycle_shape)
+        lasso_cycle = QShortcut(QKeySequence("Shift+L"), self)
+        lasso_cycle.activated.connect(self._cycle_lasso_tool)
 
     def _set_toolbox_density(self, density: str) -> None:
         if density not in {"compact", "comfortable", "labels"}:
@@ -381,6 +383,16 @@ class MainWindow(QMainWindow):
         name = "gradient" if self._active_tool_name == "bucket" else "bucket"
         self._set_tool(name)
         self._tool_actions[name].setChecked(True)
+
+    def _cycle_lasso_tool(self) -> None:
+        """Shift+L cycles lasso -> poly-lasso -> magnetic-lasso."""
+        order = ("lasso", "poly-lasso", "magnetic-lasso")
+        if self._active_tool_name in order:
+            nxt = order[(order.index(self._active_tool_name) + 1) % len(order)]
+        else:
+            nxt = "poly-lasso"
+        self._set_tool(nxt)
+        self._tool_actions[nxt].setChecked(True)
 
     def _set_tool(self, name: str) -> None:
         self._active_tool_name = name
@@ -568,6 +580,33 @@ class MainWindow(QMainWindow):
         puppet_commit_btn.clicked.connect(self._on_puppet_commit)
         puppet_commit_act = bar.addWidget(puppet_commit_btn)
 
+        mag_width = QSpinBox()
+        mag_width.setRange(1, 100)
+        mag_width.setValue(self.options.detection_width)
+        mag_width.setSuffix(" px width")
+        mag_width.setToolTip("Magnetic Lasso detection search window half-width in pixels")
+        mag_width.setAccessibleName("Detection Width")
+        mag_width.valueChanged.connect(lambda v: setattr(self.options, "detection_width", v))
+        mag_width_act = bar.addWidget(mag_width)
+
+        mag_contrast = QSpinBox()
+        mag_contrast.setRange(1, 100)
+        mag_contrast.setValue(self.options.edge_contrast)
+        mag_contrast.setSuffix("% contrast")
+        mag_contrast.setToolTip("Magnetic Lasso minimum edge contrast percentage")
+        mag_contrast.setAccessibleName("Edge Contrast")
+        mag_contrast.valueChanged.connect(lambda v: setattr(self.options, "edge_contrast", v))
+        mag_contrast_act = bar.addWidget(mag_contrast)
+
+        mag_freq = QSpinBox()
+        mag_freq.setRange(0, 100)
+        mag_freq.setValue(self.options.frequency)
+        mag_freq.setSuffix(" freq")
+        mag_freq.setToolTip("Magnetic Lasso anchor point frequency density")
+        mag_freq.setAccessibleName("Frequency")
+        mag_freq.valueChanged.connect(lambda v: setattr(self.options, "frequency", v))
+        mag_freq_act = bar.addWidget(mag_freq)
+
         puppet_cancel_btn = QToolButton()
         puppet_cancel_btn.setText("✕ Cancel")
         puppet_cancel_btn.setToolTip("Cancel Puppet Warp (Esc)")
@@ -604,7 +643,7 @@ class MainWindow(QMainWindow):
             "ellipse-select": [],
             "lasso": [],
             "poly-lasso": [],
-            "magnetic-lasso": [],
+            "magnetic-lasso": [mag_width_act, mag_contrast_act, mag_freq_act],
             "wand": [tol_act, contig_act],
             "quick-select": [size_act, tol_act],
             "clone-stamp": [size_act, opacity_act],
@@ -643,6 +682,9 @@ class MainWindow(QMainWindow):
             scatter_act,
             crop_layer_act,
             *puppet_acts,
+            mag_width_act,
+            mag_contrast_act,
+            mag_freq_act,
         ]
         self._option_widgets = {
             "size": size,
@@ -657,6 +699,9 @@ class MainWindow(QMainWindow):
             "contiguous": contiguous,
             "eraser": eraser,
             "crop_layer_only": crop_layer,
+            "detection_width": mag_width,
+            "edge_contrast": mag_contrast,
+            "frequency": mag_freq,
         }
 
         # PS-style bracket shortcuts; window-level, invisible in menus

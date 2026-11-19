@@ -55,3 +55,49 @@ def test_magnetic_lasso_tool_closes_selection(qapp):
     bounds = doc.selection_bounds()
     assert bounds is not None
     assert bounds.width() > 30 and bounds.height() > 35
+
+
+def test_magnetic_lasso_options_bar_and_cycle(qapp):
+    win = MainWindow()
+    doc = Document.new(QSize(80, 50), 72.0, "ml_cycle", QColor(0, 0, 0))
+    win.add_document(doc)
+
+    # Shift+L cycles lasso group
+    win._set_tool("lasso")
+    assert win.active_tool.name == "lasso"
+    win._cycle_lasso_tool()
+    assert win.active_tool.name == "poly-lasso"
+    win._cycle_lasso_tool()
+    assert win.active_tool.name == "magnetic-lasso"
+    win._cycle_lasso_tool()
+    assert win.active_tool.name == "lasso"
+
+    # Option controls
+    win._set_tool("magnetic-lasso")
+    assert "detection_width" in win._option_widgets
+    assert "edge_contrast" in win._option_widgets
+    assert "frequency" in win._option_widgets
+    assert win.options.detection_width == 20
+    assert win.options.edge_contrast == 10
+    assert win.options.frequency == 50
+
+
+def test_magnetic_lasso_auto_drops_points(qapp):
+    win = MainWindow()
+    doc = Document.new(QSize(80, 50), 72.0, "ml_autodrop", QColor(0, 0, 0))
+    doc.layers[0].image = stepped_edge_image()
+    win.add_document(doc)
+    editor = win.current_editor()
+    tool = win.tools["magnetic-lasso"]
+
+    tool.opts.frequency = 80  # threshold max(10, 150 - 80*1.2) = 54
+    tool.press(doc, editor.canvas, QPointF(30, 4), None)
+    assert len(tool._points) == 1
+
+    # Small movement: below threshold, no drop
+    tool.hover(doc, editor.canvas, QPointF(30, 10))
+    assert len(tool._points) == 1
+
+    # Large movement: above threshold, auto-drops fastening point
+    tool.hover(doc, editor.canvas, QPointF(30, 70))
+    assert len(tool._points) >= 2

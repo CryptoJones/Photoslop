@@ -170,9 +170,10 @@ scripts are killed at a timeout.
 ```python
 from photoslop.filters import Filter, ParamSpec
 
+
 class MyFilter(Filter):
-    name = "my-filter"          # kebab-case, unique — CLI + replay identity
-    label = "My Filter"         # menu text
+    name = "my-filter"  # kebab-case, unique — CLI + replay identity
+    label = "My Filter"  # menu text
     params = (
         ParamSpec("amount", "Amount", "int", 0, 100, 50),
         #         key       label     type  min  max  default
@@ -182,7 +183,7 @@ class MyFilter(Filter):
         #  mode never has to be smuggled in as a magic integer in a spin box
     )
 
-    def apply(self, image, params):   # QImage, dict -> edit in place
+    def apply(self, image, params):  # QImage, dict -> edit in place
         ...
 ```
 
@@ -212,6 +213,7 @@ For quick experiments (or tests), skip packaging:
 
 ```python
 from photoslop.filters import register_filter
+
 register_filter(MyFilter)
 ```
 

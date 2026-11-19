@@ -25,6 +25,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
   case wand
   case rectSelect
   case lasso
+  case magneticLasso
   case eyedropper
 
   var id: String { rawValue }
@@ -39,6 +40,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .wand: "Magic Wand"
     case .rectSelect: "Rectangle Select"
     case .lasso: "Lasso Select"
+    case .magneticLasso: "Magnetic Lasso"
     case .eyedropper: "Eyedropper"
     }
   }
@@ -53,6 +55,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .wand: "wand.and.rays"
     case .rectSelect: "rectangle.dashed"
     case .lasso: "lasso"
+    case .magneticLasso: "lasso"
     case .eyedropper: "eyedropper"
     }
   }
@@ -74,6 +77,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .wand: "Wand"
     case .rectSelect: "Rect"
     case .lasso: "Lasso"
+    case .magneticLasso: "Magnetic"
     case .eyedropper: "Eyedropper"
     }
   }
@@ -95,6 +99,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .wand: "Tap to select this colour"
     case .rectSelect: "Drag a box to select"
     case .lasso: "Draw a loop to select"
+    case .magneticLasso: "Trace edges to snap selection"
     case .eyedropper: "Tap to pick up a colour"
     }
   }
@@ -115,7 +120,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
     switch self {
     case .pen, .pencil, .marker, .eraser: .draw
     case .bucket: .fill
-    case .wand, .rectSelect, .lasso: .select
+    case .wand, .rectSelect, .lasso, .magneticLasso: .select
     case .eyedropper: .pick
     }
   }
@@ -146,7 +151,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
   /// Whether a one-finger drag draws a selection shape instead of a stroke
   /// (#370). The canvas treats it like an overlay: drawing is suspended and
   /// two fingers pan.
-  var selectsByDrag: Bool { self == .rectSelect || self == .lasso }
+  var selectsByDrag: Bool { self == .rectSelect || self == .lasso || self == .magneticLasso }
 
   /// Whether the tool produces a selection, so the combine mode applies.
   var selects: Bool { selectsOnTap || selectsByDrag }
@@ -160,7 +165,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
   var respondsToTilt: Bool {
     switch self {
     case .pencil, .marker: true
-    case .pen, .eraser, .bucket, .wand, .rectSelect, .lasso, .eyedropper: false
+    case .pen, .eraser, .bucket, .wand, .rectSelect, .lasso, .magneticLasso, .eyedropper: false
     }
   }
 
@@ -169,7 +174,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .pen: .pen
     case .pencil: .pencil
     case .marker: .marker
-    case .eraser, .bucket, .wand, .rectSelect, .lasso, .eyedropper: nil
+    case .eraser, .bucket, .wand, .rectSelect, .lasso, .magneticLasso, .eyedropper: nil
     }
   }
 
