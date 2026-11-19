@@ -901,7 +901,10 @@ class MainWindow(QMainWindow):
         m_select.addAction(self._act("Su&bject (Model)", None, self.action_select_subject))
         m_select.addSeparator()
         m_select.addAction(self._act("Feat&her…", "Ctrl+Alt+D", self.action_feather_selection))
-        m_select.addAction(self._act("&Refine…", "Ctrl+Alt+R", self.action_refine_selection))
+        m_select.addAction(
+            self._act("&Select and Mask…", "Ctrl+Alt+R", self.action_select_and_mask)
+        )
+        m_select.addAction(self._act("&Refine Selection…", None, self.action_refine_selection))
         m_select.addSeparator()
         m_select.addAction(self._act("&Make Work Path…", None, self.action_make_work_path))
 
@@ -2466,6 +2469,9 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             f"Selection feathered {radius} px — filters and fills blend softly", 5000
         )
+
+    def action_select_and_mask(self) -> None:
+        self.action_refine_selection()
 
     def action_refine_selection(self) -> None:
         doc = self.current_doc()

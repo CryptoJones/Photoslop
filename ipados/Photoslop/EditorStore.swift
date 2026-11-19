@@ -1769,6 +1769,12 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     didSet { refreshCanvas() }
   }
 
+  @Published var previewRefinedLayer: (layerID: UUID, image: UIImage)? {
+    didSet { refreshCanvas() }
+  }
+
+  var originalSelectionBeforeRefine: SelectionMask?
+
   /// Replace a layer's effect stack, as one undo step. Returns false when the
   /// layer is unknown or the stack is unchanged, so nothing is registered.
   @discardableResult
@@ -1782,11 +1788,74 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     return true
   }
 
+  /// Select ▸ Refine Edge / Select and Mask (#417): preview the refined selection
+  /// and decontaminated layer pixels in real-time.
+  func previewRefineSelection(_ options: RefineSelectionOptions) {
+    guard let baseMask = originalSelectionBeforeRefine ?? selection else { return }
+    if originalSelectionBeforeRefine == nil {
+      originalSelectionBeforeRefine = baseMask
+    }
+    guard let active = activeLayer, let buffer = borrowPixels(of: active) else {
+      let (refined, _) = RefineSelectionAlgorithms.refineSelection(
+        mask: baseMask, buffer: nil, options: options
+      )
+      setSelection(refined)
+      return
+    }
+    let (refined, decontamBuf) = RefineSelectionAlgorithms.refineSelection(
+      mask: baseMask, buffer: buffer, options: options
+    )
+    setSelection(refined)
+    if let decontamBuf, let decontamImg = decontamBuf.makeImage() {
+      previewRefinedLayer = (active.id, decontamImg)
+    } else {
+      previewRefinedLayer = nil
+    }
+  }
+
+  /// Cancel the active Refine Edge sheet: restores original selection and layer pixels.
+  func cancelRefineSelection() {
+    if let original = originalSelectionBeforeRefine {
+      setSelection(original)
+      originalSelectionBeforeRefine = nil
+    }
+    previewRefinedLayer = nil
+  }
+
+  /// Apply Refine Edge: commits the refined selection and records decontamination
+  /// changes on the active layer as an undo step.
+  func applyRefineSelection(_ options: RefineSelectionOptions) {
+    guard let baseMask = originalSelectionBeforeRefine ?? selection else { return }
+    let active = activeLayer
+    let buffer = active.flatMap { borrowPixels(of: $0) }
+
+    let (refined, decontamBuf) = RefineSelectionAlgorithms.refineSelection(
+      mask: baseMask, buffer: buffer, options: options
+    )
+
+    originalSelectionBeforeRefine = nil
+    previewRefinedLayer = nil
+    setSelection(refined)
+
+    if let decontamBuf, let active = active, let newImage = decontamBuf.makeImage() {
+      mutate(actionName: "Decontaminate Colors") {
+        update(active.id) {
+          $0.image = newImage
+          $0.origin = .zero
+          $0.drawing = PKDrawing()
+          $0.source = nil
+          $0.placement = nil
+        }
+      }
+    }
+  }
+
   func refreshCanvas() {
     renderRevision += 1
     let expectedRevision = renderRevision
     let preview = previewEffects
     let previewF = previewFilter
+    let previewR = previewRefinedLayer
     let capturedLayers = layers.filter { $0.id != previewSuppressedLayerID }.map { layer in
       var previewed = layer
       if let preview, preview.layerID == layer.id {
@@ -1798,6 +1867,10 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
           previewed.image = previewImage
           previewed.drawing = PKDrawing()
         }
+      }
+      if let previewR, previewR.layerID == layer.id {
+        previewed.image = previewR.image
+        previewed.drawing = PKDrawing()
       }
       return previewed
     }

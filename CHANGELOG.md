@@ -4,7 +4,32 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.48.0] — Unreleased
+## [2.49.0] — Unreleased
+
+### Added
+- **Select: Select and Mask workspace with Guided Filter edge matting and decontamination** —
+  full cross-platform selection edge refinement across Desktop Qt GUI, headless CLI/MCP,
+  and iPadOS/iOS ([#417](https://github.com/CryptoJones/Photoslop/issues/417)).
+  - **Algorithm**: Guided Image Filter performing local linear regression of selection mask
+    against underlying RGB color pixels to extract hair, fur, and soft defocus borders.
+    Smart Radius automatically adapts edge bandwidth locally to the image's observed transition
+    width via local variance and gradient. Global refinements provide Morphological/Box Smooth,
+    Gaussian 3-pass Feather, transition ramp Contrast steepening around 50%, and Shift Edge via
+    grey morphological erosion/dilation (-100%..+100%).
+  - **Color Decontamination**: Eliminates background fringe bleed by normalized convolution from
+    interior pixels into fringe pixels of the active layer.
+  - **Memory Frugality (DD-001)**: Restricts processing strictly to tiles/strips intersecting
+    the selection boundary dilated by the search radius, with zero persistent allocation overhead.
+  - **Desktop Qt GUI**: Upgraded `RefineSelectionDialog` in `photoslop/refinedialog.py` to a full
+    Select and Mask dialog with real-time debounced preview of selection and layer decontamination,
+    exposed under `Select ▸ Select and Mask...` and `Select ▸ Refine Selection...` in `photoslop/mainwindow.py`.
+  - **Headless CLI & MCP**: Added `--refine-selection radius,smooth,feather,contrast,shift[,decontaminate]`
+    and alias `--select-and-mask` in `photoslop/cli.py` and `cli.OPS`.
+  - **iPadOS / iOS**: Native Swift implementation in `RefineSelectionAlgorithms.swift`, Refine Edge
+    sheet in `RefineEdgeSheet.swift` accessible from the selection action strip in `EditorView.swift`,
+    and full live preview and application in `EditorStore.swift`.
+
+## [2.48.0]
 
 ### Added
 - **Filter: Fast large-radius blur via 3-pass running-sum box blur approximation** —

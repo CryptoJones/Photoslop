@@ -144,6 +144,8 @@ struct EditorView: View {
   @State private var lassoPoints: [CGPoint] = []
   /// The Select ▸ Feather… sheet (#370).
   @State private var showFeatherOptions = false
+  /// The Refine Edge / Select and Mask sheet (#417).
+  @State private var showRefineEdge = false
   /// The radius the feather sheet proposes, in pixels.
   @State private var featherRadius = Double(EditorStore.defaultFeather)
   @State private var drawsWithFinger = EditorView.defaultDrawsWithFinger(
@@ -305,6 +307,7 @@ struct EditorView: View {
         })
     }
     .sheet(isPresented: $showFeatherOptions) { featherSheet }
+    .sheet(isPresented: $showRefineEdge) { refineEdgeSheet }
     .onChange(of: selectedPhoto) { _, item in
       guard let item else { return }
       Task {
@@ -1431,6 +1434,11 @@ struct EditorView: View {
         Label("Make Vector Path", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
       }
       .accessibilityIdentifier("Make Vector Path")
+      Button(action: { showRefineEdge = true }) {
+        Label("Refine Edge", systemImage: "slider.horizontal.3")
+      }
+      .disabled(store.selection == nil)
+      .accessibilityIdentifier("Refine Edge")
       // Last, and apart: it is not a thing done to the pixels, it is the end
       // of the mode they are in.
       Button(action: store.deselect) {
@@ -1733,6 +1741,13 @@ struct EditorView: View {
       }
       .disabled(store.selection == nil)
       .keyboardShortcut("d", modifiers: [.command, .option])
+      Button {
+        showRefineEdge = true
+      } label: {
+        Label("Refine Edge…", systemImage: "slider.horizontal.3")
+      }
+      .disabled(store.selection == nil)
+      .keyboardShortcut("r", modifiers: [.command, .option])
       Button(action: makeVectorPath) {
         Label("Make Vector Path", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
       }
@@ -1832,6 +1847,22 @@ struct EditorView: View {
       }
     }
     .presentationDetents([.fraction(0.3), .medium])
+  }
+
+  private var refineEdgeSheet: some View {
+    RefineEdgeSheet(
+      onApply: { options in
+        showRefineEdge = false
+        store.applyRefineSelection(options)
+      },
+      onCancel: {
+        showRefineEdge = false
+        store.cancelRefineSelection()
+      },
+      onPreview: { options in
+        store.previewRefineSelection(options)
+      }
+    )
   }
 
   /// The selection tools' options (#326, #370), behind one button so the

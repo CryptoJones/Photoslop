@@ -1228,6 +1228,87 @@ def _op_feather(ctx: Context, value: str) -> None:
     ctx.doc.selection_feather = radius
 
 
+def _op_refine_selection(ctx: Context, value: str) -> None:
+    parts = value.split(",")
+    if len(parts) not in (5, 6):
+        raise _ValueError(
+            "--refine-selection expects radius,smooth,feather,contrast,shift[,decontaminate]"
+        )
+    try:
+        radius = int(parts[0])
+        smooth = int(parts[1])
+        feather = int(parts[2])
+        contrast = int(parts[3])
+        shift = int(parts[4])
+    except ValueError as exc:
+        raise _ValueError(f"--refine-selection: {exc}") from exc
+
+    decontam = False
+    decontam_amount = 1.0
+    if len(parts) == 6:
+        raw_dec = parts[5].strip().lower()
+        if raw_dec in ("1", "true", "yes"):
+            decontam = True
+            decontam_amount = 1.0
+        elif raw_dec in ("0", "false", "no"):
+            decontam = False
+            decontam_amount = 0.0
+        else:
+            try:
+                amt = float(raw_dec)
+            except ValueError as exc:
+                raise _ValueError(f"--refine-selection decontaminate: {exc}") from exc
+            decontam = amt > 0
+            decontam_amount = min(max(amt, 0.0), 100.0) / 100.0 if amt > 1.0 else max(0.0, amt)
+
+    if not (0 <= radius <= 100):
+        raise _ValueError("--refine-selection: radius must be between 0 and 100")
+    if not (0 <= smooth <= 100):
+        raise _ValueError("--refine-selection: smooth must be between 0 and 100")
+    if not (0 <= feather <= 100):
+        raise _ValueError("--refine-selection: feather must be between 0 and 100")
+    if not (0 <= contrast <= 100):
+        raise _ValueError("--refine-selection: contrast must be between 0 and 100")
+    if not (-100 <= shift <= 100):
+        raise _ValueError("--refine-selection: shift must be between -100 and 100")
+
+    doc = ctx.doc
+    if doc.selection is None:
+        raise _ValueError("--refine-selection needs a selection earlier in the pipeline")
+
+    from PySide6.QtCore import QPoint
+
+    from photoslop import npimage
+
+    active_layer = doc.active_layer
+    layer_img = active_layer.image if active_layer is not None else None
+
+    base_mask = npimage.selection_mask(doc.selection, doc.size, QPoint(0, 0))
+    refined_bool, _refined_alpha, dec_img = npimage.refine_selection(
+        base_mask,
+        image=layer_img,
+        radius=radius,
+        smart_radius=True,
+        smooth=smooth,
+        feather=feather,
+        contrast=contrast,
+        shift=shift,
+        decontaminate=decontam,
+        decontaminate_amount=decontam_amount,
+    )
+
+    if refined_bool.any():
+        doc.set_selection(npimage.mask_to_path(refined_bool))
+        doc.selection_feather = float(feather)
+    else:
+        doc.set_selection(None)
+        doc.selection_feather = 0.0
+
+    if decontam and dec_img is not None and active_layer is not None:
+        active_layer.image = dec_img
+        doc.notify_pixels(active_layer.bounds())
+
+
 def _op_duplicate_layer(ctx: Context, value: str) -> None:
     doc = ctx.doc
     clone = doc.active_layer.clone()
@@ -1474,6 +1555,16 @@ OPS: dict = {
     "layer-opacity": ("PCT", "set the target layer's opacity", _op_layer_opacity),
     "content-aware-fill": (None, "diffusion-fill the selection", _op_content_aware_fill),
     "feather": ("RADIUS", "feather the current selection's edge", _op_feather),
+    "refine-selection": (
+        "RADIUS,SMOOTH,FEATHER,CONTRAST,SHIFT[,DECONTAM]",
+        "refine selection boundary with guided filter matting and optional decontamination",
+        _op_refine_selection,
+    ),
+    "select-and-mask": (
+        "RADIUS,SMOOTH,FEATHER,CONTRAST,SHIFT[,DECONTAM]",
+        "alias for --refine-selection",
+        _op_refine_selection,
+    ),
     "import-layer": (
         "FILE",
         "add an image file to the open document as a new layer on top, "

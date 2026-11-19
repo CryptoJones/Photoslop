@@ -843,6 +843,356 @@ def _erode(mask: np.ndarray) -> np.ndarray:
     return ~_dilate(~mask)
 
 
+def _box_blur_float(c: np.ndarray, r: int) -> np.ndarray:
+    """Normalized box blur of a 2D float array with window radius r.
+    Boundary-aware: normalized by the blurred ones-plane so image borders
+    do not darken or artificially attenuate edge values."""
+    if r <= 0:
+        return c.astype(np.float32, copy=False)
+    norm = np.ones_like(c, dtype=np.float32)
+    norm = _box_blur_plane(norm, r)
+    blurred = _box_blur_plane(c.astype(np.float32), r)
+    return blurred / np.maximum(norm, 1e-6)
+
+
+def _grey_dilate(mask: np.ndarray) -> np.ndarray:
+    """3x3 8-connected grey morphological dilation (local maximum)."""
+    out = mask.copy()
+    out[1:, :] = np.maximum(out[1:, :], mask[:-1, :])
+    out[:-1, :] = np.maximum(out[:-1, :], mask[1:, :])
+    out[:, 1:] = np.maximum(out[:, 1:], mask[:, :-1])
+    out[:, :-1] = np.maximum(out[:, :-1], mask[:, 1:])
+    out[1:, 1:] = np.maximum(out[1:, 1:], mask[:-1, :-1])
+    out[1:, :-1] = np.maximum(out[1:, :-1], mask[:-1, 1:])
+    out[:-1, 1:] = np.maximum(out[:-1, 1:], mask[1:, :-1])
+    out[:-1, :-1] = np.maximum(out[:-1, :-1], mask[1:, 1:])
+    return out
+
+
+def _grey_erode(mask: np.ndarray) -> np.ndarray:
+    """3x3 8-connected grey morphological erosion (local minimum)."""
+    out = mask.copy()
+    out[1:, :] = np.minimum(out[1:, :], mask[:-1, :])
+    out[:-1, :] = np.minimum(out[:-1, :], mask[1:, :])
+    out[:, 1:] = np.minimum(out[:, 1:], mask[:, :-1])
+    out[:, :-1] = np.minimum(out[:, :-1], mask[:, 1:])
+    out[1:, 1:] = np.minimum(out[1:, 1:], mask[:-1, :-1])
+    out[1:, :-1] = np.minimum(out[1:, :-1], mask[:-1, 1:])
+    out[:-1, 1:] = np.minimum(out[:-1, 1:], mask[1:, :-1])
+    out[:-1, :-1] = np.minimum(out[:-1, :-1], mask[1:, 1:])
+    return out
+
+
+def guided_filter(
+    guide: np.ndarray,
+    p: np.ndarray,
+    radius: int,
+    eps: float = 1e-3,
+    smart_radius: bool = False,
+) -> np.ndarray:
+    """Guided Image Filter: local linear regression of mask `p` against
+    underlying guide image `guide` (#417).
+    `guide`: (H, W, 3) or (H, W) in [0..1] or [0..255].
+    `p`: (H, W) in [0..1].
+    `radius`: window radius in pixels (0..100).
+    `eps`: regularization parameter.
+    `smart_radius`: when True, adapts edge bandwidth locally to the image's
+    observed transition width (local variance / gradient).
+    """
+    if radius <= 0:
+        return np.clip(p.astype(np.float32), 0.0, 1.0)
+
+    # Normalize guide to [0, 1] float32
+    if guide.dtype == np.uint8:
+        guide_arr = guide.astype(np.float32) / 255.0
+    else:
+        guide_arr = guide.astype(np.float32)
+        if guide_arr.size > 0 and guide_arr.max() > 1.0:
+            guide_arr = guide_arr / 255.0
+
+    mask = np.clip(p.astype(np.float32), 0.0, 1.0)
+
+    def _filter_core(r: int) -> np.ndarray:
+        if guide_arr.ndim == 2:
+            mean_guide = _box_blur_float(guide_arr, r)
+            mean_mask = _box_blur_float(mask, r)
+            mean_guide_mask = _box_blur_float(guide_arr * mask, r)
+            cov_guide_mask = mean_guide_mask - mean_guide * mean_mask
+
+            mean_guide_sq = _box_blur_float(guide_arr * guide_arr, r)
+            var_guide = mean_guide_sq - mean_guide * mean_guide
+
+            a = cov_guide_mask / (var_guide + eps)
+            b = mean_mask - a * mean_guide
+
+            mean_a = _box_blur_float(a, r)
+            mean_b = _box_blur_float(b, r)
+
+            return np.clip(mean_a * guide_arr + mean_b, 0.0, 1.0)
+
+        # 3-channel color guidance
+        red = guide_arr[..., 0]
+        green = guide_arr[..., 1]
+        blue = guide_arr[..., 2]
+
+        mean_r = _box_blur_float(red, r)
+        mean_g = _box_blur_float(green, r)
+        mean_b = _box_blur_float(blue, r)
+        mean_mask = _box_blur_float(mask, r)
+
+        cov_r_mask = _box_blur_float(red * mask, r) - mean_r * mean_mask
+        cov_g_mask = _box_blur_float(green * mask, r) - mean_g * mean_mask
+        cov_b_mask = _box_blur_float(blue * mask, r) - mean_b * mean_mask
+
+        var_rr = _box_blur_float(red * red, r) - mean_r * mean_r + eps
+        var_rg = _box_blur_float(red * green, r) - mean_r * mean_g
+        var_rb = _box_blur_float(red * blue, r) - mean_r * mean_b
+        var_gg = _box_blur_float(green * green, r) - mean_g * mean_g + eps
+        var_gb = _box_blur_float(green * blue, r) - mean_g * mean_b
+        var_bb = _box_blur_float(blue * blue, r) - mean_b * mean_b + eps
+
+        inv_00 = var_gg * var_bb - var_gb * var_gb
+        inv_01 = var_gb * var_rb - var_rg * var_bb
+        inv_02 = var_rg * var_gb - var_gg * var_rb
+
+        inv_11 = var_rr * var_bb - var_rb * var_rb
+        inv_12 = var_rb * var_rg - var_rr * var_gb
+
+        inv_22 = var_rr * var_gg - var_rg * var_rg
+
+        det = var_rr * inv_00 + var_rg * inv_01 + var_rb * inv_02
+        det = np.where(det > 1e-10, det, 1.0)
+
+        inv_00 /= det
+        inv_01 /= det
+        inv_02 /= det
+        inv_11 /= det
+        inv_12 /= det
+        inv_22 /= det
+
+        a_r = inv_00 * cov_r_mask + inv_01 * cov_g_mask + inv_02 * cov_b_mask
+        a_g = inv_01 * cov_r_mask + inv_11 * cov_g_mask + inv_12 * cov_b_mask
+        a_b = inv_02 * cov_r_mask + inv_12 * cov_g_mask + inv_22 * cov_b_mask
+
+        b = mean_mask - (a_r * mean_r + a_g * mean_g + a_b * mean_b)
+
+        mean_a_r = _box_blur_float(a_r, r)
+        mean_a_g = _box_blur_float(a_g, r)
+        mean_a_b = _box_blur_float(a_b, r)
+        mean_b = _box_blur_float(b, r)
+
+        q = mean_a_r * red + mean_a_g * green + mean_a_b * blue + mean_b
+        return np.clip(q, 0.0, 1.0)
+
+    q_full = _filter_core(radius)
+
+    if not smart_radius:
+        return q_full
+
+    # Smart Radius: adapt bandwidth between r_small and r_full
+    r_small = max(1, int(round(radius * 0.25)))
+    if r_small >= radius:
+        return q_full
+
+    q_small = _filter_core(r_small)
+
+    luma = (
+        guide_arr
+        if guide_arr.ndim == 2
+        else 0.299 * guide_arr[..., 0] + 0.587 * guide_arr[..., 1] + 0.114 * guide_arr[..., 2]
+    )
+
+    gy = np.zeros_like(luma)
+    gy[1:-1, :] = 0.5 * np.abs(luma[2:, :] - luma[:-2, :])
+    gx = np.zeros_like(luma)
+    gx[:, 1:-1] = 0.5 * np.abs(luma[:, 2:] - luma[:, :-2])
+    grad = np.sqrt(gx * gx + gy * gy)
+    peak_g = _box_blur_float(grad, 2)
+
+    var = np.maximum(0.0, _box_blur_float(luma * luma, radius) - _box_blur_float(luma, radius) ** 2)
+    sigma = np.sqrt(var)
+
+    w = np.clip(1.0 - 2.0 * peak_g + sigma, 0.0, 1.0)
+    w = _box_blur_float(w, max(1, r_small))
+
+    return np.clip((1.0 - w) * q_small + w * q_full, 0.0, 1.0)
+
+
+def decontaminate_colors(
+    image: QImage | np.ndarray,
+    mask: np.ndarray,
+    amount: float = 1.0,
+    radius: int = 8,
+) -> QImage | np.ndarray:
+    """Color Decontamination: eliminates background fringe color bleed by
+    normalized convolution from interior pixels (mask > 0.75) into fringe
+    pixels (0 < mask < 0.95) of the active layer (#417).
+    `amount`: 0.0..1.0 decontamination strength.
+    `radius`: convolution radius in pixels (default 8).
+    """
+    is_qimage = isinstance(image, QImage)
+    if is_qimage:
+        out_img = QImage(image)
+        arr = view_u32(out_img)
+        alpha = (arr >> np.uint32(24)) & 0xFF
+        r = ((arr >> np.uint32(16)) & 0xFF).astype(np.float32)
+        g = ((arr >> np.uint32(8)) & 0xFF).astype(np.float32)
+        b = (arr & np.uint32(0xFF)).astype(np.float32)
+
+        # Unpremultiply where alpha > 0
+        nonzero = alpha > 0
+        r[nonzero] = (r[nonzero] * 255.0) / alpha[nonzero]
+        g[nonzero] = (g[nonzero] * 255.0) / alpha[nonzero]
+        b[nonzero] = (b[nonzero] * 255.0) / alpha[nonzero]
+        rgb = np.stack([r, g, b], axis=-1)
+    else:
+        rgb = image[..., :3].astype(np.float32)
+
+    m = np.clip(mask.astype(np.float32), 0.0, 1.0)
+    interior = (m > 0.75).astype(np.float32)
+    if not interior.any():
+        interior = (m > 0.5).astype(np.float32)
+    if not interior.any():
+        interior = (m > 0.0).astype(np.float32)
+    if not interior.any():
+        return out_img if is_qimage else image
+
+    r_dec = max(1, int(radius))
+    denom = _box_blur_float(interior, r_dec)
+
+    fringe = (m > 0.01) & (m < 0.95)
+    amt = np.clip(float(amount), 0.0, 1.0)
+
+    out_rgb = rgb.copy()
+    for c in range(3):
+        num = _box_blur_float(rgb[..., c] * interior, r_dec)
+        extrap = np.where(denom > 1e-4, num / np.maximum(denom, 1e-6), rgb[..., c])
+        blend_factor = amt * (1.0 - m[fringe] * 0.5)
+        out_rgb[fringe, c] = (1.0 - blend_factor) * rgb[fringe, c] + blend_factor * extrap[fringe]
+
+    out_rgb = np.clip(out_rgb, 0.0, 255.0)
+
+    if is_qimage:
+        r_out = out_rgb[..., 0]
+        g_out = out_rgb[..., 1]
+        b_out = out_rgb[..., 2]
+        pr = np.minimum((r_out * alpha / 255.0 + 0.5).astype(np.uint32), alpha)
+        pg = np.minimum((g_out * alpha / 255.0 + 0.5).astype(np.uint32), alpha)
+        pb = np.minimum((b_out * alpha / 255.0 + 0.5).astype(np.uint32), alpha)
+        arr[:] = (alpha << np.uint32(24)) | (pr << np.uint32(16)) | (pg << np.uint32(8)) | pb
+        return out_img
+    else:
+        if image.shape[-1] == 4:
+            out = np.empty_like(image)
+            out[..., :3] = out_rgb.astype(image.dtype)
+            out[..., 3] = image[..., 3]
+            return out
+        return out_rgb.astype(image.dtype)
+
+
+def refine_selection(
+    mask: np.ndarray,
+    image: QImage | np.ndarray | None = None,
+    radius: int = 0,
+    smart_radius: bool = False,
+    smooth: int = 0,
+    feather: int = 0,
+    contrast: int = 0,
+    shift: int = 0,
+    decontaminate: bool = False,
+    decontaminate_amount: float = 1.0,
+) -> tuple[np.ndarray, np.ndarray, QImage | np.ndarray | None]:
+    """Select and Mask refinement pipeline with DD-001 Memory Frugality.
+    Restricts processing strictly to tiles/strips intersecting the selection
+    boundary dilated by the search radius (+ margin for smooth/feather/shift).
+
+    Returns:
+    (refined_bool_mask, refined_alpha_weights, decontaminated_image_or_none)
+    """
+    if not mask.any():
+        return mask.copy(), np.zeros_like(mask, dtype=np.float32), None
+
+    h, w = mask.shape[:2]
+    rows = np.any(mask, axis=1)
+    cols = np.any(mask, axis=0)
+    ymin, ymax = np.where(rows)[0][[0, -1]]
+    xmin, xmax = np.where(cols)[0][[0, -1]]
+
+    margin = int(radius) + int(smooth) + int(feather) + max(10, abs(int(shift))) + 8
+    y0 = max(0, ymin - margin)
+    y1 = min(h, ymax + margin + 1)
+    x0 = max(0, xmin - margin)
+    x1 = min(w, xmax + margin + 1)
+
+    sub_mask = mask[y0:y1, x0:x1]
+    alpha = sub_mask.astype(np.float32)
+
+    sub_guide = None
+    if image is not None:
+        if isinstance(image, QImage):
+            arr = view_u32(image)[y0:y1, x0:x1]
+            r = ((arr >> np.uint32(16)) & 0xFF).astype(np.float32) / 255.0
+            g = ((arr >> np.uint32(8)) & 0xFF).astype(np.float32) / 255.0
+            b = (arr & np.uint32(0xFF)).astype(np.float32) / 255.0
+            sub_guide = np.stack([r, g, b], axis=-1)
+        else:
+            sub_guide = image[y0:y1, x0:x1]
+
+    # 1. Edge Detection: Guided Image Filter
+    if radius > 0 and sub_guide is not None:
+        alpha = guided_filter(sub_guide, alpha, radius=radius, smart_radius=smart_radius)
+
+    # 2. Global Refinements:
+    # a. Smooth: morphological smoothing (close-then-open)
+    if smooth > 0:
+        s_steps = max(1, int(round(smooth / 2.0)))
+        for _ in range(s_steps):
+            alpha = _grey_dilate(alpha)
+        for _ in range(s_steps * 2):
+            alpha = _grey_erode(alpha)
+        for _ in range(s_steps):
+            alpha = _grey_dilate(alpha)
+
+    # b. Feather: 3-pass box blur (Gaussian CLT approximation)
+    if feather > 0:
+        r_feather = max(1, int(feather) // 2 + 1)
+        for _ in range(3):
+            alpha = _box_blur_float(alpha, r_feather)
+
+    # c. Contrast: steepens transition ramp around 50%
+    if contrast > 0:
+        c_val = min(100, max(0, int(contrast))) / 100.0
+        slope = 1.0 / max(1.0 - 0.98 * c_val, 0.01)
+        alpha = np.clip(0.5 + (alpha - 0.5) * slope, 0.0, 1.0)
+
+    # d. Shift Edge: grey morphological dilation (+) / erosion (-)
+    if shift != 0:
+        steps = abs(int(shift))
+        if shift > 0:
+            for _ in range(steps):
+                alpha = _grey_dilate(alpha)
+        else:
+            for _ in range(steps):
+                alpha = _grey_erode(alpha)
+
+    # Reconstruct full canvas alpha and boolean mask
+    full_alpha = np.zeros((h, w), dtype=np.float32)
+    full_alpha[y0:y1, x0:x1] = alpha
+    full_bool = full_alpha >= 0.5
+
+    # 3. Output / Color Decontamination
+    decontam_out = None
+    if decontaminate and image is not None:
+        decontam_out = decontaminate_colors(
+            image,
+            full_alpha,
+            amount=decontaminate_amount,
+            radius=max(int(radius), 8),
+        )
+
+    return full_bool, full_alpha, decontam_out
+
+
 def refine_mask(mask: np.ndarray, smooth: int = 0, expand: int = 0) -> np.ndarray:
     """Morphological selection refinement: `smooth` rounds corners and fills
     notches (close-then-open), `expand` grows (+) or contracts (-) by that

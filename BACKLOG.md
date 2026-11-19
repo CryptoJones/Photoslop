@@ -6,6 +6,10 @@ sync — check an item here when its issue closes.
 
 ## Open
 
+### Selection
+
+- [x] Select and Mask: upgrade Refine Selection with Guided Filter edge matting and decontamination: local linear regression of mask against color pixels, smart radius adaptive bandwidth, smooth/feather/contrast/shift edge, color fringe decontamination via normalized convolution, and DD-001 boundary strip processing ([#417](https://github.com/CryptoJones/Photoslop/issues/417))
+
 ### Vectors
 
 - [x] Make Work Path from Selection using contour tracing: Potrace-style 8-connected contour extraction, sub-pixel polygon simplification, and cubic Bézier curve fitting subject to tolerance (0.5–10.0 px). Desktop: `Select ▸ Make Work Path…`; CLI/MCP: `--selection-to-path [TOLERANCE]` outputting SVG path data and creating vector layer; iPad/iPhone: "Make Vector Path" action on active selection ([#424](https://github.com/CryptoJones/Photoslop/issues/424))
