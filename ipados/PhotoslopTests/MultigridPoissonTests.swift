@@ -164,8 +164,6 @@ final class MultigridPoissonTests: XCTestCase {
   func testEditorStoreSpotHealSelection() throws {
     let store = EditorStore()
     store.newDocument(size: CGSize(width: 40, height: 40))
-    let undoManager = UndoManager()
-    store.undoManager = undoManager
 
     let gray = PixelBuffer.premultipliedWord(r: 180, g: 180, b: 180, a: 255)
     let black = PixelBuffer.premultipliedWord(r: 0, g: 0, b: 0, a: 255)
@@ -180,6 +178,9 @@ final class MultigridPoissonTests: XCTestCase {
       }
       return true
     })
+
+    let undoManager = UndoManager()
+    store.undoManager = undoManager
 
     var bits = [Bool](repeating: false, count: 40 * 40)
     for y in 17..<23 {
@@ -202,8 +203,6 @@ final class MultigridPoissonTests: XCTestCase {
   func testEditorStoreHealSelectionWithSourceOffset() throws {
     let store = EditorStore()
     store.newDocument(size: CGSize(width: 60, height: 30))
-    let undoManager = UndoManager()
-    store.undoManager = undoManager
 
     let dark = PixelBuffer.premultipliedWord(r: 50, g: 50, b: 50, a: 255)
     let bright = PixelBuffer.premultipliedWord(r: 220, g: 220, b: 220, a: 255)
@@ -218,6 +217,9 @@ final class MultigridPoissonTests: XCTestCase {
       }
       return true
     })
+
+    let undoManager = UndoManager()
+    store.undoManager = undoManager
 
     // Select a region in the dark area (x: 40..<50, y: 10..<20)
     var bits = [Bool](repeating: false, count: 60 * 30)
