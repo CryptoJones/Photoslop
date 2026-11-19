@@ -80,7 +80,7 @@ struct ToolButtons: View {
   private var entries: [(tool: BrushTool, startsFamily: Bool)] {
     var result: [(tool: BrushTool, startsFamily: Bool)] = []
     var previous: BrushTool.Family?
-    for candidate in BrushTool.allCases {
+    for candidate in BrushTool.primaryPaletteTools {
       result.append((candidate, previous != nil && candidate.family != previous))
       previous = candidate.family
     }
@@ -94,13 +94,33 @@ struct ToolButtons: View {
       }
       ToolButton(
         tool: entry.tool,
-        isSelected: entry.tool == tool,
+        isSelected: entry.tool == tool || (entry.tool == .lasso && tool == .magneticLasso),
         showsCaption: showsCaption,
         fillsWidth: fills
       ) {
-        tool = entry.tool
+        if entry.tool == .lasso && tool == .lasso {
+          tool = .magneticLasso
+        } else if entry.tool == .lasso && tool == .magneticLasso {
+          tool = .lasso
+        } else {
+          tool = entry.tool
+        }
       }
       .frame(maxWidth: fills ? .infinity : nil)
+      .contextMenu {
+        if entry.tool == .lasso {
+          Button {
+            tool = .lasso
+          } label: {
+            Label("Freehand Lasso", systemImage: "lasso")
+          }
+          Button {
+            tool = .magneticLasso
+          } label: {
+            Label("Magnetic Lasso", systemImage: "lasso")
+          }
+        }
+      }
     }
   }
 }

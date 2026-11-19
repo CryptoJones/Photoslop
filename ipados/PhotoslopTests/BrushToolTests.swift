@@ -100,6 +100,15 @@ final class BrushToolTests: XCTestCase {
     XCTAssertEqual(pen.width, 9)
   }
 
+  func testPrimaryPaletteToolsBudget() {
+    XCTAssertEqual(
+      BrushTool.primaryPaletteTools.count, 9,
+      "The dock palette accommodates exactly nine primary tools at touch size"
+    )
+    XCTAssertTrue(BrushTool.primaryPaletteTools.contains(.lasso))
+    XCTAssertFalse(BrushTool.primaryPaletteTools.contains(.magneticLasso))
+  }
+
   func testEveryBrushIsPresentableInTheToolStrip() {
     XCTAssertEqual(BrushTool.allCases.first, .pen, "Pen stays the default brush")
     for brush in BrushTool.allCases {

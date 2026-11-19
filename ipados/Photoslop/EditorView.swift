@@ -1930,6 +1930,14 @@ struct EditorView: View {
         }
       }
       .pickerStyle(.inline)
+      if tool == .lasso || tool == .magneticLasso {
+        Divider()
+        Picker("Lasso Mode", selection: $tool) {
+          Label("Freehand Lasso", systemImage: "lasso").tag(BrushTool.lasso)
+          Label("Magnetic Lasso", systemImage: "lasso").tag(BrushTool.magneticLasso)
+        }
+        .pickerStyle(.inline)
+      }
       if tool.selectsOnTap {
         Divider()
         Toggle(isOn: $wandContiguous) {

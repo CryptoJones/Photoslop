@@ -28,6 +28,12 @@ enum BrushTool: String, CaseIterable, Identifiable {
   case magneticLasso
   case eyedropper
 
+  /// The primary tools displayed on the canvas palette rail and phone dock.
+  /// Sub-tools like Magnetic Lasso are grouped under their primary tool.
+  static let primaryPaletteTools: [BrushTool] = [
+    .pen, .pencil, .marker, .eraser, .bucket, .wand, .rectSelect, .lasso, .eyedropper
+  ]
+
   var id: String { rawValue }
 
   var displayName: String {
