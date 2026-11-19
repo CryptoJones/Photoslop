@@ -904,7 +904,7 @@ class MainWindow(QMainWindow):
         m_select.addAction(
             self._act("&Select and Mask…", "Ctrl+Alt+R", self.action_select_and_mask)
         )
-        m_select.addAction(self._act("&Refine Selection…", None, self.action_refine_selection))
+        m_select.addAction(self._act("&Refine…", None, self.action_refine_selection))
         m_select.addSeparator()
         m_select.addAction(self._act("&Make Work Path…", None, self.action_make_work_path))
 
