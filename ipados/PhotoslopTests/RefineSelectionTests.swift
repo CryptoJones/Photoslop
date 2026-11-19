@@ -218,7 +218,7 @@ final class RefineSelectionTests: XCTestCase {
           words[y * width + x] = (x < 15) ? 0xFFFF_0000 : 0xFF00_FF00
         }
         // Bleed green into edge of red at col 14
-        words[y * width + 14] = 0xFF14_B478
+        words[y * width + 14] = 0xFF78_B414
       }
     }
 
