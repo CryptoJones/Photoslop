@@ -44,6 +44,7 @@ CASES = {
     "cmyk-out": (None, "missing.icc"),
     "filter": ("sepia:amount=100", "nope"),
     "gaussian-blur": ("2", "soft"),
+    "fast-blur": ("2", "soft"),
     "unsharp": ("120", "sharp"),
     "tilt-shift": ("20,10,8,4", "20"),
     "drop-shadow": ("3,3,2,160", "3,3"),
@@ -227,6 +228,9 @@ def test_gaussian_blur_and_unsharp(qapp, tmp_path):
     assert run([src, "--gaussian-blur", "4", "--output", tmp_path / "out.png"]) == 0
     edge = out_image(tmp_path).pixelColor(30, 20).red()
     assert 0 < edge < 255  # softened
+    assert run([src, "--fast-blur", "4", "--output", tmp_path / "out.png"]) == 0
+    edge_fast = out_image(tmp_path).pixelColor(30, 20).red()
+    assert 0 < edge_fast < 255  # softened
     assert run([src, "--unsharp", "150", "--output", tmp_path / "out.png"]) == 0
 
 

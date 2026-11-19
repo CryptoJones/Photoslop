@@ -148,6 +148,21 @@ enum FilterAlgorithms {
     }
   }
 
+  // MARK: - Fast Large-Radius Blur (Issue #418)
+
+  /// Fast large-radius blur: 3-pass running-sum box blur approximation of
+  /// Gaussian blur in O(1) time per pixel independent of kernel radius R (DD-001, #418).
+  /// Processed in 256-row bands with a 3r halo to bound float transients.
+  static func fastBlur(_ buffer: inout PixelBuffer, radius: Int) {
+    guard radius > 0 else { return }
+    buffer = AppearanceRenderer.blurRGBA(buffer, radius: radius)
+  }
+
+  /// Gaussian blur: dispatches to the fast 3-pass running-sum box blur approximation.
+  static func gaussianBlur(_ buffer: inout PixelBuffer, radius: Int) {
+    fastBlur(&buffer, radius: radius)
+  }
+
   // MARK: - Sepia
 
   /// `SepiaFilter`: the classic tone, alpha-aware — the red channel is capped

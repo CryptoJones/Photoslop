@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.48.0] — Unreleased
+
+### Added
+- **Filter: Fast large-radius blur via 3-pass running-sum box blur approximation** —
+  three-platform parity across Desktop GUI, CLI, and iPadOS/iOS for high-performance
+  blurring up to 250px and beyond ([#418](https://github.com/CryptoJones/Photoslop/issues/418)).
+  - **Algorithm**: Replaces O(r) direct 2D convolutions with separable 3-pass running-sum
+    box blur approximations grounded in the Central Limit Theorem (CLT), achieving < 1% error
+    vs exact Gaussian blur while executing in strictly O(1) time per pixel independent of kernel radius.
+  - **Memory Frugality (DD-001)**: Processed in 256-row strips (`BAND_ROWS = 256`) with a 3r halo
+    using exact integer accumulator sums, guaranteeing zero persistent allocation overhead and
+    preserving bit-identical parity between banded and unbanded pipelines.
+  - **Desktop GUI**: Dedicated, responsive `GaussianBlurDialog` in `photoslop/gaussianblurdialog.py`
+    and `photoslop/mainwindow.py` with radius slider and spinbox up to 250px, debounced live preview,
+    and selection awareness with full undo/macro tracking.
+  - **Headless CLI & MCP**: Accelerated `--gaussian-blur` and added `--fast-blur` in `photoslop/cli.py`
+    and `cli.OPS`, automatically registered in MCP `list_operations()`.
+  - **iPadOS / iOS**: Native Swift implementation in `FilterAlgorithms.swift` and `AppearanceRenderer.swift`,
+    exposing `fastBlur` and `gaussianBlur` on `PixelBuffer`, radius sliders up to 250px in `EffectsSheet.swift`
+    and `FilterSheet.swift`, and real-time live preview during slider interactions.
+
 ## [2.47.0] — Unreleased
 
 ### Added

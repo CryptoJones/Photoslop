@@ -94,6 +94,10 @@ enum FilterKind: String, CaseIterable, Identifiable {
   case invert
   /// `Image ▸ Adjustments ▸ Color Lookup` / `photoslop-cli --color-lookup` (#422).
   case colorLookup = "color-lookup"
+  /// `Filter ▸ Gaussian Blur` / `photoslop-cli --gaussian-blur` (#418).
+  case gaussianBlur = "gaussian-blur"
+  /// `Filter ▸ Fast Blur` / `photoslop-cli --fast-blur` (#418).
+  case fastBlur = "fast-blur"
 
   var id: String { rawValue }
 
@@ -110,6 +114,8 @@ enum FilterKind: String, CaseIterable, Identifiable {
     case .beamDither: return "Beam Dither"
     case .invert: return "Invert"
     case .colorLookup: return "Color Lookup"
+    case .gaussianBlur: return "Gaussian Blur"
+    case .fastBlur: return "Fast Blur"
     }
   }
 
@@ -212,6 +218,10 @@ enum FilterKind: String, CaseIterable, Identifiable {
           kind: .int(min: 0, max: 100, default: 100)
         ),
       ]
+    case .gaussianBlur, .fastBlur:
+      return [
+        FilterParamSpec(name: "radius", label: "Radius", kind: .int(min: 1, max: 250, default: 8))
+      ]
     }
   }
 
@@ -228,6 +238,7 @@ enum FilterKind: String, CaseIterable, Identifiable {
     case .denoise: return 2
     case .datamosh: return 2
     case .retroConsole: return 1
+    case .gaussianBlur, .fastBlur: return 1
     case .sepia, .pixelate, .pixelSort, .filmNegative, .invert, .colorLookup: return 0
     // The luminance plane, the downscaled working plane, and the rendered
     // tone plane, all Double and all alive together.
@@ -273,6 +284,8 @@ enum FilterKind: String, CaseIterable, Identifiable {
         &buffer,
         preset: params.choice("preset", default: "Warm Film"),
         intensity: params.int("intensity", default: 100))
+    case .gaussianBlur, .fastBlur:
+      FilterAlgorithms.fastBlur(&buffer, radius: params.int("radius", default: 8))
     }
   }
 }

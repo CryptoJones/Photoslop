@@ -2230,17 +2230,19 @@ class MainWindow(QMainWindow):
         run_modal(LiquifyDialog(doc, layer, self))
 
     def action_gaussian_blur(self) -> None:
-        from PySide6.QtWidgets import QInputDialog
-
-        radius, ok = QInputDialog.getInt(self, "Gaussian Blur", "Radius (px):", 8, 1, 100)
-        if not ok:
+        doc = self.current_doc()
+        if doc is None or doc.active_layer is None:
             return
-        from photoslop import npimage
+        if getattr(doc.active_layer, "locked", False):
+            return
+        from photoslop.dialogs import run_modal
+        from photoslop.gaussianblurdialog import GaussianBlurDialog
 
-        self._run_filter("Gaussian Blur", lambda img, m: npimage.gaussian_blur(img, radius, m))
-        self._record_step(
-            f"Gaussian Blur {radius}px", lambda w: w.action_gaussian_blur_direct(radius)
-        )
+        dialog = GaussianBlurDialog(doc, self)
+        if not run_modal(dialog):
+            return
+        radius = dialog.radius()
+        self.action_gaussian_blur_direct(radius)
 
     def action_unsharp_mask(self) -> None:
         from PySide6.QtWidgets import QInputDialog

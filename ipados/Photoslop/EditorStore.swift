@@ -1765,6 +1765,10 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     didSet { refreshCanvas() }
   }
 
+  @Published var previewFilter: (layerID: UUID, kind: FilterKind, params: FilterParams)? {
+    didSet { refreshCanvas() }
+  }
+
   /// Replace a layer's effect stack, as one undo step. Returns false when the
   /// layer is unknown or the stack is unchanged, so nothing is registered.
   @discardableResult
@@ -1782,10 +1786,19 @@ final class EditorStore: ReferenceFileDocument, @unchecked Sendable {
     renderRevision += 1
     let expectedRevision = renderRevision
     let preview = previewEffects
+    let previewF = previewFilter
     let capturedLayers = layers.filter { $0.id != previewSuppressedLayerID }.map { layer in
-      guard let preview, preview.layerID == layer.id else { return layer }
       var previewed = layer
-      previewed.effects = preview.effects
+      if let preview, preview.layerID == layer.id {
+        previewed.effects = preview.effects
+      }
+      if let previewF, previewF.layerID == layer.id, var buffer = self.borrowPixels(of: previewed) {
+        previewF.kind.apply(to: &buffer, params: previewF.params)
+        if let previewImage = buffer.makeImage() {
+          previewed.image = previewImage
+          previewed.drawing = PKDrawing()
+        }
+      }
       return previewed
     }
     let capturedSize = canvasSize

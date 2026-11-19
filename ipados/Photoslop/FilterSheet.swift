@@ -11,13 +11,20 @@ struct FilterSheet: View {
   let kind: FilterKind
   let onApply: (FilterParams) -> Void
   let onCancel: () -> Void
+  var onPreview: ((FilterParams) -> Void)? = nil
 
   @State private var values: FilterParams
 
-  init(kind: FilterKind, onApply: @escaping (FilterParams) -> Void, onCancel: @escaping () -> Void) {
+  init(
+    kind: FilterKind,
+    onApply: @escaping (FilterParams) -> Void,
+    onCancel: @escaping () -> Void,
+    onPreview: ((FilterParams) -> Void)? = nil
+  ) {
     self.kind = kind
     self.onApply = onApply
     self.onCancel = onCancel
+    self.onPreview = onPreview
     _values = State(initialValue: kind.defaults)
   }
 
@@ -50,6 +57,12 @@ struct FilterSheet: View {
       }
     }
     .presentationDetents([.medium, .large])
+    .onChange(of: values) { _, current in
+      onPreview?(current)
+    }
+    .onAppear {
+      onPreview?(values)
+    }
   }
 
   @ViewBuilder
