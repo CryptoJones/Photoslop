@@ -532,15 +532,22 @@ enum MultigridPoisson {
           planeR[pIdx] = Float((word >> 16) & 0xFF)
           planeG[pIdx] = Float((word >> 8) & 0xFF)
           planeB[pIdx] = Float(word & 0xFF)
-
-          if cy >= topPad && cy < topPad + cropH && cx >= leftPad && cx < leftPad + cropW {
-            let my = cy - topPad + y0
-            let mx = cx - leftPad + x0
-            cropMask[pIdx] = maskIsLocal
-              ? mask[(my - y0) * cropW + (mx - x0)]
-              : mask[my * w + mx]
-          }
         }
+      }
+    }
+
+    // Set the hole mask only over the bounds region. A local mask is bw×bh (the
+    // bounds), NOT the padded crop — indexing it with padded-crop strides over
+    // the whole halo overruns the array. Halo pixels stay false (known boundary).
+    let bw = maxX - minX + 1
+    let bh = maxY - minY + 1
+    for ly in 0..<bh {
+      let cy = (minY + ly) - y0 + topPad
+      for lx in 0..<bw {
+        let cx = (minX + lx) - x0 + leftPad
+        cropMask[cy * padW + cx] = maskIsLocal
+          ? mask[ly * bw + lx]
+          : mask[(minY + ly) * w + (minX + lx)]
       }
     }
 
@@ -689,15 +696,22 @@ enum MultigridPoisson {
           sR[pIdx] = Float((sWord >> 16) & 0xFF)
           sG[pIdx] = Float((sWord >> 8) & 0xFF)
           sB[pIdx] = Float(sWord & 0xFF)
-
-          if cy >= topPad && cy < topPad + cropH && cx >= leftPad && cx < leftPad + cropW {
-            let my = cy - topPad + y0
-            let mx = cx - leftPad + x0
-            cropMask[pIdx] = maskIsLocal
-              ? mask[(my - y0) * cropW + (mx - x0)]
-              : mask[my * w + mx]
-          }
         }
+      }
+    }
+
+    // Set the hole mask only over the bounds region (bw×bh for a local mask),
+    // mapped into the padded crop by offset — never index a local mask with
+    // padded-crop strides. Halo pixels stay false (known boundary).
+    let bw = maxX - minX + 1
+    let bh = maxY - minY + 1
+    for ly in 0..<bh {
+      let cy = (minY + ly) - y0 + topPad
+      for lx in 0..<bw {
+        let cx = (minX + lx) - x0 + leftPad
+        cropMask[cy * padW + cx] = maskIsLocal
+          ? mask[ly * bw + lx]
+          : mask[(minY + ly) * w + (minX + lx)]
       }
     }
 
