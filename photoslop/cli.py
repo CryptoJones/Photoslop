@@ -1281,7 +1281,21 @@ def _op_refine_selection(ctx: Context, value: str) -> None:
     from photoslop import npimage
 
     active_layer = doc.active_layer
-    layer_img = active_layer.image if active_layer is not None else None
+    layer_img = None
+    is_full_canvas_layer = True
+    if active_layer is not None and active_layer.image is not None:
+        layer_offset = getattr(active_layer, "offset", QPoint(0, 0))
+        if active_layer.image.size() == doc.size and layer_offset == QPoint(0, 0):
+            layer_img = active_layer.image
+        else:
+            is_full_canvas_layer = False
+            from PySide6.QtGui import QImage, QPainter
+
+            layer_img = QImage(doc.size, QImage.Format.Format_ARGB32_Premultiplied)
+            layer_img.fill(0)
+            p = QPainter(layer_img)
+            p.drawImage(layer_offset, active_layer.image)
+            p.end()
 
     base_mask = npimage.selection_mask(doc.selection, doc.size, QPoint(0, 0))
     refined_bool, _refined_alpha, dec_img = npimage.refine_selection(
@@ -1304,8 +1318,16 @@ def _op_refine_selection(ctx: Context, value: str) -> None:
         doc.set_selection(None)
         doc.selection_feather = 0.0
 
-    if decontam and dec_img is not None and active_layer is not None:
-        active_layer.image = dec_img
+    has_image = active_layer is not None and active_layer.image is not None
+    if decontam and dec_img is not None and has_image:
+        if is_full_canvas_layer:
+            active_layer.image = dec_img
+        else:
+            ox = getattr(active_layer, "offset", QPoint(0, 0)).x()
+            oy = getattr(active_layer, "offset", QPoint(0, 0)).y()
+            w = active_layer.image.width()
+            h = active_layer.image.height()
+            active_layer.image = dec_img.copy(ox, oy, w, h)
         doc.notify_pixels(active_layer.bounds())
 
 

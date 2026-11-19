@@ -1032,6 +1032,13 @@ def decontaminate_colors(
     """
     is_qimage = isinstance(image, QImage)
     if is_qimage:
+        img_h, img_w = image.height(), image.width()
+    else:
+        img_h, img_w = image.shape[:2]
+    if (img_h, img_w) != mask.shape[:2]:
+        return QImage(image) if is_qimage else image.copy()
+
+    if is_qimage:
         out_img = QImage(image)
         arr = view_u32(out_img)
         alpha = (arr >> np.uint32(24)) & 0xFF
@@ -1129,14 +1136,17 @@ def refine_selection(
 
     sub_guide = None
     if image is not None:
-        if isinstance(image, QImage):
-            arr = view_u32(image)[y0:y1, x0:x1]
-            r = ((arr >> np.uint32(16)) & 0xFF).astype(np.float32) / 255.0
-            g = ((arr >> np.uint32(8)) & 0xFF).astype(np.float32) / 255.0
-            b = (arr & np.uint32(0xFF)).astype(np.float32) / 255.0
-            sub_guide = np.stack([r, g, b], axis=-1)
-        else:
-            sub_guide = image[y0:y1, x0:x1]
+        img_h = image.height() if isinstance(image, QImage) else image.shape[0]
+        img_w = image.width() if isinstance(image, QImage) else image.shape[1]
+        if (img_h, img_w) == (h, w):
+            if isinstance(image, QImage):
+                arr = view_u32(image)[y0:y1, x0:x1]
+                r = ((arr >> np.uint32(16)) & 0xFF).astype(np.float32) / 255.0
+                g = ((arr >> np.uint32(8)) & 0xFF).astype(np.float32) / 255.0
+                b = (arr & np.uint32(0xFF)).astype(np.float32) / 255.0
+                sub_guide = np.stack([r, g, b], axis=-1)
+            else:
+                sub_guide = image[y0:y1, x0:x1]
 
     # 1. Edge Detection: Guided Image Filter
     if radius > 0 and sub_guide is not None:
