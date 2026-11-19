@@ -175,37 +175,246 @@ def flood_fill(
     return bbox
 
 
-def heal_patch(src: QImage, dst: QImage) -> QImage:
-    """Healing-brush blend: the source's high-frequency texture transplanted
-    onto the destination's low-frequency tone (src - blur(src) + blur(dst))."""
+def _compute_mixed_divergence(dest: np.ndarray, src: np.ndarray) -> np.ndarray:
+    """Discrete divergence b = div v for mixed gradients max(|∇g|, |∇f_dest|)."""
+    c, h, w = dest.shape
+    b = np.zeros((c, h, w), dtype=np.float32)
+    shifts = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    for dy, dx in shifts:
+        sy_p = slice(1, h - 1)
+        sx_p = slice(1, w - 1)
+        sy_q = slice(1 + dy, h - 1 + dy if h - 1 + dy != 0 else None)
+        sx_q = slice(1 + dx, w - 1 + dx if w - 1 + dx != 0 else None)
+        dg = src[:, sy_p, sx_p] - src[:, sy_q, sx_q]
+        df = dest[:, sy_p, sx_p] - dest[:, sy_q, sx_q]
+        v = np.where(np.abs(dg) >= np.abs(df), dg, df)
+        b[:, sy_p, sx_p] += v
+    return b
+
+
+def _downsample_plane_2x(img: np.ndarray, target_h: int, target_w: int) -> np.ndarray:
+    c = img.shape[0]
+    out = np.zeros((c, target_h, target_w), dtype=np.float32)
+    counts = np.zeros((target_h, target_w), dtype=np.float32)
+    for dy in (0, 1):
+        for dx in (0, 1):
+            sub = img[:, dy::2, dx::2]
+            sy, sx = sub.shape[1], sub.shape[2]
+            out[:, :sy, :sx] += sub
+            counts[:sy, :sx] += 1
+    out /= np.maximum(counts, 1.0)
+    return out
+
+
+def poisson_solve_multigrid(
+    dest: np.ndarray,
+    mask: np.ndarray,
+    src: np.ndarray | None = None,
+    mixed: bool = False,
+    omega: float = 1.7,
+    neumann: tuple[bool, bool, bool, bool] = (False, False, False, False),
+) -> np.ndarray:
+    """Cascadic multigrid Poisson solver with Successive Over-Relaxation (SOR).
+
+    Solves Δf = div v over masked domain Ω with Dirichlet boundary conditions
+    matching surrounding pixels:
+    - If src is None: solves Laplace Δf = 0 (spot healing / inpainting).
+    - If src is provided and mixed is False: guidance v = ∇g where g is src
+      texture (seamless cloning via harmonic offset field u = f - g).
+    - If src is provided and mixed is True: mixed gradient guidance
+      v = argmax_mag(∇g, ∇f_dest).
+    - neumann: (top, bottom, left, right) flags for reflective zero-gradient
+      boundary conditions at canvas borders.
+
+    Constructs a 2-3 level half-resolution pyramid of the patch, solves the coarse
+    level with Red-Black SOR (omega ≈ 1.5-1.8), upsamples to warm-start finer
+    levels, and performs smoothing iterations at the finest level.
+    """
+    if not mask.any():
+        return dest.copy()
+    c, h, w = dest.shape
+    if h < 3 or w < 3:
+        return dest.copy()
+
+    levels = 1
+    if min(h, w) >= 32:
+        levels = 3
+    elif min(h, w) >= 16:
+        levels = 2
+
+    masks = [mask.copy()]
+    dests = [dest.copy()]
+    srcs = [src.copy()] if src is not None else None
+
+    masks[0][0, :] = False
+    masks[0][-1, :] = False
+    masks[0][:, 0] = False
+    masks[0][:, -1] = False
+
+    for _lvl in range(levels - 1):
+        m_prev = masks[-1]
+        d_prev = dests[-1]
+        h_next = (m_prev.shape[0] + 1) // 2
+        w_next = (m_prev.shape[1] + 1) // 2
+
+        m_coarse = np.zeros((h_next, w_next), dtype=bool)
+        for dy in (0, 1):
+            for dx in (0, 1):
+                sl_y = slice(dy, m_prev.shape[0], 2)
+                sl_x = slice(dx, m_prev.shape[1], 2)
+                sub_h = (m_prev.shape[0] - dy + 1) // 2
+                sub_w = (m_prev.shape[1] - dx + 1) // 2
+                m_coarse[:sub_h, :sub_w] |= m_prev[sl_y, sl_x]
+        m_coarse[0, :] = False
+        m_coarse[-1, :] = False
+        m_coarse[:, 0] = False
+        m_coarse[:, -1] = False
+        masks.append(m_coarse)
+
+        dests.append(_downsample_plane_2x(d_prev, h_next, w_next))
+        if srcs is not None:
+            srcs.append(_downsample_plane_2x(srcs[-1], h_next, w_next))
+
+    def upsample_to(f_coarse: np.ndarray, target_h: int, target_w: int) -> np.ndarray:
+        c_h, c_w = f_coarse.shape[1], f_coarse.shape[2]
+        y = np.linspace(0, c_h - 1, target_h)
+        x = np.linspace(0, c_w - 1, target_w)
+        y0 = np.floor(y).astype(int)
+        y1 = np.minimum(y0 + 1, c_h - 1)
+        x0 = np.floor(x).astype(int)
+        x1 = np.minimum(x0 + 1, c_w - 1)
+        wy = (y - y0).reshape(1, -1, 1).astype(np.float32)
+        wx = (x - x0).reshape(1, 1, -1).astype(np.float32)
+        top = f_coarse[:, y0, :][:, :, x0] * (1.0 - wx) + f_coarse[:, y0, :][:, :, x1] * wx
+        bottom = f_coarse[:, y1, :][:, :, x0] * (1.0 - wx) + f_coarse[:, y1, :][:, :, x1] * wx
+        return top * (1.0 - wy) + bottom * wy
+
+    def apply_neumann(arr: np.ndarray) -> None:
+        if neumann[0]:
+            arr[:, 0, :] = arr[:, 1, :]
+        if neumann[1]:
+            arr[:, -1, :] = arr[:, -2, :]
+        if neumann[2]:
+            arr[:, :, 0] = arr[:, :, 1]
+        if neumann[3]:
+            arr[:, :, -1] = arr[:, :, -2]
+
+    coarsest = levels - 1
+    m_c = masks[coarsest]
+    d_c = dests[coarsest]
+    s_c = srcs[coarsest] if srcs is not None else None
+
+    if src is None:
+        val = d_c.copy()
+        valid_b = (~m_c).copy()
+        if neumann[0]:
+            valid_b[0, :] = False
+        if neumann[1]:
+            valid_b[-1, :] = False
+        if neumann[2]:
+            valid_b[:, 0] = False
+        if neumann[3]:
+            valid_b[:, -1] = False
+        if valid_b.any():
+            val[:, m_c] = np.mean(d_c[:, valid_b], axis=1, keepdims=True)
+        elif (~m_c).any():
+            val[:, m_c] = np.mean(d_c[:, ~m_c], axis=1, keepdims=True)
+    elif not mixed:
+        val = np.zeros_like(d_c)
+        val[:, ~m_c] = (d_c - s_c)[:, ~m_c]
+    else:
+        val = d_c.copy()
+
+    apply_neumann(val)
+
+    iters_per_level = [20, 30, 45] if levels == 3 else ([25, 40] if levels == 2 else [50])
+
+    for lvl in range(levels - 1, -1, -1):
+        m = masks[lvl]
+        d = dests[lvl]
+        s = srcs[lvl] if srcs is not None else None
+        h, w = m.shape
+
+        if lvl < coarsest:
+            val = upsample_to(val, h, w)
+            if src is None or mixed:
+                val[:, ~m] = d[:, ~m]
+            else:
+                val[:, ~m] = (d - s)[:, ~m]
+            apply_neumann(val)
+
+        if mixed and s is not None:
+            b = _compute_mixed_divergence(d, s)
+            b_inner = b[:, 1:-1, 1:-1]
+        else:
+            b_inner = 0.0
+
+        it_count = iters_per_level[levels - 1 - lvl]
+        yy, xx = np.ogrid[:h, :w]
+        checker = (yy + xx) % 2
+        red_inner = (m & (checker == 0))[1:-1, 1:-1]
+        black_inner = (m & (checker == 1))[1:-1, 1:-1]
+
+        for _ in range(it_count):
+            apply_neumann(val)
+            nbrs_r = val[:, :-2, 1:-1] + val[:, 2:, 1:-1] + val[:, 1:-1, :-2] + val[:, 1:-1, 2:]
+            target_r = 0.25 * (nbrs_r + b_inner)
+            val[:, 1:-1, 1:-1] = np.where(
+                red_inner, (1.0 - omega) * val[:, 1:-1, 1:-1] + omega * target_r, val[:, 1:-1, 1:-1]
+            )
+
+            apply_neumann(val)
+            nbrs_b = val[:, :-2, 1:-1] + val[:, 2:, 1:-1] + val[:, 1:-1, :-2] + val[:, 1:-1, 2:]
+            target_b = 0.25 * (nbrs_b + b_inner)
+            val[:, 1:-1, 1:-1] = np.where(
+                black_inner,
+                (1.0 - omega) * val[:, 1:-1, 1:-1] + omega * target_b,
+                val[:, 1:-1, 1:-1],
+            )
+            apply_neumann(val)
+
+    result = srcs[0] + val if src is not None and not mixed else val
+    return np.clip(result, 0.0, 255.0)
+
+
+def heal_patch(
+    src: QImage, dst: QImage, mask: np.ndarray | None = None, mixed: bool = False
+) -> QImage:
+    """Healing-brush blend: seamless gradient-domain cloning using a cascadic
+    multigrid SOR Poisson solver. Solves Δf = div v over the patch domain with
+    Dirichlet boundary conditions matching the destination tone."""
     s = view_u32(src)
     d = view_u32(dst)
     h = min(s.shape[0], d.shape[0])
     w = min(s.shape[1], d.shape[1])
     s, d = s[:h, :w], d[:h, :w]
+    if h < 3 or w < 3:
+        return src.copy()
+
+    if mask is None:
+        mask = np.zeros((h, w), dtype=bool)
+        cy, cx = (h - 1) / 2.0, (w - 1) / 2.0
+        ry, rx = max(1.0, cy - 0.5), max(1.0, cx - 0.5)
+        yy, xx = np.ogrid[:h, :w]
+        mask = (((yy - cy) / ry) ** 2 + ((xx - cx) / rx) ** 2) <= 1.0
+        mask[0, :] = False
+        mask[-1, :] = False
+        mask[:, 0] = False
+        mask[:, -1] = False
+    else:
+        mask = mask[:h, :w].copy()
 
     def channels(arr):
-        return [((arr >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (16, 8, 0)]
+        return np.stack(
+            [((arr >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (16, 8, 0)], axis=0
+        )
 
-    def blur(c):
-        out = c
-        for _ in range(3):
-            padded = np.pad(out, 1, mode="edge")
-            out = (
-                padded[:-2, 1:-1]
-                + padded[2:, 1:-1]
-                + padded[1:-1, :-2]
-                + padded[1:-1, 2:]
-                + padded[1:-1, 1:-1]
-            ) / 5.0
-        return out
-
-    healed = []
-    for sc, dc in zip(channels(s), channels(d), strict=True):
-        healed.append(np.clip(sc - blur(sc) + blur(dc), 0, 255))
+    s_ch = channels(s)
+    d_ch = channels(d)
+    solved = poisson_solve_multigrid(d_ch, mask, src=s_ch, mixed=mixed)
 
     alpha = (d >> np.uint32(24)) & 0xFF  # destination alpha wins
-    r, g, b = [(c + 0.5).astype(np.uint32) for c in healed]
+    r, g, b = [np.clip(solved[i] + 0.5, 0, 255).astype(np.uint32) for i in range(3)]
     # premultiplied clamp: channels may not exceed alpha
     r = np.minimum(r, alpha)
     g = np.minimum(g, alpha)
@@ -689,58 +898,67 @@ def livewire_path(
     return path
 
 
-def patch_heal(img: QImage, mask: np.ndarray, dx: int, dy: int) -> QRect:
+def patch_heal(img: QImage, mask: np.ndarray, dx: int, dy: int, mixed: bool = False) -> QRect:
     """Patch-tool blend: fill the masked region with texture sampled at
-    (dx, dy) away, tone-matched to the destination (src - blur(src) +
-    blur(dst) inside the mask). Returns the dirty rect."""
+    (dx, dy) away, tone-matched to the destination using a cascadic multigrid
+    SOR Poisson solver over the mask's bounding box (DD-001). Returns dirty rect."""
     ys, xs = np.nonzero(mask)
     if len(ys) == 0:
         return QRect()
     pad = 4
     h, w = mask.shape
-    y0, y1 = max(0, ys.min() - pad), min(h, ys.max() + 1 + pad)
-    x0, x1 = max(0, xs.min() - pad), min(w, xs.max() + 1 + pad)
+    y0, y1 = max(0, int(ys.min()) - pad), min(h, int(ys.max()) + 1 + pad)
+    x0, x1 = max(0, int(xs.min()) - pad), min(w, int(xs.max()) + 1 + pad)
     sy0, sy1 = y0 + dy, y1 + dy
     sx0, sx1 = x0 + dx, x1 + dx
     if sy0 < 0 or sx0 < 0 or sy1 > h or sx1 > w:
         return QRect()  # source window out of bounds: refuse
 
     arr = view_u32(img)
-    dst = arr[y0:y1, x0:x1]
-    src = arr[sy0:sy1, sx0:sx1]
-    hole = mask[y0:y1, x0:x1]
+    dst_crop = arr[y0:y1, x0:x1]
+    src_crop = arr[sy0:sy1, sx0:sx1]
+    hole = mask[y0:y1, x0:x1].copy()
 
-    # tone reference: the destination with the blemish diffused away —
-    # matching against the raw destination would re-impose the blemish
-    tone_img = img.copy(QRect(int(x0), int(y0), int(x1 - x0), int(y1 - y0)))
-    inpaint_diffuse(tone_img, hole, blend_passes=1)
-    tone = view_u32(tone_img)
+    top_pad = max(0, 1 - (int(ys.min()) - y0))
+    bottom_pad = max(0, 1 - (y1 - 1 - int(ys.max())))
+    left_pad = max(0, 1 - (int(xs.min()) - x0))
+    right_pad = max(0, 1 - (x1 - 1 - int(xs.max())))
 
     def channels(a):
-        return [((a >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (16, 8, 0)]
-
-    def blur(c):
-        out = c
-        for _ in range(3):
-            padded = np.pad(out, 1, mode="edge")
-            out = (
-                padded[:-2, 1:-1]
-                + padded[2:, 1:-1]
-                + padded[1:-1, :-2]
-                + padded[1:-1, 2:]
-                + padded[1:-1, 1:-1]
-            ) / 5.0
-        return out
-
-    alpha = (dst >> np.uint32(24)) & 0xFF
-    healed = []
-    for sc, tc in zip(channels(src), channels(tone), strict=True):
-        healed.append(
-            np.minimum(np.clip(sc - blur(sc) + blur(tc), 0, 255).astype(np.uint32), alpha)
+        return np.stack(
+            [((a >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (16, 8, 0)], axis=0
         )
-    r, g, b = healed
+
+    d_ch = channels(dst_crop)
+    s_ch = channels(src_crop)
+
+    if top_pad or bottom_pad or left_pad or right_pad:
+        d_ch = np.pad(d_ch, ((0, 0), (top_pad, bottom_pad), (left_pad, right_pad)), mode="edge")
+        s_ch = np.pad(s_ch, ((0, 0), (top_pad, bottom_pad), (left_pad, right_pad)), mode="edge")
+        hole_padded = np.pad(
+            hole,
+            ((top_pad, bottom_pad), (left_pad, right_pad)),
+            mode="constant",
+            constant_values=False,
+        )
+    else:
+        hole_padded = hole
+
+    neumann = (top_pad > 0, bottom_pad > 0, left_pad > 0, right_pad > 0)
+    solved = poisson_solve_multigrid(d_ch, hole_padded, src=s_ch, mixed=mixed, neumann=neumann)
+
+    if top_pad or bottom_pad or left_pad or right_pad:
+        end_y = solved.shape[1] - bottom_pad if bottom_pad > 0 else solved.shape[1]
+        end_x = solved.shape[2] - right_pad if right_pad > 0 else solved.shape[2]
+        solved = solved[:, top_pad:end_y, left_pad:end_x]
+
+    alpha = (dst_crop >> np.uint32(24)) & 0xFF
+    r, g, b = [np.clip(solved[i] + 0.5, 0, 255).astype(np.uint32) for i in range(3)]
+    r = np.minimum(r, alpha)
+    g = np.minimum(g, alpha)
+    b = np.minimum(b, alpha)
     out = (alpha << np.uint32(24)) | (r << np.uint32(16)) | (g << np.uint32(8)) | b
-    dst[hole] = out[hole]
+    dst_crop[hole] = out[hole]
     return QRect(int(x0), int(y0), int(x1 - x0), int(y1 - y0))
 
 
@@ -870,56 +1088,66 @@ def seam_carve(img: QImage, target_w: int, target_h: int) -> QImage:
     return out
 
 
-def inpaint_diffuse(img: QImage, mask: np.ndarray, blend_passes: int = 3) -> QRect:
-    """Fill the masked pixels by diffusing inward from the boundary (each
-    unknown pixel takes the mean of its known 4-neighbours, layer by layer),
-    then smooth the healed region. Operates on the mask's bbox only.
+def inpaint_poisson(img: QImage, mask: np.ndarray) -> QRect:
+    """Poisson / Laplace inpainting: solve Δf = 0 with Dirichlet boundary
+    conditions matching surrounding pixels using a cascadic multigrid SOR solver.
+    Operates strictly on the mask's bounding box plus padding (DD-001).
     Returns the dirty rect."""
     ys, xs = np.nonzero(mask)
     if len(ys) == 0:
         return QRect()
-    pad = 2
-    y0, y1 = max(0, ys.min() - pad), min(mask.shape[0], ys.max() + 1 + pad)
-    x0, x1 = max(0, xs.min() - pad), min(mask.shape[1], xs.max() + 1 + pad)
+    pad = 4
+    h, w = mask.shape
+    y0, y1 = max(0, int(ys.min()) - pad), min(h, int(ys.max()) + 1 + pad)
+    x0, x1 = max(0, int(xs.min()) - pad), min(w, int(xs.max()) + 1 + pad)
 
     arr = view_u32(img)[y0:y1, x0:x1]
     hole = mask[y0:y1, x0:x1].copy()
-    channels = [((arr >> np.uint32(shift)) & 0xFF).astype(np.float32) for shift in (24, 16, 8, 0)]
-    known = ~hole
 
-    shifts = (
-        ((slice(1, None), slice(None)), (slice(None, -1), slice(None))),
-        ((slice(None, -1), slice(None)), (slice(1, None), slice(None))),
-        ((slice(None), slice(1, None)), (slice(None), slice(None, -1))),
-        ((slice(None), slice(None, -1)), (slice(None), slice(1, None))),
-    )
-    while not known.all():
-        cnt = np.zeros_like(channels[0])
-        for src, dst in shifts:
-            cnt[dst] += known[src]
-        newly = (~known) & (cnt > 0)
-        if not newly.any():
-            break
-        for c in channels:
-            acc = np.zeros_like(c)
-            for src, dst in shifts:
-                acc[dst] += c[src] * known[src]
-            c[newly] = acc[newly] / cnt[newly]
-        known |= newly
+    top_pad = max(0, 1 - (int(ys.min()) - y0))
+    bottom_pad = max(0, 1 - (y1 - 1 - int(ys.max())))
+    left_pad = max(0, 1 - (int(xs.min()) - x0))
+    right_pad = max(0, 1 - (x1 - 1 - int(xs.max())))
 
-    healed = hole
-    for _ in range(blend_passes):  # soften the fill against its surroundings
-        for c in channels:
-            blur = c.copy()
-            blur[1:-1, 1:-1] = (
-                c[:-2, 1:-1] + c[2:, 1:-1] + c[1:-1, :-2] + c[1:-1, 2:] + c[1:-1, 1:-1]
-            ) / 5.0
-            c[healed] = blur[healed]
+    def channels(a):
+        return np.stack(
+            [((a >> np.uint32(k)) & 0xFF).astype(np.float32) for k in (24, 16, 8, 0)], axis=0
+        )
 
-    a, r, g, b = [np.clip(c + 0.5, 0, 255).astype(np.uint32) for c in channels]
+    ch = channels(arr)
+
+    if top_pad or bottom_pad or left_pad or right_pad:
+        ch = np.pad(ch, ((0, 0), (top_pad, bottom_pad), (left_pad, right_pad)), mode="edge")
+        hole_padded = np.pad(
+            hole,
+            ((top_pad, bottom_pad), (left_pad, right_pad)),
+            mode="constant",
+            constant_values=False,
+        )
+    else:
+        hole_padded = hole
+
+    neumann = (top_pad > 0, bottom_pad > 0, left_pad > 0, right_pad > 0)
+    solved = poisson_solve_multigrid(ch, hole_padded, src=None, neumann=neumann)
+
+    if top_pad or bottom_pad or left_pad or right_pad:
+        end_y = solved.shape[1] - bottom_pad if bottom_pad > 0 else solved.shape[1]
+        end_x = solved.shape[2] - right_pad if right_pad > 0 else solved.shape[2]
+        solved = solved[:, top_pad:end_y, left_pad:end_x]
+
+    a, r, g, b = [np.clip(solved[i] + 0.5, 0, 255).astype(np.uint32) for i in range(4)]
+    r = np.minimum(r, a)
+    g = np.minimum(g, a)
+    b = np.minimum(b, a)
     out = (a << np.uint32(24)) | (r << np.uint32(16)) | (g << np.uint32(8)) | b
     arr[hole] = out[hole]
     return QRect(int(x0), int(y0), int(x1 - x0), int(y1 - y0))
+
+
+def inpaint_diffuse(img: QImage, mask: np.ndarray, blend_passes: int = 3) -> QRect:
+    """Diffusion inpainting of masked pixels. Delegates to `inpaint_poisson`
+    for multigrid Poisson / Laplace gradient-domain solving."""
+    return inpaint_poisson(img, mask)
 
 
 def blend_by_weights(filtered: QImage, original: QImage, weights: np.ndarray) -> None:

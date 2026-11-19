@@ -5,8 +5,8 @@ A completeness test pins the op catalog to this file so they cannot drift."""
 import json
 
 import pytest
-from PySide6.QtCore import QPoint, QSize
-from PySide6.QtGui import QColor, QImage
+from PySide6.QtCore import QPoint, QRect, QSize
+from PySide6.QtGui import QColor, QImage, QPainter
 
 from photoslop import cli
 from photoslop.appearance import EFFECT_DEFAULTS
@@ -75,6 +75,8 @@ CASES = {
     "blend-mode": ("multiply", "extra-spicy"),
     "layer-opacity": ("50", "150"),
     "content-aware-fill": (None, None),
+    "spot-heal": ("10,10,5", "bad,args"),
+    "heal": ("5,5,15,15,5", "bad,args"),
     "feather": ("3", "-1"),
     "refine-selection": ("5,2,1,10,0", "not,enough"),
     "select-and-mask": ("5,2,1,10,0", "not,enough"),
@@ -842,6 +844,71 @@ def test_content_aware_fill_and_feather(qapp, tmp_path):
         )
         == 0
     )
+
+
+def test_spot_heal_cli(qapp, tmp_path):
+    img = QImage(60, 40, QImage.Format.Format_ARGB32_Premultiplied)
+    img.fill(QColor(180, 180, 180))
+    p = QPainter(img)
+    p.fillRect(QRect(18, 18, 5, 5), QColor(0, 0, 0))  # black blemish
+    p.end()
+    src = str(tmp_path / "blemish.png")
+    img.save(src)
+
+    # Spot heal with coordinates and radius
+    assert run([src, "--spot-heal", "20,20,8", "--output", tmp_path / "out_coord.png"]) == 0
+    px = QImage(str(tmp_path / "out_coord.png")).pixelColor(20, 20)
+    assert px.red() > 150  # blemish replaced by surrounding gray
+
+    # Spot heal with active selection
+    assert (
+        run([src, "--select", "15,15,10,10", "--spot-heal", "--output", tmp_path / "out_sel.png"])
+        == 0
+    )
+    px_sel = QImage(str(tmp_path / "out_sel.png")).pixelColor(20, 20)
+    assert px_sel.red() > 150
+
+    # Spot heal with no selection and no coords fails with exit code 2
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--spot-heal", "--output", tmp_path / "fail.png"])
+    assert exc.value.code == 2
+
+
+def test_heal_cli(qapp, tmp_path):
+    img = QImage(80, 40, QImage.Format.Format_ARGB32_Premultiplied)
+    img.fill(QColor(60, 60, 60))  # dark field
+    p = QPainter(img)
+    p.fillRect(QRect(0, 0, 30, 40), QColor(220, 220, 220))
+    p.end()
+    src = str(tmp_path / "texture.png")
+    img.save(src)
+
+    # Heal circular dab at (60, 20) from (15, 20) with radius 8
+    assert run([src, "--heal", "15,20,60,20,8", "--output", tmp_path / "healed_pt.png"]) == 0
+    px = QImage(str(tmp_path / "healed_pt.png")).pixelColor(60, 20)
+    assert px.red() < 120
+
+    # Heal with selection and source offset DX,DY
+    assert (
+        run(
+            [
+                src,
+                "--select",
+                "55,15,10,10",
+                "--heal=-45,0",
+                "--output",
+                tmp_path / "healed_sel.png",
+            ]
+        )
+        == 0
+    )
+    px_sel = QImage(str(tmp_path / "healed_sel.png")).pixelColor(60, 20)
+    assert px_sel.red() < 120
+
+    # Heal with DX,DY but no selection fails with exit code 2
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--heal", "10,10", "--output", tmp_path / "fail.png"])
+    assert exc.value.code == 2
 
 
 def test_import_layer_joins_the_open_document(qapp, tmp_path):

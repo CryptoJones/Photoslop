@@ -1261,6 +1261,132 @@ def _op_content_aware_fill(ctx: Context, value: str) -> None:
         npimage.inpaint_diffuse(layer.image, mask)
 
 
+def _op_spot_heal(ctx: Context, value: str) -> None:
+    """Spot heal: inpaint active selection using Poisson multigrid solver,
+    or inpaint a circular dab at X,Y with RADIUS (default 10)."""
+    from PySide6.QtGui import QImage
+
+    from photoslop import npimage
+
+    doc = ctx.doc
+    val = value.strip() if value else ""
+    if not val:
+        if doc.selection is None:
+            raise _ValueError("--spot-heal needs a selection or coordinates (X,Y[,RADIUS])")
+        for layer in _target_layers(ctx):
+            mask = npimage.selection_mask(doc.selection, layer.image.size(), layer.offset)
+            if not mask.any():
+                continue
+            layer.image = QImage(layer.image)
+            npimage.inpaint_poisson(layer.image, mask)
+            layer.fx_cache = None
+        return
+
+    parts = [p.strip() for p in val.split(",")]
+    if len(parts) == 2:
+        try:
+            cx, cy = int(parts[0]), int(parts[1])
+            radius = 10
+        except ValueError as exc:
+            raise _ValueError(f"--spot-heal: {exc}") from exc
+    elif len(parts) == 3:
+        try:
+            cx, cy, radius = int(parts[0]), int(parts[1]), int(parts[2])
+        except ValueError as exc:
+            raise _ValueError(f"--spot-heal: {exc}") from exc
+    else:
+        raise _ValueError("--spot-heal expects X,Y or X,Y,RADIUS")
+
+    if radius <= 0:
+        raise _ValueError("--spot-heal: radius must be positive")
+
+    for layer in _target_layers(ctx):
+        lx = cx - layer.offset.x()
+        ly = cy - layer.offset.y()
+        h, w = layer.image.height(), layer.image.width()
+        y0, y1 = max(0, ly - radius), min(h, ly + radius + 1)
+        x0, x1 = max(0, lx - radius), min(w, lx + radius + 1)
+        if y0 >= y1 or x0 >= x1:
+            continue
+        import numpy as np
+
+        mask = np.zeros((h, w), dtype=bool)
+        yy, xx = np.ogrid[y0:y1, x0:x1]
+        mask[y0:y1, x0:x1] = (yy - ly) ** 2 + (xx - lx) ** 2 <= radius * radius
+        if not mask.any():
+            continue
+        layer.image = QImage(layer.image)
+        npimage.inpaint_poisson(layer.image, mask)
+        layer.fx_cache = None
+
+
+def _op_heal(ctx: Context, value: str) -> None:
+    """Heal: seamless gradient-domain cloning using Poisson multigrid solver.
+    Accepts:
+    - DX,DY with active selection: heals selection using texture at offset (DX,DY).
+    - SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS]: heals dab at (DST_X,DST_Y) sampled from (SRC_X,SRC_Y).
+    """
+    from PySide6.QtGui import QImage
+
+    from photoslop import npimage
+
+    doc = ctx.doc
+    val = value.strip() if value else ""
+    if not val:
+        raise _ValueError(
+            "--heal requires DX,DY with a selection, or SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS]"
+        )
+
+    parts = [p.strip() for p in val.split(",")]
+    if len(parts) == 2:
+        try:
+            dx, dy = int(parts[0]), int(parts[1])
+        except ValueError as exc:
+            raise _ValueError(f"--heal: {exc}") from exc
+        if doc.selection is None:
+            raise _ValueError("--heal with DX,DY requires an active selection")
+        for layer in _target_layers(ctx):
+            mask = npimage.selection_mask(doc.selection, layer.image.size(), layer.offset)
+            if not mask.any():
+                continue
+            layer.image = QImage(layer.image)
+            npimage.patch_heal(layer.image, mask, dx, dy)
+            layer.fx_cache = None
+    elif len(parts) in (4, 5):
+        try:
+            sx, sy = int(parts[0]), int(parts[1])
+            dx_pt, dy_pt = int(parts[2]), int(parts[3])
+            radius = int(parts[4]) if len(parts) == 5 else 10
+        except ValueError as exc:
+            raise _ValueError(f"--heal: {exc}") from exc
+        if radius <= 0:
+            raise _ValueError("--heal: radius must be positive")
+        offset_x = sx - dx_pt
+        offset_y = sy - dy_pt
+        for layer in _target_layers(ctx):
+            lx = dx_pt - layer.offset.x()
+            ly = dy_pt - layer.offset.y()
+            h, w = layer.image.height(), layer.image.width()
+            y0, y1 = max(0, ly - radius), min(h, ly + radius + 1)
+            x0, x1 = max(0, lx - radius), min(w, lx + radius + 1)
+            if y0 >= y1 or x0 >= x1:
+                continue
+            import numpy as np
+
+            mask = np.zeros((h, w), dtype=bool)
+            yy, xx = np.ogrid[y0:y1, x0:x1]
+            mask[y0:y1, x0:x1] = (yy - ly) ** 2 + (xx - lx) ** 2 <= radius * radius
+            if not mask.any():
+                continue
+            layer.image = QImage(layer.image)
+            npimage.patch_heal(layer.image, mask, offset_x, offset_y)
+            layer.fx_cache = None
+    else:
+        raise _ValueError(
+            "--heal expects DX,DY (with selection) or SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS]"
+        )
+
+
 def _op_feather(ctx: Context, value: str) -> None:
     try:
         radius = float(value)
@@ -1626,6 +1752,18 @@ OPS: dict = {
     "blend-mode": ("NAME", "set the target layer's blend mode", _op_blend_mode),
     "layer-opacity": ("PCT", "set the target layer's opacity", _op_layer_opacity),
     "content-aware-fill": (None, "diffusion-fill the selection", _op_content_aware_fill),
+    "spot-heal": (
+        "[X,Y[,RADIUS]]",
+        "Poisson/Laplace inpainting on active selection, or a circular spot at X,Y "
+        "with RADIUS (default 10)",
+        _op_spot_heal,
+    ),
+    "heal": (
+        "DX,DY|SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS]",
+        "Poisson seamless clone on selection via offset DX,DY, or spot at DST_X,DST_Y "
+        "from SRC_X,SRC_Y (SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS])",
+        _op_heal,
+    ),
     "feather": ("RADIUS", "feather the current selection's edge", _op_feather),
     "refine-selection": (
         "RADIUS,SMOOTH,FEATHER,CONTRAST,SHIFT[,DECONTAM]",

@@ -4,7 +4,29 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.50.0] — Unreleased
+## [2.51.0] — Unreleased
+
+### Added
+- **Retouch: Poisson multigrid gradient-domain solver for Healing Brush and Spot Healing** —
+  cascadic multigrid Poisson solver with Successive Over-Relaxation (SOR) for seamless cloning,
+  patch healing, and spot inpainting across Desktop Qt GUI, headless CLI/MCP, and iPadOS/iOS ([#415](https://github.com/CryptoJones/Photoslop/issues/415)).
+  - **Algorithm (Cascadic Multigrid Poisson SOR)**: Solves the Poisson equation $\Delta f = \operatorname{div} v$
+    over masked domains $\Omega$ with Dirichlet boundary conditions matching surrounding pixels. Seamless cloning
+    solves Laplace equation $\Delta u = 0$ for harmonic offset fields $u = f - g$ with boundary matching
+    $f_{\text{dest}} - g_{\text{source}}$, or mixed gradients $v = \operatorname{argmax-mag}(\nabla g, \nabla f_{\text{dest}})$.
+    Spot healing / inpainting solves Laplace $\Delta f = 0$ with reflective Neumann boundaries at canvas edges.
+  - **Cascadic Multigrid**: 2-3 level half-resolution pyramid of the patch, coarse-level Red-Black SOR (omega ≈ 1.7),
+    bilinear upsampling to warm-start finer levels, and smoothing passes at finest level. Converges in milliseconds.
+  - **Memory Frugality (DD-001)**: Computes strictly on the bounding box of the mask or dab plus padding (2-4px),
+    never allocating canvas-wide floating point matrices.
+  - **Desktop Qt GUI**: Integrated into `SpotHealTool` (`J`) and `HealBrushTool` (`Shift+J`), `heal_patch`,
+    `patch_heal`, and `inpaint_poisson` / `inpaint_diffuse`.
+  - **Headless CLI & MCP**: Added `--spot-heal [X,Y[,RADIUS]]` and `--heal DX,DY|SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS]`
+    pipeline options with full validation and pair-combination test coverage.
+  - **iPadOS / iOS**: Native Swift implementation in `MultigridPoisson.swift`, with `EditorStore` methods
+    for `spotHealSelection`, `healSelection`, and point dabs, covered by unit tests in `MultigridPoissonTests.swift`.
+
+## [2.50.0]
 
 ### Added
 - **Select: Magnetic Lasso edge-snapping selection tool with live-wire tracing** —
