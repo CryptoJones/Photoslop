@@ -172,7 +172,7 @@ struct EffectEditor: View {
         case "gaussian-blur", "feather":
           // The two fill-replacing kinds (#372): they blur the layer's own
           // pixels rather than adding a plane, so radius is all there is.
-          number("Radius", key: "radius", in: 0...100)
+          number("Radius", key: "radius", in: 0...250)
           Text(
             effect.kind == "feather"
               ? "Softens the edge inward. Feather only takes opacity away, so the "

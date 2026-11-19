@@ -290,10 +290,19 @@ struct EditorView: View {
       FilterSheet(
         kind: kind,
         onApply: { params in
+          store.previewFilter = nil
           filterToConfigure = nil
           runFilter(kind, params: params)
         },
-        onCancel: { filterToConfigure = nil })
+        onCancel: {
+          store.previewFilter = nil
+          filterToConfigure = nil
+        },
+        onPreview: { params in
+          if let id = store.activeLayerID {
+            store.previewFilter = (id, kind, params)
+          }
+        })
     }
     .sheet(isPresented: $showFeatherOptions) { featherSheet }
     .onChange(of: selectedPhoto) { _, item in

@@ -64,6 +64,7 @@ PAIR_ARGS = {
     "color-balance": ["--color-balance", "10,0,0,0,5,0,0,0,-10"],
     "curves": ["--curves", "0:10,255:245"],
     "gaussian-blur": ["--gaussian-blur", "2"],
+    "fast-blur": ["--fast-blur", "2"],
     "unsharp": ["--unsharp", "120"],
     "tilt-shift": ["--tilt-shift", "16,8,6,3"],
     "drop-shadow": ["--drop-shadow", "3,3,2,160"],

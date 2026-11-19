@@ -91,6 +91,7 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--color-lookup` `LUT_OR_PRESET[,INTENSITY]` | apply a 3D LUT (.cube or .3dl) or built-in preset (`Warm Film`, `Cool Crisp`, `Bleach Bypass`, `Teal & Orange`, `Faded Monochrome`) with optional intensity (0.0–1.0 or 0–100%) |
 | `--palette` `FILE.aco|FILE.ase` | import swatch palette (.aco/.ase) for active tool colours and document info |
 | `--gaussian-blur` `RADIUS` | gaussian blur (selection-aware) |
+| `--fast-blur` `RADIUS` | fast large-radius blur via 3-pass running-sum box approximation |
 | `--filter` `"NAME:KEY=VAL,..."` | run a filter plugin — built-ins `sepia`, `pixelate`, `denoise`, `retro-console`, `pixel-sort`, `datamosh`, `film-negative`, and the six `node-machine*` circuit-trace presets ([Filters](filters.md)); the G'MIC pack (`gmic-cartoon`, raw `gmic:command=...`, …) with `photoslop[gmic]`; the GEGL pack (`gegl-vignette`, raw `gegl:operation=...`, …) with system python3-gi + gir1.2-gegl; the GIMP bridge (`gimp-oilify`, raw `gimp-script:script=...`, spawn-per-call) with a gimp binary; more via [Filter Plugins](filter-plugins.md) |
 | `--unsharp` `AMOUNT` | unsharp mask, percent |
 | `--tilt-shift` `C,B,T,R` | tilt-shift blur: centre,band,transition,radius |

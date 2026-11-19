@@ -454,6 +454,19 @@ def _op_gaussian_blur(ctx: Context, value: str) -> None:
         _filter_region(ctx, layer, lambda img, m: npimage.gaussian_blur(img, radius, m))
 
 
+def _op_fast_blur(ctx: Context, value: str) -> None:
+    from photoslop import npimage
+
+    try:
+        radius = int(value)
+    except ValueError as exc:
+        raise _ValueError(f"--fast-blur: {exc}") from exc
+    if radius < 1:
+        raise _ValueError("--fast-blur: radius must be >= 1")
+    for layer in _target_layers(ctx):
+        _filter_region(ctx, layer, lambda img, m: npimage.fast_blur(img, radius, m))
+
+
 def _op_unsharp(ctx: Context, value: str) -> None:
     from photoslop import npimage
 
@@ -1398,6 +1411,11 @@ OPS: dict = {
         _op_point_color,
     ),
     "gaussian-blur": ("RADIUS", "gaussian blur (selection-aware)", _op_gaussian_blur),
+    "fast-blur": (
+        "RADIUS",
+        "fast large-radius blur via 3-pass running-sum box approximation",
+        _op_fast_blur,
+    ),
     "filter": (
         '"NAME:KEY=VAL,..."',
         "run a filter plugin (built-ins: sepia, pixelate; more via "
