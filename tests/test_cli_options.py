@@ -75,6 +75,8 @@ CASES = {
     "layer-opacity": ("50", "150"),
     "content-aware-fill": (None, None),
     "feather": ("3", "-1"),
+    "refine-selection": ("5,2,1,10,0", "not,enough"),
+    "select-and-mask": ("5,2,1,10,0", "not,enough"),
     "import-layer": ("photo.png", "no-such-file.png"),
     "expand-canvas": (None, None),
     "duplicate-layer": (None, None),

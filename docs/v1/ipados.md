@@ -1,6 +1,6 @@
 # Photoslop for iPadOS
 
-Photoslop v2.48.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
+Photoslop v2.49.0 includes an iOS-native edition targeting iPadOS and iOS 17 and
 newer. It is a universal app: iPad and iPhone ship in one binary from `ipados/`,
 built with SwiftUI, UIKit, and PencilKit. This is a native
 client rather than a repackaging of the desktop Python process: Qt supports
@@ -587,6 +587,19 @@ holds the rest of the desktop's selection commands:
   user. The weights cost one byte per canvas pixel and one float plane while
   they are computed, so setting a feather is refused under the same memory
   notice as adding a layer.
+
+- **Refine Edge / Select and Mask** (#417) is available from the selection action
+  strip (and `Select ▸ Refine Edge…`). It opens the Refine Edge parameter sheet with:
+  - **Guided Filter Edge Detection**: local linear regression of the mask against
+    the underlying layer pixels, with adaptive **Smart Radius** to capture hair, fur,
+    and soft transitions without haloing.
+  - **Global Refinements**: Morphological **Smooth** (0..100 px), 3-pass Gaussian **Feather**
+    (0..100 px), ramp **Contrast** steepening (0..100%), and grey morphology **Shift Edge**
+    (-100%..+100%).
+  - **Color Decontamination**: eliminates background fringe bleed by normalized convolution
+    from interior foreground pixels into semi-transparent edge pixels.
+  - Real-time live preview of the refined boundary and decontaminated pixels, committed
+    with full undo support upon Apply.
 
 **Strokes honour the selection** (#370). With a selection up, the pen, pencil,
 marker and eraser stop at its edge. While the finger is down the stroke is

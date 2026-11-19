@@ -123,6 +123,8 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--layer-opacity` `PCT` | set the target layer's opacity |
 | `--content-aware-fill` | diffusion-fill the selection |
 | `--feather` `RADIUS` | feather the current selection's edge |
+| `--refine-selection` `RADIUS,SMOOTH,FEATHER,CONTRAST,SHIFT[,DECONTAM]` | refine selection boundary with guided filter matting and optional decontamination |
+| `--select-and-mask` `RADIUS,SMOOTH,FEATHER,CONTRAST,SHIFT[,DECONTAM]` | alias for `--refine-selection` |
 | `--import-layer` `FILE` | add an image file to the open document as a new layer on top, centred at its own size (`--input` is how a file becomes the document) |
 | `--expand-canvas` | grow the canvas to reveal every layer pixel that overhangs it (the GUI import prompt's Expand Canvas choice; a no-op when all fits) |
 | `--duplicate-layer` | duplicate the active layer |
