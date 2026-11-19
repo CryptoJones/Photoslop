@@ -81,14 +81,15 @@ enum LivewireAlgorithms {
       return [a, b]
     }
 
+    let scale = CGFloat(image.scale > 0 ? image.scale : 1.0)
     let imgW = cgImage.width
     let imgH = cgImage.height
     guard imgW > 0, imgH > 0 else { return [a, b] }
 
-    let ax = max(0, min(imgW - 1, Int(a.x.rounded())))
-    let ay = max(0, min(imgH - 1, Int(a.y.rounded())))
-    let bx = max(0, min(imgW - 1, Int(b.x.rounded())))
-    let by = max(0, min(imgH - 1, Int(b.y.rounded())))
+    let ax = max(0, min(imgW - 1, Int((a.x * scale).rounded())))
+    let ay = max(0, min(imgH - 1, Int((a.y * scale).rounded())))
+    let bx = max(0, min(imgW - 1, Int((b.x * scale).rounded())))
+    let by = max(0, min(imgH - 1, Int((b.y * scale).rounded())))
 
     let margin = max(4, width)
     let x0 = max(0, min(ax, bx) - margin)
@@ -335,7 +336,9 @@ enum LivewireAlgorithms {
     var path: [CGPoint] = []
     var curr = goal
     while curr >= 0 {
-      path.append(CGPoint(x: curr % cw + x0, y: curr / cw + y0))
+      let px = CGFloat(curr % cw + x0) / scale
+      let py = CGFloat(curr / cw + y0) / scale
+      path.append(CGPoint(x: px, y: py))
       if curr == start { break }
       curr = parent[curr]
     }

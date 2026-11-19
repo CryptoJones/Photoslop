@@ -70,9 +70,9 @@ final class BrushToolTests: XCTestCase {
   }
 
   func testTheMarqueeAndLassoSelectByDragAndTakeNoInk() {
-    XCTAssertEqual(BrushTool.allCases.filter(\.selectsByDrag), [.rectSelect, .lasso])
-    XCTAssertEqual(BrushTool.allCases.filter(\.selects), [.wand, .rectSelect, .lasso])
-    for tool in [BrushTool.rectSelect, .lasso] {
+    XCTAssertEqual(BrushTool.allCases.filter(\.selectsByDrag), [.rectSelect, .lasso, .magneticLasso])
+    XCTAssertEqual(BrushTool.allCases.filter(\.selects), [.wand, .rectSelect, .lasso, .magneticLasso])
+    for tool in [BrushTool.rectSelect, .lasso, .magneticLasso] {
       XCTAssertFalse(tool.actsOnTap, "\(tool) is a drag, not a tap")
       XCTAssertFalse(tool.usesTolerance)
       XCTAssertFalse(tool.usesInk)

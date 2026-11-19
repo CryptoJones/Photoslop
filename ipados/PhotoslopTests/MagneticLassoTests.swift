@@ -11,7 +11,9 @@ final class MagneticLassoTests: XCTestCase {
 
   /// Stepped edge image: 80x50, black left / white right stepping from x=30 to x=45 at y=25.
   private func steppedEdgeImage(width w: Int = 80, height h: Int = 50) -> UIImage {
-    let renderer = UIGraphicsImageRenderer(size: CGSize(width: w, height: h))
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: w, height: h), format: format)
     return renderer.image { ctx in
       let cg = ctx.cgContext
       cg.setFillColor(UIColor.black.cgColor)
@@ -48,7 +50,9 @@ final class MagneticLassoTests: XCTestCase {
   }
 
   func testLivewireFallbackOnLargeCorridor() throws {
-    let renderer = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600))
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600), format: format)
     let bigImg = renderer.image { ctx in
       ctx.cgContext.setFillColor(UIColor.white.cgColor)
       ctx.cgContext.fill(CGRect(x: 0, y: 0, width: 600, height: 600))
@@ -78,8 +82,8 @@ final class MagneticLassoTests: XCTestCase {
     let sel = try XCTUnwrap(store.selection)
     XCTAssertFalse(sel.isEmpty)
     let bounds = try XCTUnwrap(sel.bounds)
-    XCTAssertEqual(bounds.width, 21)
-    XCTAssertEqual(bounds.height, 21)
+    XCTAssertEqual(bounds.width, 20)
+    XCTAssertEqual(bounds.height, 20)
   }
 
   func testBrushToolMagneticLassoProperties() {
