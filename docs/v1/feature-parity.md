@@ -188,9 +188,11 @@ Photoslop is an editor, not a DAM — these rows are scope notes, not gaps.
 
 ## Where Photoslop stands out
 
-- **Headless automation through a shared engine.** All 75 operations are shared
-  by CLI and MCP; GUI presentation-only interactions have explicit parity
-  rulings. Pipelines compose as ordered operations (`--new A4 --dpi 300 --adjust
+- **Headless automation through a shared engine.** The CLI exposes all 75
+  engine operations; MCP shares 71 of them, blocking the four model-backed ops
+  (`model-url`, `select-subject`, `generative-fill`, `denoise-model`). GUI
+  presentation-only interactions have explicit parity rulings. Pipelines compose
+  as ordered operations (`--new A4 --dpi 300 --adjust
   "exposure=1" --select-poly … --clear --output out.png`). None of the six has
   this: Photoshop has no headless mode at all, `darktable-cli` is
   export-focused, and GIMP's batch mode requires writing Script-Fu.

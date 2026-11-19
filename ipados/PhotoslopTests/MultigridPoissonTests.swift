@@ -42,6 +42,51 @@ final class MultigridPoissonTests: XCTestCase {
     XCTAssertLessThan(maxErr, 0.05, "Laplace reconstruction of ramp should be virtually exact")
   }
 
+  func testLargeHoleRampCenter() {
+    // A large hole must reproduce the ramp at its centre, not just near the
+    // boundary — the dynamic-depth pyramid + residual stop carry the low
+    // frequency part (CodeRabbit MultigridPoisson.swift:234).
+    let w = 200, h = 200
+    var groundTruth = [Float](repeating: 0, count: w * h)
+    for y in 0..<h {
+      for x in 0..<w {
+        groundTruth[y * w + x] = 20.0 + 0.05 * Float(x) + 0.08 * Float(y)
+      }
+    }
+    var destData = groundTruth
+    var mask = [Bool](repeating: false, count: w * h)
+    for y in 4..<(h - 4) {
+      for x in 4..<(w - 4) {
+        mask[y * w + x] = true
+        destData[y * w + x] = 0.0
+      }
+    }
+    let solved = MultigridPoisson.solveChannel(
+      dest: MultigridPoisson.Plane(width: w, height: h, data: destData), mask: mask)
+    let cx = w / 2, cy = h / 2
+    XCTAssertEqual(solved[cx, cy], groundTruth[cy * w + cx], accuracy: 0.5,
+                   "Centre of a large hole must match the harmonic ramp")
+  }
+
+  func testLargeConstantOffsetClone() {
+    // Flat source 220 over destination boundary 60: the offset -160 must reach
+    // the centre of a large mask (CodeRabbit npimage.py:330 / Swift parity).
+    let n = 256
+    let dest = MultigridPoisson.Plane(width: n, height: n, initialValue: 60.0)
+    let src = MultigridPoisson.Plane(width: n, height: n, initialValue: 220.0)
+    var mask = [Bool](repeating: false, count: n * n)
+    for y in 8..<(n - 8) {
+      for x in 8..<(n - 8) { mask[y * n + x] = true }
+    }
+    let solved = MultigridPoisson.solveChannel(dest: dest, mask: mask, src: src, mixed: false)
+    XCTAssertEqual(solved[n / 2, n / 2], 60.0, accuracy: 0.5)
+    var maxDev: Float = 0
+    for y in 8..<(n - 8) {
+      for x in 8..<(n - 8) { maxDev = max(maxDev, abs(solved[x, y] - 60.0)) }
+    }
+    XCTAssertLessThan(maxDev, 1.0, "Constant offset must be exact throughout")
+  }
+
   func testSeamlessClonePreservesTextureAndMatchesTone() {
     let w = 40, h = 40
     let destPlane = MultigridPoisson.Plane(width: w, height: h, initialValue: 50.0)
@@ -58,9 +103,7 @@ final class MultigridPoissonTests: XCTestCase {
 
     var mask = [Bool](repeating: false, count: w * h)
     for y in 10..<30 {
-      for x in 10..<30 {
-        mask[y * w + x] = true
-      }
+      for x in 10..<30 { mask[y * w + x] = true }
     }
 
     let solved = MultigridPoisson.solveChannel(dest: destPlane, mask: mask, src: srcPlane, mixed: false)
@@ -86,7 +129,6 @@ final class MultigridPoissonTests: XCTestCase {
     let variance = sumSq / count
     XCTAssertGreaterThan(variance, 700.0, "Texture variance should be preserved")
 
-    // Boundary matches destination exactly
     XCTAssertEqual(solved[20, 9], 50.0)
     XCTAssertEqual(solved[20, 30], 50.0)
   }
@@ -102,17 +144,13 @@ final class MultigridPoissonTests: XCTestCase {
     buffer.withMutableWords { words in
       for i in 0..<words.count { words[i] = gray }
       for y in 18..<22 {
-        for x in 18..<22 {
-          words[y * w + x] = black
-        }
+        for x in 18..<22 { words[y * w + x] = black }
       }
     }
 
     var mask = [Bool](repeating: false, count: w * h)
     for y in 17..<23 {
-      for x in 17..<23 {
-        mask[y * w + x] = true
-      }
+      for x in 17..<23 { mask[y * w + x] = true }
     }
 
     let rect = MultigridPoisson.inpaint(buffer: &buffer, mask: mask)
@@ -122,7 +160,6 @@ final class MultigridPoissonTests: XCTestCase {
     let r = (centerWord >> 16) & 0xFF
     let g = (centerWord >> 8) & 0xFF
     let b = centerWord & 0xFF
-
     XCTAssertGreaterThan(r, 150, "Blemish should be filled with surround-like gray")
     XCTAssertGreaterThan(g, 150)
     XCTAssertGreaterThan(b, 150)
@@ -138,25 +175,126 @@ final class MultigridPoissonTests: XCTestCase {
     buffer.withMutableWords { words in
       for i in 0..<words.count { words[i] = gray }
       for y in 0..<8 {
-        for x in 0..<8 {
-          words[y * w + x] = dark
-        }
+        for x in 0..<8 { words[y * w + x] = dark }
       }
     }
 
     var mask = [Bool](repeating: false, count: w * h)
     for y in 0..<8 {
-      for x in 0..<8 {
-        mask[y * w + x] = true
-      }
+      for x in 0..<8 { mask[y * w + x] = true }
     }
 
     let rect = MultigridPoisson.inpaint(buffer: &buffer, mask: mask)
     XCTAssertNotNil(rect)
 
     let cornerWord = buffer.word(x: 2, y: 2)
-    let r = (cornerWord >> 16) & 0xFF
-    XCTAssertGreaterThan(r, 140, "Corner touching canvas boundary must inpaint to surround")
+    XCTAssertGreaterThan((cornerWord >> 16) & 0xFF, 140, "Interior corner must inpaint to surround")
+    // Probe the actual canvas-edge pixel (0,0): writeback must not skip row 0 /
+    // column 0 (CodeRabbit MultigridPoissonTests.swift:159).
+    let edgeWord = buffer.word(x: 0, y: 0)
+    XCTAssertGreaterThan((edgeWord >> 16) & 0xFF, 140, "Masked canvas-edge pixel must be written")
+  }
+
+  func testInpaintFullOpaqueImageReturnsNil() {
+    // Spot-healing an entire opaque image leaves no known boundary pixel: the
+    // operation must refuse (nil), not fill with translucent 128 and report
+    // success (CodeRabbit MultigridPoisson.swift:218).
+    let w = 8, h = 8
+    var buffer = PixelBuffer(width: w, height: h)
+    let gray = PixelBuffer.premultipliedWord(r: 180, g: 180, b: 180, a: 255)
+    buffer.withMutableWords { words in
+      for i in 0..<words.count { words[i] = gray }
+    }
+    let mask = [Bool](repeating: true, count: w * h)
+    let rect = MultigridPoisson.inpaint(buffer: &buffer, mask: mask)
+    XCTAssertNil(rect, "No known boundary pixel -> no edit")
+    XCTAssertEqual(buffer.word(x: 4, y: 4), gray, "Image must be unchanged")
+  }
+
+  func testSpotHealDabCoveringNoPixelReturnsNil() {
+    // A radius-4 dab at (-3,-3) has a clipped bbox but covers no pixel: must
+    // return nil, not a successful empty edit (CodeRabbit MultigridPoisson.swift:360).
+    let w = 40, h = 40
+    var buffer = PixelBuffer(width: w, height: h)
+    let gray = PixelBuffer.premultipliedWord(r: 180, g: 180, b: 180, a: 255)
+    buffer.withMutableWords { words in
+      for i in 0..<words.count { words[i] = gray }
+    }
+    let rect = MultigridPoisson.spotHeal(buffer: &buffer, center: CGPoint(x: -3, y: -3), radius: 4)
+    XCTAssertNil(rect)
+    XCTAssertEqual(buffer.word(x: 0, y: 0), gray)
+  }
+
+  func testNarrowBufferSpotHealAdmittedByGhostBorder() {
+    // A 2-wide crop becomes 4 wide after the left/right ghost columns; the size
+    // guard must check padW/padH, not cropW/cropH (CodeRabbit MultigridPoisson.swift:382).
+    let w = 2, h = 8
+    var buffer = PixelBuffer(width: w, height: h)
+    let gray = PixelBuffer.premultipliedWord(r: 180, g: 180, b: 180, a: 255)
+    let black = PixelBuffer.premultipliedWord(r: 0, g: 0, b: 0, a: 255)
+    buffer.withMutableWords { words in
+      for i in 0..<words.count { words[i] = gray }
+      for y in 3..<5 {
+        for x in 0..<2 { words[y * w + x] = black }
+      }
+    }
+    var mask = [Bool](repeating: false, count: w * h)
+    for y in 3..<5 {
+      for x in 0..<2 { mask[y * w + x] = true }
+    }
+    let rect = MultigridPoisson.inpaint(buffer: &buffer, mask: mask)
+    XCTAssertNotNil(rect, "Ghost border admits the narrow crop")
+    XCTAssertGreaterThan((buffer.word(x: 0, y: 3) >> 16) & 0xFF, 140)
+  }
+
+  func testHealSourceFootprintAtCanvasEdge() {
+    // A dab whose sampled source footprint fits on-canvas must heal even when
+    // the solver halo crosses the edge (CodeRabbit MultigridPoisson.swift:503).
+    let w = 60, h = 30
+    var buffer = PixelBuffer(width: w, height: h)
+    let flat = PixelBuffer.premultipliedWord(r: 60, g: 60, b: 60, a: 255)
+    buffer.withMutableWords { words in
+      for i in 0..<words.count { words[i] = flat }
+      for y in 16..<25 {
+        for x in 0..<9 {
+          let c: Int = ((x / 2) + (y / 2)) % 2 == 0 ? 220 : 160
+          words[y * w + x] = PixelBuffer.premultipliedWord(r: c, g: c, b: c, a: 255)
+        }
+      }
+      // Reset the destination dab to flat 60 so it starts untextured.
+      for y in 18..<23 {
+        for x in 2..<7 { words[y * w + x] = flat }
+      }
+    }
+    var mask = [Bool](repeating: false, count: w * h)
+    for y in 18..<23 {
+      for x in 2..<7 { mask[y * w + x] = true }
+    }
+    // dx = -2: source footprint x=0..4 fits, but the pad-4 halo reaches x=-2.
+    let rect = MultigridPoisson.seamlessClone(buffer: &buffer, mask: mask, dx: -2, dy: 0)
+    XCTAssertNotNil(rect, "Valid source footprint must not be refused")
+    var changed = false
+    for y in 18..<23 {
+      for x in 2..<7 where buffer.word(x: x, y: y) != flat { changed = true }
+    }
+    XCTAssertTrue(changed, "Source texture must transfer")
+    XCTAssertEqual(buffer.word(x: 30, y: 20), flat, "Unmasked pixel unchanged")
+  }
+
+  func testHealRefusesOffCanvasSourceFootprint() {
+    let w = 60, h = 30
+    var buffer = PixelBuffer(width: w, height: h)
+    let flat = PixelBuffer.premultipliedWord(r: 60, g: 60, b: 60, a: 255)
+    buffer.withMutableWords { words in
+      for i in 0..<words.count { words[i] = flat }
+    }
+    var mask = [Bool](repeating: false, count: w * h)
+    for y in 18..<23 {
+      for x in 2..<7 { mask[y * w + x] = true }
+    }
+    let rect = MultigridPoisson.seamlessClone(buffer: &buffer, mask: mask, dx: -10, dy: 0)
+    XCTAssertNil(rect, "Off-canvas source footprint must be refused")
+    XCTAssertEqual(buffer.word(x: 4, y: 20), flat)
   }
 
   // MARK: - EditorStore Integration Tests
@@ -168,6 +306,9 @@ final class MultigridPoissonTests: XCTestCase {
     let gray = PixelBuffer.premultipliedWord(r: 180, g: 180, b: 180, a: 255)
     let black = PixelBuffer.premultipliedWord(r: 0, g: 0, b: 0, a: 255)
 
+    let undoManager = UndoManager()
+    store.undoManager = undoManager
+
     let layer = try XCTUnwrap(store.activeLayer)
     XCTAssertTrue(store.applyPixelOperation(to: layer.id, actionName: "Setup") { buf in
       buf.withMutableWords { words in
@@ -178,9 +319,8 @@ final class MultigridPoissonTests: XCTestCase {
       }
       return true
     })
-
-    let undoManager = UndoManager()
-    store.undoManager = undoManager
+    // Clear the fixture undo step so healing is the only undoable action.
+    undoManager.removeAllActions()
 
     var bits = [Bool](repeating: false, count: 40 * 40)
     for y in 17..<23 {
@@ -205,21 +345,27 @@ final class MultigridPoissonTests: XCTestCase {
     store.newDocument(size: CGSize(width: 60, height: 30))
 
     let dark = PixelBuffer.premultipliedWord(r: 50, g: 50, b: 50, a: 255)
-    let bright = PixelBuffer.premultipliedWord(r: 220, g: 220, b: 220, a: 255)
+
+    let undoManager = UndoManager()
+    store.undoManager = undoManager
 
     let layer = try XCTUnwrap(store.activeLayer)
     XCTAssertTrue(store.applyPixelOperation(to: layer.id, actionName: "Setup") { buf in
       buf.withMutableWords { words in
         for i in 0..<words.count { words[i] = dark }
+        // A distinct checker texture in the sampled source block (x 0..<20).
+        // A flat source would tone-match to the dark field and look like a
+        // no-op; texture makes the assertion fail if no edit occurs.
         for y in 0..<30 {
-          for x in 0..<20 { words[y * 60 + x] = bright }
+          for x in 0..<20 {
+            let c: Int = ((x / 2) + (y / 2)) % 2 == 0 ? 220 : 160
+            words[y * 60 + x] = PixelBuffer.premultipliedWord(r: c, g: c, b: c, a: 255)
+          }
         }
       }
       return true
     })
-
-    let undoManager = UndoManager()
-    store.undoManager = undoManager
+    undoManager.removeAllActions()
 
     // Select a region in the dark area (x: 40..<50, y: 10..<20)
     var bits = [Bool](repeating: false, count: 60 * 30)
@@ -228,14 +374,22 @@ final class MultigridPoissonTests: XCTestCase {
     }
     store.setSelection(SelectionMask(width: 60, height: 30, bits: bits))
 
-    // Sample from left side: dx = 10 - 40 = -30
+    // Sample from the textured left side: dx = 10 - 40 = -30
     XCTAssertTrue(store.healSelection(dx: -30, dy: 0))
     XCTAssertEqual(undoManager.undoActionName, "Healing Brush")
 
-    let probe = PixelBuffer.probe(image: try XCTUnwrap(store.activeLayer).image, x: 45, y: 15)
-    let r = ((try XCTUnwrap(probe)) >> 16) & 0xFF
-    // Tone should blend smoothly near destination (50)
-    XCTAssertLessThan(r, 110)
+    // Texture transferred: the healed region is no longer uniformly dark.
+    var minR: UInt32 = 255, maxR: UInt32 = 0
+    for y in 12..<18 {
+      for x in 42..<48 {
+        let probe = try XCTUnwrap(PixelBuffer.probe(image: try XCTUnwrap(store.activeLayer).image, x: x, y: y))
+        let r = (probe >> 16) & 0xFF
+        minR = min(minR, r)
+        maxR = max(maxR, r)
+      }
+    }
+    XCTAssertGreaterThan(maxR - minR, 20, "Source texture must appear at the destination")
+    XCTAssertLessThan(maxR, 160, "Tone must stay matched to the dark destination")
 
     undoManager.undo()
     let undoneProbe = PixelBuffer.probe(image: try XCTUnwrap(store.activeLayer).image, x: 45, y: 15)

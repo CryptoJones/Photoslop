@@ -125,8 +125,8 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--blend-mode` `NAME` | set the target layer's blend mode |
 | `--layer-opacity` `PCT` | set the target layer's opacity |
 | `--content-aware-fill` | diffusion-fill the selection |
-| `--spot-heal` `[X,Y[,RADIUS]]` | Poisson/Laplace inpainting on active selection, or a circular spot at X,Y with RADIUS (default 10) |
-| `--heal` `DX,DY|SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS]` | Poisson seamless clone on selection via offset DX,DY, or spot at DST_X,DST_Y from SRC_X,SRC_Y (default radius 10) |
+| `--spot-heal` `[X,Y[,RADIUS]]` | Poisson/Laplace inpainting on active selection, or a circular spot at X,Y with RADIUS (default 10). For negative coordinates use the attached form `--spot-heal=-3,-3,5` |
+| `--heal` `DX,DY\|SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS]` | Poisson seamless clone on selection via offset DX,DY, or spot at DST_X,DST_Y from SRC_X,SRC_Y (default radius 10). For a negative offset use the attached form `--heal=-45,0` — a space-separated leading `-` is parsed as a flag on Python 3.11 |
 | `--feather` `RADIUS` | feather the current selection's edge |
 | `--refine-selection` `RADIUS,SMOOTH,FEATHER,CONTRAST,SHIFT[,DECONTAM]` | refine selection boundary with guided filter matting and optional decontamination |
 | `--select-and-mask` `RADIUS,SMOOTH,FEATHER,CONTRAST,SHIFT[,DECONTAM]` | alias for `--refine-selection` |

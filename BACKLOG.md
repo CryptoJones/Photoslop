@@ -13,7 +13,8 @@ sync — check an item here when its issue closes.
 
 ### Retouching
 
-- [x] Poisson multigrid gradient-domain solver for Healing Brush and Spot Healing: cascadic multigrid Poisson solver with Successive Over-Relaxation (SOR) on half-resolution pyramids, seamless cloning over stroke mask bounding box + padding (DD-001), integration into desktop Healing Brush and Spot Healing tools, CLI `--heal` and `--spot-heal`, and Swift port for iPadOS/iOS ([#415](https://github.com/CryptoJones/Photoslop/issues/415))
+- [ ] Poisson multigrid gradient-domain solver for Healing Brush and Spot Healing: cascadic multigrid Poisson solver with Red-Black Successive Over-Relaxation (SOR, omega ≈ 1.7) on a dynamic-depth injection pyramid with residual-based stopping, seamless cloning over stroke mask bounding box + padding (DD-001), integration into desktop Healing Brush and Spot Healing tools, CLI `--heal` and `--spot-heal`, and a native Swift port for iPadOS/iOS with selection-based heal routes ([#415](https://github.com/CryptoJones/Photoslop/issues/415))
+- [ ] iOS: interactive canvas Healing Brush / Spot Healing stroke tools (desktop `J` / `Shift+J` parity) — wire the existing `EditorStore` point-dab methods to canvas gestures within the iPhone nine-button palette budget; the solver and selection routes shipped in #415 ([#456](https://github.com/CryptoJones/Photoslop/issues/456))
 
 ### Layers and Compositing
 

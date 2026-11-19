@@ -192,18 +192,78 @@ def _compute_mixed_divergence(dest: np.ndarray, src: np.ndarray) -> np.ndarray:
     return b
 
 
-def _downsample_plane_2x(img: np.ndarray, target_h: int, target_w: int) -> np.ndarray:
-    c = img.shape[0]
-    out = np.zeros((c, target_h, target_w), dtype=np.float32)
-    counts = np.zeros((target_h, target_w), dtype=np.float32)
-    for dy in (0, 1):
-        for dx in (0, 1):
-            sub = img[:, dy::2, dx::2]
-            sy, sx = sub.shape[1], sub.shape[2]
-            out[:, :sy, :sx] += sub
-            counts[:sy, :sx] += 1
-    out /= np.maximum(counts, 1.0)
-    return out
+def _restrict_plane_2x(
+    img: np.ndarray, known: np.ndarray | None = None, linear: bool = True
+) -> np.ndarray:
+    """Injection restriction: coarse cell (i, j) is fine pixel (2i, 2j).
+
+    Averaging 2x2 blocks would place each coarse value at a block centre
+    (half a pixel off the coarse grid point) and, for inpainting, mix erased
+    hole pixels into coarse boundary data. Injection keeps coarse boundary
+    cells exact copies of real known pixels and keeps the grids aligned, so
+    bilinear prolongation reproduces linear fields exactly at every level.
+
+    With an even fine size n, plain injection's last coarse cell lands on
+    fine n-2, which can sit inside the hole. Pinning that cell to the fine
+    boundary value instead would break the coarse grid's uniform spacing:
+    the solve (and prolongation) treat coarse index c-1 as fine 2(c-1), so
+    boundary data from fine n-1 acting at that coordinate distorts the whole
+    coarse solution. The fix is to extend the grid by one cell at fine
+    position n carrying the linear extrapolation 2·v(n-1) − v(n-2): spacing
+    stays uniform, the far boundary carries the true edge trend, and linear
+    ramps restrict exactly. Where the n-2 row/column is erased hole (``known``
+    marks real pixels), the trend is taken from the nearest known row/column
+    instead (which may be the opposite ring when the hole spans the interior),
+    so a linear ramp still restricts exactly; with no known pixel at all the
+    extension replicates v(n-1) and garbage never leaks into coarse boundary
+    data. ``linear=False`` replicates unconditionally: texture planes (clone
+    source/destination) have no linear trend to extrapolate, and
+    2·v(n-1) − v(n-2) on a checker boundary overshoots badly, poisoning the
+    coarse harmonic-offset solve.
+    """
+    h, w = img.shape[1], img.shape[2]
+    if h % 2 == 0:
+        last = img[:, -1, :]
+        if linear:
+            if known is not None:
+                # Nearest known row above the boundary, per column.
+                k = np.where(known[:-1, :], np.arange(h - 1)[:, None], -1).max(axis=0)
+                prev = img[:, np.maximum(k, 0), np.arange(w)]
+                prev = np.where((k >= 0)[None, :], prev, last)
+                step = np.where(k >= 0, (h - 1) - k, 1).astype(np.float32)
+                extra = last + (last - prev) / step[None, :]
+            else:
+                extra = 2.0 * last - img[:, -2, :]
+        else:
+            extra = last
+        img = np.concatenate([img, extra[:, None, :]], axis=1)
+        if known is not None:
+            known = np.concatenate([known, np.ones((1, w), dtype=bool)], axis=0)
+    if w % 2 == 0:
+        last = img[:, :, -1]
+        if linear:
+            if known is not None:
+                # Nearest known column left of the boundary, per row.
+                k = np.where(known[:, :-1], np.arange(w - 1)[None, :], -1).max(axis=1)
+                prev = img[:, np.arange(img.shape[1]), np.maximum(k, 0)]
+                prev = np.where((k >= 0)[None, :], prev, last)
+                step = np.where(k >= 0, (w - 1) - k, 1).astype(np.float32)
+                extra = last + (last - prev) / step[None, :]
+            else:
+                extra = 2.0 * last - img[:, :, -2]
+        else:
+            extra = last
+        img = np.concatenate([img, extra[:, :, None]], axis=2)
+    return img[:, ::2, ::2].copy()
+
+
+# Multigrid convergence controls: stop a level's SOR sweeps once the max
+# residual on masked cells is below a quarter of a quantisation step (the
+# result is rounded to u8 anyway), with sweep caps so a pathological patch
+# cannot spin. The coarsest grid is tiny, so it gets a generous cap.
+_MG_RESIDUAL_TOL = 0.02
+_MG_MAX_SWEEPS = 80
+_MG_COARSEST_SWEEPS = 400
 
 
 def poisson_solve_multigrid(
@@ -226,21 +286,26 @@ def poisson_solve_multigrid(
     - neumann: (top, bottom, left, right) flags for reflective zero-gradient
       boundary conditions at canvas borders.
 
-    Constructs a 2-3 level half-resolution pyramid of the patch, solves the coarse
-    level with Red-Black SOR (omega ≈ 1.5-1.8), upsamples to warm-start finer
-    levels, and performs smoothing iterations at the finest level.
+    Builds half-resolution levels until the coarsest grid's shorter side is
+    below 8 px (so boundary information can reach every interior cell cheaply),
+    solves the coarsest level with Red-Black SOR (omega ≈ 1.5-1.8), upsamples
+    to warm-start finer levels, and smooths each level until its max residual
+    drops below ``_MG_RESIDUAL_TOL`` or a per-level sweep cap is hit. The
+    residual stop is what makes large masks converge: a fixed sweep budget
+    cannot propagate boundary values to the centre of a big hole, but the
+    coarse solve carries the low-frequency part and the fine levels only
+    polish the interpolation error.
+
+    Memory (DD-001): work is proportional to the patch it is given — callers
+    pass the mask's bounding box plus padding, not the canvas. A selection
+    that covers (nearly) the whole canvas therefore does allocate
+    (nearly) canvas-sized planes; the bound is the crop, not a constant.
     """
     if not mask.any():
         return dest.copy()
     c, h, w = dest.shape
     if h < 3 or w < 3:
         return dest.copy()
-
-    levels = 1
-    if min(h, w) >= 32:
-        levels = 3
-    elif min(h, w) >= 16:
-        levels = 2
 
     masks = [mask.copy()]
     dests = [dest.copy()]
@@ -251,34 +316,48 @@ def poisson_solve_multigrid(
     masks[0][:, 0] = False
     masks[0][:, -1] = False
 
-    for _lvl in range(levels - 1):
-        m_prev = masks[-1]
-        d_prev = dests[-1]
-        h_next = (m_prev.shape[0] + 1) // 2
-        w_next = (m_prev.shape[1] + 1) // 2
-
-        m_coarse = np.zeros((h_next, w_next), dtype=bool)
-        for dy in (0, 1):
-            for dx in (0, 1):
-                sl_y = slice(dy, m_prev.shape[0], 2)
-                sl_x = slice(dx, m_prev.shape[1], 2)
-                sub_h = (m_prev.shape[0] - dy + 1) // 2
-                sub_w = (m_prev.shape[1] - dx + 1) // 2
-                m_coarse[:sub_h, :sub_w] |= m_prev[sl_y, sl_x]
+    # Coarsen while the grid is big enough that SOR alone would not reach the
+    # interior, and while the hole still has an interior at the next level.
+    while min(masks[-1].shape) >= 8 and len(masks) < 16:
+        m_fine = masks[-1]
+        m_coarse = m_fine[::2, ::2].copy()
+        # Match _restrict_plane_2x's even-size extension: the appended coarse
+        # row/column is the extrapolated far boundary, always known.
+        if m_fine.shape[0] % 2 == 0:
+            m_coarse = np.concatenate(
+                [m_coarse, np.zeros((1, m_coarse.shape[1]), dtype=bool)], axis=0
+            )
+        if m_fine.shape[1] % 2 == 0:
+            m_coarse = np.concatenate(
+                [m_coarse, np.zeros((m_coarse.shape[0], 1), dtype=bool)], axis=1
+            )
+        h_next, w_next = m_coarse.shape
         m_coarse[0, :] = False
         m_coarse[-1, :] = False
         m_coarse[:, 0] = False
         m_coarse[:, -1] = False
+        if h_next < 3 or w_next < 3 or not m_coarse[1:-1, 1:-1].any():
+            break
         masks.append(m_coarse)
+        if srcs is None:
+            # Laplace fill: the boundary trend is smooth, so extrapolation
+            # keeps ramps exact; erased hole cells fall back to replication.
+            dests.append(_restrict_plane_2x(dests[-1], known=~m_fine))
+        else:
+            # Clone/mixed: both planes are real image texture — replicate the
+            # far boundary instead of extrapolating checker overshoots.
+            dests.append(_restrict_plane_2x(dests[-1], linear=False))
+            srcs.append(_restrict_plane_2x(srcs[-1], linear=False))
 
-        dests.append(_downsample_plane_2x(d_prev, h_next, w_next))
-        if srcs is not None:
-            srcs.append(_downsample_plane_2x(srcs[-1], h_next, w_next))
+    levels = len(masks)
 
     def upsample_to(f_coarse: np.ndarray, target_h: int, target_w: int) -> np.ndarray:
+        # Injection restriction puts coarse cell i at fine pixel 2i, so the
+        # inverse map is u = x/2 (clamped), NOT an endpoint-aligned linspace.
+        # This keeps linear fields exact across the prolongation.
         c_h, c_w = f_coarse.shape[1], f_coarse.shape[2]
-        y = np.linspace(0, c_h - 1, target_h)
-        x = np.linspace(0, c_w - 1, target_w)
+        y = np.minimum(np.arange(target_h, dtype=np.float32) * 0.5, c_h - 1)
+        x = np.minimum(np.arange(target_w, dtype=np.float32) * 0.5, c_w - 1)
         y0 = np.floor(y).astype(int)
         y1 = np.minimum(y0 + 1, c_h - 1)
         x0 = np.floor(x).astype(int)
@@ -327,8 +406,6 @@ def poisson_solve_multigrid(
 
     apply_neumann(val)
 
-    iters_per_level = [20, 30, 45] if levels == 3 else ([25, 40] if levels == 2 else [50])
-
     for lvl in range(levels - 1, -1, -1):
         m = masks[lvl]
         d = dests[lvl]
@@ -349,29 +426,35 @@ def poisson_solve_multigrid(
         else:
             b_inner = 0.0
 
-        it_count = iters_per_level[levels - 1 - lvl]
+        interior = m[1:-1, 1:-1]
+        if not interior.any():
+            continue
+        it_cap = _MG_COARSEST_SWEEPS if lvl == coarsest else _MG_MAX_SWEEPS
         yy, xx = np.ogrid[:h, :w]
         checker = (yy + xx) % 2
         red_inner = (m & (checker == 0))[1:-1, 1:-1]
         black_inner = (m & (checker == 1))[1:-1, 1:-1]
+        core = val[:, 1:-1, 1:-1]
 
-        for _ in range(it_count):
+        for it in range(it_cap):
             apply_neumann(val)
             nbrs_r = val[:, :-2, 1:-1] + val[:, 2:, 1:-1] + val[:, 1:-1, :-2] + val[:, 1:-1, 2:]
             target_r = 0.25 * (nbrs_r + b_inner)
-            val[:, 1:-1, 1:-1] = np.where(
-                red_inner, (1.0 - omega) * val[:, 1:-1, 1:-1] + omega * target_r, val[:, 1:-1, 1:-1]
-            )
+            core[:] = np.where(red_inner, (1.0 - omega) * core + omega * target_r, core)
 
             apply_neumann(val)
             nbrs_b = val[:, :-2, 1:-1] + val[:, 2:, 1:-1] + val[:, 1:-1, :-2] + val[:, 1:-1, 2:]
             target_b = 0.25 * (nbrs_b + b_inner)
-            val[:, 1:-1, 1:-1] = np.where(
-                black_inner,
-                (1.0 - omega) * val[:, 1:-1, 1:-1] + omega * target_b,
-                val[:, 1:-1, 1:-1],
-            )
+            core[:] = np.where(black_inner, (1.0 - omega) * core + omega * target_b, core)
             apply_neumann(val)
+
+            # Residual stop: r = b - (4·val - Σ neighbours) on masked cells.
+            # Checked every few sweeps so small dabs stay cheap.
+            if (it + 1) % 4 == 0 or it + 1 == it_cap:
+                nbrs = val[:, :-2, 1:-1] + val[:, 2:, 1:-1] + val[:, 1:-1, :-2] + val[:, 1:-1, 2:]
+                resid = np.abs(b_inner - (4.0 * core - nbrs))
+                if float(resid[:, interior].max()) <= _MG_RESIDUAL_TOL:
+                    break
 
     result = srcs[0] + val if src is not None and not mixed else val
     return np.clip(result, 0.0, 255.0)
@@ -389,7 +472,9 @@ def heal_patch(
     w = min(s.shape[1], d.shape[1])
     s, d = s[:h, :w], d[:h, :w]
     if h < 3 or w < 3:
-        return src.copy()
+        # Too small to solve: no edit. Return the (cropped) destination, not the
+        # source — the source may be opaque where the destination is transparent.
+        return dst.copy(0, 0, w, h)
 
     if mask is None:
         mask = np.zeros((h, w), dtype=bool)
@@ -411,7 +496,34 @@ def heal_patch(
 
     s_ch = channels(s)
     d_ch = channels(d)
-    solved = poisson_solve_multigrid(d_ch, mask, src=s_ch, mixed=mixed)
+
+    # The solver treats the patch's outer ring as Dirichlet boundary. An
+    # explicit mask that touches a patch edge would otherwise be cleared and
+    # left unhealed — give those edges a one-pixel ghost border (reflective,
+    # like the canvas-edge treatment in patch_heal) and crop it back after.
+    pad_top = 1 if mask[0, :].any() else 0
+    pad_bottom = 1 if mask[-1, :].any() else 0
+    pad_left = 1 if mask[:, 0].any() else 0
+    pad_right = 1 if mask[:, -1].any() else 0
+    edge_padded = bool(pad_top or pad_bottom or pad_left or pad_right)
+    if edge_padded:
+        widths = ((0, 0), (pad_top, pad_bottom), (pad_left, pad_right))
+        d_ch = np.pad(d_ch, widths, mode="edge")
+        s_ch = np.pad(s_ch, widths, mode="edge")
+        mask = np.pad(mask, widths[1:], mode="constant", constant_values=False)
+
+    solved = poisson_solve_multigrid(
+        d_ch,
+        mask,
+        src=s_ch,
+        mixed=mixed,
+        neumann=(pad_top > 0, pad_bottom > 0, pad_left > 0, pad_right > 0),
+    )
+
+    if edge_padded:
+        end_y = solved.shape[1] - pad_bottom if pad_bottom else solved.shape[1]
+        end_x = solved.shape[2] - pad_right if pad_right else solved.shape[2]
+        solved = solved[:, pad_top:end_y, pad_left:end_x]
 
     alpha = (d >> np.uint32(24)) & 0xFF  # destination alpha wins
     r, g, b = [np.clip(solved[i] + 0.5, 0, 255).astype(np.uint32) for i in range(3)]
@@ -901,22 +1013,41 @@ def livewire_path(
 def patch_heal(img: QImage, mask: np.ndarray, dx: int, dy: int, mixed: bool = False) -> QRect:
     """Patch-tool blend: fill the masked region with texture sampled at
     (dx, dy) away, tone-matched to the destination using a cascadic multigrid
-    SOR Poisson solver over the mask's bounding box (DD-001). Returns dirty rect."""
+    SOR Poisson solver over the mask's bounding box (DD-001). Returns dirty
+    rect; an empty rect means the heal was refused because a masked pixel's
+    source lies off-canvas (the solver halo around the source footprint is
+    edge-replicated, not refused)."""
     ys, xs = np.nonzero(mask)
     if len(ys) == 0:
         return QRect()
-    pad = 4
     h, w = mask.shape
+    # Validate the source footprint of the masked pixels themselves. The
+    # solver halo (pad below) may cross the canvas edge even when every
+    # sampled source pixel fits — that halo is edge-replicated, not refused.
+    if (
+        int(ys.min()) + dy < 0
+        or int(ys.max()) + dy >= h
+        or int(xs.min()) + dx < 0
+        or int(xs.max()) + dx >= w
+    ):
+        return QRect()  # a masked pixel's source is off-canvas: refuse
+    pad = 4
     y0, y1 = max(0, int(ys.min()) - pad), min(h, int(ys.max()) + 1 + pad)
     x0, x1 = max(0, int(xs.min()) - pad), min(w, int(xs.max()) + 1 + pad)
     sy0, sy1 = y0 + dy, y1 + dy
     sx0, sx1 = x0 + dx, x1 + dx
-    if sy0 < 0 or sx0 < 0 or sy1 > h or sx1 > w:
-        return QRect()  # source window out of bounds: refuse
 
     arr = view_u32(img)
     dst_crop = arr[y0:y1, x0:x1]
-    src_crop = arr[sy0:sy1, sx0:sx1]
+    # Source window clipped to the canvas, then edge-replicated back to the
+    # destination crop's shape so the solver halo always has boundary values.
+    csy0, csy1 = max(0, sy0), min(h, sy1)
+    csx0, csx1 = max(0, sx0), min(w, sx1)
+    src_crop = arr[csy0:csy1, csx0:csx1]
+    sp_top, sp_bottom = csy0 - sy0, sy1 - csy1
+    sp_left, sp_right = csx0 - sx0, sx1 - csx1
+    if sp_top or sp_bottom or sp_left or sp_right:
+        src_crop = np.pad(src_crop, ((sp_top, sp_bottom), (sp_left, sp_right)), mode="edge")
     hole = mask[y0:y1, x0:x1].copy()
 
     top_pad = max(0, 1 - (int(ys.min()) - y0))

@@ -155,6 +155,11 @@ struct EditorView: View {
   @State private var showRefineEdge = false
   /// The radius the feather sheet proposes, in pixels.
   @State private var featherRadius = Double(EditorStore.defaultFeather)
+  /// The Select ▸ Heal Selection… source-offset sheet (#415).
+  @State private var showHealOffset = false
+  /// Source offset (pixels) the heal sheet proposes; negative samples left/up.
+  @State private var healDX = 0
+  @State private var healDY = 0
   @State private var drawsWithFinger = EditorView.defaultDrawsWithFinger(
     idiom: UIDevice.current.userInterfaceIdiom)
   @State private var showLayers = false
@@ -315,6 +320,7 @@ struct EditorView: View {
     }
     .sheet(isPresented: $showFeatherOptions) { featherSheet }
     .sheet(isPresented: $showRefineEdge) { refineEdgeSheet }
+    .sheet(isPresented: $showHealOffset) { healOffsetSheet }
     .onChange(of: selectedPhoto) { _, item in
       guard let item else { return }
       Task {
@@ -1805,6 +1811,26 @@ struct EditorView: View {
       }
       .disabled(store.selection == nil)
       Divider()
+      // Poisson retouching on the selection (#415). The stroke/dab tools (the
+      // desktop's J / Shift+J) are deferred — see the tracking issue; the
+      // iPhone palette is already at its nine-button budget.
+      Button {
+        store.spotHealSelection()
+      } label: {
+        Label("Spot Heal Selection", systemImage: "bandage")
+      }
+      .disabled(store.selection == nil || store.activeLayer == nil)
+      .accessibilityIdentifier("Spot Heal Selection")
+      Button {
+        healDX = 0
+        healDY = 0
+        showHealOffset = true
+      } label: {
+        Label("Heal Selection…", systemImage: "cross.case")
+      }
+      .disabled(store.selection == nil || store.activeLayer == nil)
+      .accessibilityIdentifier("Heal Selection")
+      Divider()
       // The clipboard trio keeps its shortcuts here, where a keyboard user
       // looks for them; the one-tap route is `selectionActionBar` (#374).
       Button(action: cutSelection) {
@@ -1895,6 +1921,58 @@ struct EditorView: View {
             showFeatherOptions = false
           }
           .accessibilityIdentifier("Apply feather")
+        }
+      }
+    }
+    .presentationDetents([.fraction(0.3), .medium])
+  }
+
+  /// Select ▸ Heal Selection… (#415): the desktop's `--heal DX,DY` source
+  /// offset as two steppers. Apply seamless-clones texture sampled (DX, DY)
+  /// away into the selection, tone-matched to its surroundings. Negative DX
+  /// samples to the left, negative DY upward.
+  private var healOffsetSheet: some View {
+    NavigationStack {
+      Form {
+        Section {
+          Stepper(value: $healDX, in: -500...500, step: 1) {
+            HStack {
+              Text("Offset X")
+              Spacer()
+              Text("\(healDX) px")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(.secondary)
+            }
+          }
+          .accessibilityIdentifier("Heal offset X")
+          Stepper(value: $healDY, in: -500...500, step: 1) {
+            HStack {
+              Text("Offset Y")
+              Spacer()
+              Text("\(healDY) px")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(.secondary)
+            }
+          }
+          .accessibilityIdentifier("Heal offset Y")
+        } footer: {
+          Text(
+            "Samples texture this far from the selection and blends it in, matching the "
+              + "surrounding tone. Negative X samples left; negative Y samples up.")
+        }
+      }
+      .navigationTitle("Heal Selection")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") { showHealOffset = false }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Apply") {
+            store.healSelection(dx: healDX, dy: healDY)
+            showHealOffset = false
+          }
+          .accessibilityIdentifier("Apply heal")
         }
       }
     }

@@ -15,16 +15,24 @@ follows [SemVer](https://semver.org).
     solves Laplace equation $\Delta u = 0$ for harmonic offset fields $u = f - g$ with boundary matching
     $f_{\text{dest}} - g_{\text{source}}$, or mixed gradients $v = \operatorname{argmax-mag}(\nabla g, \nabla f_{\text{dest}})$.
     Spot healing / inpainting solves Laplace $\Delta f = 0$ with reflective Neumann boundaries at canvas edges.
-  - **Cascadic Multigrid**: 2-3 level half-resolution pyramid of the patch, coarse-level Red-Black SOR (omega ≈ 1.7),
-    bilinear upsampling to warm-start finer levels, and smoothing passes at finest level. Converges in milliseconds.
+  - **Cascadic Multigrid**: Dynamic-depth injection pyramid (coarse cell `i` samples fine `2i`, so grids stay
+    aligned; even-sized levels are extended by one linearly-extrapolated cell to keep spacing uniform), coarse-level
+    Red-Black SOR (omega ≈ 1.7) with residual-based stopping (tol 0.02), bilinear upsampling to warm-start finer
+    levels, and smoothing passes at the finest level. Low-frequency error is carried by the coarse solve rather than
+    a fixed sweep count, so large holes converge exactly (ramp reconstruction error ≤ 0.002 at 1200px) in milliseconds.
   - **Memory Frugality (DD-001)**: Computes strictly on the bounding box of the mask or dab plus padding (2-4px),
     never allocating canvas-wide floating point matrices.
   - **Desktop Qt GUI**: Integrated into `SpotHealTool` (`J`) and `HealBrushTool` (`Shift+J`), `heal_patch`,
     `patch_heal`, and `inpaint_poisson` / `inpaint_diffuse`.
   - **Headless CLI & MCP**: Added `--spot-heal [X,Y[,RADIUS]]` and `--heal DX,DY|SRC_X,SRC_Y,DST_X,DST_Y[,RADIUS]`
     pipeline options with full validation and pair-combination test coverage.
-  - **iPadOS / iOS**: Native Swift implementation in `MultigridPoisson.swift`, with `EditorStore` methods
-    for `spotHealSelection`, `healSelection`, and point dabs, covered by unit tests in `MultigridPoissonTests.swift`.
+  - **iPadOS / iOS**: Native Swift implementation in `MultigridPoisson.swift` mirroring the Python solver
+    (injection pyramid, residual stopping, Neumann canvas-edge boundaries, off-canvas source-footprint refusal),
+    with `EditorStore` methods for `spotHealSelection`, `healSelection`, and point dabs, covered by unit tests in
+    `MultigridPoissonTests.swift`. Selection-based routes (`Select ▸ Spot Heal Selection`, `Select ▸ Heal Selection…`
+    with an offset sheet) are wired in `EditorView.swift`. The interactive canvas Healing Brush / Spot Healing stroke
+    tools (desktop `J` / `Shift+J` parity) are deferred to [#456](https://github.com/CryptoJones/Photoslop/issues/456)
+    to respect the iPhone nine-button palette budget.
 
 ## [2.50.0]
 
