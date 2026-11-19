@@ -4,7 +4,27 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.49.0] — Unreleased
+## [2.50.0] — Unreleased
+
+### Added
+- **Select: Magnetic Lasso edge-snapping selection tool with live-wire tracing** —
+  full cross-platform live-wire Intelligent Scissors edge-snapping selection tool across
+  Desktop Qt GUI, headless CLI/MCP, and iPadOS/iOS ([#416](https://github.com/CryptoJones/Photoslop/issues/416)).
+  - **Algorithm (Intelligent Scissors / Live-wire)**: Dijkstra minimum-cost graph search in `photoslop/npimage.py`
+    with link costs combining gradient magnitude (Sobel/central differences, high gradient -> low cost),
+    edge direction (penalizing steps deviating from edge tangent unit vector), non-maximum suppression (NMS
+    edge centering along gradient normal), and gentle pull toward pointer guide line.
+  - **Memory Frugality (DD-001)**: Read pixels lazily in 128px cached blocks along the pointer corridor;
+    multi-megapixel canvases never buffer the full image into memory at once.
+  - **Desktop Qt GUI**: `MagneticLassoTool` in the lasso tool group (`Shift+L` cycle) with Options bar controls
+    for Detection Width (px), Edge Contrast (%), and Frequency (anchor point density). Real-time livewire preview line
+    and auto-dropping fastening points as cursor traces along edges.
+  - **Headless CLI & MCP**: Added `--magnetic-select X1,Y1:X2,Y2:...:Xn,Yn` with `--magnetic-width` (`--detection-width`)
+    and `--magnetic-contrast` (`--edge-contrast`) in `photoslop/cli.py` and registered in `PAIR_ARGS`.
+  - **iPadOS / iOS**: Native Swift implementation in `LivewireAlgorithms.swift`, touch and Apple Pencil tracing
+    with auto-dropping fastening points, tap near start or double-tap to close, livewire preview overlay, and unit tests in `MagneticLassoTests.swift`.
+
+## [2.49.0]
 
 ### Added
 - **Select: Select and Mask workspace with Guided Filter edge matting and decontamination** —

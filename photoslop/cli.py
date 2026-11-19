@@ -99,6 +99,8 @@ class Context:
     allow_insecure_model_http: bool = False
     palette: object = None
     puppet_mode: str = "normal"
+    magnetic_width: int = 20
+    magnetic_contrast: int = 10
 
 
 def _target_layers(ctx: Context) -> list:
@@ -684,6 +686,49 @@ def _op_select_poly(ctx: Context, value: str) -> None:
     path.addPolygon(QPolygonF(points))
     path.closeSubpath()
     ctx.doc.set_selection(path)
+
+
+def _op_magnetic_select(ctx: Context, value: str) -> None:
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QPainterPath
+
+    from photoslop import npimage
+
+    cleaned = value.replace(";", ":").replace(" ", ":")
+    parts = [p.strip() for p in cleaned.split(":") if p.strip()]
+    points = []
+    for part in parts:
+        x, y = _ints(part, 2, "--magnetic-select point")
+        points.append(QPointF(x, y))
+    if len(points) < 3:
+        raise _ValueError("--magnetic-select needs at least three X,Y points")
+
+    doc = ctx.doc
+    layer = doc.active_layer
+    img = layer.image if layer is not None else doc.flatten()
+    off_x = layer.offset.x() if layer is not None else 0
+    off_y = layer.offset.y() if layer is not None else 0
+
+    width = getattr(ctx, "magnetic_width", 20)
+    contrast = getattr(ctx, "magnetic_contrast", 10)
+
+    path = QPainterPath()
+    path.moveTo(points[0])
+    n = len(points)
+    for i in range(n):
+        p1 = points[i]
+        p2 = points[(i + 1) % n]
+        wire = npimage.livewire_path(
+            img,
+            (p1.x() - off_x, p1.y() - off_y),
+            (p2.x() - off_x, p2.y() - off_y),
+            width=width,
+            contrast=contrast,
+        )
+        for wx, wy in wire[1:]:
+            path.lineTo(QPointF(wx + off_x + 0.5, wy + off_y + 0.5))
+    path.closeSubpath()
+    doc.set_selection(path)
 
 
 def _op_clear(ctx: Context, value: str) -> None:
@@ -1549,6 +1594,11 @@ OPS: dict = {
         "polygon selection from three or more points",
         _op_select_poly,
     ),
+    "magnetic-select": (
+        "X1,Y1:X2,Y2:...:Xn,Yn",
+        "closed selection tracing waypoints with livewire edge snapping",
+        _op_magnetic_select,
+    ),
     "deselect": (None, "clear the selection", _op_deselect),
     "clear": (None, "erase the selection to transparency (headless Cut)", _op_clear),
     "flip": ("h|v", "mirror the target layer(s)", _op_flip),
@@ -1681,6 +1731,22 @@ def build_parser() -> argparse.ArgumentParser:
         default="normal",
         metavar="MODE",
         help="stiffness mode for --puppet-warp (rigid, normal, distort; default normal)",
+    )
+    parser.add_argument(
+        "--magnetic-width",
+        "--detection-width",
+        type=int,
+        default=20,
+        metavar="PX",
+        help="detection search window half-width in px for --magnetic-select (default 20)",
+    )
+    parser.add_argument(
+        "--magnetic-contrast",
+        "--edge-contrast",
+        type=int,
+        default=10,
+        metavar="PCT",
+        help="minimum edge contrast percentage for --magnetic-select (default 10)",
     )
     from photoslop import __version__
 
@@ -1884,6 +1950,8 @@ def apply_pipeline(
     allow_unsafe_plugins: bool = False,
     allow_insecure_model_http: bool = False,
     puppet_mode: str = "normal",
+    magnetic_width: int = 20,
+    magnetic_contrast: int = 10,
 ) -> dict:
     """Run the same load → op-pipeline → write flow as ``main``, but driven by
     Python values and returning a structured result instead of printing.
@@ -1916,6 +1984,8 @@ def apply_pipeline(
         allow_unsafe_plugins=allow_unsafe_plugins,
         allow_insecure_model_http=allow_insecure_model_http,
         puppet_mode=puppet_mode,
+        magnetic_width=magnetic_width,
+        magnetic_contrast=magnetic_contrast,
     )
     for op, value in operations or []:
         if op not in OPS:
@@ -1992,6 +2062,8 @@ def main(argv: list[str] | None = None) -> int:
             allow_unsafe_plugins=args.allow_unsafe_plugins,
             allow_insecure_model_http=args.allow_insecure_model_http,
             puppet_mode=getattr(args, "puppet_mode", "normal"),
+            magnetic_width=getattr(args, "magnetic_width", 20),
+            magnetic_contrast=getattr(args, "magnetic_contrast", 10),
         )
         for op, value in pipeline:
             OPS[op][2](ctx, value)

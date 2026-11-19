@@ -23,7 +23,7 @@ TOOL_SPECS = (
     ToolSpec("ellipse-select", "Ellipse Select", "Shift+M", "marquee", "transform"),
     ToolSpec("lasso", "Lasso Select", "L", "lasso", "lasso"),
     ToolSpec("poly-lasso", "Polygonal Lasso", "Shift+L", "lasso", "lasso"),
-    ToolSpec("magnetic-lasso", "Magnetic Lasso", "Alt+L", "lasso", "lasso"),
+    ToolSpec("magnetic-lasso", "Magnetic Lasso", "Shift+L", "lasso", "lasso"),
     ToolSpec("wand", "Magic Wand", "W", "automatic", "wand"),
     ToolSpec("quick-select", "Quick Selection", "Shift+W", "automatic", "brush"),
     ToolSpec("crop", "Crop", "C", "warp", "crop"),

@@ -1,6 +1,6 @@
 # Feature Parity — Photoslop vs the Field
 
-An honest, category-by-category comparison of **Photoslop v2.49.0** against six
+An honest, category-by-category comparison of **Photoslop v2.50.0** against six
 established editors, researched against each product's official documentation
 and release notes in **July 2026** (see [Sources](#sources)).
 
@@ -22,7 +22,7 @@ client exposes it.
 | Raster/Pencil drawing | ✅ | ✅ PencilKit | — | — |
 | Paint bucket (flood fill) | ✅ | ✅ ported from the desktop fill, fixture-proven identical | 🟡 `--fill` fills the whole layer | — |
 | Colour sampling (eyedropper) | ✅ `I`, composite-aware, Shift → background | ✅ composite-aware, into the single ink swatch | ✅ `--sample X,Y`, composite-aware, repeatable | — |
-| Selections/filters/vectors/text | ✅ | 🟡 wand, marquee and lasso selections with feathering; brushes, bucket, Delete Selection and Cut/Copy/Paste honour them; editable text layers; the seven built-in filters, pixel-identical to the desktop; no vectors yet | ✅ shared safe engine operations | ✅ safe subset |
+| Selections/filters/vectors/text | ✅ | 🟡 wand, marquee, lasso, and magnetic lasso selections with feathering; brushes, bucket, Delete Selection and Cut/Copy/Paste honour them; editable text layers; the seven built-in filters, pixel-identical to the desktop; no vectors yet | ✅ shared safe engine operations | ✅ safe subset |
 | One-bit dither / beam modulation | ✅ Beam Dither, 11 algorithms | ✅ ported, fixture-proven word for word | ✅ `--filter beam-dither:…` | — |
 | Live appearance effects (shadow, glow, outline, overlay, bevel, satin) | ✅ 11 kinds on any layer | ✅ 11 kinds on any layer, ported from the desktop renderer, fixture-proven identical, Gaussian blur and feather included | ✅ `--drop-shadow`, `--glow`, `--stroke`, `--satin`, `--effect`, `--set-effects` | ✅ safe subset |
 | Color swatches (.aco / .ase) | ✅ Swatches dock & dialog, import/export | ✅ document-picker import into mobile swatches | ✅ `--palette <file.aco\|file.ase>` inspection & session | — |
@@ -35,7 +35,7 @@ client exposes it.
 
 | Product | Version (July 2026) | License / price | Platforms |
 |---|---|---|---|
-| **Photoslop** | 2.49.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
+| **Photoslop** | 2.50.0 | Apache-2.0, free | Linux / Windows / macOS (Qt), iPadOS / iOS |
 | Adobe Photoshop | 2026 (27.8) | subscription + generative credits | Windows / macOS |
 | GIMP | 3.2.4 | GPL-3.0, free | Linux / Windows / macOS |
 | Paint.NET | 5.1.12 | freeware (+$14.99 Store edition) | Windows only |
@@ -153,7 +153,7 @@ for the versioned platform screen-reader and visual smoke procedures.
 |---|---|---|---|---|---|---|---|
 | Action/macro recording | ✅ [Actions](actions.md) | ✅ | 🟡 (script instead) | ❌ | 🟡 (presets/batch) | ✅ (styles) | ✅ (styles) |
 | Scripting language | ❌ (CLI instead) | ✅ (JS/AppleScript/VBS) | ✅ (Script-Fu, Python 3) | ❌ | ✅ (Lua SDK) | ✅ (Lua + AI API) | 🟡 (AppleScript, Mac) |
-| Headless CLI | ✅ **72 shared engine ops** [CLI](cli.md) | ❌ | ✅ (`gimp -i -b`, script-driven) | ❌ | ❌ | ✅ (`darktable-cli`, export-focused) | ❌ |
+| Headless CLI | ✅ **73 shared engine ops** [CLI](cli.md) | ❌ | ✅ (`gimp -i -b`, script-driven) | ❌ | ❌ | ✅ (`darktable-cli`, export-focused) | ❌ |
 | Start pipelines from blank docs | ✅ (`--new A4 --dpi 300`) | — | ✅ (script) | ❌ | — | — | — |
 | Batch export | ✅ (shell loops + CLI) | ✅ (Actions batch) | ✅ | ❌ | ✅ | ✅ | ✅ (process recipes) |
 
@@ -188,7 +188,7 @@ Photoslop is an editor, not a DAM — these rows are scope notes, not gaps.
 
 ## Where Photoslop stands out
 
-- **Headless automation through a shared engine.** All 72 operations are shared
+- **Headless automation through a shared engine.** All 73 operations are shared
   by CLI and MCP; GUI presentation-only interactions have explicit parity
   rulings. Pipelines compose as ordered operations (`--new A4 --dpi 300 --adjust
   "exposure=1" --select-poly … --clear --output out.png`). None of the six has

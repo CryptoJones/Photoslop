@@ -81,6 +81,7 @@ PAIR_ARGS = {
     "select": ["--select", "2,2,8,8"],
     "select-ellipse": ["--select-ellipse", "2,2,10,10"],
     "select-poly": ["--select-poly", "2,2 12,2 12,12"],
+    "magnetic-select": ["--magnetic-select", "2,2:12,2:12,12"],
     "deselect": ["--deselect"],
     "clear": ["--select", "3,3,6,6", "--clear", "--deselect"],
     "adjust": ["--adjust", "exposure=0.4,contrast=5"],

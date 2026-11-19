@@ -47,6 +47,8 @@ photoslop-cli shot.cr2 --resize 1600x1067 --auto-levels \
   for trusted local files; hard geometry/archive/parser limits remain.
 - `--allow-unsafe-plugins` enables native-process and third-party plugins.
 - `--allow-insecure-model-http` permits plain HTTP to a non-loopback model host.
+- `--magnetic-width PX` (or `--detection-width`) — detection search window half-width in pixels for `--magnetic-select` (default 20).
+- `--magnetic-contrast PCT` (or `--edge-contrast`) — minimum edge contrast percentage threshold for `--magnetic-select` (default 10).
 
 ## Exit codes
 
@@ -109,6 +111,7 @@ stderr (`photoslop-cli: error [io_failure]: …`).
 | `--select` `X,Y,W,H` | rectangular selection for region-aware ops |
 | `--select-ellipse` `X,Y,W,H` | elliptical selection inscribed in the box |
 | `--select-poly` `"X,Y X,Y X,Y..."` | polygon selection from three or more points |
+| `--magnetic-select` `"X1,Y1:X2,Y2:...:Xn,Yn"` | closed selection tracing waypoints with livewire edge snapping |
 | `--deselect` | clear the selection |
 | `--clear` | erase the selection to transparency (headless Cut) |
 | `--flip` `h|v` | mirror the target layer(s) |

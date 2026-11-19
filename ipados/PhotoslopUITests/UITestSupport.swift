@@ -513,23 +513,25 @@ extension XCUIApplication {
     _ label: String, file: StaticString = #filePath, line: UInt = #line
   ) -> XCUIElement {
     openMoreActions(file: file, line: line)
-    var action = buttons[label].firstMatch
+    func item(_ name: String) -> XCUIElement {
+      descendants(matching: .any).matching(
+        NSPredicate(format: "label == %@ OR identifier == %@", name, name)
+      ).firstMatch
+    }
+    var action = item(label)
     if !action.exists, let submenu = Self.submenuHolding[label] {
-      let row = buttons[submenu].firstMatch
+      let row = item(submenu)
       XCTAssertTrue(
         row.waitForExistence(timeout: 10),
         "neither \(label) nor the \(submenu) submenu is in More Actions", file: file, line: line)
       for _ in 1...3 {
         row.tap()
         if action.waitForExistence(timeout: 10) { break }
-        if !buttons["Import Image…"].firstMatch.exists, !row.exists {
+        if !item("Import Image…").exists, !row.exists {
           openMoreActions(file: file, line: line)
         }
         guard row.waitForExistence(timeout: 10), row.isHittable else { break }
       }
-    }
-    if !action.exists {
-      action = staticTexts[label].firstMatch
     }
     XCTAssertTrue(
       action.waitForExistence(timeout: 10), "\(label) is missing from More Actions",
@@ -552,7 +554,10 @@ extension XCUIApplication {
     for _ in 1...3 {
       let action = revealAction(label, file: file, line: line)
       action.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-      if !buttons["Import Image…"].firstMatch.exists {
+      let importItem = descendants(matching: .any).matching(
+        NSPredicate(format: "label == 'Import Image…' OR identifier == 'Import Image…'")
+      ).firstMatch
+      if !importItem.exists {
         return
       }
     }

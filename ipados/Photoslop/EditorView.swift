@@ -142,6 +142,13 @@ struct EditorView: View {
   @State private var marquee: (from: CGPoint, to: CGPoint)?
   /// The lasso being dragged (#370): its points so far, in canvas pixels.
   @State private var lassoPoints: [CGPoint] = []
+  /// The magnetic lasso being traced (Issue #416): fastened anchor points.
+  @State private var magneticAnchors: [CGPoint] = []
+  /// The magnetic lasso's committed livewire segments.
+  @State private var magneticCommittedWire: [CGPoint] = []
+  /// The magnetic lasso's current pointer/cursor point.
+  @State private var magneticCurrentPoint: CGPoint? = nil
+  @State private var magneticLastTapTime: Date? = nil
   /// The Select ▸ Feather… sheet (#370).
   @State private var showFeatherOptions = false
   /// The Refine Edge / Select and Mask sheet (#417).
@@ -532,6 +539,18 @@ struct EditorView: View {
         placementBanner
           .floatingPanel()
           .padding(.top, 12)
+      } else if tool == .magneticLasso && !magneticAnchors.isEmpty {
+        HStack(spacing: 12) {
+          Label("Magnetic Lasso (\(magneticAnchors.count) pts)", systemImage: "lasso")
+            .font(.caption)
+            .foregroundColor(.secondary)
+          Button("Close", action: commitMagneticLasso)
+            .buttonStyle(.borderedProminent)
+          Button("Cancel", role: .cancel, action: cancelMagneticLasso)
+            .buttonStyle(.bordered)
+        }
+        .floatingPanel()
+        .padding(.top, 12)
       }
     }
   }
@@ -954,6 +973,39 @@ struct EditorView: View {
       ZStack(alignment: .topLeading) {
         path.stroke(.white, lineWidth: 1 / zoom)
         path.stroke(.black, style: StrokeStyle(lineWidth: 1 / zoom, dash: [4 / zoom, 4 / zoom]))
+      }
+      .frame(width: size.width, height: size.height, alignment: .topLeading)
+      .allowsHitTesting(false)
+      .accessibilityHidden(true)
+    } else if tool == .magneticLasso, !magneticAnchors.isEmpty {
+      let liveSegment: [CGPoint] = {
+        guard let current = magneticCurrentPoint, let last = magneticAnchors.last else { return [] }
+        let img = store.activeLayer?.image ?? store.canvasBackground
+        return LivewireAlgorithms.livewirePath(
+          image: img,
+          from: last,
+          to: current
+        )
+      }()
+      let path = Path { p in
+        if !magneticCommittedWire.isEmpty {
+          p.addLines(magneticCommittedWire)
+        }
+        if liveSegment.count > 1 {
+          p.addLines(liveSegment)
+        }
+      }
+      ZStack(alignment: .topLeading) {
+        path.stroke(.white, lineWidth: 1 / zoom)
+        path.stroke(.black, style: StrokeStyle(lineWidth: 1 / zoom, dash: [4 / zoom, 4 / zoom]))
+        ForEach(0..<magneticAnchors.count, id: \.self) { i in
+          let pt = magneticAnchors[i]
+          Rectangle()
+            .fill(Color.white)
+            .border(Color.black, width: 1 / zoom)
+            .frame(width: 6 / zoom, height: 6 / zoom)
+            .position(pt)
+        }
       }
       .frame(width: size.width, height: size.height, alignment: .topLeading)
       .allowsHitTesting(false)
@@ -1878,6 +1930,14 @@ struct EditorView: View {
         }
       }
       .pickerStyle(.inline)
+      if tool == .lasso || tool == .magneticLasso {
+        Divider()
+        Picker("Lasso Mode", selection: $tool) {
+          Label("Freehand Lasso", systemImage: "lasso").tag(BrushTool.lasso)
+          Label("Magnetic Lasso", systemImage: "lasso").tag(BrushTool.magneticLasso)
+        }
+        .pickerStyle(.inline)
+      }
       if tool.selectsOnTap {
         Divider()
         Toggle(isOn: $wandContiguous) {
@@ -2977,9 +3037,71 @@ struct EditorView: View {
         lassoPoints = []
         store.selectLasso(points, combine: wandCombine)
       }
+    case .magneticLasso:
+      if magneticAnchors.isEmpty {
+        magneticAnchors.append(start)
+        magneticCommittedWire.append(start)
+      }
+      magneticCurrentPoint = current
+      let lastAnchor = magneticAnchors.last!
+      let dist = hypot(current.x - lastAnchor.x, current.y - lastAnchor.y)
+      if dist >= 35.0 {
+        let img = store.activeLayer?.image ?? store.canvasBackground
+        let wire = LivewireAlgorithms.livewirePath(
+          image: img,
+          from: lastAnchor,
+          to: current
+        )
+        if wire.count > 1 {
+          magneticCommittedWire.append(contentsOf: wire.dropFirst())
+          magneticAnchors.append(wire.last!)
+        }
+      }
+      if isFinal {
+        let now = Date()
+        let isDoubleTap = magneticLastTapTime.map { now.timeIntervalSince($0) < 0.40 } ?? false
+        magneticLastTapTime = now
+
+        let isNearStart =
+          magneticAnchors.count >= 3
+          && hypot(current.x - magneticAnchors[0].x, current.y - magneticAnchors[0].y) <= 16
+
+        if (isDoubleTap || isNearStart) && magneticAnchors.count >= 3 {
+          commitMagneticLasso()
+        }
+      }
     default:
       break
     }
+  }
+
+  private func commitMagneticLasso() {
+    guard magneticAnchors.count >= 3 else {
+      cancelMagneticLasso()
+      return
+    }
+    let img = store.activeLayer?.image ?? store.canvasBackground
+    let closingWire = LivewireAlgorithms.livewirePath(
+      image: img,
+      from: magneticAnchors.last!,
+      to: magneticAnchors[0]
+    )
+    var allPoints = magneticCommittedWire
+    if closingWire.count > 1 {
+      allPoints.append(contentsOf: closingWire.dropFirst())
+    }
+    store.selectMagneticLasso(allPoints, combine: wandCombine)
+    magneticAnchors = []
+    magneticCommittedWire = []
+    magneticCurrentPoint = nil
+    magneticLastTapTime = nil
+  }
+
+  private func cancelMagneticLasso() {
+    magneticAnchors = []
+    magneticCommittedWire = []
+    magneticCurrentPoint = nil
+    magneticLastTapTime = nil
   }
 
   /// Render the fit-text preview for the box as it stands: the words wrapped
