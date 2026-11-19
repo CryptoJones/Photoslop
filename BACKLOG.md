@@ -11,6 +11,14 @@ sync — check an item here when its issue closes.
 - [x] Magnetic Lasso: edge-snapping selection tool with live-wire tracing: Intelligent Scissors Dijkstra minimum-cost graph search, link costs from gradient magnitude/edge direction/non-maximum suppression, DD-001 128px cached blocks, desktop Options bar controls, CLI `--magnetic-select`, and iOS touch/Pencil tracing ([#416](https://github.com/CryptoJones/Photoslop/issues/416))
 - [x] Select and Mask: upgrade Refine Selection with Guided Filter edge matting and decontamination: local linear regression of mask against color pixels, smart radius adaptive bandwidth, smooth/feather/contrast/shift edge, color fringe decontamination via normalized convolution, and DD-001 boundary strip processing ([#417](https://github.com/CryptoJones/Photoslop/issues/417))
 
+### Retouching
+
+- [ ] Poisson multigrid gradient-domain solver for Healing Brush and Spot Healing: cascadic multigrid Poisson solver with Successive Over-Relaxation (SOR) on half-resolution pyramids, seamless cloning over stroke mask bounding box + padding (DD-001), integration into desktop Healing Brush and Spot Healing tools, CLI `--heal` and `--spot-heal`, and Swift port for iPadOS/iOS ([#415](https://github.com/CryptoJones/Photoslop/issues/415))
+
+### Layers and Compositing
+
+- [ ] Complete blend mode suite: implement remaining 14 layer blend modes across desktop, CLI, and iOS (Linear Burn, Linear Dodge/Add, Vivid Light, Linear Light, Pin Light, Hard Mix, Subtract, Divide, Soft Light PS variant, Darker Color, Lighter Color, Hue, Saturation, Color, Luminosity, Dissolve) ([#414](https://github.com/CryptoJones/Photoslop/issues/414))
+
 ### Vectors
 
 - [x] Make Work Path from Selection using contour tracing: Potrace-style 8-connected contour extraction, sub-pixel polygon simplification, and cubic Bézier curve fitting subject to tolerance (0.5–10.0 px). Desktop: `Select ▸ Make Work Path…`; CLI/MCP: `--selection-to-path [TOLERANCE]` outputting SVG path data and creating vector layer; iPad/iPhone: "Make Vector Path" action on active selection ([#424](https://github.com/CryptoJones/Photoslop/issues/424))
