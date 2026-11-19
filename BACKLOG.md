@@ -8,6 +8,7 @@ sync — check an item here when its issue closes.
 
 ### Selection
 
+- [ ] Magnetic Lasso: edge-snapping selection tool with live-wire tracing: Intelligent Scissors Dijkstra minimum-cost graph search, link costs from gradient magnitude/edge direction/non-maximum suppression, DD-001 128px cached blocks, desktop Options bar controls, CLI `--magnetic-select`, and iOS touch/Pencil tracing ([#416](https://github.com/CryptoJones/Photoslop/issues/416))
 - [x] Select and Mask: upgrade Refine Selection with Guided Filter edge matting and decontamination: local linear regression of mask against color pixels, smart radius adaptive bandwidth, smooth/feather/contrast/shift edge, color fringe decontamination via normalized convolution, and DD-001 boundary strip processing ([#417](https://github.com/CryptoJones/Photoslop/issues/417))
 
 ### Vectors
