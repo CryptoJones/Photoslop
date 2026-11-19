@@ -257,6 +257,41 @@ def _restrict_plane_2x(
     return img[:, ::2, ::2].copy()
 
 
+def _restrict_texture_2x(img: np.ndarray) -> np.ndarray:
+    """Aligned anti-aliased (full-weighting) restriction for clone texture.
+
+    Injection (coarse ``i`` = fine ``2i``) keeps the grids aligned and ramps
+    exact, but samples a single phase of a near-Nyquist texture: a 160/220
+    single-pixel checkerboard restricts to 220 everywhere instead of its true
+    mean 190, so the coarse harmonic offset carried to a large hole's centre is
+    biased (−160 instead of −130) and the cloned tone comes out wrong. The 3×3
+    full-weighting kernel ``[1 2 1; 2 4 2; 1 2 1] / 16`` centred on fine
+    ``(2i, 2j)`` fixes the mean while keeping coarse ``i`` aligned with fine
+    ``2i`` (so bilinear prolongation still reproduces linear fields), and keeps
+    constant planes exact because the weights sum to 1. Border cells clamp
+    (replicate) so no garbage leaks into coarse boundary data. Even fine sizes
+    are extended by one replicated cell so the coarse shape matches the mask
+    pyramid, which appends a far-boundary coarse cell for even levels.
+    """
+    if img.shape[1] % 2 == 0:
+        img = np.concatenate([img, img[:, -1:, :]], axis=1)
+    if img.shape[2] % 2 == 0:
+        img = np.concatenate([img, img[:, :, -1:]], axis=2)
+    pad = np.pad(img, ((0, 0), (1, 1), (1, 1)), mode="edge")
+    out = (
+        pad[:, 0:-2:2, 0:-2:2]
+        + 2.0 * pad[:, 0:-2:2, 1:-1:2]
+        + pad[:, 0:-2:2, 2::2]
+        + 2.0 * pad[:, 1:-1:2, 0:-2:2]
+        + 4.0 * pad[:, 1:-1:2, 1:-1:2]
+        + 2.0 * pad[:, 1:-1:2, 2::2]
+        + pad[:, 2::2, 0:-2:2]
+        + 2.0 * pad[:, 2::2, 1:-1:2]
+        + pad[:, 2::2, 2::2]
+    ) / 16.0
+    return out.astype(np.float32)
+
+
 # Multigrid convergence controls: stop a level's SOR sweeps once the max
 # residual on masked cells is below a quarter of a quantisation step (the
 # result is rounded to u8 anyway), with sweep caps so a pathological patch
@@ -344,10 +379,12 @@ def poisson_solve_multigrid(
             # keeps ramps exact; erased hole cells fall back to replication.
             dests.append(_restrict_plane_2x(dests[-1], known=~m_fine))
         else:
-            # Clone/mixed: both planes are real image texture — replicate the
-            # far boundary instead of extrapolating checker overshoots.
-            dests.append(_restrict_plane_2x(dests[-1], linear=False))
-            srcs.append(_restrict_plane_2x(srcs[-1], linear=False))
+            # Clone/mixed: both planes are real image texture. Full-weighting
+            # restriction preserves each block's true mean (injection would
+            # alias a near-Nyquist checkerboard to one phase and bias the
+            # coarse harmonic offset), while staying grid-aligned.
+            dests.append(_restrict_texture_2x(dests[-1]))
+            srcs.append(_restrict_texture_2x(srcs[-1]))
 
     levels = len(masks)
 

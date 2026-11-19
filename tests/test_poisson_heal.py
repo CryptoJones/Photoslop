@@ -236,3 +236,28 @@ def test_patch_heal_refuses_offcanvas_source_footprint():
     rect = npimage.patch_heal(img, mask, -10, 0)  # source x = -8..-3: off-canvas
     assert rect.isEmpty()
     assert img.pixelColor(4, 20).red() == 60
+
+
+def test_poisson_clone_highfreq_texture_tone_matched():
+    """A near-Nyquist (single-pixel checkerboard) source must be tone-matched to
+    the destination across a large hole, not aliased to one phase by the coarse
+    restriction (issue #415 / CodeRabbit npimage.py:350). Injection restriction
+    sampled only the 220 phase, biasing the coarse harmonic offset to −160
+    instead of −130; aligned full-weighting restriction preserves the source
+    mean (190) so the cloned tone matches the destination everywhere."""
+    n = 256
+    yy, xx = np.ogrid[:n, :n]
+    dest = np.full((3, n, n), 60.0, dtype=np.float32)
+    src = np.zeros((3, n, n), dtype=np.float32)
+    phase0 = ((yy + xx) % 2) == 0
+    src[:, phase0] = 220.0
+    src[:, ~phase0] = 160.0  # mean is 190.0
+    mask = np.zeros((n, n), dtype=bool)
+    mask[8:-8, 8:-8] = True
+
+    res = npimage.poisson_solve_multigrid(dest, mask, src=src, mixed=False)
+    # Correct harmonic offset is 60 − 190 = −130 throughout the interior.
+    assert abs(float(res[0, mask].mean()) - 60.0) < 1.0
+    c = n // 2
+    assert abs(float(res[0, c, c]) - 90.0) < 1.0  # 220 − 130
+    assert abs(float(res[0, c, c + 1]) - 30.0) < 1.0  # 160 − 130

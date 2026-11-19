@@ -948,6 +948,25 @@ def test_spot_heal_cli_rejects_empty_dab(qapp, tmp_path):
     assert exc.value.code == 2
 
 
+def test_spot_heal_cli_rejects_disk_that_misses_canvas(qapp, tmp_path):
+    """A dab whose bounding square intersects the canvas but whose circular
+    footprint does not must exit 2, not silently no-op (CodeRabbit cli.py:1314).
+    A slightly larger disk that does cross the edge is accepted."""
+    src = make_input(tmp_path, QColor(180, 180, 180), size=(60, 40))
+    # Square (-9,-9)..(1,1) touches the canvas, but the r5 disk misses it: the
+    # nearest canvas pixel (0,0) is sqrt(32) > 5 from the centre (-4,-4).
+    # Attached form (=) so the leading negative is not parsed as a flag.
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--spot-heal=-4,-4,5", "--output", tmp_path / "f.png"])
+    assert exc.value.code == 2
+    # r6 reaches (0,0) (sqrt(32) <= 6): a valid edge-crossing dab heals.
+    assert run([src, "--spot-heal=-4,-4,6", "--output", tmp_path / "ok.png"]) == 0
+    # The heal source disk gets the same treatment.
+    with pytest.raises(SystemExit) as exc:
+        run([src, "--heal=-4,-4,10,10,5", "--output", tmp_path / "f2.png"])
+    assert exc.value.code == 2
+
+
 def test_import_layer_joins_the_open_document(qapp, tmp_path):
     """--input is how a file becomes the document; --import-layer is how one
     joins the document already open. The imported layer keeps its own pixels

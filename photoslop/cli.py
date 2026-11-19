@@ -1313,6 +1313,14 @@ def _op_spot_heal(ctx: Context, value: str) -> None:
     canvas = doc.canvas_rect()
     if not canvas.intersects(QRect(cx - radius, cy - radius, 2 * radius + 1, 2 * radius + 1)):
         raise _ValueError("--spot-heal: the dab covers no pixel of the canvas")
+    # The bounding square can intersect the canvas while the circular dab does
+    # not (e.g. -4,-4,5 on a 60x40 canvas). Reject when the nearest canvas pixel
+    # to the centre is farther than the radius, so an empty disk is a usage error
+    # rather than a silent no-op; a disk that crosses an edge (-4,-4,6) is kept.
+    nearest_x = min(max(cx, canvas.left()), canvas.right())
+    nearest_y = min(max(cy, canvas.top()), canvas.bottom())
+    if (cx - nearest_x) ** 2 + (cy - nearest_y) ** 2 > radius * radius:
+        raise _ValueError("--spot-heal: the dab covers no pixel of the canvas")
 
     for layer in _target_layers(ctx):
         lx = cx - layer.offset.x()
@@ -1396,6 +1404,14 @@ def _op_heal(ctx: Context, value: str) -> None:
         # heal composes with every other op (tests/test_cli_combinations.py).
         canvas = doc.canvas_rect()
         if not canvas.intersects(QRect(sx - radius, sy - radius, 2 * radius + 1, 2 * radius + 1)):
+            raise _ValueError(
+                "--heal: the source is out of bounds — the sampled region lies entirely off-canvas"
+            )
+        # As with --spot-heal, the bounding square may intersect while the disk
+        # does not; reject a source disk that covers no canvas pixel.
+        nearest_x = min(max(sx, canvas.left()), canvas.right())
+        nearest_y = min(max(sy, canvas.top()), canvas.bottom())
+        if (sx - nearest_x) ** 2 + (sy - nearest_y) ** 2 > radius * radius:
             raise _ValueError(
                 "--heal: the source is out of bounds — the sampled region lies entirely off-canvas"
             )

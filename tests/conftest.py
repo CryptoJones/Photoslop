@@ -29,7 +29,20 @@ def _fresh_settings():
     yield
 
 
+# Hold the QApplication for the life of the process. The session ``qapp``
+# fixture used to drop its only reference at teardown, which let shiboken delete
+# the C++ QApplication during pytest's sessionfinish — while Qt's pixmap/font
+# caches and other QObjects were still alive. On ubuntu-latest + Python 3.14 that
+# deletion order segfaults (exit 139) right after ``[100%]`` and before the
+# summary line, with no faulthandler dump because pytest has already disabled its
+# handler by then. Keeping a module-level reference means the app is not deleted
+# at fixture teardown; the interpreter reclaims it at exit, after pytest is done.
+_QAPP = None
+
+
 @pytest.fixture(scope="session")
 def qapp():
-    app = QApplication.instance() or QApplication([])
-    yield app
+    global _QAPP
+    if _QAPP is None:
+        _QAPP = QApplication.instance() or QApplication([])
+    yield _QAPP

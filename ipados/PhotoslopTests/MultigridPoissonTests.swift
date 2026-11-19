@@ -87,6 +87,41 @@ final class MultigridPoissonTests: XCTestCase {
     XCTAssertLessThan(maxDev, 1.0, "Constant offset must be exact throughout")
   }
 
+  func testCloneHighFreqTextureToneMatched() {
+    // A near-Nyquist (single-pixel checkerboard) source must be tone-matched to
+    // the destination across a large hole, not aliased to one phase by the coarse
+    // restriction (CodeRabbit npimage.py:350 / Swift parity). Injection sampled
+    // only the 220 phase, biasing the offset to -160 instead of -130; aligned
+    // full-weighting restriction preserves the source mean (190).
+    let n = 256
+    let dest = MultigridPoisson.Plane(width: n, height: n, initialValue: 60.0)
+    var srcData = [Float](repeating: 0, count: n * n)
+    for y in 0..<n {
+      for x in 0..<n {
+        srcData[y * n + x] = ((y + x) % 2 == 0) ? 220.0 : 160.0  // mean 190
+      }
+    }
+    let src = MultigridPoisson.Plane(width: n, height: n, data: srcData)
+    var mask = [Bool](repeating: false, count: n * n)
+    for y in 8..<(n - 8) {
+      for x in 8..<(n - 8) { mask[y * n + x] = true }
+    }
+    let solved = MultigridPoisson.solveChannel(dest: dest, mask: mask, src: src, mixed: false)
+    // Correct harmonic offset is 60 - 190 = -130 throughout the interior.
+    var sum: Float = 0
+    var count: Float = 0
+    for y in 8..<(n - 8) {
+      for x in 8..<(n - 8) {
+        sum += solved[x, y]
+        count += 1
+      }
+    }
+    XCTAssertEqual(sum / count, 60.0, accuracy: 1.0, "Interior tone must match destination")
+    let c = n / 2
+    XCTAssertEqual(solved[c, c], 90.0, accuracy: 1.0)  // 220 - 130
+    XCTAssertEqual(solved[c + 1, c], 30.0, accuracy: 1.0)  // 160 - 130
+  }
+
   func testSeamlessClonePreservesTextureAndMatchesTone() {
     let w = 40, h = 40
     let destPlane = MultigridPoisson.Plane(width: w, height: h, initialValue: 50.0)

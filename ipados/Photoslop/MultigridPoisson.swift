@@ -145,6 +145,58 @@ enum MultigridPoisson {
       return Plane(width: nw, height: nh, data: out)
     }
 
+    /// Aligned anti-aliased (full-weighting) restriction for clone texture.
+    ///
+    /// Injection samples a single phase of a near-Nyquist texture (a 160/220
+    /// single-pixel checkerboard restricts to 220 everywhere, not its mean 190),
+    /// biasing the coarse harmonic offset carried to a large hole's centre. The
+    /// 3×3 kernel `[1 2 1; 2 4 2; 1 2 1] / 16` centred on fine `(2i, 2j)`
+    /// preserves each block's true mean while keeping coarse `i` aligned with
+    /// fine `2i` (so bilinear prolongation still reproduces linear fields) and
+    /// constant planes exact (the weights sum to 1). Border cells clamp
+    /// (replicate) so no garbage leaks into coarse boundary data. Even fine sizes
+    /// are extended by one replicated cell so the coarse shape matches the mask
+    /// pyramid. Mirrors `npimage._restrict_texture_2x` (#455 review).
+    func restrictTexture2x() -> Plane {
+      var src = data
+      var sw = width
+      var sh = height
+      if sh % 2 == 0 {
+        let lastRow = Array(src[(sh - 1) * sw..<sh * sw])
+        src.append(contentsOf: lastRow)
+        sh += 1
+      }
+      if sw % 2 == 0 {
+        var ext = [Float](repeating: 0, count: sh * (sw + 1))
+        for y in 0..<sh {
+          for x in 0..<sw { ext[y * (sw + 1) + x] = src[y * sw + x] }
+          ext[y * (sw + 1) + sw] = src[y * sw + (sw - 1)]
+        }
+        src = ext
+        sw += 1
+      }
+      let nw = (sw + 1) / 2
+      let nh = (sh + 1) / 2
+      func at(_ x: Int, _ y: Int) -> Float {
+        let cx = min(max(x, 0), sw - 1)
+        let cy = min(max(y, 0), sh - 1)
+        return src[cy * sw + cx]
+      }
+      var out = [Float](repeating: 0, count: nw * nh)
+      for y in 0..<nh {
+        for x in 0..<nw {
+          let fx = 2 * x
+          let fy = 2 * y
+          let v =
+            at(fx - 1, fy - 1) + 2 * at(fx, fy - 1) + at(fx + 1, fy - 1)
+            + 2 * at(fx - 1, fy) + 4 * at(fx, fy) + 2 * at(fx + 1, fy)
+            + at(fx - 1, fy + 1) + 2 * at(fx, fy + 1) + at(fx + 1, fy + 1)
+          out[y * nw + x] = v / 16.0
+        }
+      }
+      return Plane(width: nw, height: nh, data: out)
+    }
+
     /// Injection-aligned bilinear prolongation: coarse cell i sits at fine 2i,
     /// so the inverse map is u = x/2 (clamped), NOT an endpoint-aligned linspace.
     /// This keeps linear fields exact across the prolongation.
@@ -242,8 +294,11 @@ enum MultigridPoisson {
         let known = mFine.map { !$0 }
         dests.append(dests[dests.count - 1].restrict2x(known: known, linear: true))
       } else {
-        dests.append(dests[dests.count - 1].restrict2x(linear: false))
-        srcs!.append(srcs![srcs!.count - 1].restrict2x(linear: false))
+        // Clone/mixed: full-weighting restriction preserves each texture block's
+        // true mean (injection would alias a near-Nyquist checkerboard to one
+        // phase and bias the coarse harmonic offset), while staying grid-aligned.
+        dests.append(dests[dests.count - 1].restrictTexture2x())
+        srcs!.append(srcs![srcs!.count - 1].restrictTexture2x())
       }
     }
 
