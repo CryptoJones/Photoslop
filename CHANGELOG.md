@@ -4,7 +4,15 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
-## [2.51.0] — Unreleased
+## [2.51.1] — 2026-11-19
+
+### Changed
+- Backlog ↔ Issues sync after [#455](https://github.com/CryptoJones/Photoslop/pull/455) merged:
+  `BACKLOG.md` ticks the shipped [#415](https://github.com/CryptoJones/Photoslop/issues/415) Poisson
+  multigrid heal line; the 2.51.0 changelog heading is dated. Docs-only patch bump to satisfy the
+  every-PR version gate.
+
+## [2.51.0] — 2026-11-19
 
 ### Added
 - **Retouch: Poisson multigrid gradient-domain solver for Healing Brush and Spot Healing** —
