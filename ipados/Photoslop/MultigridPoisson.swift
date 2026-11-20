@@ -884,6 +884,93 @@ enum MultigridPoisson {
       dx: sx - cx, dy: sy - cy, mixed: mixed
     )
   }
+
+  /// Spot heal a whole stroke of dabs as one edit (#456): the union of the
+  /// circular dabs is inpainted in a single solve, the way the desktop's
+  /// `SpotHealTool` accumulates a mask over the trail and inpaints once on
+  /// release. One solve over the covered region rather than one per dab keeps
+  /// the boundary diffusion continuous across the stroke and costs a single
+  /// multigrid pass. Returns nil when no dab covers a pixel.
+  @discardableResult
+  static func spotHealStroke(
+    buffer: inout PixelBuffer, centers: [CGPoint], radius: CGFloat
+  ) -> PixelRect? {
+    guard !centers.isEmpty else { return nil }
+    let w = buffer.width
+    let h = buffer.height
+    let r = max(1, Int(radius.rounded()))
+    // The union bounding box of every clipped dab, in canvas pixels.
+    var x0 = w, y0 = h, x1 = 0, y1 = 0
+    var any = false
+    for center in centers {
+      let cx = Int(center.x.rounded())
+      let cy = Int(center.y.rounded())
+      let dx0 = max(0, cx - r), dx1 = min(w, cx + r + 1)
+      let dy0 = max(0, cy - r), dy1 = min(h, cy + r + 1)
+      guard dx0 < dx1, dy0 < dy1 else { continue }
+      x0 = min(x0, dx0); y0 = min(y0, dy0)
+      x1 = max(x1, dx1); y1 = max(y1, dy1)
+      any = true
+    }
+    guard any else { return nil }
+    let bw = x1 - x0
+    let bh = y1 - y0
+    var mask = [Bool](repeating: false, count: bw * bh)
+    let rSq = r * r
+    for center in centers {
+      let cx = Int(center.x.rounded())
+      let cy = Int(center.y.rounded())
+      // Clip each dab to the canvas and skip a center whose clipped range is
+      // empty, exactly as the bounding-box pass above does. Without this guard a
+      // center far off the canvas builds `0..<negative`, which traps Swift's
+      // Range precondition — a drag that starts in the surround beside the
+      // fitted canvas and ends on the image would crash the stroke (#456).
+      let dy0 = max(0, cy - r), dy1 = min(h, cy + r + 1)
+      let dx0 = max(0, cx - r), dx1 = min(w, cx + r + 1)
+      guard dy0 < dy1, dx0 < dx1 else { continue }
+      for y in dy0..<dy1 {
+        let dy = y - cy
+        let row = (y - y0) * bw
+        for x in dx0..<dx1 {
+          let dx = x - cx
+          if dx * dx + dy * dy <= rSq { mask[row + (x - x0)] = true }
+        }
+      }
+    }
+    return inpaint(
+      buffer: &buffer, mask: mask, bounds: PixelRect(x: x0, y: y0, width: bw, height: bh),
+      maskIsLocal: true)
+  }
+
+  /// Heal a whole stroke of dabs from a locked source offset (#456): each dab
+  /// seamless-clones texture sampled `sourceOffset` away, tone-matched to its
+  /// destination, the way the desktop's aligned `HealBrushTool` stamps along a
+  /// stroke. The dabs are applied in order to one buffer so the stroke is a
+  /// single edit (one undo step). Returns the union of the changed regions, or
+  /// nil when no dab changed a pixel.
+  @discardableResult
+  static func healStroke(
+    buffer: inout PixelBuffer, centers: [CGPoint], sourceOffset: CGSize, radius: CGFloat
+  ) -> PixelRect? {
+    var dirty: PixelRect?
+    for center in centers {
+      let source = CGPoint(x: center.x - sourceOffset.width, y: center.y - sourceOffset.height)
+      guard let rect = heal(buffer: &buffer, center: center, from: source, radius: radius) else {
+        continue
+      }
+      dirty = dirty.map { union($0, rect) } ?? rect
+    }
+    return dirty
+  }
+
+  /// The bounding box of two pixel rectangles.
+  private static func union(_ a: PixelRect, _ b: PixelRect) -> PixelRect {
+    let x0 = min(a.x, b.x)
+    let y0 = min(a.y, b.y)
+    let x1 = max(a.x + a.width, b.x + b.width)
+    let y1 = max(a.y + a.height, b.y + b.height)
+    return PixelRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+  }
 }
 
 // MARK: - EditorStore Extension
@@ -925,6 +1012,30 @@ extension EditorStore {
     return applyPixelOperation(to: layer.id, actionName: "Healing Brush") { buffer in
       MultigridPoisson.heal(
         buffer: &buffer, center: center, from: sourceCenter, radius: radius
+      ) != nil
+    }
+  }
+
+  /// Spot heal a whole drag stroke as one undo step (#456). The trail of dab
+  /// centers is inpainted in a single solve, so a stroke that covers a blemish
+  /// with twenty samples is one "Spot Heal" in the history, not twenty.
+  @discardableResult
+  func spotHealStroke(centers: [CGPoint], radius: CGFloat) -> Bool {
+    guard let layer = activeLayer, !centers.isEmpty else { return false }
+    return applyPixelOperation(to: layer.id, actionName: "Spot Heal") { buffer in
+      MultigridPoisson.spotHealStroke(buffer: &buffer, centers: centers, radius: radius) != nil
+    }
+  }
+
+  /// Heal a whole drag stroke from a locked source offset as one undo step
+  /// (#456). `sourceOffset` is dest − source, locked on the first dab after a
+  /// source pick (the desktop's aligned mode); each dab samples that far away.
+  @discardableResult
+  func healStroke(centers: [CGPoint], sourceOffset: CGSize, radius: CGFloat) -> Bool {
+    guard let layer = activeLayer, !centers.isEmpty else { return false }
+    return applyPixelOperation(to: layer.id, actionName: "Healing Brush") { buffer in
+      MultigridPoisson.healStroke(
+        buffer: &buffer, centers: centers, sourceOffset: sourceOffset, radius: radius
       ) != nil
     }
   }

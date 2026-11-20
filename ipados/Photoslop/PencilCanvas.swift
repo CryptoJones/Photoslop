@@ -66,6 +66,11 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
   /// box *is* the feature. A UIKit recogniser on the overlay behaves the same
   /// on both.
   var onBoxDrag: ((CGPoint, CGPoint, Bool) -> Void)?
+  /// The box drag was cancelled or failed (a second finger landed to pinch, a
+  /// system gesture took over) rather than released. Carries the drag origin and
+  /// the cancel location so the owner can discard an unfinished stroke (#456).
+  /// When nil, a cancelled drag is reported as a final `onBoxDrag` as before.
+  var onBoxDragCancelled: ((CGPoint, CGPoint) -> Void)?
   /// A rectangle, in document pixels, the canvas must bring fully on screen —
   /// zooming out if it has to. Each request carries a fresh id so it applies
   /// once rather than re-asserting itself on every update: after the reveal,
@@ -143,6 +148,7 @@ struct PencilCanvas<Overlay: View>: UIViewRepresentable {
     host.canvasView.isUserInteractionEnabled =
       !isMoving && !overlayIsActive && onCanvasTapped == nil
     host.onBoxDrag = onBoxDrag
+    host.onBoxDragCancelled = onBoxDragCancelled
     host.setOverlayActive(overlayIsActive)
     // With one-finger panning left on, the scroll view and the move gesture
     // both claim the same drag: the canvas scrolls while the text moves, so the
@@ -266,6 +272,7 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
   private var tapRecognizer: UITapGestureRecognizer?
   private var boxDragRecognizer: BoxPanRecognizer?
   var onBoxDrag: ((CGPoint, CGPoint, Bool) -> Void)?
+  var onBoxDragCancelled: ((CGPoint, CGPoint) -> Void)?
   private var boxDragStart: CGPoint?
   /// Which selection the canvas's mask layer was built from, so the shape is
   /// rebuilt once per selection rather than on every update.
@@ -425,10 +432,21 @@ final class CanvasHostView: UIView, UIScrollViewDelegate, UIGestureRecognizerDel
     case .changed:
       guard let start = boxDragStart else { return }
       onBoxDrag(start, point, false)
-    case .ended, .cancelled, .failed:
+    case .ended:
       guard let start = boxDragStart else { return }
       boxDragStart = nil
       onBoxDrag(start, point, true)
+    case .cancelled, .failed:
+      guard let start = boxDragStart else { return }
+      boxDragStart = nil
+      // A cancelled drag is not a release: let the owner discard an unfinished
+      // stroke (#456). With no cancel handler, fall back to the old final report
+      // so crop and selection keep their existing behaviour.
+      if let onBoxDragCancelled {
+        onBoxDragCancelled(start, point)
+      } else {
+        onBoxDrag(start, point, true)
+      }
     default:
       break
     }
