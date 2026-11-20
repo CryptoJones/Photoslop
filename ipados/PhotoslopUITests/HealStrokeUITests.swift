@@ -62,22 +62,42 @@ final class HealStrokeUITests: UITestCase {
 
   /// Deposit a black blemish at the canvas centre with the Pen, so a heal has
   /// something to remove and the probe can see it.
+  ///
+  /// Two things a naive version gets wrong, both proven on the CI 18.5 leg:
+  /// the Pen is a PencilKit *stroke* tool, not a tap tool, so a zero-motion
+  /// `.tap()` deposits nothing at the probed pixel — a real press-and-drag is
+  /// needed (the way FitTextUITests draws). And `setFingerDrawing(true)` leaves
+  /// the More Actions menu open when it had to flip the toggle (an iPad's
+  /// finger-off default), so the scrim must be dismissed before the stroke can
+  /// reach the canvas. The canvas is fitted and `centerCanvas()`-ed, so the
+  /// view's centre is the image centre the probe reads; a stroke through it
+  /// inks that pixel.
   private func drawBlemishAtCentre(_ app: XCUIApplication) {
-    app.setFingerDrawing(true)
     app.selectTool("Pen")
+    app.setFingerDrawing(true)
+    // Close the menu scrim if the toggle left one up. dismissMenu's own tap is
+    // zero-motion, so even when it lands on the canvas it draws no Pen mark.
+    app.dismissMenu()
     let probe = app.staticTexts["Pixel probe"].firstMatch
     XCTAssertTrue(probe.waitForExistence(timeout: 10))
-    canvas(app).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    let centre = canvas(app)
+    let start = centre.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.5))
+    let end = centre.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.5))
+    start.press(forDuration: 0.1, thenDragTo: end)
     let darkened = XCTNSPredicateExpectation(
       predicate: NSPredicate(format: "value != %@", "FFFFFFFF"), object: probe)
     XCTAssertEqual(
       XCTWaiter().wait(for: [darkened], timeout: 20), .completed,
-      "the Pen tap left no blemish at the centre")
+      "the Pen stroke left no blemish at the centre")
   }
 
   func testSpotHealingTapHealsABlemishAndIsUndoable() {
     let app = openFreshEditor()
     drawBlemishAtCentre(app)
+    let probe = app.staticTexts["Pixel probe"].firstMatch
+    // Pen ink is anti-aliased, so the blemish is dark but not the bucket's pure
+    // FF000000; capture what was actually drawn and assert against that.
+    let blemishHex = probe.value as? String ?? ""
     let blemishRed = probeRed(app) ?? 0
     XCTAssertLessThan(blemishRed, 128, "the blemish should be dark before healing")
 
@@ -91,7 +111,7 @@ final class HealStrokeUITests: UITestCase {
 
     // The blemish heals back toward the white field: one undo step, named.
     let healed = XCTNSPredicateExpectation(
-      predicate: NSPredicate(format: "value != %@", "FF000000"), object: app.staticTexts["Pixel probe"].firstMatch)
+      predicate: NSPredicate(format: "value != %@", blemishHex), object: probe)
     XCTAssertEqual(
       XCTWaiter().wait(for: [healed], timeout: 20), .completed,
       "the centre pixel did not change after the spot-heal tap")
@@ -102,7 +122,7 @@ final class HealStrokeUITests: UITestCase {
     XCTAssertTrue(undo.isEnabled, "the spot-heal tap did not register an undo step")
     undo.tap()
     let restored = XCTNSPredicateExpectation(
-      predicate: NSPredicate(format: "value == %@", "FF000000"), object: app.staticTexts["Pixel probe"].firstMatch)
+      predicate: NSPredicate(format: "value == %@", blemishHex), object: probe)
     XCTAssertEqual(
       XCTWaiter().wait(for: [restored], timeout: 20), .completed,
       "undo did not restore the blemish")

@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
 follows [SemVer](https://semver.org).
 
+## [2.51.2] — Unreleased
+
+### Added
+- **Retouch: interactive iOS Healing Brush / Spot Healing canvas stroke tools** — tap and drag
+  dabs on the iPad/iPhone canvas call the shipped Poisson multigrid heal, for desktop `J` / `Shift+J`
+  parity, within the iPhone nine-button palette budget (the heal tools share the Eraser's slot through
+  the Retouch picker, as Magnetic Lasso hosts under Lasso). Spot Healing inpaints a tap and interpolates
+  a drag at desktop spacing into one undo step; the Healing Brush picks a source with an aligned offset
+  locked on the first stroke. A cancelled drag discards the trail; refusals are attributed without
+  double-alerting ([#456](https://github.com/CryptoJones/Photoslop/issues/456)).
+  - Live stroke preview and off-main-thread stroke commit are deferred to
+    [#458](https://github.com/CryptoJones/Photoslop/issues/458); commit-on-release is the deliberate
+    memory-frugal compromise for the 16 GB shared build host.
+
 ## [2.51.1] — 2026-11-19
 
 ### Changed

@@ -3081,13 +3081,23 @@ struct EditorView: View {
   /// probe costs nothing in the app.
   static let pixelProbeEnabled = ProcessInfo.processInfo.arguments.contains("-PhotoslopPixelProbe")
 
-  /// The active layer's centre pixel as a premultiplied ARGB32 word in hex,
-  /// read through a 1x1 context rather than a canvas-sized buffer.
+  /// The active layer's centre pixel as a premultiplied ARGB32 word in hex.
+  ///
+  /// Read through `borrowPixels` — the same seam fills and heals read through —
+  /// so the probe reports the layer *as drawn*: its pixels with the live
+  /// PencilKit strokes baked in. A stroke tool (Pen, retouch) keeps its mark in
+  /// `layer.drawing` until a pixel operation bakes it, so probing `layer.image`
+  /// alone would never see a freshly drawn blemish. With no strokes up,
+  /// `borrowPixels` is the cheap image-only path, so the fill probe stays a
+  /// four-byte read rather than a canvas-sized render.
   private var pixelProbe: some View {
     let word: UInt32? = store.activeLayer.flatMap { layer in
       let centre = CGPoint(x: store.canvasSize.width / 2, y: store.canvasSize.height / 2)
       guard layer.fillsCanvas(store.canvasSize) else { return nil }
-      return PixelBuffer.probe(image: layer.image, x: Int(centre.x), y: Int(centre.y))
+      guard let buffer = store.borrowPixels(of: layer) else { return nil }
+      let x = Int(centre.x), y = Int(centre.y)
+      guard x >= 0, y >= 0, x < buffer.width, y < buffer.height else { return nil }
+      return buffer.word(x: x, y: y)
     }
     let hex = word.map { String(format: "%08X", $0) } ?? "none"
     return Text(hex)
