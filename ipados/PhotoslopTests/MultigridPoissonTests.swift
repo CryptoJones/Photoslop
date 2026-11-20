@@ -451,4 +451,214 @@ final class MultigridPoissonTests: XCTestCase {
     let r = ((try XCTUnwrap(probe)) >> 16) & 0xFF
     XCTAssertGreaterThan(r, 150)
   }
+
+  // MARK: - Interactive stroke tools (#456)
+
+  /// A drag of several dabs heals the whole trail and is a single undo step,
+  /// the way the desktop's SpotHealTool inpaints its accumulated mask once on
+  /// release.
+  func testEditorStoreSpotHealStrokeIsOneUndoStep() throws {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 40, height: 40))
+    let gray = PixelBuffer.premultipliedWord(r: 180, g: 180, b: 180, a: 255)
+    let black = PixelBuffer.premultipliedWord(r: 0, g: 0, b: 0, a: 255)
+
+    let undoManager = UndoManager()
+    store.undoManager = undoManager
+
+    let layer = try XCTUnwrap(store.activeLayer)
+    XCTAssertTrue(store.applyPixelOperation(to: layer.id, actionName: "Setup") { buf in
+      buf.withMutableWords { words in
+        for i in 0..<words.count { words[i] = gray }
+        // A horizontal blemish the stroke will cover.
+        for x in 14..<27 { words[20 * 40 + x] = black }
+      }
+      return true
+    })
+    undoManager.removeAllActions()
+
+    let centers = [CGPoint(x: 15, y: 20), CGPoint(x: 20, y: 20), CGPoint(x: 25, y: 20)]
+    XCTAssertTrue(store.spotHealStroke(centers: centers, radius: 4))
+    XCTAssertEqual(undoManager.undoActionName, "Spot Heal")
+
+    // Every dab center healed, not just the first.
+    for x in [15, 20, 25] {
+      let probe = try XCTUnwrap(PixelBuffer.probe(image: try XCTUnwrap(store.activeLayer).image, x: x, y: 20))
+      XCTAssertGreaterThan((probe >> 16) & 0xFF, 150, "dab at \(x) did not heal")
+    }
+
+    // One stroke, one undo: the whole trail comes back at once.
+    undoManager.undo()
+    for x in [15, 20, 25] {
+      let probe = PixelBuffer.probe(image: try XCTUnwrap(store.activeLayer).image, x: x, y: 20)
+      XCTAssertEqual(probe, black, "undo did not restore dab at \(x)")
+    }
+    XCTAssertFalse(undoManager.canUndo, "a stroke must register exactly one undo step")
+  }
+
+  /// A healing-brush stroke transplants the source texture along the trail,
+  /// tone-matched, as one undo step.
+  func testEditorStoreHealStrokeIsOneUndoStep() throws {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 60, height: 30))
+    let dark = PixelBuffer.premultipliedWord(r: 50, g: 50, b: 50, a: 255)
+
+    let undoManager = UndoManager()
+    store.undoManager = undoManager
+
+    let layer = try XCTUnwrap(store.activeLayer)
+    XCTAssertTrue(store.applyPixelOperation(to: layer.id, actionName: "Setup") { buf in
+      buf.withMutableWords { words in
+        for i in 0..<words.count { words[i] = dark }
+        for y in 0..<30 {
+          for x in 0..<20 {
+            let c: Int = ((x / 2) + (y / 2)) % 2 == 0 ? 220 : 160
+            words[y * 60 + x] = PixelBuffer.premultipliedWord(r: c, g: c, b: c, a: 255)
+          }
+        }
+      }
+      return true
+    })
+    undoManager.removeAllActions()
+
+    // Destinations in the dark field; offset 30 samples the textured left side
+    // (source = center − offset lands at x 10, 15, 20).
+    let centers = [CGPoint(x: 40, y: 15), CGPoint(x: 45, y: 15), CGPoint(x: 50, y: 15)]
+    XCTAssertTrue(store.healStroke(centers: centers, sourceOffset: CGSize(width: 30, height: 0), radius: 4))
+    XCTAssertEqual(undoManager.undoActionName, "Healing Brush")
+
+    var minR: UInt32 = 255, maxR: UInt32 = 0
+    for x in 40..<51 {
+      let probe = try XCTUnwrap(PixelBuffer.probe(image: try XCTUnwrap(store.activeLayer).image, x: x, y: 15))
+      let r = (probe >> 16) & 0xFF
+      minR = min(minR, r)
+      maxR = max(maxR, r)
+    }
+    XCTAssertGreaterThan(maxR - minR, 20, "source texture must appear along the stroke")
+    XCTAssertLessThan(maxR, 160, "tone must stay matched to the dark destination")
+
+    undoManager.undo()
+    XCTAssertEqual(
+      PixelBuffer.probe(image: try XCTUnwrap(store.activeLayer).image, x: 45, y: 15), dark)
+    XCTAssertFalse(undoManager.canUndo, "a stroke must register exactly one undo step")
+  }
+
+  /// The aligned offset semantics: source = center − offset, so a positive
+  /// offset samples to the left of the destination.
+  func testHealStrokeAlignedOffsetSamplesSource() throws {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 60, height: 30))
+    let dark = PixelBuffer.premultipliedWord(r: 50, g: 50, b: 50, a: 255)
+    let layer = try XCTUnwrap(store.activeLayer)
+    XCTAssertTrue(store.applyPixelOperation(to: layer.id, actionName: "Setup") { buf in
+      buf.withMutableWords { words in
+        for i in 0..<words.count { words[i] = dark }
+        for y in 0..<30 {
+          for x in 0..<20 {
+            let c: Int = ((x / 2) + (y / 2)) % 2 == 0 ? 220 : 160
+            words[y * 60 + x] = PixelBuffer.premultipliedWord(r: c, g: c, b: c, a: 255)
+          }
+        }
+      }
+      return true
+    })
+    // A single-dab stroke at x=45 with offset 35 samples x=10 (textured).
+    XCTAssertTrue(store.healStroke(
+      centers: [CGPoint(x: 45, y: 15)], sourceOffset: CGSize(width: 35, height: 0), radius: 4))
+    var minR: UInt32 = 255, maxR: UInt32 = 0
+    for x in 43..<48 {
+      let probe = try XCTUnwrap(PixelBuffer.probe(image: try XCTUnwrap(store.activeLayer).image, x: x, y: 15))
+      let r = (probe >> 16) & 0xFF
+      minR = min(minR, r); maxR = max(maxR, r)
+    }
+    XCTAssertGreaterThan(maxR - minR, 15, "the offset must sample the textured source")
+  }
+
+  func testSpotHealStrokeEmptyCentersReturnsFalse() {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 20, height: 20))
+    XCTAssertFalse(store.spotHealStroke(centers: [], radius: 4))
+    XCTAssertFalse(store.healStroke(centers: [], sourceOffset: .zero, radius: 4))
+  }
+
+  /// A stroke wholly off the canvas changes nothing and registers no undo.
+  func testSpotHealStrokeOffCanvasReturnsFalse() {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 20, height: 20))
+    let undoManager = UndoManager()
+    store.undoManager = undoManager
+    XCTAssertFalse(store.spotHealStroke(centers: [CGPoint(x: -10, y: -10)], radius: 2))
+    XCTAssertFalse(undoManager.canUndo)
+  }
+
+  /// A stroke that mixes a far-off-canvas center with an on-canvas one must heal
+  /// the on-canvas dab and not crash. The mask-building pass clips each dab like
+  /// the bounding-box pass does; without that guard an off-canvas center built
+  /// `0..<negative` and trapped Swift's Range precondition — a drag starting in
+  /// the surround beside the fitted canvas and ending on the image (#456).
+  func testSpotHealStrokeMixedOffCanvasCenterDoesNotCrash() throws {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 20, height: 20))
+    let gray = PixelBuffer.premultipliedWord(r: 180, g: 180, b: 180, a: 255)
+    let black = PixelBuffer.premultipliedWord(r: 0, g: 0, b: 0, a: 255)
+    let layer = try XCTUnwrap(store.activeLayer)
+    XCTAssertTrue(store.applyPixelOperation(to: layer.id, actionName: "Setup") { buf in
+      buf.withMutableWords { words in
+        for i in 0..<words.count { words[i] = gray }
+        words[10 * 20 + 10] = black
+      }
+      return true
+    })
+    // The first center is far off the canvas; the second heals the blemish.
+    let centers = [CGPoint(x: -100, y: -100), CGPoint(x: 10, y: 10)]
+    XCTAssertTrue(store.spotHealStroke(centers: centers, radius: 4))
+    let probe = try XCTUnwrap(PixelBuffer.probe(image: try XCTUnwrap(store.activeLayer).image, x: 10, y: 10))
+    XCTAssertGreaterThan((probe >> 16) & 0xFF, 150, "the on-canvas dab must still heal")
+  }
+
+  /// A dab straddling the canvas edge heals rather than refusing or smearing: the
+  /// local-mask inpaint edge-replicates the solver halo on the clipped side.
+  func testSpotHealStrokeEdgeDabHeals() throws {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 40, height: 40))
+    let gray = PixelBuffer.premultipliedWord(r: 180, g: 180, b: 180, a: 255)
+    let black = PixelBuffer.premultipliedWord(r: 0, g: 0, b: 0, a: 255)
+    let layer = try XCTUnwrap(store.activeLayer)
+    XCTAssertTrue(store.applyPixelOperation(to: layer.id, actionName: "Setup") { buf in
+      buf.withMutableWords { words in
+        for i in 0..<words.count { words[i] = gray }
+        for x in 0..<4 { words[10 * 40 + x] = black }
+      }
+      return true
+    })
+    // Centered on the left edge: the dab clips to x 0...3.
+    XCTAssertTrue(store.spotHealStroke(centers: [CGPoint(x: 0, y: 10)], radius: 4))
+    let probe = try XCTUnwrap(PixelBuffer.probe(image: try XCTUnwrap(store.activeLayer).image, x: 1, y: 10))
+    XCTAssertGreaterThan((probe >> 16) & 0xFF, 150, "an edge dab must heal toward the field")
+  }
+
+  /// Dabs spaced at the drag spacing (radius/2) cover the whole segment between
+  /// the first and last center — the union mask has no holes, which is what the
+  /// drag handler's interpolation guarantees for a fast stroke (#456).
+  func testSpotHealStrokeCoversTrailAtSpacing() throws {
+    let store = EditorStore()
+    store.newDocument(size: CGSize(width: 40, height: 40))
+    let gray = PixelBuffer.premultipliedWord(r: 180, g: 180, b: 180, a: 255)
+    let black = PixelBuffer.premultipliedWord(r: 0, g: 0, b: 0, a: 255)
+    let layer = try XCTUnwrap(store.activeLayer)
+    XCTAssertTrue(store.applyPixelOperation(to: layer.id, actionName: "Setup") { buf in
+      buf.withMutableWords { words in
+        for i in 0..<words.count { words[i] = gray }
+        for x in 10...30 { words[20 * 40 + x] = black }
+      }
+      return true
+    })
+    // radius 4 → spacing 2; centers every 2px from 10 to 30, as interpolation emits.
+    let centers = stride(from: 10, through: 30, by: 2).map { CGPoint(x: $0, y: 20) }
+    XCTAssertTrue(store.spotHealStroke(centers: centers, radius: 4))
+    for x in 10...30 {
+      let probe = try XCTUnwrap(PixelBuffer.probe(image: try XCTUnwrap(store.activeLayer).image, x: x, y: 20))
+      XCTAssertGreaterThan((probe >> 16) & 0xFF, 150, "unhealed hole in the trail at x=\(x)")
+    }
+  }
 }

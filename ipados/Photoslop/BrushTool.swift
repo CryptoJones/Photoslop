@@ -27,9 +27,17 @@ enum BrushTool: String, CaseIterable, Identifiable {
   case lasso
   case magneticLasso
   case eyedropper
+  case spotHeal
+  case healBrush
 
   /// The primary tools displayed on the canvas palette rail and phone dock.
   /// Sub-tools like Magnetic Lasso are grouped under their primary tool.
+  ///
+  /// The retouch tools (`spotHeal`, `healBrush`, #456) are deliberately *not*
+  /// here: the iPhone dock is budgeted to nine 44pt buttons and adding two
+  /// would push the last tools off a 375pt phone. They are reached the way
+  /// Magnetic Lasso is — a long-press on their host palette button (Eraser)
+  /// and a Retouch picker in the tool options — so the budget is untouched.
   static let primaryPaletteTools: [BrushTool] = [
     .pen, .pencil, .marker, .eraser, .bucket, .wand, .rectSelect, .lasso, .eyedropper
   ]
@@ -48,6 +56,8 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .lasso: "Lasso Select"
     case .magneticLasso: "Magnetic Lasso"
     case .eyedropper: "Eyedropper"
+    case .spotHeal: "Spot Healing"
+    case .healBrush: "Healing Brush"
     }
   }
 
@@ -63,6 +73,8 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .lasso: "lasso"
     case .magneticLasso: "lasso"
     case .eyedropper: "eyedropper"
+    case .spotHeal: "bandage"
+    case .healBrush: "cross.case"
     }
   }
 
@@ -85,6 +97,8 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .lasso: "Lasso"
     case .magneticLasso: "Magnetic"
     case .eyedropper: "Eyedropper"
+    case .spotHeal: "Spot Heal"
+    case .healBrush: "Heal"
     }
   }
 
@@ -107,6 +121,8 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .lasso: "Draw a loop to select"
     case .magneticLasso: "Trace edges to snap selection"
     case .eyedropper: "Tap to pick up a colour"
+    case .spotHeal: "Tap or drag over a blemish to heal it"
+    case .healBrush: "Pick a source, then tap or drag to heal"
     }
   }
 
@@ -120,6 +136,7 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case fill
     case select
     case pick
+    case retouch
   }
 
   var family: Family {
@@ -128,8 +145,15 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .bucket: .fill
     case .wand, .rectSelect, .lasso, .magneticLasso: .select
     case .eyedropper: .pick
+    case .spotHeal, .healBrush: .retouch
     }
   }
+
+  /// Whether this is one of the Poisson retouch tools (#456): the desktop's
+  /// Spot Healing (`J`) and Healing Brush (`Shift+J`). They heal pixels under
+  /// the finger rather than painting ink, and share the Eraser's palette slot
+  /// so the iPhone's nine-button budget is preserved.
+  var isHealTool: Bool { self == .spotHeal || self == .healBrush }
 
   /// Whether the ink colour and opacity controls apply to this tool.
   ///
@@ -137,8 +161,10 @@ enum BrushTool: String, CaseIterable, Identifiable {
   /// so the swatch stays on screen: it is where the sampled colour appears.
   var usesInk: Bool { inkType != nil || fillsOnTap || samplesOnTap }
 
-  /// Whether the brush width control applies to this tool.
-  var usesWidth: Bool { inkType != nil }
+  /// Whether the brush width control applies to this tool. The retouch tools
+  /// take a dab *radius* from the same width control (radius = width / 2, the
+  /// desktop's `opts.size / 2`), so the slider serves them too.
+  var usesWidth: Bool { inkType != nil || isHealTool }
 
   /// Whether a tap on the canvas fills instead of a stroke painting.
   var fillsOnTap: Bool { self == .bucket }
@@ -150,9 +176,18 @@ enum BrushTool: String, CaseIterable, Identifiable {
   /// swatch, the desktop's Eyedropper (`I`).
   var samplesOnTap: Bool { self == .eyedropper }
 
+  /// Whether a tap on the canvas heals a single dab under it (#456). A drag
+  /// heals a whole stroke; both commit through the Poisson solver.
+  var healsOnTap: Bool { isHealTool }
+
+  /// Whether a one-finger drag heals a stroke of dabs instead of painting
+  /// (#456). The canvas treats it like an overlay: drawing is suspended and
+  /// two fingers pan, exactly as for a marquee or lasso.
+  var healsByDrag: Bool { isHealTool }
+
   /// Whether the tool acts on a tap rather than a stroke, so the canvas is
   /// told to hand taps over and hold strokes back.
-  var actsOnTap: Bool { fillsOnTap || selectsOnTap || samplesOnTap }
+  var actsOnTap: Bool { fillsOnTap || selectsOnTap || samplesOnTap || healsOnTap }
 
   /// Whether a one-finger drag draws a selection shape instead of a stroke
   /// (#370). The canvas treats it like an overlay: drawing is suspended and
@@ -171,7 +206,8 @@ enum BrushTool: String, CaseIterable, Identifiable {
   var respondsToTilt: Bool {
     switch self {
     case .pencil, .marker: true
-    case .pen, .eraser, .bucket, .wand, .rectSelect, .lasso, .magneticLasso, .eyedropper: false
+    case .pen, .eraser, .bucket, .wand, .rectSelect, .lasso, .magneticLasso, .eyedropper,
+      .spotHeal, .healBrush: false
     }
   }
 
@@ -180,7 +216,8 @@ enum BrushTool: String, CaseIterable, Identifiable {
     case .pen: .pen
     case .pencil: .pencil
     case .marker: .marker
-    case .eraser, .bucket, .wand, .rectSelect, .lasso, .magneticLasso, .eyedropper: nil
+    case .eraser, .bucket, .wand, .rectSelect, .lasso, .magneticLasso, .eyedropper,
+      .spotHeal, .healBrush: nil
     }
   }
 

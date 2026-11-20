@@ -14,6 +14,14 @@ import SwiftUI
 /// name, so `buttons["Eraser"]` is this button; the label is "Tool, Eraser"
 /// while it is selected and the plain name otherwise, so the one button whose
 /// label begins "Tool, " is the tool in hand.
+///
+/// A button is a physical dock *slot*, and a slot can host sub-tools: Lasso hosts
+/// Magnetic Lasso, Eraser hosts Spot Healing and the Healing Brush (#456). While a
+/// hosted sub-tool is in hand its host slot stays lit and keeps the slot's own
+/// label ("Tool, Eraser"), so `selectTool` can still find the slot by name and the
+/// nine-button budget never grows. The sub-tool actually in hand is named by the
+/// canvas accessibility value and the tool-identity strip, not by the slot label —
+/// a deliberate trade-off, the same one Magnetic Lasso already makes.
 struct ToolButton: View {
   let tool: BrushTool
   let isSelected: Bool
@@ -94,7 +102,9 @@ struct ToolButtons: View {
       }
       ToolButton(
         tool: entry.tool,
-        isSelected: entry.tool == tool || (entry.tool == .lasso && tool == .magneticLasso),
+        isSelected: entry.tool == tool
+          || (entry.tool == .lasso && tool == .magneticLasso)
+          || (entry.tool == .eraser && tool.isHealTool),
         showsCaption: showsCaption,
         fillsWidth: fills
       ) {
@@ -102,6 +112,12 @@ struct ToolButtons: View {
           tool = .magneticLasso
         } else if entry.tool == .lasso && tool == .magneticLasso {
           tool = .lasso
+        } else if entry.tool == .eraser && tool.isHealTool {
+          // Tapping the host while a retouch sub-tool is in hand returns to the
+          // eraser, the way tapping Lasso returns from Magnetic Lasso. The
+          // sub-tools themselves are picked from the long-press menu below or
+          // the Retouch picker in the tool options (#456).
+          tool = .eraser
         } else {
           tool = entry.tool
         }
@@ -118,6 +134,26 @@ struct ToolButtons: View {
             tool = .magneticLasso
           } label: {
             Label("Magnetic Lasso", systemImage: "lasso")
+          }
+        }
+        if entry.tool == .eraser {
+          // The retouch tools share the eraser's slot to keep the iPhone dock
+          // at nine buttons (#456). Long-press to pick one, exactly as Magnetic
+          // Lasso lives under Lasso.
+          Button {
+            tool = .eraser
+          } label: {
+            Label("Eraser", systemImage: "eraser")
+          }
+          Button {
+            tool = .spotHeal
+          } label: {
+            Label("Spot Healing", systemImage: "bandage")
+          }
+          Button {
+            tool = .healBrush
+          } label: {
+            Label("Healing Brush", systemImage: "cross.case")
           }
         }
       }

@@ -1,4 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
 """Authoritative Photoslop release metadata."""
 
-__version__ = "2.51.1"
+__version__ = "2.51.2"

@@ -163,6 +163,26 @@ struct EditorView: View {
   /// Refusal explanation shown inside the heal sheet; the sheet stays open and
   /// keeps the entered offsets so a refused heal is recoverable (#455 review).
   @State private var healRefusal: String?
+  /// The interactive retouch stroke tools (#456): the trail of dab centers a
+  /// drag is covering, in canvas pixels. Drawn as a translucent trail while the
+  /// finger moves and committed as one heal when it lifts, the way the desktop's
+  /// SpotHealTool accumulates a mask and inpaints on release.
+  @State private var healTrail: [CGPoint] = []
+  /// The Healing Brush's user-picked source point (the desktop's Alt+click),
+  /// in canvas pixels. Nil until a source is picked; the tool refuses to paint
+  /// without one.
+  @State private var healSource: CGPoint?
+  /// The aligned source offset (dest − source), locked on the first dab after a
+  /// pick and held across strokes until the source is re-picked, as the desktop's
+  /// CloneStampTool/HealBrushTool lock alignment.
+  @State private var healOffset: CGSize?
+  /// True while the next canvas tap is being taken as the Healing Brush's source
+  /// rather than a heal — the touch equivalent of holding Alt.
+  @State private var pickingHealSource = false
+  /// True for the remainder of a gesture that began as a source pick, so a finger
+  /// that drifts past pan slop while picking samples texture only and does not
+  /// also paint a heal stroke (#456). Cleared when the gesture ends or cancels.
+  @State private var healGestureIsPick = false
   @State private var drawsWithFinger = EditorView.defaultDrawsWithFinger(
     idiom: UIDevice.current.userInterfaceIdiom)
   @State private var showLayers = false
@@ -417,6 +437,15 @@ struct EditorView: View {
       offerCanvasSizeForNewDocument()
     }
     .onChange(of: undoManager) { _, manager in store.undoManager = manager }
+    .onChange(of: tool) { _, newTool in
+      // A pending source pick and an unfinished trail belong to the retouch
+      // stroke; drop them when another tool takes the canvas so they cannot
+      // surface later (#456). The picked source itself persists, as the desktop
+      // keeps its clone source until it is re-picked.
+      healTrail = []
+      healGestureIsPick = false
+      if newTool != .healBrush { pickingHealSource = false }
+    }
   }
 
   /// The canvas with its chrome around it.
@@ -535,9 +564,19 @@ struct EditorView: View {
       // rectangle rather than painting under it. Pinch, zoom and two-finger
       // pan keep working throughout — switching off hit-testing for the whole
       // scroll view is what took them away before (#270).
-      // A marquee or lasso drag is an overlay for this purpose (#370).
-      overlayIsActive: isCropping || placement != nil || tool.selectsByDrag,
+      // A marquee or lasso drag is an overlay for this purpose (#370), and so
+      // is a retouch stroke (#456): drawing is suspended while the finger heals.
+      overlayIsActive: isCropping || placement != nil || tool.selectsByDrag || tool.healsByDrag,
       onBoxDrag: handleBoxDrag,
+      // A retouch stroke cancelled mid-drag is discarded, not committed (#456).
+      // Crop and selection keep their existing finalize-on-cancel behaviour.
+      onBoxDragCancelled: { start, point in
+        if !isCropping, placement == nil, tool.healsByDrag {
+          cancelHealDrag()
+        } else {
+          handleBoxDrag(from: start, to: point, isFinal: true)
+        }
+      },
       reveal: boxReveal,
       onDrawingChanged: { store.setDrawing($0, erasing: tool == .eraser) }
     ) {
@@ -560,7 +599,31 @@ struct EditorView: View {
         }
         .floatingPanel()
         .padding(.top, 12)
+      } else if tool == .healBrush {
+        healSourceBanner
+          .floatingPanel()
+          .padding(.top, 12)
       }
+    }
+  }
+
+  /// The Healing Brush's source status, over the canvas (#456). The tool heals
+  /// nothing until a source is picked, so the banner says which step is next:
+  /// pick a source, or that a source is set and the canvas is ready to heal.
+  @ViewBuilder
+  private var healSourceBanner: some View {
+    if pickingHealSource {
+      Label("Tap the canvas to set the healing source", systemImage: "scope")
+        .font(.caption)
+        .foregroundColor(.secondary)
+    } else if healSource == nil {
+      Label("Pick a source to begin healing", systemImage: "cross.case")
+        .font(.caption)
+        .foregroundColor(.secondary)
+    } else {
+      Label("Source set — tap or drag to heal", systemImage: "checkmark.circle")
+        .font(.caption)
+        .foregroundColor(.secondary)
     }
   }
 
@@ -853,6 +916,65 @@ struct EditorView: View {
     if tool.selects {
       wandOptionsMenu
     }
+    // The retouch family's picker (#456): a visible, tappable route between
+    // Eraser, Spot Healing and Healing Brush that does not rely on knowing to
+    // long-press the palette. Icon-only so the phone's options strip keeps its
+    // budget beside the width slider.
+    if tool == .eraser || tool.isHealTool {
+      retouchOptionsMenu
+    }
+    if tool == .healBrush {
+      pickHealSourceButton
+    }
+  }
+
+  /// Switch between the retouch tools that share the Eraser's palette slot
+  /// (#456). Bound straight to the tool in hand, so choosing one arms it exactly
+  /// as the palette's long-press menu does.
+  private var retouchOptionsMenu: some View {
+    Menu {
+      Picker("Retouch", selection: $tool) {
+        Label("Eraser", systemImage: "eraser").tag(BrushTool.eraser)
+        Label("Spot Healing", systemImage: "bandage").tag(BrushTool.spotHeal)
+        Label("Healing Brush", systemImage: "cross.case").tag(BrushTool.healBrush)
+      }
+      .pickerStyle(.inline)
+    } label: {
+      Image(systemName: "bandage")
+        .font(.system(size: 12, weight: .medium))
+        .padding(.horizontal, 10)
+        .frame(height: 28)
+        .background(Studio.raised, in: Capsule())
+    }
+    // A SwiftUI Menu is a Button wrapping a Button; the identifier lands on the
+    // outer wrapper, which XCUITest reports as not hittable. `.combine` was tried
+    // for exactly this and does not work on iOS 18.5 (LESSONSLEARNED.md L-001), so
+    // — like the wand options menu — this carries a label and identifier and the
+    // tests operate it by coordinate, asserting geometry rather than hittability.
+    .accessibilityLabel("Retouch tools, \(tool.displayName)")
+    .accessibilityIdentifier("Retouch tools")
+  }
+
+  /// Arm the next canvas tap as the Healing Brush's source pick (#456) — the
+  /// touch equivalent of the desktop's Alt+click. Icon-only with a full label for
+  /// VoiceOver and the tests; lit while a pick is pending.
+  private var pickHealSourceButton: some View {
+    Button {
+      pickingHealSource.toggle()
+    } label: {
+      Image(systemName: pickingHealSource ? "scope" : "cross.case")
+        .font(.system(size: 14, weight: .medium))
+        .foregroundStyle(pickingHealSource ? Color.black : Color.primary)
+        .frame(width: Studio.iconSide, height: Studio.iconSide)
+        .background(
+          pickingHealSource ? Studio.accent : Color.clear,
+          in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(pickingHealSource ? "Picking healing source" : "Pick healing source")
+    .accessibilityIdentifier("Pick Heal Source")
+    .accessibilityHint("Tap the canvas to set the texture the Healing Brush samples")
   }
 
   /// Colour and opacity, in one control the width of a swatch.
@@ -953,9 +1075,56 @@ struct EditorView: View {
         SelectionOutline(selection: selection, scale: canvasZoom)
       }
       selectionDragOverlay
+      healStrokeOverlay
       modeOverlay
     }
   }
+
+  /// The retouch stroke in progress (#456), drawn in canvas pixels: the trail of
+  /// dabs the finger is covering, and the Healing Brush's picked source as a
+  /// crosshair. Like the selection drag it takes no touches — the drag belongs to
+  /// the canvas — and its chrome stays finger-sized at any zoom.
+  @ViewBuilder
+  private var healStrokeOverlay: some View {
+    let zoom = max(canvasZoom, 0.0001)
+    let size = store.canvasSize
+    if tool.isHealTool {
+      ZStack(alignment: .topLeading) {
+        // One stroked path through the trail, not a Circle view per dab: with
+        // interpolation a long stroke is hundreds of centers, and rebuilding that
+        // many SwiftUI views on every drag callback is the cost the desktop avoids
+        // by painting its trail into a single QPainter (#456). Round caps render a
+        // single-point trail as a dab dot.
+        if let first = healTrail.first {
+          Path { p in
+            p.move(to: first)
+            for point in healTrail.dropFirst() { p.addLine(to: point) }
+            if healTrail.count == 1 { p.addLine(to: first) }
+          }
+          .stroke(
+            Color(red: 120 / 255, green: 200 / 255, blue: 1).opacity(0.27),
+            style: StrokeStyle(lineWidth: healRadius * 2, lineCap: .round, lineJoin: .round))
+        }
+        if tool == .healBrush, let source = healSource {
+          let arm = 6 / zoom
+          Path { p in
+            p.move(to: CGPoint(x: source.x - arm, y: source.y))
+            p.addLine(to: CGPoint(x: source.x + arm, y: source.y))
+            p.move(to: CGPoint(x: source.x, y: source.y - arm))
+            p.addLine(to: CGPoint(x: source.x, y: source.y + arm))
+          }
+          .stroke(Color(red: 1, green: 80 / 255, blue: 1), lineWidth: 1 / zoom)
+        }
+      }
+      .frame(width: size.width, height: size.height, alignment: .topLeading)
+      .allowsHitTesting(false)
+      .accessibilityHidden(true)
+    }
+  }
+
+  /// The retouch dab radius in canvas pixels: half the width control, the
+  /// desktop's `opts.size / 2` (#456).
+  private var healRadius: CGFloat { max(1, inkWidth / 2) }
 
   /// The marquee or lasso in progress (#370), drawn where the selection will
   /// be: a hairline in the ants' colours, one screen point wide at any zoom
@@ -2912,13 +3081,23 @@ struct EditorView: View {
   /// probe costs nothing in the app.
   static let pixelProbeEnabled = ProcessInfo.processInfo.arguments.contains("-PhotoslopPixelProbe")
 
-  /// The active layer's centre pixel as a premultiplied ARGB32 word in hex,
-  /// read through a 1x1 context rather than a canvas-sized buffer.
+  /// The active layer's centre pixel as a premultiplied ARGB32 word in hex.
+  ///
+  /// Read through `borrowPixels` — the same seam fills and heals read through —
+  /// so the probe reports the layer *as drawn*: its pixels with the live
+  /// PencilKit strokes baked in. A stroke tool (Pen, retouch) keeps its mark in
+  /// `layer.drawing` until a pixel operation bakes it, so probing `layer.image`
+  /// alone would never see a freshly drawn blemish. With no strokes up,
+  /// `borrowPixels` is the cheap image-only path, so the fill probe stays a
+  /// four-byte read rather than a canvas-sized render.
   private var pixelProbe: some View {
     let word: UInt32? = store.activeLayer.flatMap { layer in
       let centre = CGPoint(x: store.canvasSize.width / 2, y: store.canvasSize.height / 2)
       guard layer.fillsCanvas(store.canvasSize) else { return nil }
-      return PixelBuffer.probe(image: layer.image, x: Int(centre.x), y: Int(centre.y))
+      guard let buffer = store.borrowPixels(of: layer) else { return nil }
+      let x = Int(centre.x), y = Int(centre.y)
+      guard x >= 0, y >= 0, x < buffer.width, y < buffer.height else { return nil }
+      return buffer.word(x: x, y: y)
     }
     let hex = word.map { String(format: "%08X", $0) } ?? "none"
     return Text(hex)
@@ -2931,12 +3110,167 @@ struct EditorView: View {
 
   /// A tap on the canvas while a tap tool is armed, in canvas pixels.
   private func tapCanvas(_ point: CGPoint) {
-    if tool.selectsOnTap {
+    if tool.healsOnTap {
+      healDab(at: point)
+    } else if tool.selectsOnTap {
       selectAtTap(point)
     } else if tool.samplesOnTap {
       sampleAtTap(point)
     } else {
       fillAtTap(point)
+    }
+  }
+
+  /// A single retouch dab under a tap (#456). While a source pick is pending the
+  /// tap sets the Healing Brush's source instead of healing. Otherwise Spot
+  /// Healing inpaints the dab and the Healing Brush seamless-clones from its
+  /// locked source offset — each through the shipped point-dab store methods, so
+  /// a tap is one undo step.
+  private func healDab(at point: CGPoint) {
+    if pickingHealSource {
+      healSource = point
+      healOffset = nil
+      pickingHealSource = false
+      return
+    }
+    if tool == .spotHeal {
+      if !store.spotHeal(at: point, radius: healRadius) { refuseHeal() }
+      return
+    }
+    guard let source = usableHealSource() else {
+      errorMessage = "Pick a source first: tap Pick Source, then tap the texture to sample."
+      return
+    }
+    let offset = healOffset ?? CGSize(width: point.x - source.x, height: point.y - source.y)
+    healOffset = offset
+    let sample = CGPoint(x: point.x - offset.width, y: point.y - offset.height)
+    if !store.heal(at: point, from: sample, radius: healRadius) { refuseHeal() }
+  }
+
+  /// A retouch drag (#456), routed from the canvas's box-drag seam. The trail of
+  /// dab centers accumulates as the finger moves (spaced so dabs overlap and cover
+  /// the stroke) and is committed as one heal on release. A drag while a source
+  /// pick is pending sets the source where the finger landed.
+  private func handleHealDrag(from start: CGPoint, to current: CGPoint, isFinal: Bool) {
+    // A source pick owns the whole gesture: where the finger lands sets the
+    // source, and any drift past pan slop must sample texture only, not also
+    // paint a heal stroke (#456). Swallow every event of the pick gesture rather
+    // than just the first, so the .changed/.ended of a shaky pick cannot leak
+    // into the trail below.
+    if pickingHealSource {
+      healSource = start
+      healOffset = nil
+      pickingHealSource = false
+      healGestureIsPick = true
+      return
+    }
+    if healGestureIsPick {
+      if isFinal { healGestureIsPick = false }
+      return
+    }
+    if healTrail.isEmpty { healTrail.append(start) }
+    // Interpolate dabs between the last trail point and the current sample at the
+    // desktop's spacing, so a fast drag covers the whole stroke instead of leaving
+    // unhealed bands between coarse touch samples — the desktop walks the segment
+    // in `spacing` steps (tools.py HealBrushTool._paint / CloneStampTool._paint).
+    let spacing = max(1, healRadius * 0.5)
+    if let last = healTrail.last {
+      let dx = current.x - last.x, dy = current.y - last.y
+      let dist = hypot(dx, dy)
+      if dist >= spacing {
+        let steps = Int(dist / spacing)
+        for i in 1...steps {
+          let t = CGFloat(i) * spacing / dist
+          healTrail.append(CGPoint(x: last.x + dx * t, y: last.y + dy * t))
+        }
+      }
+    }
+    if isFinal {
+      if healTrail.last != current { healTrail.append(current) }
+      let centers = healTrail
+      healTrail = []
+      commitHealStroke(centers)
+    }
+  }
+
+  /// A retouch gesture interrupted by a system takeover (a second finger landing
+  /// to pinch, an edge swipe, a notification) is cancelled, not released: drop the
+  /// unfinished trail rather than committing a half-intended heal, the way the
+  /// desktop's SpotHealTool.cancel discards its accumulated mask (#456).
+  private func cancelHealDrag() {
+    healTrail = []
+    healGestureIsPick = false
+  }
+
+  /// The picked Healing Brush source, only while it still lies on the current
+  /// canvas. A new or resized document can leave a previously picked source off
+  /// the canvas; treat that as no source and prompt a re-pick rather than healing
+  /// from an off-canvas footprint or refusing silently (#456).
+  private func usableHealSource() -> CGPoint? {
+    guard let source = healSource else { return nil }
+    let size = store.canvasSize
+    guard source.x >= 0, source.y >= 0, source.x < size.width, source.y < size.height else {
+      healSource = nil
+      healOffset = nil
+      return nil
+    }
+    return source
+  }
+
+  /// Commit a finished retouch stroke as one undo step (#456). Spot Healing
+  /// inpaints the whole trail in a single solve; the Healing Brush clones each
+  /// dab from the aligned source offset, locked here on the first dab if a tap
+  /// has not already locked it.
+  ///
+  /// Deliberate deviation from desktop, documented rather than hidden: the desktop
+  /// HealBrushTool paints each stamp live as the finger moves, while iOS shows the
+  /// translucent trail overlay during the drag and commits the pixels on release.
+  /// Live per-frame multigrid Poisson solving would starve a shared 16 GB device
+  /// with no discrete GPU, so commit-on-release is the memory-frugal compromise
+  /// (Spot Healing already commits on release on desktop too). The residual cost is
+  /// that the Healing Brush runs one solve per dab synchronously at release; a long
+  /// stroke can briefly block the main thread. Live preview and an off-main-thread
+  /// stroke commit are tracked as a parity/performance follow-up to #456.
+  private func commitHealStroke(_ centers: [CGPoint]) {
+    guard !centers.isEmpty else { return }
+    if tool == .spotHeal {
+      if !store.spotHealStroke(centers: centers, radius: healRadius) { refuseHeal() }
+      return
+    }
+    guard let source = usableHealSource() else {
+      errorMessage = "Pick a source first: tap Pick Source, then tap the texture to sample."
+      return
+    }
+    let offset = healOffset
+      ?? CGSize(width: centers[0].x - source.x, height: centers[0].y - source.y)
+    healOffset = offset
+    if !store.healStroke(centers: centers, sourceOffset: offset, radius: healRadius) {
+      refuseHeal()
+    }
+  }
+
+  /// Explain a refused heal out loud (#456), attributing the right cause. A text
+  /// layer is refused the way the bucket and filters refuse it — its words stay
+  /// editable. A memory refusal has already raised the low-memory notice, so it
+  /// must not also raise a second alert. The remaining refusals are a dab with no
+  /// boundary to heal from (Spot Healing) or a source footprint off the canvas
+  /// (Healing Brush).
+  private func refuseHeal() {
+    if store.activeLayer?.isText == true {
+      errorMessage =
+        "Text layers stay editable, so a heal cannot be baked into one. "
+        + "Select a paint layer, or flatten first, and heal that."
+      return
+    }
+    guard store.memoryPressureNotice == nil else { return }
+    if tool == .spotHeal {
+      errorMessage =
+        "Spot Heal needs surrounding pixels to sample from. Heal a smaller region, "
+        + "away from the canvas edge."
+    } else {
+      errorMessage =
+        "The Healing Brush could not sample texture there. Keep the source on the "
+        + "canvas and pick again if needed."
     }
   }
 
@@ -3104,9 +3438,12 @@ struct EditorView: View {
   /// again on every sample would let the grip jump between handles as the
   /// rectangle moves under the finger.
   private func handleBoxDrag(from start: CGPoint, to current: CGPoint, isFinal: Bool) {
-    // A crop or a placement owns the canvas ahead of a selection tool.
+    // A crop or a placement owns the canvas ahead of a selection or retouch tool.
     if !isCropping, placement == nil, tool.selectsByDrag {
       return handleSelectionDrag(from: start, to: current, isFinal: isFinal)
+    }
+    if !isCropping, placement == nil, tool.healsByDrag {
+      return handleHealDrag(from: start, to: current, isFinal: isFinal)
     }
     let translation = CGSize(width: current.x - start.x, height: current.y - start.y)
 

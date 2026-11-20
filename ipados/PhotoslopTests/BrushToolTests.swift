@@ -59,7 +59,8 @@ final class BrushToolTests: XCTestCase {
 
   func testOnlyTheWandSelectsOnTapAndTakesNoInk() {
     XCTAssertEqual(BrushTool.allCases.filter(\.selectsOnTap), [.wand])
-    XCTAssertEqual(BrushTool.allCases.filter(\.actsOnTap), [.bucket, .wand, .eyedropper])
+    XCTAssertEqual(
+      BrushTool.allCases.filter(\.actsOnTap), [.bucket, .wand, .eyedropper, .spotHeal, .healBrush])
     // The bucket and the wand grow a region, so they take a tolerance; the
     // eyedropper (#379) taps too but reads a single pixel, so it does not.
     XCTAssertEqual(BrushTool.allCases.filter(\.usesTolerance), [.bucket, .wand])
@@ -107,6 +108,30 @@ final class BrushToolTests: XCTestCase {
     )
     XCTAssertTrue(BrushTool.primaryPaletteTools.contains(.lasso))
     XCTAssertFalse(BrushTool.primaryPaletteTools.contains(.magneticLasso))
+    // The retouch tools (#456) share the eraser's slot rather than adding buttons,
+    // so the nine-button iPhone budget is preserved.
+    XCTAssertFalse(BrushTool.primaryPaletteTools.contains(.spotHeal))
+    XCTAssertFalse(BrushTool.primaryPaletteTools.contains(.healBrush))
+    XCTAssertTrue(BrushTool.primaryPaletteTools.contains(.eraser))
+  }
+
+  /// The interactive retouch tools (#456): heal on tap and by drag, take a dab
+  /// radius from the width control, and paint no ink.
+  func testTheRetouchToolsHealOnTapAndByDrag() {
+    XCTAssertEqual(BrushTool.allCases.filter(\.isHealTool), [.spotHeal, .healBrush])
+    XCTAssertEqual(BrushTool.allCases.filter(\.healsByDrag), [.spotHeal, .healBrush])
+    XCTAssertEqual(BrushTool.allCases.filter(\.healsOnTap), [.spotHeal, .healBrush])
+    for tool in [BrushTool.spotHeal, .healBrush] {
+      XCTAssertTrue(tool.actsOnTap, "\(tool) heals a dab on tap")
+      XCTAssertTrue(tool.usesWidth, "\(tool) takes a dab radius from the width control")
+      XCTAssertFalse(tool.usesInk, "\(tool) heals pixels, it does not paint ink")
+      XCTAssertFalse(tool.usesTolerance)
+      XCTAssertFalse(tool.selects)
+      XCTAssertFalse(tool.respondsToTilt)
+      XCTAssertEqual(tool.family, .retouch)
+      // Armed, the canvas is disabled; the pen it installs never draws.
+      XCTAssertTrue(tool.pkTool(color: .black, width: 4) is PKInkingTool)
+    }
   }
 
   func testEveryBrushIsPresentableInTheToolStrip() {
